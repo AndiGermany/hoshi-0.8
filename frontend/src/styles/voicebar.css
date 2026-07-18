@@ -1,0 +1,481 @@
+/* Hoshi 0.8 — Voice-Bar-Visuals (Yoru, awake).
+   Redesign der Sprach-Eingabe in der Compose-Bar:
+     1. Schlichte Inline-SVG-Icons (Mic + Speaker) STATT der 🎤/🔊-Emojis.
+     2. Ein ruhiger, „atmender" Licht-Orb, der GLATT auf den Pegel reagiert —
+        statt des alten, hart springenden Glyph-Ausschlags.
+
+   Alle Farben kommen aus den Theme-Vars (--accent, --bg-*, --text-* …), damit
+   die Visuals mit den Farbthemen mitgehen; Gold/--accent bleibt der Stimme/CTA
+   vorbehalten. Animiert wird nur transform/opacity/filter (+ ein sanfter
+   box-shadow-Atem am Mic) → 60fps, kein Layout-Thrash. Diese Datei wird per
+   Import in der Voice-Komponente (ChatView) geladen; sie nutzt EIGENE
+   Klassennamen (vc-*), sodass sie nicht mit den alten .compose__*/.star-Regeln
+   in index.css um Spezifität/Reihenfolge ringt. */
+
+/* ---- gemeinsames Icon ---- */
+.vc-ico {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+/* ---- Mic-Knopf (Push-to-Talk) = erstklassige Steuerung links ---- */
+.vc-mic {
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  cursor: pointer;
+  touch-action: none; /* Pointer-Halten ohne Scroll/Long-Press-Menü */
+  transition:
+    transform var(--dur-fast) var(--ease-out-soft),
+    color var(--dur-fast) var(--ease-standard),
+    background-color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-standard);
+}
+.vc-mic:hover {
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+}
+.vc-mic:active {
+  transform: scale(0.94);
+}
+.vc-mic:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* verstehen/antworten = ruhiger Aktiv-Ton (Gold = Stimme), KEIN Puls. */
+.vc-mic.is-busy {
+  color: var(--accent);
+  border-color: transparent;
+  background: var(--accent-faint);
+}
+
+/* aufnehmend = klar aktiv: Gold-Ton + ruhig atmender Schein (1.6s, nicht hektisch).
+   Steht NACH .is-busy → gewinnt, wenn (wie beim Hören) beide Klassen anliegen. */
+.vc-mic.is-recording {
+  color: var(--accent);
+  border-color: transparent;
+  background: var(--accent-soft);
+  animation: vc-mic-breath 1.6s var(--ease-standard) infinite;
+}
+@keyframes vc-mic-breath {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px var(--accent-soft),
+      0 0 8px var(--accent-faint);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px var(--accent-glow),
+      0 0 16px var(--accent-glow);
+  }
+}
+
+/* ---- Sprich-Modus-Toggle (Speaker) = leises Ghost-Icon (Modus, keine CTA) ---- */
+.vc-tts {
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-4);
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out-soft),
+    color var(--dur-fast) var(--ease-standard);
+}
+.vc-tts .vc-ico {
+  width: 19px;
+  height: 19px;
+}
+.vc-tts:hover {
+  color: var(--text-2);
+}
+.vc-tts.is-on {
+  color: var(--accent);
+}
+.vc-tts.is-on:hover {
+  transform: scale(1.08);
+}
+
+/* ---- Voice-Orb (星): EIN warmer Licht-Punkt für jeden Sprach-Zustand ----
+   Drei zentriert gestapelte Schichten (kein absolutes Positionsrechnen, sie
+   teilen sich eine Grid-Zelle): bloom (weicher Pegel-Schein), ring (feine
+   Kontur), core (ruhiger Licht-Kern). Der Pegel kommt als --lvl (0..1) rein
+   (oben in audio/level.ts bereits perzeptuell angehoben + EMA-geglättet); die
+   kurzen CSS-Transitions lerpen GLATT zwischen den rAF-Samples → kein Springen. */
+.vc-orb {
+  position: relative;
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  /* Größe als Custom-Properties mit den Compose-Bar-Maßen als Default — der
+     Home-Orb (VoiceOrb.tsx, `.voiceorb .vc-orb`) überschreibt nur diese Vars,
+     die Formeln unten bleiben unverändert (ein Größensystem, zwei Auftritte). */
+  width: var(--orb-w, 26px);
+  height: var(--orb-h, 36px);
+  color: var(--accent);
+  --lvl: 0;
+}
+.vc-orb > * {
+  grid-area: 1 / 1; /* alle Schichten in dieselbe Zelle → zentriert gestapelt */
+}
+
+/* ruhiger Licht-Kern — immer da; trägt Atmen (idle) bzw. Schimmern (thinking)
+   und wächst beim Hören/Sprechen sanft mit dem Pegel. */
+.vc-orb__core {
+  width: var(--orb-core, 8px);
+  height: var(--orb-core, 8px);
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
+  transform: scale(calc(1 + var(--lvl) * 0.4));
+  filter: drop-shadow(
+    0 0 calc(var(--orb-glow-min, 2px) + var(--lvl) * var(--orb-glow, 7px)) var(--accent-glow)
+  );
+  transition:
+    transform 130ms linear,
+    opacity var(--dur-base) var(--ease-standard),
+    filter 130ms linear;
+}
+
+/* weicher Pegel-Bloom: radialer Schein, skaliert + blendet mit dem Pegel. */
+.vc-orb__bloom {
+  width: var(--orb-bloom, 24px);
+  height: var(--orb-bloom, 24px);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 68%);
+  opacity: calc(0.1 + var(--lvl) * 0.6);
+  transform: scale(calc(0.6 + var(--lvl) * 1.05));
+  transition:
+    transform 150ms linear,
+    opacity 150ms linear;
+  pointer-events: none;
+}
+
+/* feine Kontur für Definition: atmet idle, weitet sich mit dem Pegel. */
+.vc-orb__ring {
+  width: var(--orb-ring, 16px);
+  height: var(--orb-ring, 16px);
+  border-radius: 50%;
+  border: 1px solid var(--accent-soft);
+  opacity: calc(0.18 + var(--lvl) * 0.5);
+  transform: scale(calc(0.7 + var(--lvl) * 0.7));
+  transition:
+    transform 150ms linear,
+    opacity 150ms linear;
+  pointer-events: none;
+}
+
+/* idle = ruhiges Atmen (warme „ich lebe & höre"-Präsenz). */
+.vc-orb--idle .vc-orb__core {
+  animation: vc-breath var(--breath) var(--ease-standard) infinite;
+}
+.vc-orb--idle .vc-orb__ring {
+  animation: vc-ring-breath var(--breath) var(--ease-standard) infinite;
+}
+.vc-orb--idle .vc-orb__bloom {
+  opacity: 0.1;
+}
+@keyframes vc-breath {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+}
+@keyframes vc-ring-breath {
+  0%,
+  100% {
+    opacity: 0.12;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.28;
+    transform: scale(1.05);
+  }
+}
+
+/* thinking = Schimmern (NICHT pegel-reaktiv — es fließt kein Audio). */
+.vc-orb--thinking .vc-orb__core {
+  opacity: 1;
+  animation: vc-shimmer 1300ms var(--ease-standard) infinite;
+}
+.vc-orb--thinking .vc-orb__ring {
+  animation: vc-ring-think 1300ms var(--ease-standard) infinite;
+}
+@keyframes vc-shimmer {
+  0%,
+  100% {
+    opacity: 0.55;
+    filter: drop-shadow(0 0 2px var(--accent-faint));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 9px var(--accent-glow));
+  }
+}
+@keyframes vc-ring-think {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.75);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.1);
+  }
+}
+
+/* listening/speaking = der Kern leuchtet voll, der Pegel (--lvl) treibt
+   core/bloom/ring glatt über die Transitions (kein Keyframe). */
+.vc-orb--listening .vc-orb__core,
+.vc-orb--speaking .vc-orb__core {
+  opacity: 1;
+}
+
+/* ---- reduced-motion: ruhiger, STATISCHER Fallback ----
+   Kein Pegel-Ausschlag, kein Atmen/Schimmern/Puls — ein ruhig leuchtender Orb
+   und ein steter (nicht pulsierender) Aufnahme-Schein. Der Zustand bleibt über
+   das aria-live-Label und die Farb-Töne ohne Bewegung lesbar. (Ergänzt die
+   globale reduced-motion-Regel in index.css; eigene Spezifität + !important
+   pinnen zusätzlich die transform-getriebene Reaktivität fest.) */
+@media (prefers-reduced-motion: reduce) {
+  .vc-orb__core,
+  .vc-orb__ring,
+  .vc-orb__bloom {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .vc-orb__core {
+    opacity: 0.8 !important;
+    filter: drop-shadow(0 0 3px var(--accent-glow)) !important;
+  }
+  .vc-orb__ring {
+    opacity: 0.25 !important;
+  }
+  .vc-orb__bloom {
+    opacity: 0.14 !important;
+  }
+  .vc-mic.is-recording {
+    animation: none !important;
+    box-shadow:
+      0 0 0 1px var(--accent-glow),
+      0 0 10px var(--accent-glow) !important;
+  }
+}
+
+/* ==== Lebende Welle (Cowork-Spec §3, korrigiert 20260706-1729) ====
+   Canvas + rAF in VoiceWaveform: 3 überlagerte Sinusse (+ Speak-Sinus) mit
+   Halbwellen-Envelope, EINE ~1,5px-Linie in accent, kein Glow. Gesetz:
+   nichts leuchtet, was nichts misst — die Welle wird NUR gemountet, wenn ein
+   Audio-Kanal offen ist (Hören: Mikro-Pegel · Sprechen: echter TTS-Ausgabe-
+   pegel); kein synthetisches Atmen, nirgends. Offener Kanal ⇒ Floor 0,35
+   (Sprechpausen bleiben ein ruhiger Sockel). Kurven/Konstanten:
+   src/audio/motionTokens.ts (geteiltes Token-Set — später auch Satelliten-
+   LED). reduced-motion behandelt die Komponente selbst (sofort da, kein
+   Fade, statisches Standbild). */
+.vc-wave {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 4px;
+  overflow: hidden;
+}
+.vc-wave__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* currentColor-Kanal für den Canvas-Strich: accent des aktiven Themes. */
+  color: var(--accent);
+}
+
+/* Aufnahme-Timer (tabular, springt nicht) + Verwerfen-Kreuz rechts der Waveform. */
+.compose__rectime {
+  flex: none;
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-3, 0.8rem);
+  color: var(--text-2, var(--text-3));
+  opacity: 0.85;
+  min-width: 3.4ch;
+  text-align: right;
+}
+.compose__cancel {
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2, var(--text-3));
+  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: background 120ms ease;
+}
+.compose__cancel:hover,
+.compose__cancel:focus-visible {
+  background: color-mix(in srgb, var(--text-3) 18%, transparent);
+  color: var(--text-1, inherit);
+}
+
+/* Verarbeitungs-Punkte in der Compose-Bar (nach dem Einsprechen: STT + Denken).
+   Nutzt bewusst die bestehenden .thinking/.thinking__dot-Regeln (index.css), damit
+   die drei wandernden Punkte 1:1 wie in der Antwort-Blase aussehen. */
+.compose__proc {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding-left: 6px;
+}
+.compose__proc-label {
+  font-size: var(--text-3, 0.8rem);
+  color: var(--text-2, var(--text-3));
+  opacity: 0.9;
+}
+
+/* reduced-motion der Welle: kein CSS nötig — VoiceWaveform zeichnet dann per
+   matchMedia ein statisches Standbild (Floor 0,35, eingefrorenes t): sofort
+   da, kein Fade — und weg, sobald der Kanal schließt (Unmount). */
+
+/* ==== Home-Orb (VoiceOrb.tsx, Andi-Auftrag 19.07) ====
+   Derselbe .vc-orb wie die Compose-Bar — nur groß und prominent im Home-
+   Screen. Die Größen-Vars überschreiben NUR die Maße; die Zustands-Optik
+   (Atmen/Bloom/Schimmern/reduced-motion) bleibt exakt dieselbe Formel wie
+   oben (ein Größensystem, zwei Auftritte, keine Kopie der Regeln). */
+.voiceorb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px 20px;
+  text-align: center;
+}
+.voiceorb__tap {
+  /* Größen-Vars fürs .vc-orb-Kind (Custom Properties vererben sich). */
+  --orb-w: 172px;
+  --orb-h: 172px;
+  --orb-core: 54px;
+  --orb-ring: 116px;
+  --orb-bloom: 156px;
+  --orb-glow: 22px;
+  --orb-glow-min: 4px;
+  display: grid;
+  place-items: center;
+  width: var(--orb-w);
+  height: var(--orb-h);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out-soft);
+}
+.voiceorb__tap:not(:disabled):hover {
+  transform: scale(1.02);
+}
+.voiceorb__tap:not(:disabled):active {
+  transform: scale(0.98);
+}
+.voiceorb__tap:disabled {
+  cursor: default; /* kein „verboten"-Cursor — die Pipeline arbeitet nur echt */
+}
+.voiceorb__tap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.voiceorb__hint {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  color: var(--text-3);
+  min-height: 1.4em; /* kein Layout-Sprung zwischen den unterschiedlich langen Labels */
+}
+
+.voiceorb__error {
+  margin-top: 4px;
+}
+
+/* Die Karte: NUR der letzte Turn (kein zweiter Verlauf — der volle bleibt im
+   Chat-Reiter). Reuse der Aoi-Farb-/Radius-Tokens (wie .tile/.hero), eigene
+   schlichte Zeilen statt der Chat-Bubble-Regeln (die hängen an .chat__log
+   als Flex-Eltern und ans Aoi-Eintritts-Timing — hier reicht ruhiges Papier). */
+.voiceorb__card {
+  width: 100%;
+  max-width: 46ch;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-surface);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.voiceorb__row {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.voiceorb__row--user {
+  color: var(--text-2);
+}
+.voiceorb__row--user::before {
+  content: 'Du · ';
+  color: var(--text-4);
+}
+.voiceorb__row--assistant {
+  color: var(--text-1);
+}
+.voiceorb__row--assistant::before {
+  content: 'Hoshi · ';
+  color: var(--text-4);
+}
+
+/* reduced-motion: die vorhandene .vc-orb__*-Regel oben deckt den großen Orb
+   schon mit ab (gleiche Klassen, nur andere Größe) — hier bleibt nur die
+   Hover/Active-Transform des Tap-Buttons zu kappen. */
+@media (prefers-reduced-motion: reduce) {
+  .voiceorb__tap {
+    transition: none !important;
+  }
+  .voiceorb__tap:not(:disabled):hover,
+  .voiceorb__tap:not(:disabled):active {
+    transform: none !important;
+  }
+}

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+# Explizite Laufzeit-Abhaengigkeiten des externen Piper-Wheels. Die HTTP-Huelle
+# nutzt nur die Python-Standardbibliothek und braucht deshalb keinen Web-Stack.
+# Das GPL-lizenzierte Wheel selbst wird hash-geprueft durch bootstrap.sh
+# installiert und steht absichtlich NICHT als unkontrollierter PyPI-Range hier.
+
+onnxruntime==1.27.0
+pathvalidate==3.3.1
+numpy==2.1.3
+flatbuffers==25.12.19
+packaging==26.2
+protobuf==7.35.1

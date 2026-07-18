@@ -1,0 +1,52 @@
+# sidecars/brain — text-only Gemma-4-E4B LLM-Sidecar (server.py)
+# [0.8-Port] 1:1 aus Hoshi_0.5/hoshi-llm-optiq/requirements.txt, ERWEITERT um die
+# vollen Kern-Pins aus dem echten 0.5-venv (`pip freeze`, 2026-07-16) — nicht nur
+# mlx/mlx-lm/lm-format-enforcer wie im 0.5-Original, sondern auch huggingface_hub
+# + den Web-Layer, weil Version-Drift dort schon einmal einen Cache-Incident
+# ausgeloest hat (s. run.sh-Kommentar zum HF-Revision-Pin) — die Kern-Versionen
+# mlx-lm/huggingface_hub sind betriebskritisch gepinnt. Transitive Blaetter
+# (anyio/click/h11/...) NICHT einzeln gepinnt — pip loest sie automatisch
+# ueber die Pins unten; fuer eine
+# bit-exakte Vollrekonstruktion s. `.venv/bin/pip freeze` im 0.5-Quell-venv.
+#
+# Apple Silicon (M1/M2/M3/M4) only — mlx-* haben keinen Intel-/Nicht-Mac-Support.
+# Auf Nicht-Mac-Plattformen ist das BrainPort (HTTP-Vertrag /v1/chat, /v1/score,
+# /health) trotzdem erfuellbar — nur eben mit einem ANDEREN Server hinter dem
+# Port, nicht mit dieser requirements.txt (s. sidecars/brain/README.md).
+
+# ── KRITISCHER PIN: mlx-lm == 0.31.2 ─────────────────────────────────────────
+#   0.31.3 ist Regression #1242 und bricht Gemma-4-KV-Sharing
+#   (pip-default 0.31.3 wirft "Missing 54 parameters", Modell laedt nicht).
+#   Dieser Pin MUSS isoliert bleiben (andere Sidecars/venvs koennen abweichende
+#   mlx-lm-Versionen ziehen — NIE dieses venv mit einem anderen mischen).
+mlx-lm==0.31.2
+mlx==0.31.2
+# mlx installiert mlx-metal (die Metal-GPU-Runtime) automatisch als eigene
+# Dependency — hier trotzdem explizit gepinnt (Reproduzierbarkeit, s.o.).
+mlx-metal==0.31.2
+
+# ── huggingface_hub: betriebskritisch gepinnt ────────────────────────────────
+#   mlx_lm.load() nutzt huggingface_hub.snapshot_download() intern; run.sh's
+#   Cache-Vollstaendigkeits-Guard ruft dieselbe Funktion direkt. Incident
+#   2026-07-08 (Hoshi_0.5): ein simpler Brain-Restart zog ungefragt die
+#   NEUESTE HF-Revision — inkompatibel mit dem installierten mlx-lm, Brain tot.
+#   Seitdem: HF_HUB_OFFLINE=1 by default (s. run.sh) + dieser Pin.
+huggingface_hub==1.18.0
+
+# ── Web-Server (import uvicorn / fastapi / pydantic in server.py) ───────────
+fastapi==0.136.3
+uvicorn==0.49.0
+pydantic==2.13.4
+
+# ── PATH B (Track #3 Agentik) — strukturell erzwungenes Tool-JSON ───────────
+#   server.py::tool_grammar. Torch-FREI genutzt: NIE
+#   `lmformatenforcer.integrations.transformers` importieren (macht hart
+#   `import torch`; dieses venv hat KEIN torch und soll es behalten).
+#   server.py baut die TokenEnforcerTokenizerData selbst nach
+#   (_replicate_te_tokenizer_data). Eigene Deps (interegular/packaging/pyyaml)
+#   werden von pip automatisch mitgezogen — kein torch/transformers-Touch
+#   ueber diesen Pin hinaus.
+lm-format-enforcer==0.11.3
+
+# ── numpy: direkt genutzt fuer die Logits-Bias-Arrays (PATH B / D1b) ────────
+numpy==2.4.6

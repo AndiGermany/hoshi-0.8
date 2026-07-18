@@ -1,0 +1,83 @@
+# --- Hoshi 0.8: sauberes .gitignore von Anfang an (Trust = clean repo) ---
+# Lehre aus 0.5: 1,9 GB untracked Blobs (Sidecar-Modelle, Firmware-Builds) → NIE wieder.
+# Große Binaries/Modelle gehören in Git-LFS oder bleiben ganz draußen.
+
+# Build / Tooling
+.gradle/
+.gradle-jdks/
+build/
+**/build/
+.kotlin/
+*.class
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Python-Sidecars (venvs nie committen; venv-Symlink-Hölle aus 0.5)
+.venv/
+**/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# ML-Modelle / große Binaries → LFS oder extern, nie in die History
+*.gguf
+*.safetensors
+*.onnx
+*.bin
+*.pt
+*.mlx
+models/
+*.db
+*.sqlite
+
+# Audio / generierte Artefakte
+*.wav
+*.mp3
+out/
+generated/
+
+# Secrets / lokale Config (nie committen)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+# OSS-Härtung 2026-07-15: Keystores, SSH-Private-Keys, Secrets-Dateien.
+*.p12
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+secrets.json
+secrets.env
+
+# OS / IDE
+.DS_Store
+.idea/
+*.iml
+.vscode/
+
+# Logs / Laufzeit
+*.log
+logs/
+*.pid
+.hoshi/
+
+# Dev-Pipeline-Logs (bin/hoshi verify|run → .pipeline/*.log)
+.pipeline/
+
+# Obsidian editor-local state (churnt staendig, kein geteiltes Wissen) — der Rest
+# von .obsidian/ (app/appearance/core-plugins) bleibt getrackt.
+.obsidian/workspace.json
+.obsidian/graph.json
+.obsidian/community-plugins.json
+.obsidian/plugins/
+# stray dev-log am Repo-Root (kein *.log-Suffix → sonst nicht erfasst)
+/log
+
+# LoRA-Training: Adapter-Gewichte + Logs bleiben lokal (Datensatz wird committet)
+training/**/adapters/
+training/**/logs/

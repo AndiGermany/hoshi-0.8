@@ -1,0 +1,40 @@
+{"id": "b01", "text": "Kannst du mir bitte einen kurzen Reim über Kaffee machen?", "kategorie": "bitte-oeffner"}
+{"id": "b02", "text": "Erklär mir bitte, was ein Schaltjahr ist.", "kategorie": "bitte-oeffner"}
+{"id": "b03", "text": "Mach mir bitte eine Einkaufsliste für Spaghetti Bolognese.", "kategorie": "bitte-oeffner"}
+{"id": "b04", "text": "Schreib mir eine kurze Geburtstagsnachricht für meine Oma.", "kategorie": "bitte-oeffner"}
+{"id": "b05", "text": "Gib mir bitte drei Ideen für ein schnelles Abendessen.", "kategorie": "bitte-oeffner"}
+{"id": "b06", "text": "Übersetz mir bitte das Wort Feierabend ins Englische.", "kategorie": "bitte-oeffner"}
+{"id": "b07", "text": "Nenn mir bitte drei Dinge, die ich am Sonntag machen könnte.", "kategorie": "bitte-oeffner"}
+{"id": "b08", "text": "Kannst du mir ein Beispiel für eine Metapher geben?", "kategorie": "bitte-oeffner"}
+{"id": "b09", "text": "Stell mir bitte eine Quizfrage über Tiere.", "kategorie": "bitte-oeffner"}
+{"id": "b10", "text": "Hilf mir mal kurz: Was reimt sich auf Sonne?", "kategorie": "bitte-oeffner"}
+{"id": "h01", "text": "Wie kriege ich Rotweinflecken aus dem Teppich?", "kategorie": "alltag"}
+{"id": "h02", "text": "Wie lange hält sich offene Milch im Kühlschrank?", "kategorie": "alltag"}
+{"id": "h03", "text": "Warum piept der Rauchmelder immer nachts?", "kategorie": "alltag"}
+{"id": "h04", "text": "Wie oft sollte man eigentlich die Bettwäsche wechseln?", "kategorie": "alltag"}
+{"id": "h05", "text": "Was kann ich gegen beschlagene Fenster im Winter tun?", "kategorie": "alltag"}
+{"id": "h06", "text": "Mein Basilikum lässt die Blätter hängen, was mache ich falsch?", "kategorie": "alltag"}
+{"id": "h07", "text": "Wie entkalke ich am besten den Wasserkocher?", "kategorie": "alltag"}
+{"id": "h08", "text": "Kann man Bananen im Kühlschrank aufbewahren?", "kategorie": "alltag"}
+{"id": "h09", "text": "Wie kriege ich den Abfluss frei, ohne Chemie zu benutzen?", "kategorie": "alltag"}
+{"id": "h10", "text": "Was hilft schnell gegen Schluckauf?", "kategorie": "alltag"}
+{"id": "p01", "text": "Was sollte ich für einen Tagesausflug mit Kindern einpacken?", "kategorie": "planung"}
+{"id": "p02", "text": "Wie plane ich den Wocheneinkauf, ohne die Hälfte zu vergessen?", "kategorie": "planung"}
+{"id": "p03", "text": "Hilf mir, morgen früher aus dem Bett zu kommen.", "kategorie": "planung"}
+{"id": "p04", "text": "Wie bereite ich mich auf ein schwieriges Gespräch mit meinem Chef vor?", "kategorie": "planung"}
+{"id": "p05", "text": "Was gehört auf eine Packliste für ein Wochenende an der Ostsee?", "kategorie": "planung"}
+{"id": "p06", "text": "Wie teile ich mir eine Stunde Lernzeit sinnvoll ein?", "kategorie": "planung"}
+{"id": "p07", "text": "Was koche ich, wenn spontan Besuch vor der Tür steht?", "kategorie": "planung"}
+{"id": "p08", "text": "Wie fange ich am besten an, den Keller auszumisten?", "kategorie": "planung"}
+{"id": "m01", "text": "Was ist dein Lieblingswort im Deutschen?", "kategorie": "meinung"}
+{"id": "m02", "text": "Sommer oder Winter — was findest du besser?", "kategorie": "meinung"}
+{"id": "m03", "text": "Wenn du ein Tier wärst, welches wärst du?", "kategorie": "meinung"}
+{"id": "m04", "text": "Was hältst du von Montagen?", "kategorie": "meinung"}
+{"id": "m05", "text": "Findest du Pizza Hawaii in Ordnung?", "kategorie": "meinung"}
+{"id": "m06", "text": "Welche Musik würdest du hören, wenn du könntest?", "kategorie": "meinung"}
+{"id": "x01", "text": "Could you please give me three tips for better sleep?", "kategorie": "en-v2"}
+{"id": "x02", "text": "Help me write a short thank-you note to a colleague.", "kategorie": "en-v2"}
+{"id": "x03", "text": "Please explain what inflation means in simple terms.", "kategorie": "en-v2"}
+{"id": "x04", "text": "Can you suggest a good name for a black cat?", "kategorie": "en-v2"}
+{"id": "x05", "text": "Any ideas for a rainy Sunday afternoon?", "kategorie": "en-v2"}
+{"id": "x06", "text": "What would be a nice way to start learning to cook?", "kategorie": "en-v2"}

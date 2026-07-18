@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# bin/hoshi — Dispatcher für die autonome Hoshi-0.8-Dev-Pipeline.
+#
+# Muster aus 0.5 (tools/hoshi-deploy.sh: --status, Exit-Codes, Farben), aber als
+# EIN Einstieg mit Subcommands, die an pipeline/<cmd>.sh delegieren.
+#
+# Usage:
+#   bin/hoshi verify       # grüner Gate: build (alle Module + Tests) + LIVE-Brain-Smoke
+#   bin/hoshi run          # lauffähig-Beweis: App auf :8090 booten + Health/401/200 prüfen
+#   bin/hoshi turn         # M2-Beweis: echter Turn durchs Hexagon (POST /chat/stream → SSE)
+#   bin/hoshi ask "<frage>"# M4-Step-2-Beweis: grounded Turn — Antwort spiegelt echtes Wiki-Wissen
+#   bin/hoshi voice        # Audio-Beweis: der Turn ist HÖRBAR (≥1 AudioChunk, Bytes/ms)
+#   bin/hoshi voicein      # Eingabe-Beweis: gesprochene WAV → /api/v1/voice → STT → Turn
+#   bin/hoshi ground       # M4-Step-1-Beweis: Fts5GroundingAdapter → echte Wiki-Bridge (:8035)
+#   bin/hoshi services     # M3-Beweis: Sidecar-Supervisor live (ehrlicher read-only Report)
+#   bin/hoshi doctor       # Stack ehrlich prüfen (echter Roundtrip, read-only)
+#   bin/hoshi heal         # Zombie/Wedge-Brain auto-fixen (guard-sicher, mit Beweis)
+#   bin/hoshi up           # Stack brain-guard-sicher hochfahren (idempotent)
+#   bin/hoshi seam-watch   # die Brain-Naht (e4b :8041) beobachten
+#   bin/hoshi deploy       # lokaler launchd-Service (io.hoshi.0.8.backend, :8090, HA-scharf)
+#                          #   + Verify; --status / --down / --remote(=Andi-Gate-Stub)
+#
+# Exit-Code wird 1:1 vom Subcommand durchgereicht (0 = grün).
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PIPELINE_DIR="$REPO_ROOT/pipeline"
+
+# ── Farben (nur am tty) ──────────────────────────────────────────────────────
+if [ -t 1 ]; then
+    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'; C_GREEN=$'\033[32m'
+    C_RED=$'\033[31m'; C_DIM=$'\033[2m'; C_CYAN=$'\033[36m'
+else
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_RED=""; C_DIM=""; C_CYAN=""
+fi
+
+usage() {
+    cat <<EOF
+${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (0.8 / Nagareboshi)
+
+  ${C_CYAN}verify${C_RESET}       grüner Gate: ./gradlew build (alle Module + ArchUnit/Unit)
+               + LIVE-Brain-Smoke gegen echten e4b (:8041)
+  ${C_CYAN}run${C_RESET}          lauffähig-Beweis: App auf :8090 booten,
+               /api/health→200, /api/v1/ping ohne Token→401, mit Token→200
+  ${C_CYAN}turn${C_RESET}         M2-Beweis: echter Turn durchs Hexagon — POST /api/v1/chat/stream
+               (deutsche Frage → SSE-ChatEvent-Stream, nicht-leere Antwort)
+  ${C_CYAN}ask${C_RESET} "<frage>" M4-Step-2-Beweis: grounded Turn — App mit HOSHI_GROUNDING_ENABLED=true,
+               Router→FACT→Fts5GroundingAdapter (:8035) → Antwort spiegelt echtes Wiki-Wissen
+  ${C_CYAN}voice${C_RESET}        Audio-Beweis: der Turn ist HÖRBAR — speak=true → ≥1 AudioChunk
+               (Voxtral :8042), gibt AudioChunks/Bytes/ms aus, WAV nach .pipeline/
+  ${C_CYAN}voicein${C_RESET}      Eingabe-Beweis: Andi SPRICHT Hoshi an — WAV (Voxtral :8042)
+               → POST /api/v1/voice → Whisper :9001 → Turn; zeigt Transkript + Antwort
+  ${C_CYAN}tts-openai${C_RESET}   Cloud-TTS-Beweis (ohne Brain): OpenAiTtsAdapter → OpenAI
+               /v1/audio/speech (\"Hallo, ich bin Hoshi.\") → WAV-Bytes (RIFF), gibt Byte-Länge aus
+  ${C_CYAN}ground${C_RESET}       M4-Step-1-Beweis: Fts5GroundingAdapter → echte Knowledge-Bridge
+               (:8035, dt. Wiki) — gibt den abgerufenen Grounding-Block wörtlich aus
+  ${C_CYAN}services${C_RESET}     M3-Beweis: Sidecar-Supervisor live gegen die echte Infra
+               (read-only inspect, ehrlich OK/DEGRADED/DOWN, Restart GATED)
+  ${C_CYAN}doctor${C_RESET}       Stack ehrlich prüfen (READ-ONLY): Brain via echtem /v1/chat-Roundtrip
+               (grün≠lebt → OK/WEDGE/ZOMBIE/DOWN/LOADING), Sidecars + RAM + Brain-Guard
+  ${C_CYAN}heal${C_RESET}         Zombie/Wedge/Down-Brain auto-fixen: guard-sicher kill→start,
+               Erfolg ERST bei bewiesenem Roundtrip (--brain-only, Default)
+  ${C_CYAN}up${C_RESET}           Stack brain-guard-sicher hochfahren: Brain (wenn nicht OK) +
+               whisper/bridge/speaker-id best-effort, idempotent (voxtral gewollt aus)
+  ${C_CYAN}seam-watch${C_RESET}   die Brain-Naht (e4b :8041) beobachten (--once für einen Schuss)
+  ${C_CYAN}deploy${C_RESET}       lokaler launchd-Service: io.hoshi.0.8.backend (:8090, HA-scharf,
+               self-healing) bauen+installieren+verifizieren (Health/401-Wand/Turn/Log);
+               ${C_DIM}--status${C_RESET} (Service+Health) · ${C_DIM}--down${C_RESET} (stoppen) · ${C_DIM}--remote${C_RESET} (ct-106 = Andi-Gate-Stub)
+
+Logs: ${C_DIM}$REPO_ROOT/.pipeline/${C_RESET}
+EOF
+}
+
+cmd="${1:-}"
+[ $# -gt 0 ] && shift || true
+
+case "$cmd" in
+    verify|run|turn|ask|voice|voicein|tts-openai|ground|services|doctor|heal|up|seam-watch|deploy)
+        target="$PIPELINE_DIR/$cmd.sh"
+        if [ ! -x "$target" ]; then
+            echo "${C_RED}✗ FAIL${C_RESET} — $target fehlt oder ist nicht ausführbar" >&2
+            exit 1
+        fi
+        echo "${C_BOLD}── hoshi $cmd ${C_RESET}${C_DIM}· $(date '+%H:%M:%S') · repo=$(basename "$REPO_ROOT")${C_RESET}"
+        echo
+        set +e
+        bash "$target" "$@"
+        rc=$?
+        set -e
+        echo
+        if [ "$rc" -eq 0 ]; then
+            echo "${C_GREEN}${C_BOLD}✓ OK${C_RESET} — hoshi $cmd (exit 0)"
+        else
+            echo "${C_RED}${C_BOLD}✗ FAIL${C_RESET} — hoshi $cmd (exit $rc)"
+        fi
+        exit $rc
+        ;;
+    ""|-h|--help|help)
+        usage
+        [ -z "$cmd" ] && exit 2 || exit 0
+        ;;
+    *)
+        echo "${C_RED}✗ unbekanntes Subcommand: $cmd${C_RESET}" >&2
+        echo
+        usage
+        exit 2
+        ;;
+esac

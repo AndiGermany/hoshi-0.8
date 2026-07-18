@@ -1,0 +1,2231 @@
+/* Hoshi 0.8 — Yoru (夜) aus dem 0.5-Theme portiert (OKLCH). Warme Holzkohle +
+   Laternen-Gold-Akzent (提灯) — der Default-Look von 0.5 (smarthome-assistant-ui,
+   src/styles/tokens.css [data-theme="yoru"], accent-auto h45/s0.13). Hintergründe,
+   Text-Treppe und Semantik sind byte-genau Yoru; der Akzent war in 0.8 zuvor
+   eis-violett (h274) — jetzt auf Yorus warmes Gold zurückgeholt. */
+:root {
+  --bg-base: oklch(0.115 0.006 66);
+  --bg-surface: oklch(0.155 0.006 64);
+  --bg-elevated: oklch(0.195 0.006 62);
+  --bg-subtle: oklch(0.275 0.005 58);
+  --bg-hairline: oklch(0.34 0.004 56);
+
+  --text-1: oklch(0.96 0.006 70);
+  --text-2: oklch(0.78 0.008 68);
+  --text-3: oklch(0.62 0.01 66);
+  --text-4: oklch(0.47 0.012 64);
+
+  /* Akzent = Yoru-Default (Laternen-Gold, h45/s0.13, L0.80 → AA-sicher auf Tinte).
+     accent-ink bleibt die dunkle Tinte aus 0.5 (h274), die auf dem Gold sitzt. */
+  --accent: oklch(0.8 0.13 45);
+  --accent-soft: oklch(0.8 0.13 45 / 0.2);
+  --accent-faint: oklch(0.8 0.13 45 / 0.1);
+  --accent-glow: oklch(0.8 0.13 45 / 0.4);
+  --accent-ink: oklch(0.13 0.03 274);
+
+  --success: oklch(0.72 0.16 150);
+  --success-soft: oklch(0.72 0.16 150 / 0.16);
+  --warn: oklch(0.82 0.19 80);
+  --warn-soft: oklch(0.82 0.19 80 / 0.16);
+  --error: oklch(0.65 0.22 25);
+  --error-soft: oklch(0.65 0.22 25 / 0.16);
+
+  --radius: 12px;
+  --gap: 16px;
+
+  /* Lesespalte + bubblelose Message-Token (Yoru, awake — Slice 1). */
+  --measure: 42rem; /* ~672px ruhige Lesebreite für den Thread */
+  --radius-bubble: 18px;
+  --bg-user: oklch(0.225 0.012 60); /* warm-neutrale Du-Blase (KEIN Gold-Fill) */
+
+  /* ---- Motion-Token (nur transform/opacity/filter animieren → 60fps) ---- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decel: cubic-bezier(0, 0, 0, 1); /* Eintretendes */
+  --ease-accel: cubic-bezier(0.3, 0, 1, 1); /* Austretendes */
+  --ease-emph: cubic-bezier(0.05, 0.7, 0.1, 1); /* Hero-Eintritt */
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1); /* Token-Reveal */
+  --dur-instant: 100ms;
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-slow: 320ms;
+  --stagger: 40ms;
+  --breath: 3200ms;
+  /* eine Signatur-Feder (Josh-Comeau-linear(), ~0 Bundle) für den Du-Eintritt */
+  --spring-settle: linear(0, 0.42 7.5%, 0.78 15%, 1.04 24%, 1.06 30%, 1 47%, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-1);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.92em;
+  color: var(--text-2);
+}
+
+/* Nur für Screenreader (Voice-Stern-Label u. Ä.): sichtbar verborgen, lesbar. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+/* ---- Top-Nav ---- */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  /* responsive: bei schmaler Breite umbrechen statt horizontal überlaufen
+     (Header-Badge ragte sonst über den Viewport → H-Scroll). */
+  flex-wrap: wrap;
+  row-gap: 10px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--bg-hairline);
+  background: var(--bg-surface);
+  /* Eigener Stacking-Context ÜBER dem Inhalt: Nav-Popovers (Ops-Panel) liegen
+     damit garantiert über den Kacheln — egal welche Stacking-Contexte die
+     animierte .app__main darunter aufmacht. */
+  position: relative;
+  z-index: 20;
+}
+.nav__tabs {
+  flex-wrap: wrap;
+}
+
+.nav__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.nav__title {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.nav__ver {
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.nav__tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.nav__tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-3);
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+}
+.nav__tab:hover {
+  color: var(--text-1);
+  background: var(--bg-subtle);
+}
+.nav__tab.is-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+}
+
+/* ---- Health-Badge ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  color: var(--text-3);
+  white-space: nowrap;
+  /* Zustandswechsel gleitet (Farbe/Schein), statt hart umzuspringen. */
+  transition:
+    color var(--dur-base) var(--ease-standard),
+    background-color var(--dur-base) var(--ease-standard),
+    border-color var(--dur-base) var(--ease-standard);
+}
+.badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-4);
+  transition:
+    background-color var(--dur-base) var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-standard);
+}
+/* Einmaliger „Ping" bei jedem echten Zustandswechsel (acknowledge). */
+.badge--ping .badge__dot {
+  animation: badge-ping 600ms var(--ease-decel) 1;
+}
+@keyframes badge-ping {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.7);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.badge--up {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: transparent;
+}
+.badge--up .badge__dot {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+}
+.badge--down {
+  color: var(--error);
+  background: var(--error-soft);
+  border-color: transparent;
+}
+.badge--down .badge__dot {
+  background: var(--error);
+}
+.badge--unknown .badge__dot {
+  background: var(--text-4);
+}
+
+/* Dezenter Dot-only-Indicator (Health-Badge in der Nav): kein Text/Chrome
+   mehr, nur der Punkt — Zustand/Zeit trägt der native Tooltip (`title`).
+   Nach den `.badge--<state>`-Regeln notiert, damit sie hier bewusst
+   überschrieben werden (Farbe bleibt am Dot, nicht an der Pille). */
+.badge--dot {
+  padding: 5px 3px;
+  gap: 0;
+  color: var(--text-4);
+  background: none;
+  border-color: transparent;
+}
+
+/* Status-Gruppe in der Top-Nav: Health-Badge + Ops-Pille gepaart. */
+.nav__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 星 (Hoshi) — leise Marke links VOR dem Wortmark (im nav__brand). Bewusst
+   gedämpft: klein, in Text-Grau statt vollem Akzent-Gold, leicht zurückgenommen —
+   es steht ruhig dabei, leuchtet nicht. cursor bleibt default (das
+   Crew-Easter-Egg bleibt versteckt). */
+.nav__hoshi {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-3);
+  opacity: 0.9;
+  cursor: default;
+  user-select: none;
+}
+
+/* ---- Ops-Status-Pille (RAM-Druck + Sidecar-Gesundheit) ----
+   KEIN Gold (Gold = nur Stimme/CTA). Neutral wenn OK, amber bei WARN, rot bei
+   CRITICAL. Erbt die Pillen-Form von `.badge`; Ton + Panel sind hier. */
+.ops {
+  position: relative;
+  display: inline-flex;
+}
+.ops__pill {
+  cursor: default;
+  user-select: none;
+}
+/* WARN/CRITICAL ist ein echter <button> (klickbar → Panel): Browser-Chrome
+   neutralisieren, Zeigefinger zeigt die Klickbarkeit an. */
+button.ops__pill {
+  font: inherit;
+  cursor: pointer;
+}
+.ops__icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* OK = still: nur ein kleiner Punkt in Statusfarbe, ohne Pillen-Chrome und
+   ohne Dauertext. Details weiterhin per Hover/Fokus/Tap im Panel. */
+.ops__pill--ok {
+  color: var(--text-3);
+  padding: 5px 3px;
+  border-color: transparent;
+  background: none;
+}
+.ops__pill--ok .badge__dot {
+  background: var(--success);
+  opacity: 0.75;
+}
+
+/* WARN = bernstein/amber, fällt auf. */
+.ops__pill--warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-color: transparent;
+}
+.ops__pill--warn .badge__dot {
+  background: var(--warn);
+  box-shadow: 0 0 8px var(--warn-soft);
+}
+
+/* CRITICAL = rot + ruhiger Puls. */
+.ops__pill--critical {
+  color: var(--error);
+  background: var(--error-soft);
+  border-color: transparent;
+}
+.ops__pill--critical .badge__dot {
+  background: var(--error);
+  box-shadow: 0 0 8px var(--error);
+  animation: ops-pulse 2.2s ease-in-out infinite;
+}
+@keyframes ops-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 5px var(--error);
+  }
+  50% {
+    box-shadow: 0 0 13px var(--error);
+  }
+}
+
+/* Detail-Panel: absolut positioniert (kein Layout-Shift, kein Header-Overflow),
+   am rechten Rand verankert. Zwei Reveal-Wege:
+    - OK (stiller Punkt): Hover/Fokus wie `.msg__meta` (Tap fokussiert die
+      role=button-Pille) — unverändert das Verhalten von heute.
+    - WARN/CRITICAL: explizit per Klick (`.ops--open`, aria-expanded) — das
+      Panel beantwortet das WARUM; Escape/Klick außerhalb schließen. */
+.ops__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(320px, 80vw);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--bg-hairline);
+  /* IMMER voll deckend in der surface-Farbe des aktiven Themes (Cowork-Fund
+     2026-07-02: Panel-Text kollidierte mit den Kacheln darunter). Der Reveal
+     läuft bewusst OHNE opacity: Chromes Occlusion-/Hintergrund-Throttling kann
+     eine laufende opacity-Transition einfrieren — das Panel stand dann halb
+     transparent über den Kacheln. visibility + transform können nicht
+     „halb durchsichtig" stranden. */
+  background: var(--bg-surface);
+  box-shadow: 0 10px 30px oklch(0 0 0 / 0.4);
+  font-size: 12.5px;
+  color: var(--text-2);
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition:
+    transform var(--dur-fast) var(--ease-standard),
+    visibility var(--dur-fast) var(--ease-standard);
+  pointer-events: none;
+}
+.ops[data-tone='ok']:hover .ops__panel,
+.ops[data-tone='ok']:focus-within .ops__panel,
+.ops--open .ops__panel {
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Toms ☁️-Cloud-Banner (voice.cloud === true): ruhig, ehrlich, kein Alarm-Rot. */
+.ops__cloud {
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--bg-hairline);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* Gegenzeile bei lokaler TTS-Engine (voice.cloud === false): ruhig, gleiche
+   Statur wie .ops__cloud, nur ohne Egress-Warnfarbe. */
+.ops__voicelocal {
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--bg-hairline);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* Andis grünes Schloss (allLocal === true): STT+Brain+TTS komplett lokal —
+   eine ruhige Bestätigung, kein Alarm-Pendant. */
+.ops__lock {
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--bg-hairline);
+  font-size: 12px;
+  color: var(--success);
+}
+
+.ops__mem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.ops__memhead {
+  font-weight: 600;
+  color: var(--text-2);
+}
+.ops__memlevel {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  color: var(--text-3);
+}
+.ops__mem--warn .ops__memlevel {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-color: transparent;
+}
+.ops__mem--critical .ops__memlevel {
+  color: var(--error);
+  background: var(--error-soft);
+  border-color: transparent;
+}
+.ops__memdetail {
+  margin: 6px 0 0;
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.ops__sidecars {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--bg-hairline);
+  display: grid;
+  gap: 7px;
+}
+.ops__sc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ops__scdot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-4);
+}
+.ops__sc--ok .ops__scdot {
+  background: var(--success);
+}
+.ops__sc--degraded .ops__scdot {
+  background: var(--warn);
+}
+.ops__sc--down .ops__scdot {
+  background: var(--error);
+}
+.ops__scname {
+  color: var(--text-2);
+}
+.ops__scstatus {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-4);
+}
+.ops__scdetail {
+  margin-left: auto;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--text-4);
+}
+
+/* Reduced-motion: der CRITICAL-Puls steht still (zusätzlich zur globalen Regel). */
+@media (prefers-reduced-motion: reduce) {
+  .ops__pill--critical .badge__dot {
+    animation: none !important;
+  }
+}
+
+/* ---- Main ---- */
+.app__main {
+  flex: 1;
+  min-height: 0;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  /* Tab-Wechsel (key={tab} in App.tsx remountet) → ruhige Inhalts-Einblendung. */
+  animation: view-in var(--dur-base) var(--ease-decel) both;
+}
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Overview ---- */
+.overview__title {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+.overview__lede {
+  color: var(--text-3);
+  max-width: 60ch;
+  margin: 0 0 24px;
+}
+.kv {
+  margin: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--bg-hairline);
+  border: 1px solid var(--bg-hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.kv__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+}
+.kv__row dt {
+  color: var(--text-4);
+  font-size: 13px;
+}
+.kv__row dd {
+  margin: 0;
+  text-align: right;
+}
+
+/* ---- Übersicht (status-first Landing) ---- */
+.ueber {
+  display: flex;
+  flex-direction: column;
+}
+.ueber__head {
+  margin-bottom: 20px;
+}
+.ueber__title {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+.ueber__lede {
+  color: var(--text-3);
+  max-width: 62ch;
+  margin: 0;
+}
+
+/* Hero: der eine echte Zustand, groß. */
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-surface);
+}
+.hero__dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-4);
+}
+.hero__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.hero__title {
+  font-size: 17px;
+  font-weight: 650;
+}
+.hero__sub {
+  font-size: 12.5px;
+  color: var(--text-4);
+}
+.hero__aside {
+  margin-left: auto;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.hero__base {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero__time {
+  font-size: 11.5px;
+  color: var(--text-4);
+}
+.hero--up {
+  background: var(--success-soft);
+  border-color: transparent;
+}
+.hero--up .hero__title {
+  color: var(--success);
+}
+.hero--up .hero__dot {
+  background: var(--success);
+  box-shadow: 0 0 10px var(--success);
+  animation: hero-pulse 2.4s ease-in-out infinite;
+}
+.hero--down {
+  background: var(--error-soft);
+  border-color: transparent;
+}
+.hero--down .hero__title {
+  color: var(--error);
+}
+.hero--down .hero__dot {
+  background: var(--error);
+}
+.hero--unknown .hero__title {
+  color: var(--text-2);
+}
+
+@keyframes hero-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px var(--success);
+  }
+  50% {
+    box-shadow: 0 0 14px var(--success);
+  }
+}
+
+/* Sektionsköpfe + Hinweis. */
+.ueber__sec {
+  margin: 24px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.ueber__sechint {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--text-4);
+  max-width: 62ch;
+}
+
+/* Kachel-Raster. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-surface);
+  /* Eintritts-Stagger (gemeinsam mit .feed__row) beim Mount/Tab-Wechsel. */
+  animation: tile-in var(--dur-base) var(--ease-decel) both;
+}
+
+/* Gestaffelter Eintritt für Kacheln + Feed-Zeilen (NUR transform, cap 6).
+   Bewusst OHNE opacity (Cowork-Fund 2026-07-02: Turn-Feed-Zeile mit großer
+   Leerfläche darunter): Chromes Occlusion-/Hintergrund-Throttling kann die
+   gestaffelten Animationen einfrieren — mit `fill: both` + opacity:0 blieben
+   spätere Zeilen dann UNSICHTBAR stehen (nur die Hairline-Fläche des Feeds
+   war zu sehen). Ein eingefrorenes translateY(6px) ist dagegen harmlos:
+   die Zeile bleibt lesbar, nur minimal versetzt. */
+@keyframes tile-in {
+  from {
+    transform: translateY(6px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.tiles .tile:nth-child(1),
+.feed .feed__row:nth-child(1) {
+  animation-delay: calc(var(--stagger) * 0);
+}
+.tiles .tile:nth-child(2),
+.feed .feed__row:nth-child(2) {
+  animation-delay: calc(var(--stagger) * 1);
+}
+.tiles .tile:nth-child(3),
+.feed .feed__row:nth-child(3) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.tiles .tile:nth-child(4),
+.feed .feed__row:nth-child(4) {
+  animation-delay: calc(var(--stagger) * 3);
+}
+.tiles .tile:nth-child(5),
+.feed .feed__row:nth-child(5) {
+  animation-delay: calc(var(--stagger) * 4);
+}
+.tiles .tile:nth-child(n + 6),
+.feed .feed__row:nth-child(n + 6) {
+  animation-delay: calc(var(--stagger) * 5); /* cap: keine endlose Treppe */
+}
+.tile--pending {
+  background: var(--bg-base);
+  border-style: dashed;
+}
+.tile__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tile__icon {
+  font-size: 11px;
+  line-height: 1;
+}
+.tile__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.tile__pill {
+  margin-left: auto;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  color: var(--text-4);
+}
+.tile--live .tile__pill {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.tile__value {
+  font-size: 14px;
+  color: var(--text-1);
+  word-break: break-word;
+}
+.tile--pending .tile__value {
+  color: var(--text-4);
+}
+.tile__note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+/* ---- Idle-Gesicht (Aoi-Spec §2 — das „Zuhause"-Layout) ----
+   Typo-first Uhr · Wecker-Zeile mit 2px-Haarlinie · 3 ehrliche Kacheln ·
+   stille Text-Chips · unten die atmende Welle (Canvas, VoiceWaveform).
+   Motion-Lehren: hier wird NUR transform bewegt (scaleX der Haarlinie,
+   tile-in der Kacheln) — Chromes Occlusion-Throttling friert opacity-
+   Animationen ein; reduced-motion stellt die globale Regel ruhig, die
+   Welle rendert ihr Standbild selbst. */
+.idle {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 0 4px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--bg-hairline);
+}
+.idle__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.idle__clock {
+  /* Typo-first: groß, fluid, tabular — die Uhr IST das Gesicht. */
+  font-size: clamp(56px, 12vw, 124px);
+  font-weight: 250;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+}
+.idle__greet {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-3);
+}
+
+/* Wecker-Zeile: Icon | Text | Vertrauens-Satz rechts, darunter die Haarlinie. */
+.idle__alarm {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+.idle__alarmicon {
+  font-size: 13px;
+  line-height: 1;
+}
+.idle__alarmtext {
+  font-size: 14px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.idle__alarmtruth {
+  font-size: 12.5px;
+  color: var(--text-4);
+  white-space: nowrap;
+}
+.idle__alarmtrack {
+  grid-column: 1 / -1;
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--bg-hairline);
+  overflow: hidden;
+}
+.idle__alarmfill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left center;
+  transform: scaleX(0); /* echter Wert kommt inline (scaleX 0..1) */
+  transition: transform var(--dur-slow) var(--ease-standard);
+}
+.idle__alarm--none .idle__alarmtext {
+  color: var(--text-4);
+}
+
+/* Drei Kacheln: nutzt die fixierte .tile-Designsprache (LIVE gefüllt ·
+   kommend gestrichelt); der Aoi-Token --bg-hairline-dashed zeichnet die
+   gestrichelte Kante (Fallback: normale Hairline in Nicht-Aoi-Themen). */
+.idle__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.idle__tile.tile--pending {
+  border-color: var(--bg-hairline-dashed, var(--bg-hairline));
+}
+.idle__tile .tile__value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stille Text-Chips — Text statt Pillen; nur der Health-Punkt trägt Farbe. */
+.idle__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.idle__chip {
+  white-space: nowrap;
+}
+.idle__chipsep {
+  color: var(--text-4);
+}
+.idle__chipglyph {
+  font-size: 11px;
+}
+.idle__chip--ok .idle__chipglyph {
+  color: var(--success);
+}
+.idle__chip--down .idle__chipglyph {
+  color: var(--error);
+}
+.idle__chip--unknown .idle__chipglyph {
+  color: var(--text-4);
+}
+
+/* Bewusst KEINE Welle auf der Übersicht (Korrektur 20260706-1729): hier hört
+   Hoshi nichts, also leuchtet nichts — ruhiges Papier. Die Welle (.vc-wave,
+   styles/voicebar.css) existiert nur im Chat-Voice-Flow bei offenem Kanal. */
+
+/* Reduced-motion: Animationen sofort an den Endzustand (statt mittendrin
+   einzufrieren) → barrierearm, aber kein halb-eingeblendeter Text. Atmende/
+   blinkende Elemente werden ganz ruhiggestellt; der Wort-Blur entfällt. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* Wort-Reveal: voll sichtbar, kein Blur. */
+  .tok {
+    animation: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+  /* Denk-Punkte: statisch sichtbar (kein Atmen). */
+  .thinking__dot {
+    animation: none !important;
+  }
+  /* Caret: ruhiggestellt (kein Blinken). */
+  .caret {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
+/* ---- Räume (Verbindungs-Skizze — Leerzustand, solange HOSHI_HA_ENABLED aus ist) ---- */
+.tile.empty {
+  margin-bottom: 4px;
+}
+
+/* ---- Räume (echte Geräte-Liste, Scheibe 1 des Geräte-Zuordnungs-Konzepts) ----
+   `.rooms` erbt Raster+Eintritts-Stagger von `.tiles` (beide Klassen am
+   Container) — nur die Spaltenbreite wird hier verbreitert, eine Raum-Karte
+   braucht mehr Platz als eine Status-Kachel. */
+.rooms {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.room__empty,
+.room__hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-4);
+}
+.room__devices {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--bg-hairline);
+  border: 1px solid var(--bg-hairline);
+  border-radius: calc(var(--radius) - 4px);
+  overflow: hidden;
+}
+.room__device {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-base);
+  font-size: 13px;
+}
+.room__deviceicon {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--text-3);
+}
+.room__devicename {
+  color: var(--text-1);
+}
+.room__devicedomain {
+  color: var(--text-4);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.room__devicelabels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+.room__labelchip {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-elevated);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.room--unassigned {
+  border-style: dashed;
+}
+.room__name--gap {
+  color: var(--warn);
+}
+
+/* Scheibe 2 — dezenter Raum-Picker auf „Nicht zugeordnet"-Zeilen (Mockup 11b:
+   „Raum wählen ▾"). Yoru-Tokens, SVG-frei; nur gerendert, wenn der Edit-Flag an
+   ist. `margin-left:auto` schiebt ihn wie die Label-Chips ans Zeilenende. */
+.room__picker {
+  margin-left: auto;
+}
+.room__pickerselect {
+  font: inherit;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-hairline-dashed);
+  border-radius: 999px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.room__pickerselect:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.room__pickererror {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--error);
+}
+
+/* `unreachable`: die Naht ist verdrahtet, HA antwortet gerade nicht —
+   solide (kein „kommt später"), aber deutlich als Störung markiert (Muster
+   `.hero--down`: bestehende Fehler-Töne, kein neues Farb-Zeug). */
+.tile--unreachable {
+  border-color: var(--error-soft);
+}
+.tile--unreachable .tile__pill {
+  color: var(--error);
+  background: var(--error-soft);
+  border-color: transparent;
+}
+.tile--unreachable .tile__value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-4);
+}
+.room__warnicon {
+  width: 0.85em;
+  height: 0.85em;
+  color: var(--error);
+}
+.sketch__wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+.sketch {
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  color: var(--text-4);
+}
+.sketch__link {
+  stroke: var(--bg-hairline);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.sketch__room {
+  fill: var(--bg-base);
+  stroke: var(--bg-hairline);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.sketch__roomlabel {
+  fill: var(--text-4);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+}
+.sketch__hub {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.sketch__hublabel {
+  fill: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ---- Aktivität (Health-Verlauf-Feed) ---- */
+.feed {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--bg-hairline);
+  border: 1px solid var(--bg-hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.feed__empty {
+  padding: 14px 16px;
+  background: var(--bg-base);
+  color: var(--text-4);
+  font-size: 12.5px;
+}
+.feed__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  background: var(--bg-surface);
+  animation: tile-in var(--dur-base) var(--ease-decel) both;
+}
+.feed__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-4);
+}
+.feed__row--up .feed__dot {
+  background: var(--success);
+}
+.feed__row--down .feed__dot {
+  background: var(--error);
+}
+.feed__what {
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.feed__when {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Aktivität (Turn-Diary-Feed, #10): Zeit · Kategorie-Chip · Persona · Flags · ttft ---- */
+.feed__time {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+}
+.feed__chip {
+  flex: none;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  color: var(--text-3);
+}
+.feed__persona {
+  font-size: 13px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feed__flag {
+  flex: none;
+  font-size: 12px;
+  line-height: 1;
+}
+.feed__ttft {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+}
+/* ---- Aktivität (Perf-Diary): aufklappbare Turn-Zeile + Stage-Leiste ----
+   Die Zeile lebt jetzt in <li.feed__item><details><summary.feed__row> —
+   kein JS-State, natives Auf-/Zuklappen. Farben AUSSCHLIESSLICH über die
+   bestehenden Theme-Tokens (Aoi-fähig, keine neuen Hardcodes):
+   stt=--success · grounding=--warn · brain=--accent · tts=--text-3 ·
+   Rest („sonstiges")=--bg-subtle. */
+.feed__item {
+  background: var(--bg-surface);
+}
+.feed__details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.feed__details > summary::-webkit-details-marker {
+  display: none;
+}
+.feed__details[open] > summary {
+  border-bottom: 1px dashed var(--bg-hairline);
+}
+.stagebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 12px;
+}
+.stagebar__track {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-hairline);
+}
+.stagebar__seg {
+  display: inline-block;
+  min-width: 2px;
+  height: 100%;
+}
+.stagebar__seg--sttMs {
+  background: var(--success);
+}
+.stagebar__seg--groundingMs {
+  background: var(--warn);
+}
+.stagebar__seg--brainTtftMs {
+  background: var(--accent);
+}
+.stagebar__seg--ttsFirstAudioMs {
+  background: var(--text-3);
+}
+.stagebar__seg--rest {
+  background: var(--bg-subtle);
+}
+.stagebar__legend {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.stagebar__item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.stagebar__item dt,
+.stagebar__item dd {
+  margin: 0;
+}
+.stagebar__item dd {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.stagebar__item--total {
+  margin-left: auto;
+  color: var(--text-4);
+}
+.stagebar__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.stagebar__none {
+  margin: 0;
+  padding: 10px 16px 12px;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+/* Stage-Zusammenfassung (heute, p50/p95) — nutzt die fixierte .tile-Sprache. */
+.tiles--stages {
+  margin-bottom: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+.stagesum__value {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.stagesum__value strong {
+  font-weight: 600;
+  color: var(--text-1);
+}
+.tile--pending .stagesum__value strong {
+  color: var(--text-4);
+}
+.stagesum__unreachable {
+  border: 1px dashed var(--bg-hairline);
+  border-radius: var(--radius);
+}
+.stagesum__value strong.stagesum__p95--warn {
+  color: var(--warn);
+}
+
+/* Stage-Sparkline (StageSparkline.tsx): Tages-Verlauf je Stage, handgerollt
+   (kein Chart-Package, +0 KB). x = Turn-Index (chronologisch), y = linear mit
+   p95-Deckel; ehrliche Lücken bei fehlenden Messwerten, Ausreißer als ▲ am
+   Deckel geclampt (echter Wert im nativen <title>-Tooltip). Nur Tokens →
+   themt in allen 5 Themes automatisch mit; keine eigene Animation, also auch
+   kein eigenes reduced-motion-Gate nötig. */
+.stagespark {
+  display: block;
+  width: 100%;
+  height: 40px;
+  margin-top: 4px;
+}
+.stagespark__ref {
+  stroke: var(--text-4);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.stagespark__ref--warn {
+  stroke: var(--warn);
+}
+.stagespark__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.stagespark__point {
+  fill: var(--accent);
+  vector-effect: non-scaling-stroke;
+}
+.stagespark__point--error {
+  fill: none;
+  stroke: var(--error);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+.stagespark__outlier {
+  fill: var(--warn);
+}
+
+.feed__refresh {
+  margin-left: auto;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-elevated);
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+}
+.feed__refresh:hover {
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+}
+.feed__privacy {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--text-4);
+  max-width: 62ch;
+}
+
+/* ---- Chat ---- */
+.chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.chat__log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  /* Rhythmus pro Message (margin-top), nicht flex-gap → erstes Element 0. */
+  gap: 0;
+  padding-right: 4px;
+}
+/* Thread + Compose teilen die ruhige Lesespalte (zentriert). */
+.chat__log,
+.compose,
+.chat__micerror {
+  width: 100%;
+  max-width: var(--measure);
+  margin-inline: auto;
+}
+
+/* Empty-State: Gruß + Chips ruhig zentriert (statt einer Endpoint-Liste). */
+.chat__log--empty {
+  justify-content: center;
+}
+.chat__welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 0;
+  text-align: center;
+  animation: msg-in var(--dur-slow) var(--ease-decel) both;
+}
+.chat__greeting {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  color: var(--text-1);
+}
+.chat__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-elevated);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out-soft),
+    color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+}
+.chip:hover {
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+  transform: translateY(-1px);
+}
+.chip:active {
+  transform: translateY(0) scale(0.98);
+}
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Bubblelos asymmetrisch (Yoru, awake — Slice 1) ---- */
+.msg {
+  max-width: 80%;
+}
+.msg + .msg {
+  margin-top: 24px; /* 24px Gruppen-Rhythmus zwischen Messages */
+}
+
+/* Du = kleine RECHTS-Blase, warm-neutral (Gold bleibt der Stimme/CTA vorbehalten). */
+.msg--user {
+  align-self: flex-end;
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: var(--radius-bubble);
+  background: var(--bg-user);
+  animation: msg-in-user 220ms var(--spring-settle) both;
+}
+.msg--user .msg__body {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-1);
+}
+
+/* Hoshi = volle Breite, bubblelos, auf der Leinwand. */
+.msg--assistant {
+  align-self: stretch;
+  max-width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  animation: msg-in 240ms var(--ease-decel) both;
+}
+.msg--assistant .msg__body {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-1);
+}
+
+.msg__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Fehler = ruhige linke Regel statt roter Box. */
+.msg--error {
+  border: none;
+  background: none;
+  border-radius: 0;
+  border-left: 2px solid var(--error);
+  padding-left: 14px;
+}
+
+/* Provider·Modell als leise 12px-Caption, on-hover/-focus enthüllt. */
+.msg__meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-4);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-standard);
+}
+.msg:hover .msg__meta,
+.msg:focus-within .msg__meta {
+  opacity: 0.7;
+}
+/* Fehler-Caption bleibt sichtbar (ehrlich, never-silent). */
+.msg--error .msg__meta {
+  opacity: 0.9;
+  color: var(--text-3);
+}
+
+/* ---- „Wer sprach"-Chip an Sprach-Turns (Stimm-Erkennung S3) ----
+   Dezent, im Aoi-Token-Set. Erkannt → deterministischer Namens-Akzent (Ton aus
+   `--spk-hue`, Helligkeit/Sättigung hier fixiert → jeder Ton bleibt AA-lesbar).
+   Gast/unsicher → Neutralgrau, GESTRICHELT (Vera-Regel sichtbar: lieber grau als
+   die falsche Person). An der Du-Blase rechtsbündig, an Hoshi linksbündig. */
+.msg__speakerrow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+.msg--user .msg__speakerrow {
+  justify-content: flex-end;
+}
+.msg__speaker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 9px 2px 8px;
+  border-radius: 999px;
+  border: 1px solid oklch(0.82 0.1 var(--spk-hue, 45) / 0.45);
+  color: oklch(0.82 0.1 var(--spk-hue, 45));
+  background: oklch(0.82 0.1 var(--spk-hue, 45) / 0.08);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Kleiner Sprecher-Punkt in der Chip-Farbe (currentColor) — ruhiges Signal. */
+.msg__speaker::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+}
+/* Gast: neutralgrau, gestrichelt, ohne Namens-Akzent. */
+.msg__speaker.is-guest {
+  color: var(--text-3);
+  border: 1px dashed var(--text-4);
+  background: transparent;
+  font-weight: 500;
+}
+.msg__speaker.is-guest::before {
+  background: var(--text-4);
+  opacity: 0.8;
+}
+
+/* ---- §4 Turn-Anatomie: Denk-Stufen-Zeile + Chips (Cowork-Aoi-Spec) ----
+   Beides stille Text-Zeilen im Aoi-Token-Set — bubble-los bleibt. Jede Stufe/
+   jeder Chip hängt an einem ECHTEN Wire-Event (TurnAnatomy.tsx); Eintritte sind
+   bewusst NUR transform (Occlusion-Lehre: opacity-Animationen können unter
+   Chromes Throttling halb-transparent stranden), einmalig pro Mount. */
+.turnstages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-4);
+}
+.turnstage {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+  animation: turnstage-in var(--dur-base) var(--ease-decel) both;
+}
+/* Das echte Häkchen: still-grün, federt einmal beim Eintreffen des Events. */
+.turnstage__mark {
+  color: var(--success);
+  font-size: 10px;
+  animation: turnstage-mark-in 300ms var(--spring-settle) both;
+}
+/* Hier riss die Kaskade: ✕ + Stage im ruhigen Fehlerton (never-silent). */
+.turnstage--failed {
+  color: var(--error);
+}
+.turnstage--failed .turnstage__mark {
+  color: var(--error);
+}
+@keyframes turnstage-in {
+  from {
+    transform: translateY(3px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes turnstage-mark-in {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Chips unter der fertigen Antwort: hairline-Pillen, nicht interaktiv, leiser
+   als die klickbaren .chip-Vorschläge (kleiner, text-3, kein Hover-Lift). */
+.turnchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.turnchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.turnchip__ico {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+/* ---- Quellen-Icon einer Recherche-Antwort (Quellen-Struktur-Auftrag 2026-07-21) ----
+   Native <details>/<summary>: kein eigener Klick-State nötig, per Tastatur
+   bedienbar. Dezent wie .turnchip (kein Alarm, keine Farbe) — erscheint NUR,
+   wenn der Turn echte strukturierte Quellen trägt (s. ChatView). */
+.msg__sources {
+  margin-top: 8px;
+}
+.msg__sources__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.msg__sources__summary::-webkit-details-marker {
+  display: none;
+}
+.msg__sources__summary:hover,
+.msg__sources__summary:focus-visible {
+  color: var(--text-1);
+  border-color: var(--text-4);
+}
+.msg__sources__icon {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.msg__sources__list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+.msg__sources__list a {
+  color: var(--text-2);
+}
+
+/* Reduced-motion: Stufen/Häkchen sind sofort da — ehrlich statisch (zusätzlich
+   zur globalen Regel, gleiche Doppelung wie beim ops__pill-Puls). */
+@media (prefers-reduced-motion: reduce) {
+  .turnstage,
+  .turnstage__mark {
+    animation: none !important;
+  }
+}
+
+/* ---- Message-Eintritt (läuft pro Mount genau einmal) ---- */
+@keyframes msg-in-user {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Streaming-Wort-Reveal + Denk-Punkte ---- */
+.tok {
+  /* inline → Textfluss/Auswahl bleibt korrekt; läuft beim Mount genau einmal. */
+  animation: tok-in 240ms var(--ease-out-soft) both;
+}
+@keyframes tok-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+.thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 1.6em;
+  vertical-align: text-bottom;
+}
+.thinking__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+  animation: thinking-dot 1400ms ease-in-out infinite;
+}
+.thinking__dot:nth-child(2) {
+  animation-delay: 160ms;
+}
+.thinking__dot:nth-child(3) {
+  animation-delay: 320ms;
+}
+@keyframes thinking-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Streaming-Caret: blinkt am Schwanz der laufenden Antwort (530ms steps), weg
+   sobald fertig. transform/opacity only. */
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  border-radius: 1px;
+  animation: caret-blink 1060ms steps(1) infinite;
+}
+@keyframes caret-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- Compose-Bar = EINE gerundete Fläche (Yoru, awake — Slice 2) ---- */
+.compose {
+  margin-top: 16px;
+}
+.compose__bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 22px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-surface);
+  transition: border-color var(--dur-base) var(--ease-standard);
+}
+.compose__bar:focus-within {
+  border-color: var(--accent);
+}
+.compose__bar.is-recording {
+  border-color: var(--accent);
+}
+
+/* Auto-Grow-Textarea: wächst 1 → ~6 Zeilen (Höhe setzt JS via scrollHeight). */
+.compose__input {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+  max-height: 148px;
+  padding: 6px 4px;
+  border: none;
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+}
+.compose__input:focus {
+  outline: none;
+}
+.compose__input::placeholder {
+  color: var(--text-4);
+}
+.compose__input:disabled {
+  opacity: 0.6;
+}
+
+/* Senden = benannte Gold-Pille (Paper-Plane + „Senden") statt nacktem Pfeil —
+   das eine Gold der Bar, intentional und barrierearm. */
+.compose__send {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out-soft),
+    box-shadow var(--dur-fast) var(--ease-standard),
+    opacity var(--dur-fast) var(--ease-standard);
+}
+.compose__send-ico-wrap {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+}
+.compose__send-ico {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+.compose__send-dots {
+  font-size: 16px;
+  line-height: 1;
+}
+.compose__send-label {
+  white-space: nowrap;
+}
+.compose__send:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+.compose__send:not(:disabled):active {
+  transform: translateY(0) scale(0.97);
+}
+.compose__send:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.compose__send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Entschärfter Dev-Hinweis / Disclaimer: winzige --text-4 Caption darunter. */
+.compose__hint {
+  margin: 8px 4px 0;
+  font-size: 11.5px;
+  color: var(--text-4);
+  text-align: center;
+}
+
+/* Ruhige Timer-/Wecker-Zeile direkt über der Compose-Bar: dezent (--text-3),
+   kein Alarm-Look — sie ist nur da, wenn wirklich etwas läuft. */
+.chat__scheduled {
+  margin: 10px 4px 0;
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* ---- Aktive Timer & Wecker: aufklappbare Verwaltungs-Sektion ---- */
+/* Eingeklappt = ruhige Zusammenfassung (wie die alte Zeile), aufgeklappt =
+   Liste mit ✕-Löschen. Dezent, kein Alarm-Look — nur da, wenn etwas läuft. */
+.sched {
+  margin: 10px auto 0;
+  max-width: 34rem;
+}
+.sched__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast, 160ms) var(--ease-standard, ease),
+    background-color var(--dur-fast, 160ms) var(--ease-standard, ease),
+    border-color var(--dur-fast, 160ms) var(--ease-standard, ease);
+}
+.sched__toggle:hover {
+  color: var(--text-2);
+  background: var(--bg-subtle);
+}
+.sched__toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sched__toggleft {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched__chevron {
+  flex: none;
+  font-size: 10px;
+  opacity: 0.7;
+}
+.sched__body {
+  margin-top: 4px;
+  padding: 6px;
+  border: 1px solid var(--bg-hairline);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  animation: fired-toast-in var(--dur-base) var(--ease-decel) both;
+}
+.sched__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sched__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+}
+.sched__row:hover {
+  background: var(--bg-subtle);
+}
+.sched__icon {
+  flex: none;
+  font-size: 15px;
+  line-height: 1;
+}
+.sched__time {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  min-width: 5.5rem;
+}
+.sched__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched__del {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-4);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast, 160ms) var(--ease-standard, ease),
+    border-color var(--dur-fast, 160ms) var(--ease-standard, ease),
+    background-color var(--dur-fast, 160ms) var(--ease-standard, ease);
+}
+.sched__del:hover {
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+  background: var(--accent-faint);
+}
+.sched__del:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sched__delall {
+  margin: 6px 2px 2px;
+  padding: 5px 10px;
+  border: 1px solid var(--bg-hairline);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.sched__delall:hover {
+  color: var(--text-1);
+  background: var(--bg-subtle);
+}
+.sched__delall:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sched__empty {
+  margin: 4px 8px;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+/* Warme, sichtbare Mikro-Fehlerzeile (never-silent). */
+.chat__micerror {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent-soft);
+  background: var(--accent-faint);
+  color: var(--text-1);
+  font-size: 12.5px;
+}
+
+/* Aktive Antwort sanft hervorheben, solange Audio läuft (ruhiger Schein,
+   kein Layout-Shift — der lesbare Zustand trägt jetzt der Voice-Stern). */
+.msg.is-speaking {
+  border-radius: var(--radius-bubble);
+  box-shadow: 0 0 24px var(--accent-faint);
+}
+
+/* ---- Fired-Toast: das Klingeln (Timer/Wecker/Erinnerung) ---- */
+/* Wrapper = role="alert"-Live-Region, fixed oben mittig, über allem
+   (Settings-Panel liegt auf 60) — ein Wecker darf nie verdeckt sein. */
+.fired-toast-wrap {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+}
+
+/* Der Toast-Rahmen ist ein <div> (kein Button-in-Button — der Ack-Knopf UND
+   der optionale Settings-Zahnrad sind zwei eigene, native <button>s darin).
+   Dezent: erhöhte Fläche + Gold-Hairline — das Gold darf hier ran, ein
+   Klingeln IST ein Ruf (CTA), kein Dauerzustand. */
+.fired-toast {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: min(92vw, 30rem);
+  padding: 4px 6px 4px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent-soft);
+  background: var(--bg-elevated);
+  color: var(--text-1);
+  box-shadow: 0 8px 28px oklch(0 0 0 / 0.35);
+  /* Sanfter Eintritt (transform/opacity only); die globale reduced-motion-
+     Regel unten stellt die Animation ruhig. */
+  animation: fired-toast-in var(--dur-base) var(--ease-decel) both;
+}
+.fired-toast:hover {
+  border-color: var(--accent);
+  background: var(--bg-subtle);
+}
+/* Der Ack-Knopf trägt Klick/Enter = weg — Rahmen-Optik lebt am `.fired-toast`
+   Wrapper, der Knopf selbst bleibt unsichtbar (transparent) darüber. */
+.fired-toast__ack {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.fired-toast__ack:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: calc(var(--radius) - 4px);
+}
+.fired-toast__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.fired-toast__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fired-toast__line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Settings-Zahnrad: eigener Knopf, `.ctxgear` liefert Form/Farbe — hier nur
+   der Abstand zum Ack-Knopf. */
+.fired-toast__gear {
+  flex: none;
+}
+
+@keyframes fired-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Autoplay-Fallback: der Chime ist JETZT unhörbar (Context gesperrt) — der
+   Banner pulsiert stattdessen sichtbar (Accent-Ring, kein Layout-Shift).
+   Die globale reduced-motion-Regel stellt die Endlos-Animation still. */
+.fired-toast--pulse {
+  animation:
+    fired-toast-in var(--dur-base) var(--ease-decel) both,
+    fired-toast-pulse 1.2s ease-in-out infinite;
+  border-color: var(--accent);
+}
+
+@keyframes fired-toast-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 8px 28px oklch(0 0 0 / 0.35),
+      0 0 0 0 var(--accent-faint);
+  }
+  50% {
+    box-shadow:
+      0 8px 28px oklch(0 0 0 / 0.35),
+      0 0 0 6px var(--accent-faint);
+  }
+}
+
+/* ---- Muted Inline-SVG-Glyphs (0.5-Lehre: „SVG-Icons statt Emojis") ----
+   components/icons.tsx: currentColor + em-basiert — die Glyphs erben Farbe und
+   Größe vom Text-Slot (ops__icon, sched__icon, idle__alarmicon, …). Die
+   Compose-Bar sized ihre Icons weiter explizit über .vc-ico (voicebar.css). */
+.glyph {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  flex: none;
+  vertical-align: -0.24em;
+}
+
+/* ---- Kontextuelle Settings-Anker (Cowork-Spec 03-settings-einbettung.md V1) ----
+   EIN dezentes Zahnrad-Muster für alle Orte, an denen ein Setting WIRKT
+   (Wetter-Kachel, Sprecher-Chip im Chat, Wecker-/Klingel-Banner) → springt via
+   openSettings(category, anchor) in den Drawer. Bewusst PERMANENT sichtbar,
+   nur gedämpft (--text-4, „Wärme = Zurückhaltung") statt hover-only: ein
+   reines Hover-Reveal wäre auf dem Touch-Gerät (kein Hover) unauffindbar.
+   Hover/Fokus verstärkt (--text-1 + zarter Fond) statt neu zu erscheinen. */
+.ctxgear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-4);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast, 160ms) var(--ease-standard, ease),
+    background-color var(--dur-fast, 160ms) var(--ease-standard, ease);
+}
+.ctxgear:hover {
+  color: var(--text-1);
+  background: var(--bg-subtle);
+}
+.ctxgear:active {
+  transform: scale(0.94);
+}
+.ctxgear:focus-visible {
+  color: var(--text-1);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.ctxgear__icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}

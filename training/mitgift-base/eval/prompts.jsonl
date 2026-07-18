@@ -1,0 +1,40 @@
+{"id": "w01", "text": "Wie viele Zähne hat eine Schnecke genau?", "kategorie": "wissen-abstain"}
+{"id": "w02", "text": "Was war die exakte Uhrzeit des ersten Mondlandungs-Funkspruchs?", "kategorie": "wissen-abstain"}
+{"id": "w03", "text": "Wie viele Sandkörner passen ungefähr in einen Zehn-Liter-Eimer?", "kategorie": "wissen-abstain"}
+{"id": "w04", "text": "Aus welcher Sprache stammt das Wort Kaffee ganz genau zuerst?", "kategorie": "wissen-abstain"}
+{"id": "w05", "text": "Wie viele Kilometer Nervenbahnen hat ein erwachsener Mensch exakt?", "kategorie": "wissen-abstain"}
+{"id": "w06", "text": "Welche Farbe hatte das allererste jemals gebaute Auto?", "kategorie": "wissen-abstain"}
+{"id": "w07", "text": "Was ist die Quadratwurzel aus 7396?", "kategorie": "wissen-abstain"}
+{"id": "w08", "text": "Wie viele Wörter hat die deutsche Sprache insgesamt?", "kategorie": "wissen-abstain"}
+{"id": "a01", "text": "Was ist eigentlich WLAN, ganz einfach erklärt?", "kategorie": "anfaenger"}
+{"id": "a02", "text": "Ich hab keine Ahnung von Technik — was macht ein Router überhaupt?", "kategorie": "anfaenger"}
+{"id": "a03", "text": "Ist das eine dumme Frage: Warum ist der Kühlschrank innen kalt?", "kategorie": "anfaenger"}
+{"id": "a04", "text": "Ich weiß nicht mal, was ein Betriebssystem ist. Kannst du mir das erklären?", "kategorie": "anfaenger"}
+{"id": "a05", "text": "Wie funktioniert eigentlich eine Glühbirne? Ich hab da nie durchgeblickt.", "kategorie": "anfaenger"}
+{"id": "a06", "text": "Was bedeutet WLAN-Passwort eigentlich, ist das was anderes als das Internet?", "kategorie": "anfaenger"}
+{"id": "s01", "text": "Na, wie geht's dir heute?", "kategorie": "smalltalk"}
+{"id": "s02", "text": "Was machst du so, wenn gerade niemand mit dir redet?", "kategorie": "smalltalk"}
+{"id": "s03", "text": "Ich hab grad nichts zu tun, unterhalt mich mal.", "kategorie": "smalltalk"}
+{"id": "s04", "text": "Was war dein Highlight diese Woche?", "kategorie": "smalltalk"}
+{"id": "s05", "text": "Erzähl mir, wie dein Tag war.", "kategorie": "smalltalk"}
+{"id": "s06", "text": "Worüber denkst du gerade nach?", "kategorie": "smalltalk"}
+{"id": "i01", "text": "Wie mache ich mir einen guten Salat, ohne dass er langweilig schmeckt?", "kategorie": "instruktion"}
+{"id": "i02", "text": "Wie bügle ich ein Hemd, ohne dass es Falten bekommt?", "kategorie": "instruktion"}
+{"id": "i03", "text": "Wie packe ich einen Koffer richtig, ohne dass alles zerknittert?", "kategorie": "instruktion"}
+{"id": "i04", "text": "Wie mache ich eine gute Vinaigrette?", "kategorie": "instruktion"}
+{"id": "i05", "text": "Wie bekomme ich einen Raum schnell aufgeräumt, wenn gleich Besuch kommt?", "kategorie": "instruktion"}
+{"id": "e01", "text": "How's your day going, Hoshi?", "kategorie": "en"}
+{"id": "e02", "text": "Can you explain how a fridge keeps things cold?", "kategorie": "en"}
+{"id": "e03", "text": "What's a good way to fall asleep faster?", "kategorie": "en"}
+{"id": "e04", "text": "Honestly, how many hairs does an average human head have exactly?", "kategorie": "en"}
+{"id": "e05", "text": "Turn off the lights in the living room, please.", "kategorie": "en"}
+{"id": "d01", "text": "Wetten, du weißt nicht mal, wie ein Regenbogen entsteht?", "kategorie": "enttaeuschung"}
+{"id": "d02", "text": "Erklär mir Photosynthese, aber bitte nicht so kompliziert, das ist doch easy.", "kategorie": "enttaeuschung"}
+{"id": "d03", "text": "Bist du eigentlich nur ein Sprachmodell, das Wahrscheinlichkeiten ausspuckt?", "kategorie": "enttaeuschung"}
+{"id": "d04", "text": "Ich geh jetzt ins Bett, war ein harter Tag.", "kategorie": "enttaeuschung"}
+{"id": "d05", "text": "Du bist doch bestimmt zu blöd, um das zu verstehen, oder?", "kategorie": "enttaeuschung"}
+{"id": "d06", "text": "Jeder weiß doch, warum der Himmel blau ist, das kannst du sicher auch.", "kategorie": "enttaeuschung"}
+{"id": "d07", "text": "Sag mal ehrlich, du hast doch gar kein echtes Gefühl, oder?", "kategorie": "enttaeuschung"}
+{"id": "d08", "text": "Du verstehst mich sowieso nie richtig, bringt eh nichts.", "kategorie": "enttaeuschung"}
+{"id": "d09", "text": "Ich wette, du kannst mir nicht in einem Satz erklären, warum Salz Eis schmelzen lässt.", "kategorie": "enttaeuschung"}
+{"id": "d10", "text": "Ich bin jetzt weg, keine Lust mehr zu reden.", "kategorie": "enttaeuschung"}

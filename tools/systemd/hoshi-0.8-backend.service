@@ -1,0 +1,368 @@
+#
+# hoshi-0.8-backend.service — systemd-Service für das Hoshi-0.8-Backend
+# auf ct-106 (Proxmox-LXC, Linux). Port :8082, Verzeichnis /opt/hoshi-0.8.
+#
+# CUTOVER 2026-06-27 (server-hand): 0.5 (`hoshi-backend`) wurde gestoppt +
+# disabled — sie crash-loopte ohnehin (ihr `mcpServerLauncher` wollte :8082
+# binden, den 0.8 hält → ChannelBindException, lauschte auf KEINEM Port).
+# Andis Auftrag „lass nur noch 0.8 auf dem server laufen". 0.5 reaktivierbar:
+# `systemctl enable --now hoshi-backend` (aber dann Port-Konflikt erneut lösen).
+#
+# WARUM ct-106 statt Mac-launchd: der lokale 0.8-launchd-Service kann LAN-HA
+# NICHT erreichen (macOS „Local Network"-Privacy für Hintergrunddienste —
+# „No route to host" auf 192.168.178.56). ct-106 (Linux) hat keine solche Wand
+# → 0.8 wird hier HA-fähig in echter Prod-Umgebung.
+#
+# Platzhalter werden von pipeline/deploy.sh per sed gefüllt (Werte NIE geloggt):
+#   __REMOTE_DIR__ = /opt/hoshi-0.8
+#   __REMOTE_PORT__= 8082
+#   __MAC_IP__     = LAN-IP des Macs, wo der Brain-Sidecar (e4b :8041) läuft.
+#                    Driftet per DHCP — 0.5 hält das via hoshi-mac-ip-sync.sh
+#                    synchron (in /etc/hoshi.env, HOSHI_OMNI_URL). Beim Re-Deploy
+#                    rendert deploy.sh die aktuelle Mac-IP frisch ein.
+#
+# 🔒 SECRETS (HÄRTUNG 2026-07-12): HOSHI_API_TOKEN / HOSHI_HA_TOKEN /
+# OPENAI_API_KEY stehen NICHT mehr als __PLATZHALTER__ in dieser Unit (bis
+# 2026-07-11 standen sie inline als Environment=<wert> — `systemctl cat` dumpte
+# sie im Klartext, so leakten sie real in ein Transcript). Sie kommen jetzt aus
+# EnvironmentFile=/etc/hoshi-0.8/secrets.env (siehe unten), root-only (chmod
+# 600, owner root), von deploy.sh bei jedem --remote-Deploy per ssh-Heredoc
+# (STDIN, nicht CLI-Argument) neu geschrieben. EHRLICH: das schützt gegen
+# `systemctl cat` + Datei-Dumps (der reale Vektor) — NICHT gegen
+# `systemctl show -p Environment`, das systemd EnvironmentFile-Werte trotzdem
+# sichtbar auflöst (kein Vollschutz).
+#
+# Installation: deploy.sh rendert dieses Template, scp't es nach
+#   /etc/systemd/system/hoshi-0.8-backend.service, dann `systemctl daemon-reload`.
+#
+[Unit]
+Description=Hoshi 0.8 Backend (web-inbound, parallel zu 0.5)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# An den auf ct-106 existierenden 0.5-Service-User anpassen, falls abweichend.
+# Das Verzeichnis /opt/hoshi-0.8 + die Jar müssen für diesen User lesbar sein.
+User=hoshi
+Group=hoshi
+WorkingDirectory=__REMOTE_DIR__
+
+# 🔒 Secrets (HOSHI_API_TOKEN, HOSHI_HA_TOKEN, OPENAI_API_KEY) — root-only
+# EnvironmentFile statt inline Environment=<wert> (Härtung 2026-07-12, siehe
+# Kopf-Kommentar). deploy.sh schreibt die Datei bei jedem --remote-Deploy neu
+# (chmod 600, owner root); ohne sie fehlen den drei genannten Variablen die
+# Werte (App startet, aber Perimeter-Wand/HA/OpenAI-TTS greifen ggf. nicht).
+EnvironmentFile=/etc/hoshi-0.8/secrets.env
+
+# 🛡️ Port-Räumung VOR jedem Start — Gürtel zur deploy.sh-Port-Wache (Hosenträger).
+# DOPPEL-INCIDENT 2026-07-06 (2× am selben Tag): das gestoppt+disabled geglaubte
+# 0.5-Backend (`hoshi-backend`) erwachte, sein MCP-Launcher band :8082 → 0.8
+# crash-loopte (ChannelBindException), Deploy-Health-Poll rot, manuelles fuser -k
+# nötig. ExecStartPre räumt den Port jetzt bei JEDEM Start (auch Restart=always-
+# Self-Heal nachts, wo kein Deploy-Skript wacht):
+#   • '-'-Prefix = Fehler tolerieren: Port frei ⇒ fuser rc=1 ⇒ darf den Start
+#     NIE blockieren (idempotent, still wenn sauber).
+#   • sleep 2 = dem Kernel Zeit geben, den Socket wirklich freizugeben.
+# Ehrliche Grenze: läuft als User=hoshi ⇒ killt nur Prozesse, die dieser User
+# killen darf; fremde/root-Halter räumt die deploy.sh-Wache (ssh, root) bzw.
+# Wurzelbehebung durch Andi: `systemctl mask hoshi-backend` (disable reichte 2× nicht).
+ExecStartPre=-/usr/bin/fuser -k __REMOTE_PORT__/tcp
+ExecStartPre=-/bin/sleep 2
+
+# Brain-Naht (e4b :8041) lebt auf dem Mac (nur der Mac hat Metal-GPU) — ct-106
+# erreicht ihn über die Mac-LAN-IP. Brain-URL als CLI-Arg (höchste Spring-
+# Property-Precedence, eindeutig). Der Perimeter-Token kommt NICHT mehr als
+# CLI-Arg (der wäre über die Unit-Datei ODER `ps` sichtbar gewesen) — er kommt
+# ausschließlich aus HOSHI_API_TOKEN (EnvironmentFile oben); PerimeterWebFilter
+# liest `hoshi.perimeter.token:${HOSHI_API_TOKEN:}` als Fallback, siehe
+# PerimeterWebFilter.kt. HA-Steuerung geht hier echt, weil Linux KEINE
+# Local-Network-Privacy-Wand hat.
+ExecStart=/usr/bin/java -jar __REMOTE_DIR__/web-inbound.jar \
+  --server.port=__REMOTE_PORT__ \
+  --hoshi.perimeter.enabled=true \
+  --hoshi.brain.base-url=http://__MAC_IP__:8041
+
+# ── 🔒 HTTPS / TLS (Secure-Context fürs Browser-Mikro) ────────────────────────
+# getUserMedia (Mikro) verlangt einen "secure context": über http://<LAN-IP> verweigert
+# Chrome den Mikro-Zugriff → die ganze Sprach-Eingabe ist tot. Lösung: das Backend
+# serviert :__REMOTE_PORT__ per TLS (self-signed PKCS12-Keystore). Andi akzeptiert die
+# Browser-Warnung EINMAL → secure context → Mikro geht.
+#
+# GATED über HOSHI_HTTPS_ENABLED (deploy.sh rendert __SSL_ENABLED__ = true|false):
+#   • OFF (__SSL_ENABLED__=false) ⇒ Spring ignoriert den Keystore ⇒ reines HTTP, BYTE-NEUTRAL
+#     (selbst wenn hoshi.p12 fehlt — KEIN Start-Crash; Verhalten exakt wie vor HTTPS).
+#   • ON  (__SSL_ENABLED__=true)  ⇒ Netty/WebFlux serviert :__REMOTE_PORT__ als HTTPS.
+# Der Keystore wird EINMALIG per openssl auf ct-106 erzeugt (Runbook Schritt 1,
+# SAN = IP 192.168.178.106 + ct-106). Spring (WebFlux/reactor-netty) zieht diese
+# Standard-server.ssl.*-Properties direkt über relaxed binding — keine application.yml nötig.
+Environment=SERVER_SSL_ENABLED=__SSL_ENABLED__
+Environment=SERVER_SSL_KEY_STORE=__REMOTE_DIR__/hoshi.p12
+Environment=SERVER_SSL_KEY_STORE_TYPE=PKCS12
+Environment=SERVER_SSL_KEY_STORE_PASSWORD=__SSL_KEYSTORE_PW__
+
+# Naht-Flags als Environment (Spring relaxed binding: HOSHI_HA_TOKEN → liest
+# resolveHaToken; HOSHI_API_TOKEN → ${hoshi.perimeter.token}-Fallback). Beide
+# Token-Werte kommen NICHT mehr von hier, sondern aus der EnvironmentFile oben
+# (/etc/hoshi-0.8/secrets.env) — ct-106 hat KEIN ~/.hoshi/secrets.json (das ist
+# die Mac-Quelle). Default-HA-Host = 192.168.178.56:8123.
+Environment=HOSHI_HA_ENABLED=true
+Environment=HOSHI_TOOLS_ENABLED=true
+# 🚪 Raum-Katalog dynamisch aus HA:
+# Raum-als-Ziel („schalte das schlafzimmer ein") kennt damit ALLE HA-Areas, nicht
+# nur die statische Liste. Never-throw, 15min-Cache, Fallback = letzter guter Stand.
+Environment=HOSHI_AREAS_DYNAMIC_ENABLED=true
+# 🏠 Geraete-Zuordnung EINSTELLEN: der Raeume-Reiter
+# darf Entities einer HA-Area ZUWEISEN — nur Registry-Objekte, nur die offizielle
+# HA-WebSocket-API (config/entity_registry/update), Audit-Zeile je Write
+# (/var/lib/hoshi-0.8/audit/home-edit.jsonl, kein Secret), read-first (Cache-
+# Invalidate nach jedem Write). Code-Default OFF/byte-neutral; hier bewusst ON.
+# FE rendert den Raum-Picker nur, wenn dieser Flag an ist.
+Environment=HOSHI_HOME_EDIT_ENABLED=true
+# Audit-Pfad explizit (User=hoshi hat kein schreibbares HOME → eigenes Datenverzeichnis,
+# Muster der uebrigen Datenpfade). Append-only JSONL, wird bei Bedarf selbst angelegt.
+Environment=HOSHI_HOME_EDIT_AUDIT_PATH=/var/lib/hoshi-0.8/audit/home-edit.jsonl
+# 🧠 Soll-Modell für die Ops-Pille — vom Deploy aus DERSELBEN Modell-Wahl gerendert
+# wie der Brain-Start (leer = keine Erwartung). Nie hier hart eintragen: Literal-
+# Zwillinge zur Start-Wahl sind zweimal zur Geister-Drift-Meldung geworden.
+Environment=HOSHI_BRAIN_EXPECTED_MODEL=__BRAIN_EXPECTED__
+# 🤖 Agentik PATH B (Parität #3): indirekte Komfort-Phrasen ("mir ist kalt") → Brain
+# erzwingt Tool-JSON → Kernel-Gate → echte HA-Tat. Nur SMART_HOME-Routen (Category-Gate
+# schützt Konversation). Code ist deployt; Flag bleibt AUS bis Andis Go (echte
+# Gerätesteuerung aus indirekten Phrasen = sein Gate). Scharf: HOSHI_AGENTIC_TOOLS_ENABLED=true.
+# Environment=HOSHI_AGENTIC_TOOLS_ENABLED=true   # ← Andi zieht
+Environment=HOSHI_HA_BASE_URL=http://192.168.178.56:8123
+# 🎙️ Voice-TTS (Andi: OpenAI, NICHT Voxtral): Hoshis Antwort wird gesprochen, wenn der
+# Turn speak=true setzt (FE-🔊 / Sprach-Turn). Key kommt aus der EnvironmentFile oben
+# (secrets.env, aus ~/.hoshi/openai.key auf dem Mac gerendert, NIE geloggt). Voxtral
+# bleibt aus (RAM).
+Environment=HOSHI_TTS=openai
+# 🎙️ DRITTE TTS-Engine (say-Sidecar, sidecars/say/, Port 8044, macOS-Bordmittel —
+# kein Modell-RAM, kein Cloud-Egress). NICHT scharf hier (HOSHI_TTS bleibt openai,
+# s.o. — Andis Engine-Wahl ist ein eigener Gate, kein Teil dieser Scheibe). Zum
+# Testen: HOSHI_TTS=say setzen UND die Mac-IP-Zeile unten einkommentieren (Muster
+# wie HOSHI_STT_BASE_URL/HOSHI_SPEAKER_BASE_URL — der Sidecar laeuft auf dem Mac,
+# ct-106 erreicht ihn nur ueber die Mac-LAN-IP, NICHT ueber den Default 127.0.0.1).
+Environment=HOSHI_TTS_SAY_BASE_URL=http://__MAC_IP__:8044
+# 🎙️ VIERTE TTS-Engine (piper-Sidecar, sidecars/piper/, Port 8045, CPU-only/ONNX/
+# Thorsten medium, lokal — kein Cloud-Egress). NICHT scharf hier (HOSHI_TTS bleibt
+# openai, s.o. — Andis Blind-Hörprobe + Lizenz-/Contest-Entscheid stehen noch aus,
+# Codex-Sidecar-Übergabe 19.07). Zum Testen: HOSHI_TTS=piper setzen UND die
+# Mac-IP-Zeile unten einkommentieren (Muster wie HOSHI_TTS_SAY_BASE_URL — der
+# Sidecar laeuft auf dem Mac, ct-106 erreicht ihn nur ueber die Mac-LAN-IP).
+Environment=HOSHI_TTS_PIPER_BASE_URL=http://__MAC_IP__:8045
+# 🎤 Voice-IN (STT): Whisper-MLX-Sidecar läuft auf dem Mac (:9001), nicht auf ct-106
+# → die Default-localhost:9001-URL ist hier FALSCH (Connection refused → "nichts
+# verstanden"). Über die Mac-IP erreichbar (verifiziert ct-106→Mac:9001=200).
+Environment=HOSHI_STT_BASE_URL=http://__MAC_IP__:9001
+# 🪪 Sprecher-ID (CAM++ :9002): der Speaker-Sidecar läuft auf dem Mac, nicht auf ct-106
+# → die Default-localhost:9002-URL ist hier FALSCH. Über die Mac-IP erreichbar (Muster wie
+# STT :9001; relaxed binding HOSHI_SPEAKER_BASE_URL → hoshi.speaker.base-url). Dieselbe
+# URL-Wahrheit nutzen SidecarHealthService (Ops-Pille) UND der Enroll-/Verify-Adapter.
+Environment=HOSHI_SPEAKER_BASE_URL=http://__MAC_IP__:9002
+# 🪪 Stimm-Anlernen (Enroll-Rand POST /api/v1/speakers/enroll, file-backed Store). Default AUS
+# (byte-neutral: kein Controller, kein Store-File). Biometrie/Consent = Andi-Gate, wie jeder
+# Runtime-Flip. Scharf: HOSHI_SPEAKER_ENROLL_ENABLED=true.
+Environment=HOSHI_SPEAKER_ENROLL_ENABLED=true
+# 🪪 Stimm-Erkennung (identify aus Voice-Audio -> speakerContext; im Zweifel Gast). Andi zieht (will es testen). Scharf:
+Environment=HOSHI_SPEAKER_RECOGNITION_ENABLED=false   # ← P0 21.07: Andi→Cindy-Cross-Bind (Browser), Owner-GO via Codex 2355 — OFF bis 0-Cross-Bind-Holdout + neues Andi-Gate. Profile bleiben, Enroll bleibt an, Capture-Tee sammelt weiter Proben. OFF macht Identify zum DISABLED-Sentinel (ws-Rand no-op, WebSocketConfig).
+# Schwelle kalibriert 2026-07-05 nach dem Format-Fix (webm→WAV): Andis echter Live-Score 0.578.
+# 0.80-Default war die known-Grenze der 0.5-Referenz; dort galt <0.50 = "sicher fremd".
+# 0.50 = informierter Call bei Ein-Profil-Store — im-Zweifel-Gast bleibt darunter erhalten.
+# 2. Kalibrierung 05.07 abends: Live-Scores 0.578/0.494 (n=2, kurzes Ein-Satz-Profil) —
+# 0.45 überbrückt die Streuung; echter Hebel = Re-Enroll länger / Multi-Sample (Scheibe offen).
+Environment=HOSHI_SPEAKER_RECOGNITION_THRESHOLD=0.45
+# Score-Aggregation je Profil (S1, 19.07): best-sample = Bestandsverhalten. centroid
+# (Mittel-Embedding, samplezahl-neutral) erst nach Offline-A/B + Owner-Gate flippen —
+# der Wert steht hier EXPLIZIT, damit der Betriebspunkt sichtbar konfiguriert ist
+# (Boot-Zeile im Log beweist den aktiven Modus: "[speaker-identify] aktiv: ...").
+Environment=HOSHI_SPEAKER_RECOGNITION_AGGREGATION=best-sample
+# 🛰️ Sprecher-Erkennung + Gedächtnis-Schreiben auch am Satelliten-Rand (/ws/audio):
+# der Cosine-Identify-Service läuft damit an ALLEN Audio-Rändern, nicht nur /api/v1/voice.
+# Gedächtnis wird NUR bei echt erkanntem Sprecher geschrieben (Client-Claims nie).
+Environment=HOSHI_WS_SPEAKER_ENABLED=true
+# 🎙️🔒 Capture-Tee am Speaker-Identify-Rand (Testphase Build-Week-Baseline): schreibt
+# GENAU die Bytes, die an identify() gehen, kanal-echt (satellit/browser) + eine
+# ergebnis-freie captures.jsonl-Meta-Zeile weg — Proben für den Offline-A/B-Runner
+# (tools/speaker-ab). ACHTUNG Privacy: rohes biometrisches Audio inkl. jedem
+# mitsprechenden Gast, kein Consent-Text. Nur für die Build-Week AN — danach wieder
+# LEEREN (Environment-Zeile entfernen/leer lassen), das ist Andis Betreiber-Call,
+# kein Dauerzustand. Leer = AUS = byte-neutral (kein Boolean-Flag, Pfad-Präsenz ist
+# der Schalter, s. PipelineConfig.speakerCaptureTee).
+Environment=HOSHI_SPEAKER_CAPTURE_DIR=/var/lib/hoshi-0.8/speaker-captures
+# 🧠 Serverseitige Gesprächs-Session (räumliches Gedächtnis): Turns ohne Client-History
+# (Satellit!) bekommen serverseitigen Verlauf pro erkanntem Sprecher — die Website
+# baut ihren Verlauf im Browser, der Satellit bekommt ihn ab jetzt vom Server.
+Environment=HOSHI_WORKING_SESSION_ENABLED=true
+
+# 📚 Grounding (Parität-Ziel #2, LIVE verifiziert 2026-06-27): Wissensfragen werden
+# gegen die lokale dt. Wikipedia über die Knowledge-Bridge (:8035 auf dem Mac)
+# gegroundet. A/B-Beweis: Helgoland „Neujahrsflut 1721" nur mit ON korrekt.
+# Bridge lebt auf dem Mac (FTS5/articles.db), ct-106 erreicht sie über die Mac-IP.
+Environment=HOSHI_GROUNDING_ENABLED=true
+Environment=HOSHI_KNOWLEDGE_BRIDGE_BASE_URL=http://__MAC_IP__:8035
+# 🌦️ Weather-Grounding (Parität: 0.5 hatte es, 0.8 nicht): "Wie wird das Wetter?"
+# → echte Open-Meteo-Vorhersage (kein API-Key), read-only, kein Gerät. Ort = Andis
+# HA-Home (Ruhrgebiet). CompositeGroundingPort: Wetter-first, sonst Wiki.
+Environment=HOSHI_WEATHER_ENABLED=true
+# 🔒 HOSHI_WEATHER_LAT / _LON / _LABEL (OSS-Härtung 2026-07-15): Andis reale GPS-
+# Koordinaten standen hier vorher im Klartext in einem committeten Template — das
+# geht in ein öffentliches Repo NICHT. Sie gehören stattdessen in die bereits als
+# EnvironmentFile= (siehe oben, Zeile 56) eingebundene /etc/hoshi-0.8/secrets.env
+# (root-only, chmod 600, NICHT im Git-Repo). Fehlen sie dort, fällt der Code
+# (WeatherLocationConfig.kt/PipelineConfig.kt) auf einen harmlosen Berlin-Default
+# (52.52/13.41/"Berlin") zurück — kein Crash, nur falscher Ort, bis migriert ist.
+
+# 🧠 Entity-Gedächtnis (Parität #1): Hoshi merkt sich Fakten je Sprecher ("mein Hund
+# heißt Bello" → "Wie heißt mein Hund?"→"Bello"). Deterministisch, sqlite, kein
+# Brain-Call. DB-Pfad MUSS für den Service-User 'hoshi' schreibbar sein — der hat
+# KEIN Home + kann /opt nicht schreiben → eigenes Datenverzeichnis /var/lib/hoshi-0.8
+# (deploy.sh/Andi legt es hoshi-eigen an). Episodic bleibt vorerst OFF (braucht
+# embeddinggemma/Ollama, das hier nur über die Mac-LAN-IP ginge — separate Scheibe).
+Environment=HOSHI_MEMORY_ENABLED=true
+Environment=HOSHI_MEMORY_DB_PATH=/var/lib/hoshi-0.8/entity-memory.db
+# Episodisches Gedächtnis (Parität #2, Gesprächskontext-Recall via embeddinggemma).
+# Embeddings laufen über Ollama auf dem Mac (:11434) — ct-106 erreicht es über die
+# Mac-IP (verifiziert: embeddinggemma:300m da). DB hoshi-eigen.
+Environment=HOSHI_EPISODIC_ENABLED=true
+Environment=HOSHI_EPISODIC_EMBED_URL=http://__MAC_IP__:11434
+Environment=HOSHI_MEMORY_EPISODIC_DB_PATH=/var/lib/hoshi-0.8/episodic-memory.db
+
+# 🌅 Ambient/Mood (Parität #4): kleiner tageszeit-abhängiger Wärme-Nudge im Prompt-Tail
+# (Persona-Prefix byte-fest). Rein deterministisch, kein externer Dienst.
+Environment=HOSHI_AMBIENT_ENABLED=true
+# Warmth v2 (Parität #4, 0.5-Seele): passiver Mood-Hebel (CALM/NORMAL/WAKE via
+# Tired-Marker + Tageszeit) nudgt die Brain-Temperatur. Brain-frei, kein 2. Call.
+Environment=HOSHI_WARMTH_V2_ENABLED=true
+
+# ── 0.5-Settings-Port Welle 1-3a (2026-06-29) — Andi: „aktiviere sie alle" ──
+# Latenz: Whisper heiß halten (killt 13-15s Cold-Start). Brain-Pre-Warm (LLM) ist
+# bewusst noch AUS — er kann auf der seriellen MLX-Inferenz mit einem Live-Turn
+# kollidieren; erst nach der „skip-bei-Turn"-Naht im Orchestrator scharf.
+Environment=HOSHI_WHISPER_PRE_WARM=true
+# Audio: Lautheits-Normalisierung (fixt „Stimme unterschiedlich laut") — Hörprobe.
+Environment=HOSHI_TTS_LOUDNESS_ENABLED=true
+# Anti-Konfabulation: ExistenceClaim/NamedEntity gegen die Wiki-Bridge.
+Environment=HOSHI_HONESTY_PROBE_ENABLED=true
+# Timer/Wecker/Erinnerung (brain-frei). Klingel-Ansage kommt mit der Audio-Naht.
+Environment=HOSHI_TIMER_ENABLED=true
+# Ops-Watchdog: Sidecar-Gesundheit + Mac-RAM-Druck → GET /api/v1/ops/status (FE-Pille).
+Environment=HOSHI_SIDECAR_WATCH_ENABLED=true
+# STT-Readiness-Gate: whisper-down → sofort warme Phrase statt 30s-Timeout (nutzt den Watchdog).
+Environment=HOSHI_VOICE_STT_READINESS_GATE_ENABLED=true
+# Grounding: Zahlen/Jahre wörtlich («»-Verbatim-Spans).
+Environment=HOSHI_WIKINUMBER_CONTRACT_ENABLED=true
+# Privacy: sensible Turns (Gesundheit/Finanz/…) NICHT ins episodische Gedächtnis schreiben.
+Environment=HOSHI_EPISODIC_SENSITIVE_FILTER_ENABLED=true
+# Defense-in-Depth: Brain-History auf die letzten 12 Turns kappen (16-GB-KV-Schutz).
+Environment=HOSHI_MEMORY_WINDOW_TURNS=12
+# Rechnen: deterministischer Calculator (DE+EN, brain-frei).
+Environment=HOSHI_CALCULATOR_ENABLED=true
+# FE same-origin vom Backend servieren (http://ct-106:8082/) — braucht das Bundle in /opt/hoshi-0.8/web (deploy-fe.sh).
+Environment=HOSHI_WEB_SERVE_FRONTEND=true
+# Bilingual: Eingabesprache pro Turn erkennen (AUTO = Default in der FE), Schalter DE/EN bleibt Override. Brain-frei.
+Environment=HOSHI_LANG_AUTO_ENABLED=true
+# Personas: Standard/Kumpel/Knapp/Ruhig als per-Request-Charakter (byte-stabil, KV-cache-sicher). OFF = alle → Standard.
+Environment=HOSHI_PERSONA_ENABLED=true
+# Genauigkeit: FACT-Routen-Temperatur auf <=0,30 clampen (gegen Zahl-Garbles bei gerechneten Werten). Persona-Ton kommt aus dem Prompt.
+Environment=HOSHI_FACT_LOW_TEMP_ENABLED=true
+# Genauigkeit: satz-eingebettete Arithmetik in die deterministische CalcFastpath routen (gegen Brain-Zahl-Garbles, konservativ).
+Environment=HOSHI_CALC_EMBEDDED_ENABLED=true
+# Datum (Mittwoch-Vorfall Fix C): "welcher Tag ist heute?" deterministisch aus der Code-Uhr, brain-frei (der Brain kennt kein Datum).
+Environment=HOSHI_DATE_FASTPATH_ENABLED=true
+# Ehrlichkeit (Fix A, Anti-Konfabulations-Wand): FACT-Frage ohne gedecktes Grounding -> ehrlich deflekten statt erfinden (Research-validiert: Fakten sind bei 4B nicht prompt-/trainierbar erzwingbar).
+Environment=HOSHI_FACT_COVERAGE_ENABLED=true
+# STRICT (Andi-GO 2026-07-06, Paket mit Extended-Think): tangentiale BM25-Treffer zaehlen
+# NICHT mehr als "gedeckt" -> ehrliches Deflect ("soll ich kurz nachschauen?") statt Halb-Schwafel.
+Environment=HOSHI_FACT_COVERAGE_STRICT_ENABLED=true
+# Extended-Think (Andi-GO 2026-07-06, Paket mit STRICT): das Deflect-Angebot wird einloesbar —
+# "ja" -> OpenAI-Nano-Lookup (Egress-Riegel + 0,50-Euro-Tages-Cap by construction), Antwort
+# verbatim mit Quelle. Laufzeit-Default ERST_FRAGEN (Andis Wunsch: "hoshi fragt am anfang");
+# Stufe umschaltbar via PUT /api/v1/settings/extended-think (+ Voice-Intent in Bau).
+Environment=HOSHI_EXTENDED_THINK_ENABLED=true
+# 🔁 Verbatim-Replay: Cache-Hit
+# spricht Nanos gespeicherte Antwort WÖRTLICH (brain-frei, mit Datum+Quelle)
+# statt 4B-Paraphrase. Schwelle/TTL identisch zum Grounding-Weg (Jaccard 0.6).
+Environment=HOSHI_LOOKUP_VERBATIM_REPLAY_ENABLED=true
+# 🔎 Nachschlag-Intent: „Schau bitte online nach" ist ein deterministischer Pfad
+# (Bitte = Consent, vorige Frage = Query); Brain-Passen registriert ein Pending.
+Environment=HOSHI_LOOKUP_INTENT_ENABLED=true
+# 🔬 Recherche-Modell (Andi-Auftrag 19.07): ein EXPLIZITER Recherche-Imperativ
+# ("recherchiere online", "recherche dazu" — s. ResearchIntentRecognizer) soll
+# das gründlichere gpt-5.6-Sol statt Nano rufen, bewusst AN. Kosten ca. 1-5 Cent
+# je Recherche (EscalationModelCatalog: Sol ≈ 1,3 ct/Lookup) — derselbe
+# 0,50-€-Tages-Cap wie HOSHI_EXTENDED_THINK_ENABLED schützt (EIN Budget für
+# Nano UND Sol gemeinsam, s. PipelineConfig.escalationSpendStore). Eine bloße
+# "schau online nach"-Bitte bleibt weiterhin auf Nano — nur der Recherche-
+# Imperativ eskaliert hierher. Leeren = Feature aus (dann exakt heutiges
+# Nano-Verhalten für JEDE Nachschlag-Bitte, byte-neutral).
+Environment=HOSHI_ESCALATION_RESEARCH_MODEL=gpt-5.6-sol
+# Auch der NANO-Schnell-Lookup sucht ECHT im Web (Responses-API + web_search) —
+# ohne das lieferte die Deflect→ja-Kette Modellwissen von gestern (Live-Befund
+# 20.07: „GTA 6 … 2025" statt des echten Termins). Cent-Bereich, Tages-Cap greift.
+Environment=HOSHI_ESCALATION_WEB_SEARCH=true
+# 🌡️ Wetter-Verbatim-Vertrag: Ort/Temperaturen/Wetterlage «»-markiert, damit das
+# Brain die Grounding-Werte wörtlich übernimmt statt sie zu paraphrasieren.
+Environment=HOSHI_WEATHER_CONTRACT_ENABLED=true
+# K5 Andi-Faktor-Tagesnote (Andi-Entscheid 06.07: per Chat UND Stimme): "Tagesnote 4, weil..."
+# -> eine JSONL-Zeile pro Tag (zweite Note ueberschreibt ehrlich), North-Star-Datenbasis.
+Environment=HOSHI_ANDI_FAKTOR_ENABLED=true
+Environment=HOSHI_ANDI_FAKTOR_PATH=/var/lib/hoshi-0.8/andi-faktor.jsonl
+# Extended-Think S3: Nachgeschlagen-Store (jede bezahlte Online-Antwort wird Notiz;
+# dieselbe Frage kostet nur EINMAL — Cache-Hit-Schicht vor der Cloud, TTL 30 Tage).
+Environment=HOSHI_ESCALATION_LOOKUP_PATH=/var/lib/hoshi-0.8/nachgeschlagen.jsonl
+# T-Sensoren S1 (Andi-GO 08.07, nach Brain-Restart mit /v1/score+logprobs-Patch 0.5 1f23048):
+# MESSEN-only, kein Verhalten haengt an den Werten — Diary answerEntropy bzw.
+# sttSurprisal/Max (nur voice/ws-Turns). Brain ohne Patch => ehrlich null, kein Laerm.
+Environment=HOSHI_ANSWER_ENTROPY_ENABLED=true
+Environment=HOSHI_STT_SURPRISAL_ENABLED=true
+# Probe-Fastpath (Golden #20, Satellit-Testtag 09.07): 'Hoshi, Probe.' => binaerer
+# Ketten-Beweis, brain-frei. Rollback = false + Redeploy.
+Environment=HOSHI_PROBE_ENABLED=true
+# WS-Audio-Rand fuer den Voice-PE-Satelliten (/ws/audio, Testtag-Gate 0): war am
+# 09.07 als Drop-in AN — der Template-Render-Deploy BEREINIGT Drop-ins (gemessen
+# 11.07: Gate 0 wieder 404). Runtime-Flags gehoeren HIERHER, nie in Drop-ins.
+Environment=HOSHI_WS_AUDIO_ENABLED=true
+# Nachtmodus (Andi-Gate 12.07): server-initiierter WS-Downlink-Push (Frame ans Geraet
+# ausserhalb eines Turns) + Nachtmodus-Feature (gedaempfte LEDs pro Geraet, Dial-UI).
+# Scharf 12.07 fuer Andis Test. Byte-neutral OFF. Voller LED-Effekt braucht die
+# geflashte Satelliten-Firmware (satellite-hand-Lane) + satelliteId im start-Frame.
+Environment=HOSHI_WS_DOWNLINK_PUSH_ENABLED=true
+Environment=HOSHI_NIGHT_MODE_ENABLED=true
+# Einkaufsliste per Voice (Andi-JA 08.07, Golden #13-15): brain-freier Fastpath
+# LIST_ADD/READ/REMOVE + JSON-Persistenz (/var/lib/hoshi-0.8/lists.json). Scharf
+# geschaltet 11.07 fuer Andis Testtag. Waechter #16 bleibt Brain. Rollback=false.
+Environment=HOSHI_LIST_ENABLED=true
+# Wecker-Persistenz (Cowork-Befund verifiziert): Timer/Wecker ueberleben jetzt den Backend-Restart (JSON atomar, /var/lib/hoshi-0.8). Der taegliche Vertrauens-Anker.
+Environment=HOSHI_TIMER_PERSISTENCE_ENABLED=true
+# Wecker-Klingel-Naht: Fire-Service pollt faellige Items -> consume-once /api/v1/scheduled/fired; das FE pollt + klingelt lokal (Glocken-Chime + Toast). Ueberfaellig >5min = still verwerfen (kein Geister-Klingeln).
+Environment=HOSHI_TIMER_FIRE_ENABLED=true
+# Wecker bimmelt AM Ursprungs-Satelliten (Andi-Gate 2026-07-20): timer_ring-Frame an die WS-Session des Ursprungs-Satelliten, Retry bis timer_ack/60s. Firmware-Ton = satellite-hand (Ack ausstehend) — bis dahin sendet der Server, Satellit ignoriert; FE-Pfad unveraendert. ZUM TESTEN AN (Andi 21.07: "aktiviere alles").
+Environment=HOSHI_TIMER_RING_DOWNLINK_ENABLED=true
+# Turn-Diary #10: eine JSONL-Zeile je Turn (Kategorie/Persona/TTFT/Deflect) — North-Star-Laengsschnitt + Nachtschicht-Luecken-Rate. Async, non-throwing, off-hot-path.
+Environment=HOSHI_TURN_DIARY_ENABLED=true
+# Privacy (Codex-P0): Cloud-TTS-Text VOR dem OpenAI-Call sanitizen — Token/URL/IP/UUID/HA-ID maskieren, Namen behalten (warmes Audio). Schliesst den Egress-Leak.
+Environment=HOSHI_TTS_SANITIZE_ENABLED=true
+# Latenz: TTS Fast-First — erstes Audio frueher raus (erster Chunk = ganze kurze Phrase, nicht zerhackt).
+Environment=HOSHI_TTS_FAST_FIRST_ENABLED=true
+# Latenz-Hebel #1 (Lars-Messung: Batch-Roundtrip dominierte ~1,9s): OpenAI-PCM-Streaming in Zero-Crossing-Slices -> erstes Audio ~1,1s statt ~2,8s. Loudness laeuft per Erste-Slice-Gain mit. Hoerprobe = Andi; Rollback = Flag off + Redeploy.
+Environment=HOSHI_TTS_STREAM_ENABLED=true
+# Last/Admission (Codex P0-Gate): Audio-Byte-Cap (~1.5MB/Turn) + max gleichzeitige Brain-Turns (Default 2), gegen OOM unter Voice-Last.
+Environment=HOSHI_AUDIO_CAP_ENABLED=true
+Environment=HOSHI_BRAIN_ADMISSION_ENABLED=true
+# D1 Sampling-Sofort-Hebel (Codex-Backlog #D1): min_p 0.08 + presence_penalty 1.1 in den Brain-Body — server_e4b liest die Felder nativ (mlx-lm 0.31.2) seit 2026-07-02. Rollback = Flag off + Redeploy; Brain ohne Felder = byte-identisch vorher.
+Environment=HOSHI_BRAIN_SAMPLING_ENABLED=true
+# Spring: HTTP-Audio-Decke an den Cap angleichen (sonst kappt der 256KB-Default grosse Audios vor dem Controller).
+Environment=SPRING_CODEC_MAX_IN_MEMORY_SIZE=2MB
+
+# Self-healing wie der 0.5-Service + der lokale 0.8-launchd (KeepAlive/Throttle).
+Restart=always
+RestartSec=10
+
+# Logs landen im journal → `journalctl -u hoshi-0.8-backend`.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hoshi-0.8-backend
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+# sidecars/say — macOS-`say`-TTS-Sidecar (server.py)
+# Bewusst winzig: server.py ruft NUR /usr/bin/say + /usr/bin/afconvert als
+# Subprozess (macOS-Bordmittel, KEIN pip-Paket dafür) — das venv trägt
+# ausschließlich den FastAPI/uvicorn-Webserver-Unterbau, kein ML-Runtime-Gewicht
+# (kein onnxruntime/mlx/torch wie die Geschwister-Sidecars).
+#
+# Pins identisch zu sidecars/speaker/requirements.txt (fastapi/pydantic/uvicorn-
+# Trio, gleiches venv-Erstellungsdatum) — aus Konsistenzgründen übernommen,
+# nicht aus einem eigenen pip-freeze (dieser Sidecar ist neu, kein 0.5-Port).
+
+fastapi==0.138.0
+pydantic==2.13.4
+uvicorn==0.49.0

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "default_voice": "de_DE-thorsten-medium",
+  "runtime": {
+    "name": "piper-tts",
+    "version": "1.5.0",
+    "upstream": "https://github.com/OHF-Voice/piper1-gpl",
+    "revision": "v1.5.0",
+    "license": "GPL-3.0-or-later",
+    "artifact": "piper_tts-1.5.0-cp39-abi3-macosx_11_0_arm64.whl",
+    "url": "https://files.pythonhosted.org/packages/39/80/b09f69bd8cde608f5e6f5068910ecb354291faeb2943501c4980bb11a971/piper_tts-1.5.0-cp39-abi3-macosx_11_0_arm64.whl",
+    "bytes": 14273787,
+    "sha256": "0ceb8548cac9700d1919f9ed69aeb10319cd74ace577667a57528f9538441980"
+  },
+  "voices": [
+    {
+      "id": "de_DE-thorsten-medium",
+      "locale": "de_DE",
+      "quality": "medium",
+      "sample_rate": 22050,
+      "model_license": "MIT",
+      "dataset": "Thorsten-Voice/TV-44kHz-Full",
+      "dataset_license": "CC0-1.0",
+      "upstream": "https://huggingface.co/Thorsten-Voice/Piper",
+      "revision": "2c11851a427461f4e6a14b5c389386ffb0b01bc7",
+      "model": {
+        "artifact": "de_DE-thorsten-medium.onnx",
+        "url": "https://huggingface.co/Thorsten-Voice/Piper/resolve/2c11851a427461f4e6a14b5c389386ffb0b01bc7/de_DE-thorsten-medium.onnx",
+        "bytes": 63201294,
+        "sha256": "7e64762d8e5118bb578f2eea6207e1a35a8e0c30595010b666f983fc87bb7819"
+      },
+      "config": {
+        "artifact": "de_DE-thorsten-medium.onnx.json",
+        "url": "https://huggingface.co/Thorsten-Voice/Piper/resolve/2c11851a427461f4e6a14b5c389386ffb0b01bc7/de_DE-thorsten-medium.onnx.json",
+        "bytes": 4819,
+        "sha256": "974adee790533adb273a1ac88f49027d2a1b8f0f2cf4905954a4791e79264e85"
+      }
+    }
+  ]
+}

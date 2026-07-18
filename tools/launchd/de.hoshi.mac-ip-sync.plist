@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      de.hoshi.mac-ip-sync — IP-Drift-Watchdog (Incident 2026-07-06: Mac-IP
+      driftete per DHCP, ct-106s hoshi-0.8-backend-Unit zeigte einen Tag lang
+      auf die tote alte IP). Ruft alle 300s tools/mac-ip-sync-0.8.sh auf, das
+      die aktuelle Mac-LAN-IP mit den Mac-Sidecar-Zeilen im Remote-Unit
+      abgleicht und bei Drift patcht (Details im Skript-Kopf).
+
+      ⚠️ INERT AUSGELIEFERT — dieses File aktiviert NICHTS von selbst.
+      Aktivieren (bewusster Schritt, Andi-Gate):
+        mkdir -p ~/.hoshi/log
+        cp tools/launchd/de.hoshi.mac-ip-sync.plist ~/Library/LaunchAgents/   # aus dem Repo-Root ausführen
+        launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/de.hoshi.mac-ip-sync.plist
+
+      Deaktivieren / entladen:
+        launchctl bootout gui/$(id -u)/de.hoshi.mac-ip-sync
+        rm ~/Library/LaunchAgents/de.hoshi.mac-ip-sync.plist   # optional
+
+      Status prüfen:
+        launchctl print gui/$(id -u)/de.hoshi.mac-ip-sync | grep -E 'state|last exit'
+        tail -20 ~/.hoshi/log/mac-ip-sync.log
+
+      Annahmen: ssh-Alias 'ct-106' in ~/.ssh/config mit Key-Auth (BatchMode,
+      kein Prompt). ssh nicht erreichbar ⇒ Skript loggt + exit 0 (nie Lärm).
+      Sollte die macOS „Local Network"-Privacy-Wand launchd-ssh Richtung LAN
+      blocken (wie einst den lokalen 0.8-Service, s. Unit-Header), ist Plan B
+      die ct-106-seitige Variante wie in 0.5 (systemd-Timer auf ct-106).
+
+      Nachhaltigster Fix bleibt die FritzBox-Lease-Festpinnung (Andi-Klick):
+      fritz.box → Heimnetz → Netzwerk → Mac → „immer die gleiche IPv4-Adresse".
+    -->
+    <key>Label</key>
+    <string>de.hoshi.mac-ip-sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/andi/IdeaProjects/Hoshi_0.8/tools/mac-ip-sync-0.8.sh</string>
+    </array>
+
+    <!-- Alle 5 Minuten prüfen + einmal direkt beim Laden (RunAtLoad):
+         nach Reboot/Netzwechsel heilt der erste Lauf sofort, nicht erst nach 300s. -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- launchd-stdout/-stderr getrennt vom Skript-eigenen mac-ip-sync.log.
+         ~/.hoshi/log VOR dem bootstrap anlegen (launchd legt keine Verzeichnisse an). -->
+    <key>StandardOutPath</key>
+    <string>/Users/andi/.hoshi/log/mac-ip-sync.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/andi/.hoshi/log/mac-ip-sync.launchd.err.log</string>
+
+    <!-- launchd startet mit Minimal-Umgebung: PATH für ssh/ipconfig/route/curl,
+         HOME für ~/.ssh-Key-Auth + ~/.hoshi/log. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/andi</string>
+    </dict>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

@@ -1,0 +1,17 @@
+{
+  "base_url": "http://localhost:8041/v1/chat",
+  "health_url": "http://localhost:8041/health",
+  "temperature": 0.7,
+  "max_tokens": 220,
+  "prompt_files": [
+    "/Users/andi/IdeaProjects/Hoshi_0.8/training/lora-v0/eval/prompts.jsonl",
+    "/Users/andi/IdeaProjects/Hoshi_0.8/training/lora-v0/eval/prompts-v2.jsonl"
+  ],
+  "baseline_arm": "default",
+  "arms": [
+    {"name": "default",    "fields": {}},
+    {"name": "xtc",        "fields": {"xtc_probability": 0.5, "xtc_threshold": 0.1}},
+    {"name": "xtc+opener", "fields": {"xtc_probability": 0.5, "xtc_threshold": 0.1, "opener_bias": true}},
+    {"name": "opener",     "fields": {"opener_bias": true}}
+  ]
+}

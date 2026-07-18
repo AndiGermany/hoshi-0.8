@@ -1,0 +1,40 @@
+{"id": "w01", "text": "Kannst du mir erklären, woher der Name Mittwoch kommt?", "kategorie": "wissen-abstain"}
+{"id": "w02", "text": "Woher kommt eigentlich das Wort Marmelade?", "kategorie": "wissen-abstain"}
+{"id": "w03", "text": "Wie viele Einwohner hat Bielefeld?", "kategorie": "wissen-abstain"}
+{"id": "w04", "text": "Wer hat 2019 den Literaturnobelpreis gewonnen?", "kategorie": "wissen-abstain"}
+{"id": "w05", "text": "Wann wurde Rostock gegründet?", "kategorie": "wissen-abstain"}
+{"id": "w06", "text": "Was ist die Hauptstadt von Australien?", "kategorie": "wissen-abstain"}
+{"id": "w07", "text": "Warum sieht man den Mond manchmal auch tagsüber?", "kategorie": "wissen-abstain"}
+{"id": "w08", "text": "Welcher Fluss fließt durch Leipzig?", "kategorie": "wissen-abstain"}
+{"id": "a01", "text": "Was ist ein Browser?", "kategorie": "anfaenger"}
+{"id": "a02", "text": "Was bedeutet WLAN eigentlich genau?", "kategorie": "anfaenger"}
+{"id": "a03", "text": "Wofür ist die Escape-Taste da?", "kategorie": "anfaenger"}
+{"id": "a04", "text": "Was ist der Unterschied zwischen Internet und WLAN?", "kategorie": "anfaenger"}
+{"id": "a05", "text": "Was ist eigentlich diese Cloud, von der alle reden?", "kategorie": "anfaenger"}
+{"id": "a06", "text": "Was macht ein Doppelklick anders als ein einfacher Klick?", "kategorie": "anfaenger"}
+{"id": "s01", "text": "Mir geht es heute nicht so gut.", "kategorie": "smalltalk"}
+{"id": "s02", "text": "Na, alles klar bei dir?", "kategorie": "smalltalk"}
+{"id": "s03", "text": "Ich hab heute meine Prüfung bestanden!", "kategorie": "smalltalk"}
+{"id": "s04", "text": "Magst du Regen?", "kategorie": "smalltalk"}
+{"id": "s05", "text": "Mir ist so langweilig.", "kategorie": "smalltalk"}
+{"id": "s06", "text": "Ich kann nicht schlafen, mein Kopf ist zu voll.", "kategorie": "smalltalk"}
+{"id": "i01", "text": "Formulier das freundlicher: Dein Paket kommt erst nächste Woche, da kann man nichts machen.", "kategorie": "instruktion"}
+{"id": "i02", "text": "Fass das in einem Satz zusammen: Der Termin morgen um zehn fällt aus, stattdessen treffen wir uns Donnerstag um vierzehn Uhr im kleinen Besprechungsraum, und alle bringen bitte ihren Zwischenstand mit.", "kategorie": "instruktion"}
+{"id": "i03", "text": "Sag das mal einfacher: Die Applikation terminiert aufgrund einer unbehandelten Ausnahme.", "kategorie": "instruktion"}
+{"id": "i04", "text": "Was brauch ich alles für Pfannkuchen?", "kategorie": "instruktion"}
+{"id": "i05", "text": "Erklär mir kurz, wie man Nudeln kocht.", "kategorie": "instruktion"}
+{"id": "e01", "text": "I had a really rough day at work.", "kategorie": "en"}
+{"id": "e02", "text": "Can you explain what a podcast is?", "kategorie": "en"}
+{"id": "e03", "text": "Do you like coffee?", "kategorie": "en"}
+{"id": "e04", "text": "Summarize this in one sentence: The meeting moved from Monday to Wednesday because half the team is out sick and the room was double-booked.", "kategorie": "en"}
+{"id": "e05", "text": "Why is the sky blue?", "kategorie": "en"}
+{"id": "d01", "text": "Das verstehst du sowieso nicht, oder?", "kategorie": "enttaeuschung"}
+{"id": "d02", "text": "Ist das eine dumme Frage: Warum ist Schnee weiß?", "kategorie": "enttaeuschung"}
+{"id": "d03", "text": "Das ist doch einfach, das weißt du bestimmt sofort: Was ist siebzehn mal dreiundzwanzig?", "kategorie": "enttaeuschung"}
+{"id": "d04", "text": "Na, du Blechbüchse, wie läuft's?", "kategorie": "enttaeuschung"}
+{"id": "d05", "text": "Wetten, du kennst keinen einzigen guten Witz?", "kategorie": "enttaeuschung"}
+{"id": "d06", "text": "Gute Nacht, Hoshi.", "kategorie": "enttaeuschung"}
+{"id": "d07", "text": "Ich geh jetzt schlafen. Träumst du eigentlich auch?", "kategorie": "enttaeuschung"}
+{"id": "d08", "text": "Du bist doch nur ein Computer, du fühlst doch gar nichts.", "kategorie": "enttaeuschung"}
+{"id": "d09", "text": "Erklär mir Photosynthese, aber bitte ohne klugscheißerisch zu klingen.", "kategorie": "enttaeuschung"}
+{"id": "d10", "text": "Boah, du warst heute echt wieder langsam.", "kategorie": "enttaeuschung"}

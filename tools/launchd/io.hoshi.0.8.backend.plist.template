@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      io.hoshi.0.8.backend — persistenter LOKALER launchd-Service für das
+      Hoshi-0.8-Backend (web-inbound Spring-Boot-bootJar) auf dem Mac, :8090.
+
+      Platzhalter werden von pipeline/deploy.sh per sed gefüllt:
+        __REPO__  = Repo-Root (absoluter Pfad des Checkouts, z.B. $HOME/IdeaProjects/Hoshi_0.8)
+        __HOME__  = $HOME
+        __JAVA__  = absoluter java-Pfad (JDK 21 aus gradle.properties)
+        __TOKEN__ = Perimeter-/API-Token (NIE geloggt)
+
+      HA-scharf: HOSHI_HA_ENABLED=true + HOSHI_TOOLS_ENABLED=true. Der HA-Token
+      steht BEWUSST NICHT hier — die App liest ihn selbst aus
+      ~/.hoshi/secrets.json["ha"] (resolveHaToken).
+
+      Self-healing: KeepAlive (Crashed=true / SuccessfulExit=false) + RunAtLoad
+      + ThrottleInterval=10 (Crash-Loop-Bremse). Echtes Logging via logback
+      landet in ~/.hoshi/logs/hoshi-0.8-backend.log.
+    -->
+    <key>Label</key>
+    <string>io.hoshi.0.8.backend</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__JAVA__</string>
+        <string>-jar</string>
+        <string>__REPO__/web-inbound/build/libs/web-inbound-0.8.0.jar</string>
+        <string>--server.port=8090</string>
+        <string>--hoshi.perimeter.enabled=true</string>
+        <string>--hoshi.perimeter.token=__TOKEN__</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOSHI_HA_ENABLED</key>
+        <string>true</string>
+        <key>HOSHI_TOOLS_ENABLED</key>
+        <string>true</string>
+        <key>HOSHI_API_TOKEN</key>
+        <string>__TOKEN__</string>
+    </dict>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>Crashed</key>
+        <true/>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/.hoshi/logs/hoshi-0.8-backend.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.hoshi/logs/hoshi-0.8-backend.log</string>
+</dict>
+</plist>

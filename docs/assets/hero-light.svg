@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 300" role="img" aria-label="Hoshi — ad astra per aspera">
+  <rect width="1280" height="300" fill="#f4efe4" rx="8"/>
+  <line x1="1010" y1="34" x2="810" y2="104" stroke="#b3541e" stroke-width="1.5" opacity="0.55" stroke-linecap="round"/>
+  <circle cx="806" cy="105" r="2.4" fill="#b3541e"/>
+  <text x="640" y="138" text-anchor="middle" fill="#2b2620" font-size="72" font-family="'Hiragino Mincho ProN','Yu Mincho','Noto Serif JP',serif">星</text>
+  <text x="640" y="185" text-anchor="middle" fill="#8a7f6d" font-size="20" letter-spacing="14" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">HOSHI</text>
+  <line x1="560" y1="208" x2="720" y2="208" stroke="#d9cfbc" stroke-width="1"/>
+  <text x="640" y="242" text-anchor="middle" fill="#b3541e" font-size="17" letter-spacing="7" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">AD ASTRA PER ASPERA</text>
+</svg>

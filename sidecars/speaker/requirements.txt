@@ -1,0 +1,41 @@
+# sidecars/speaker — CAM++ Speaker-Embedding-Sidecar (server.py, embedder.py)
+# Bewusst leichtgewichtig wegen 16-GB-Wand (Brain + Whisper laufen schon) —
+# ONNX statt torch/funasr, RSS ~100-130 MB steady-state.
+# [0.8-Port] 1:1 aus Hoshi_0.5/hoshi-speaker-id/requirements.txt, ERSETZT durch
+# die vollen Kern-Pins aus dem echten 0.5-venv (`pip freeze`, 2026-07-18) statt
+# der urspruenglichen `>=`-Ranges — dasselbe Muster wie sidecars/brain und
+# sidecars/stt. Transitive Blaetter (anyio/click/h11/pydantic_core/starlette/...)
+# NICHT einzeln gepinnt — pip loest sie automatisch ueber die Pins unten; fuer
+# eine bit-exakte Vollrekonstruktion s. `.venv/bin/pip freeze` im 0.5-Quell-venv.
+#
+# HINWEIS Versions-Drift ggue. sidecars/brain + sidecars/stt: fastapi/uvicorn/
+# huggingface_hub sind hier auf ANDEREN Patch-/Minor-Staenden gepinnt als in
+# den Geschwister-Sidecars (jeweils eigenes, unabhaengiges venv/pip-freeze-
+# Datum) — das ist beabsichtigt (jeder Sidecar pinnt seinen EIGENEN echten
+# Quell-Freeze), NICHT vereinheitlichen ohne neuen Freeze.
+
+# ── Embedding-Runtime (import onnxruntime / kaldi_native_fbank in embedder.py) ─
+onnxruntime==1.27.0
+kaldi-native-fbank==1.22.3
+
+# ── Audio-Decode (import soundfile in server.py, WAV/OGG/FLAC/AIFF via libsndfile) ─
+soundfile==0.14.0
+
+# ── numpy: direkt genutzt (Embedding-Arrays, Cosine, Resampling) ────────────
+numpy==2.1.3
+
+# ── Web-Server (import fastapi / pydantic / uvicorn) ─────────────────────────
+fastapi==0.138.0
+pydantic==2.13.4
+uvicorn==0.49.0
+
+# ── huggingface_hub: im 0.5-Original mitgepinnt, aber NICHT direkt importiert
+#   (server.py/embedder.py laden das CAM++-ONNX per lokalem Dateipfad, nicht
+#   ueber snapshot_download — bootstrap.sh laedt es per curl, wie setup.sh im
+#   Original). Pin nur aus Original-Treue uebernommen, kein aktiver Nutzungspfad.
+huggingface_hub==1.20.1
+
+# ── NUR fuer test_decode_audio.py (fastapi.testclient.TestClient) ───────────
+#   Nicht fuer den Server-Betrieb selbst noetig — im Quell-venv trotzdem
+#   installiert (pip-freeze-Beleg), daher hier dokumentiert mitgepinnt.
+httpx==0.28.1

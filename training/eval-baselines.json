@@ -1,0 +1,29 @@
+{
+  "version": "v1",
+  "suites": [
+    {
+      "id": "lora-v0",
+      "path": "training/lora-v0/eval/prompts.jsonl",
+      "sha256": "5732366570a928ec0b63995abdbb96c643268830c429c243e6e3ace5ee3a91df",
+      "lines": 40,
+      "frozen_at": "2026-07-17",
+      "purpose": "Baseline fuer den privaten LoRA-v0-Blind-A/B-Eval, damit kuenftige Modell-Vergleiche dieselbe eingefrorene Prompt-Suite nutzen statt sich auf Erinnerung zu verlassen."
+    },
+    {
+      "id": "mitgift-base",
+      "path": "training/mitgift-base/eval/prompts.jsonl",
+      "sha256": "0f385cb33ff98695d6f9d48d47c661a883f16d41a7ba3af5ad89214e95c22edb",
+      "lines": 40,
+      "frozen_at": "2026-07-17",
+      "purpose": "Baseline fuer den oeffentlichen Mitgift-Base-Kategorien-Eval, damit kuenftige Modell-Vergleiche dieselbe eingefrorene Prompt-Suite nutzen statt sich auf Erinnerung zu verlassen.",
+      "categories": {
+        "wissen-abstain": 8,
+        "anfaenger": 6,
+        "smalltalk": 6,
+        "instruktion": 5,
+        "en": 5,
+        "enttaeuschung": 10
+      }
+    }
+  ]
+}

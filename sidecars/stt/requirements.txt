@@ -1,0 +1,50 @@
+# sidecars/stt — mlx-whisper STT-Sidecar (server.py, silence_gate.py)
+# [0.8-Port] 1:1 aus Hoshi_0.5/hoshi-stt-mlx/requirements.txt, ERSETZT durch die
+# vollen Kern-Pins aus dem echten 0.5-venv (`pip freeze`, 2026-07-18) statt der
+# ursprünglichen `>=`-Ranges — dasselbe Muster wie sidecars/brain/requirements.txt.
+# Transitive Blaetter (anyio/click/h11/pydantic/starlette/...) NICHT einzeln
+# gepinnt — pip loest sie automatisch ueber die Pins unten; fuer eine
+# bit-exakte Vollrekonstruktion s. `.venv/bin/pip freeze` im 0.5-Quell-venv.
+#
+# Apple Silicon (M1/M2/M3/M4) only — mlx-* haben keinen Intel-/Nicht-Mac-Support.
+# ffmpeg muss separat installiert sein (brew install ffmpeg) — kein pip-Paket.
+
+# ── KRITISCHER PIN: mlx==0.31.2 ──────────────────────────────────────────────
+#   Identischer mlx-Core-Pin wie sidecars/brain (dort betriebskritisch wegen
+#   der Gemma-4-KV-Sharing-Regression #1242 in mlx-lm 0.31.3). mlx-whisper hat
+#   dieselbe Abhaengigkeit auf denselben mlx-Core — hier aus Konsistenz-/
+#   Reproduzierbarkeitsgruenden ebenfalls fest gepinnt, nicht weil dieselbe
+#   Regression hier bewiesen waere.
+mlx==0.31.2
+mlx-metal==0.31.2
+
+# ── KRITISCHER PIN: mlx-whisper == 0.4.3 ─────────────────────────────────────
+#   Das eigentliche STT-Modell-Runtime-Paket (import mlx_whisper in server.py).
+mlx-whisper==0.4.3
+
+# ── WICHTIG: torch ist HIER eine echte, unvermeidbare Direkt-Abhaengigkeit ───
+#   Anders als sidecars/brain (mlx-lm) und sidecars/speaker (onnxruntime) ist
+#   dieser Sidecar NICHT torch-frei: `pip show mlx-whisper` weist torch als
+#   Pflicht-Dependency aus (zusammen mit numba/scipy/tiktoken/tqdm/more-itertools,
+#   alle unten mitgepinnt). Verifiziert am echten 0.5-venv, 2026-07-18.
+torch==2.12.0
+numba==0.65.1
+scipy==1.17.1
+tiktoken==0.13.0
+tqdm==4.68.1
+more-itertools==11.1.0
+
+# ── huggingface_hub: von mlx_whisper intern fuer path_or_hf_repo genutzt ─────
+#   (analog sidecars/brain: snapshot_download-Nutzung, kein eigener Pin-Vorfall
+#   hier bekannt, aber derselbe Mechanismus — Pin aus Konsistenzgruenden).
+huggingface_hub==1.18.0
+
+# ── numpy: direkt genutzt (PCM-RMS fuer silence_gate.py + WAV-Handling) ──────
+numpy==2.4.6
+
+# ── Web-Server (import uvicorn / fastapi in server.py) ───────────────────────
+#   uvicorn[standard]-Extras (uvloop/httptools/watchfiles/websockets) waren im
+#   Quell-venv installiert — s. pip-freeze-Beleg, daher hier mit Extra gepinnt.
+fastapi==0.136.3
+uvicorn[standard]==0.49.0
+python-multipart==0.0.32

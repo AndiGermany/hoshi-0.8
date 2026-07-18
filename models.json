@@ -1,0 +1,73 @@
+{
+  "_comment": "Manifest der Sidecar-Modelle, die der 0.8-Stack lokal braucht. WARUM: ein unvollständiger HF-Cache (fehlende safetensors, .incomplete-Reste) fiel bisher erst beim Brain-Start auf (Start-Guard). Dieses Manifest + tools/models-verify.sh melden es VORHER, read-only. v1 prüft Vollständigkeit über Datei-Muster, bewusst OHNE Hash-Verifikation.",
+  "version": 1,
+  "models": [
+    {
+      "id": "brain-e2b",
+      "type": "hf",
+      "hf_repo": "mlx-community/gemma-4-e2b-it-4bit",
+      "role": "brain",
+      "required": true,
+      "license": "gemma",
+      "note": "Default-Brain (siehe pipeline/stack-lib.sh resolve_brain_model, HOSHI_BRAIN_MODEL=e2b). PIN: upstream liegt seit 2026-07-06 eine neuere Revision (23876752, vermutlich dieselbe KV-Sharing-Umstellung wie beim e4b-Revisions-Incident) — Upgrade NUR zusammen mit mlx-lm-Upgrade im Brain-Fenster (PREP-mlx-modell-upgrade), nie durch blindes Re-Download.",
+      "expected_files": [
+        "config.json",
+        "*.safetensors"
+      ],
+      "pinned_revision": "2c3e507453b4f218d05fe3cc97bea5c5a654257e"
+    },
+    {
+      "id": "brain-e4b",
+      "type": "hf",
+      "hf_repo": "mlx-community/gemma-4-e4b-it-4bit",
+      "role": "brain-alt",
+      "required": false,
+      "license": "gemma",
+      "note": "Alternatives/Test-Brain (16-GB-Wand: e4b und 12b laufen nie gleichzeitig, siehe brain_guard_blocks in pipeline/stack-lib.sh). Optional, daher required=false. PIN: neuere Repo-Revision (475b9088) nutzt geteilte KV-Gewichte (Layer 24-41) und braucht ein neueres mlx-lm als das gepinnte 0.31.2 — refs/main muss auf die gepinnte Revision zeigen (byte-genau, ohne Newline), sonst Missing-54-parameters-Ladefehler.",
+      "expected_files": [
+        "config.json",
+        "*.safetensors"
+      ],
+      "pinned_revision": "deb1db712068b1c9f83fb1c97f08c1204b9459a1"
+    },
+    {
+      "id": "stt-whisper",
+      "type": "hf",
+      "hf_repo": "mlx-community/whisper-large-v3-turbo",
+      "role": "stt",
+      "required": true,
+      "license": "UNVERIFIED",
+      "note": "STT-Sidecar-Default, siehe Hoshi_0.5/hoshi-stt-mlx/server.py --model Default. Layout weicht von den Brain-Modellen ab: ein einzelnes weights.safetensors statt model.safetensors + Shard-Index.",
+      "expected_files": [
+        "config.json",
+        "*.safetensors"
+      ]
+    },
+    {
+      "id": "speaker-campplus",
+      "type": "hf-direct-file",
+      "hf_repo": "Wespeaker/wespeaker-voxceleb-campplus",
+      "role": "speaker",
+      "required": true,
+      "license": "apache-2.0",
+      "note": "CAM++-ONNX-Speaker-Embedding, siehe Hoshi_0.5/hoshi-speaker-id/setup.sh. WICHTIG: kommt NICHT über huggingface_hub.snapshot_download (kein Eintrag im HF-Hub-Cache) — setup.sh lädt die Datei per curl direkt in den Projektordner. tools/models-verify.sh prüft deshalb local_path statt Snapshot-Cache. [0.8-Port] sidecars/speaker/bootstrap.sh lädt dieselbe Datei (hash-/größenverifiziert aus genau diesem Manifest-Eintrag, s. expected_sha256) nach sidecar_local_path — lokal-relativ zum Sidecar, siehe Path(__file__)-Default in sidecars/speaker/server.py. local_path bleibt bis zum Scheibe-4-Cutover (pipeline/stack-lib.sh auf sidecars/ umgestellt) die von tools/models-verify.sh geprüfte Live-Wahrheit; sidecar_local_path ist der künftige Ziel-Pfad, noch nicht produktiv verdrahtet.",
+      "local_path": "$HOSHI_05_ROOT/hoshi-speaker-id/models/voxceleb_CAM++.onnx",
+      "sidecar_local_path": "sidecars/speaker/models/voxceleb_CAM++.onnx",
+      "expected_bytes": 29292449,
+      "expected_sha256": "b50810498b5bcf5773d086f6993d344476bd0c88b566a41e8d801aaf8461efad",
+      "expected_files": [
+        "voxceleb_CAM++.onnx"
+      ]
+    },
+    {
+      "id": "embedding-embeddinggemma",
+      "type": "ollama",
+      "ollama_name": "embeddinggemma:300m",
+      "role": "embedding",
+      "required": true,
+      "license": "gemma",
+      "note": "Episodic-Memory-Embedder, siehe adapters-memory/.../EpisodicMemoryAdapter.kt OllamaEpisodicEmbedder (Port 11434). Kein HF-Hub-Cache-Eintrag — lebt in Ollamas eigenem Modell-Store, geprüft via `ollama list`.",
+      "expected_files": []
+    }
+  ]
+}

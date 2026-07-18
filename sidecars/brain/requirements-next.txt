@@ -1,0 +1,79 @@
+# sidecars/brain/requirements-next.txt — NUR fuer .venv-next (probe-next.sh),
+# NIEMALS fuer das normale .venv/bootstrap.sh. WARUM diese Datei existiert:
+# mlx-community hat mlx-community/gemma-4-e4b-it-4bit im HF-Cache still auf eine
+# neue Revision re-exportiert (Snapshot 475b9088d29754a3379866cf5aeb6b41acd313c2,
+# lokal bereits im Cache). Die neue Revision nutzt config.json
+# num_kv_shared_layers=18 bei num_hidden_layers=42 → Layer 24-41 teilen sich
+# K/V-Projektionen; deren safetensors-Index enthaelt fuer diese Layer KEINE
+# eigenen k_proj/v_proj/k_norm-Keys mehr (verifiziert: 2770 Tensoren ggue. 2894
+# beim aktuell gepinnten Snapshot deb1db712068b1c9f83fb1c97f08c1204b9459a1, der
+# diese Keys noch redundant mitfuehrt). Das gepinnte mlx-lm==0.31.2 (requirements.txt)
+# erwartet die Keys trotzdem noch pro Layer → "Missing N parameters", Ladefehler
+# (deckt sich mit models.json's brain-e4b-Notiz). Diese Datei installiert ein
+# ZWEITES, isoliertes venv mit einem mlx-lm, das den Fix traegt — s. PREP-Doc
+# vault/tracks/prep/PREP-mlx-modell-upgrade.md, Abschnitt "Revisions-Incident 2.0".
+#
+# ── Recherche-Befund (WebFetch/API-Abfrage, 2026-07-17) ─────────────────────
+#   PyPI-Latest mlx-lm: 0.31.3, veroeffentlicht 2026-04-22 (pypi.org/pypi/mlx-lm/json,
+#   github.com/ml-explore/mlx-lm/releases/tag/v0.31.3). DIESE Version enthaelt den
+#   Shared-KV-Fix NOCH NICHT — der Fix ist juenger als der Release-Tag.
+#   Fix: PR github.com/ml-explore/mlx-lm/pull/1240 "Fix Gemma 4 sanitize() not
+#   stripping KV projections for shared layers", gemerged 2026-05-04T22:26:19Z als
+#   Commit df1d3f3c9a7aae402dcbb8f41d4c36bcc13a50ae (main-Historie, per GitHub-API
+#   verifiziert). Symptom im PR-Text 1:1 unser Fehlerbild (Missing/Extra-Parameter
+#   auf language_model.model.layers.<24..41>.self_attn.{k,v}_proj/k_norm fuer
+#   mlx-community/gemma-4-e4b-it-4bit). Verwandtes Issue:
+#   github.com/ml-explore/mlx-lm/issues/1242 (geoeffnet 2026-05-03, derselbe
+#   Modell-Layer-Fehlerpattern). FAZIT: "die aktuelle Version" heisst hier NICHT
+#   der neueste PyPI-Tag (0.31.3 — kann die neue Revision nicht laden), sondern
+#   ein ungereleaster main-Commit ≥ df1d3f3c. Kontrolliert = auf GENAU diesen
+#   Fix-Commit pinnen, nicht auf ein floatendes main.
+#
+# ── KRITISCHER PIN: mlx-lm @ git-Commit (noch kein PyPI-Release) ────────────
+#   Minimal-Diff-Wahl: exakt der Fix-Commit, nicht der aktuelle main-HEAD
+#   (HEAD war beim Recherche-Zeitpunkt 15b522f593b7ca5fbc0cac6f7572d40859d2d8fe,
+#   2026-07-11 — 18 Commits weiter als der Fix, darunter u.a. "transformers>=5.7"
+#   (Bump von >=5.0.0, #1356), ein CVE-Fix fuer trust_remote_code (#1385) und
+#   eine Neuschreibung der Tool/Reasoning-Parser-State-Machine (#1501) — genau
+#   der Bereich, den server.py's PATH-B/tool_grammar beruehrt. Minimal-Diff
+#   senkt das Sampling-/Parsing-Drift-Risiko fuer die erste Probe. Wer bewusst
+#   den vollen main-Stand testen will: die auskommentierte HEAD-Zeile nutzen —
+#   dann VOR dem Golden-/Blind-A/B-Gate zusaetzlich PATH-B/tool_grammar smoken.
+#   setup.py (main + v0.31.3) verlangt weiterhin nur mlx>=0.31.2 — kein
+#   erzwungener mlx-Versionssprung durch den Fix selbst.
+mlx-lm @ git+https://github.com/ml-explore/mlx-lm.git@df1d3f3c9a7aae402dcbb8f41d4c36bcc13a50ae
+# Alternative (voller main-Stand statt Minimal-Diff-Fix, siehe Kommentar oben):
+# mlx-lm @ git+https://github.com/ml-explore/mlx-lm.git@15b522f593b7ca5fbc0cac6f7572d40859d2d8fe
+
+# ── mlx/mlx-metal: aktuelle kompatible PyPI-Version (2026-07-17 recherchiert) ─
+#   Latest auf PyPI: 0.32.0, veroeffentlicht 2026-07-07 (pypi.org/pypi/mlx/json,
+#   github.com/ml-explore/mlx/releases/tag/v0.32.0). Changelog liest sich
+#   routinemaessig (ueberwiegend CUDA/Linux-Kernel-Fixes + Bump-Minor + kleine
+#   Linalg-Ergaenzungen) — kein bekannter Apple-Silicon/Metal-Regressions-Hinweis
+#   fuer diesen Zyklus. Erfuellt mlx-lms MIN_MLX_VERSION="0.31.2" komfortabel.
+mlx==0.32.0
+# mlx installiert mlx-metal automatisch als Dependency — hier trotzdem explizit
+# gepinnt, gleiche Begruendung wie in requirements.txt (Reproduzierbarkeit).
+mlx-metal==0.32.0
+
+# ── Rest: UNVERAENDERT wie requirements.txt ("Rest wie gehabt") ─────────────
+#   Diese Pins sind vom Shared-KV-Incident nicht betroffen — keine eigene
+#   Recherche noetig, 1:1 aus der Live-requirements.txt uebernommen. NICHT
+#   eigenmaechtig mit-bumpen, sonst vermischt die Probe zwei unabhaengige
+#   Variablen (mlx-lm-Fix vs. sonstiger Dependency-Drift) und ein spaeteres
+#   Baseline-Delta laesst sich nicht mehr sauber einer Ursache zuordnen.
+huggingface_hub==1.18.0
+fastapi==0.136.3
+uvicorn==0.49.0
+pydantic==2.13.4
+lm-format-enforcer==0.11.3
+numpy==2.4.6
+
+# ── Transitiv, bewusst ungepinnt (wie requirements.txt) ──────────────────────
+#   ACHTUNG Drift-Kandidat: mlx-lms install_requires zieht am Fix-Commit/main
+#   "transformers>=5.7.0" (requirements.txt-Stand/0.31.2-Aera zog >=5.0.0 —
+#   verifiziert per setup.py-Diff main vs. v0.31.3). pip wird also eine neuere
+#   transformers-Version installieren als im Live-venv steckt. server.py nutzt
+#   transformers nicht direkt (nur ueber mlx-lm intern) — trotzdem: sollte die
+#   Baseline-Suite (training/eval-baselines.json) hier Abweichungen zeigen,
+#   ist dieser Bump der erste Verdaechtige, nicht zwingend der mlx-lm-Fix selbst.
