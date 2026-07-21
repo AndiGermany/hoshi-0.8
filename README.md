@@ -7,6 +7,18 @@
   <img src="docs/assets/hero-light.svg" alt="Hoshi 星 — ad astra per aspera" width="100%">
 </picture>
 
+<p align="center">
+  <img src="docs/screenshots/hoshi-overview-en.png" alt="Hoshi overview screen: clock, alarm line, live tiles for today, planned items and weather" width="49%">
+  <img src="docs/screenshots/hoshi-chat-en.png" alt="Hoshi chat screen: a turn with its honest step line — route chosen, answering, speaking — and a 'local' badge" width="49%">
+</p>
+
+<p align="center">
+  <sub>
+    Übersicht und Chat, hier auf Englisch — die Oberfläche folgt der gewählten Sprache (DE/EN/ES/FR/IT).<br>
+    Die Häkchen über jeder Antwort zeigen, was der Turn <em>wirklich</em> getan hat; das Schloss, ob er lokal blieb.
+  </sub>
+</p>
+
 ---
 
 ## Hoshi — Deutsch
@@ -84,6 +96,18 @@ Multi-Room mit Wake-Arbitrierung · Metriken-Sparklines. **Bekannte Kanten:** si
 > A private, German-speaking, **local-first** voice assistant you can trust.
 > Runs on a single Apple Silicon Mac (16 GB). No cloud requirement, no project telemetry —
 > your voice stays home.
+
+<p align="center">
+  <img src="docs/screenshots/hoshi-overview-en.png" alt="Hoshi overview screen in English" width="49%">
+  <img src="docs/screenshots/hoshi-chat-en.png" alt="Hoshi chat screen in English" width="49%">
+</p>
+
+<p align="center">
+  <sub>
+    Overview and chat. The interface follows the chosen language (DE/EN/ES/FR/IT).<br>
+    The ticks above each answer show what the turn <em>actually</em> did; the lock shows whether it stayed local.
+  </sub>
+</p>
 
 **Status:** 0.8 "Nagareboshi" — under active development, heading toward 1.0.
 
