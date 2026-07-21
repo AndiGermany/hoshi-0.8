@@ -4,6 +4,7 @@ import { IdleFaceLive } from '../components/IdleFace';
 import { VoiceOrb } from '../components/VoiceOrb';
 import type { VoiceChatSession } from '../hooks/useVoiceChatSession';
 import type { SettingsAnchorId, SettingsCategoryId } from '../components/SettingsPanel';
+import { useUiStrings } from '../i18n';
 
 /**
  * Status-first Landing — Andis „vom Chat zum Zuhause".
@@ -30,38 +31,8 @@ interface Tile {
   note: string;
 }
 
-const HERO: Record<HealthState, { title: string; sub: string }> = {
-  up: { title: 'Hoshi ist online', sub: 'Verbindung steht.' },
-  down: { title: 'Hoshi ist offline', sub: 'Verbindung steht gerade nicht.' },
-  unknown: { title: 'Status wird geprüft …', sub: 'erste Health-Antwort steht noch aus' },
-};
-
-/** Ehrliche Platzhalter — was das 0.8-Backend noch NICHT über die API exponiert. */
-const PENDING: Tile[] = [
-  {
-    name: 'Sidecar-Health',
-    honesty: 'pending',
-    value: '—',
-    note: 'Supervisor-/Sidecar-Status ist noch nicht über die API exponiert. Kommt, sobald das Backend ihn liefert.',
-  },
-  {
-    name: 'Sprach-Stats',
-    honesty: 'pending',
-    value: '—',
-    note: 'Voice/TTS-Telemetrie (Latenz, Sprecher) ist noch nicht angebunden. Kommt später.',
-  },
-  {
-    name: 'Geräte',
-    honesty: 'pending',
-    value: '—',
-    note: 'Geräte-/Satelliten-Registry ist noch nicht verdrahtet. Kommt, sobald die Route steht.',
-  },
-];
-
-const PILL: Record<Honesty, string> = { live: 'live', pending: 'nicht verdrahtet' };
-
-function fmtTime(ts: number | null): string {
-  return ts ? new Date(ts).toLocaleTimeString('de-DE') : '—';
+function fmtTime(ts: number | null, locale: string): string {
+  return ts ? new Date(ts).toLocaleTimeString(locale) : '—';
 }
 
 /**
@@ -70,12 +41,13 @@ function fmtTime(ts: number | null): string {
  * Zustand schon — das Emoji war ein Zustands-Duplikat (Muster: IdleTileCard).
  */
 function TileCard({ tile }: { tile: Tile }) {
+  const { overview } = useUiStrings();
   const live = tile.honesty === 'live';
   return (
     <article className={`tile tile--${tile.honesty}`} data-status={tile.honesty} aria-disabled={!live}>
       <div className="tile__head">
         <span className="tile__name">{tile.name}</span>
-        <span className="tile__pill">{PILL[tile.honesty]}</span>
+        <span className="tile__pill">{tile.honesty === 'live' ? overview.live : overview.notWired}</span>
       </div>
       <div className="tile__value">{tile.value}</div>
       <p className="tile__note">{tile.note}</p>
@@ -89,41 +61,43 @@ export interface UebersichtViewProps {
 }
 
 export function UebersichtView({ state, lastChecked }: UebersichtViewProps) {
-  const hero = HERO[state];
+  const { overview, locale } = useUiStrings();
+  const heroByState: Record<HealthState, { title: string; sub: string }> = {
+    up: { title: overview.heroUpTitle, sub: overview.heroUpSub },
+    down: { title: overview.heroDownTitle, sub: overview.heroDownSub },
+    unknown: { title: overview.heroUnknownTitle, sub: overview.heroUnknownSub },
+  };
+  const hero = heroByState[state];
 
   // 🟢 Echt verdrahtete Kacheln — Werte stammen aus realen Endpoints/Config.
   const live: Tile[] = [
     {
-      name: 'Backend',
+      name: overview.backend,
       honesty: 'live',
       value: API_BASE,
-      note: 'Adresse, mit der sich diese Oberfläche verbindet.',
+      note: overview.backendNote,
     },
     {
-      name: 'Chat-Turn',
+      name: overview.chatTurn,
       honesty: 'live',
-      value: 'Live-Streaming',
-      note: 'Echte Antwort in Echtzeit, kein Mock.',
+      value: overview.liveStreaming,
+      note: overview.chatTurnNote,
     },
     {
-      name: 'Auth-Token',
+      name: overview.authToken,
       honesty: 'live',
-      value: hasToken() ? 'gesetzt' : 'fehlt',
+      value: hasToken() ? overview.set : overview.missing,
       note: hasToken()
-        ? 'Dein Gerät ist angemeldet — geschützte Bereiche sind freigeschaltet.'
-        : 'Nicht angemeldet — geschützte Bereiche bleiben gesperrt.',
+        ? overview.authSetNote
+        : overview.authMissingNote,
     },
   ];
 
   return (
     <section className="ueber">
       <header className="ueber__head">
-        <h1 className="ueber__title">Übersicht</h1>
-        <p className="ueber__lede">
-          Status-first: ein ehrlicher Blick aufs Zuhause. Was läuft, kommt LIVE aus den
-          echten Quellen — was noch fehlt, ist klar als „noch nicht verdrahtet" markiert,
-          nie grün gefärbt.
-        </p>
+        <h1 className="ueber__title">{overview.title}</h1>
+        <p className="ueber__lede">{overview.lede}</p>
       </header>
 
       <div className={`hero hero--${state}`} data-health={state} role="status" aria-live="polite">
@@ -134,24 +108,25 @@ export function UebersichtView({ state, lastChecked }: UebersichtViewProps) {
         </div>
         <div className="hero__aside">
           <code className="hero__base">{API_BASE}</code>
-          <span className="hero__time">zuletzt geprüft {fmtTime(lastChecked)}</span>
+          <span className="hero__time">{overview.lastChecked(fmtTime(lastChecked, locale))}</span>
         </div>
       </div>
 
-      <h2 className="ueber__sec">Live verdrahtet</h2>
+      <h2 className="ueber__sec">{overview.liveWired}</h2>
       <div className="tiles">
         {live.map((t) => (
           <TileCard key={t.name} tile={t} />
         ))}
       </div>
 
-      <h2 className="ueber__sec">Noch nicht verdrahtet</h2>
-      <p className="ueber__sechint">
-        Diese Kacheln zeigen bewusst keinen Zustand — das 0.8-Backend exponiert die Daten
-        noch nicht. Kein erfundenes Grün.
-      </p>
+      <h2 className="ueber__sec">{overview.notWiredTitle}</h2>
+      <p className="ueber__sechint">{overview.notWiredHint}</p>
       <div className="tiles">
-        {PENDING.map((t) => (
+        {[
+          { name: overview.sidecarHealth, honesty: 'pending' as const, value: '—', note: overview.sidecarHealthNote },
+          { name: overview.voiceStats, honesty: 'pending' as const, value: '—', note: overview.voiceStatsNote },
+          { name: overview.devices, honesty: 'pending' as const, value: '—', note: overview.devicesNote },
+        ].map((t) => (
           <TileCard key={t.name} tile={t} />
         ))}
       </div>

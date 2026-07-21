@@ -54,6 +54,9 @@ import {
   fetchBrainSettings,
   saveBrainModel,
 } from '../api/brainSettings';
+import { de } from '../i18n/de';
+import { useUiStrings } from '../i18n';
+import type { BrainModelStrings } from '../i18n/types';
 import { CloudGlyph, LockGlyph, PlayGlyph, WarnGlyph } from './icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -593,18 +596,12 @@ export function EscalationSection({
 //  Wetter-Ort — der Standort für Wetter-Fragen (serverseitig, ein PUT pro Save)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Ehrliche Texte des Wetter-Ort-Settings (auch von den Tests referenziert). */
-export const WEATHER_LOCATION_TEXTS = {
-  save: 'Speichern',
-  saving: 'speichert…',
-  notFound: 'Ort nicht gefunden.',
-  locked: 'Wetter ist beim Deploy deaktiviert — der Ort greift erst, wenn es aktiv ist.',
-  failed: 'Speichern fehlgeschlagen — bitte nochmal versuchen.',
-  loadError: 'Wetter-Ort grad nicht lesbar.',
-  seedSuffix: ' (Standard aus dem Deploy)',
-  hint: 'Der Ort für Wetter-Fragen — gilt für alle Geräte. Für einen anderen Ort frag einfach „Wetter in …?“.',
-  saved: (label: string) => `Ort gespeichert: ${label}.`,
-} as const;
+/**
+ * Ehrliche Texte des Wetter-Ort-Settings (auch von den Tests referenziert) —
+ * jetzt eine Referenz auf den `de`-Katalog in `i18n/de.ts` (byte-gleich zum
+ * bisherigen Stand). Gerendert wird `useUiStrings().weatherLocation`, s. unten.
+ */
+export const WEATHER_LOCATION_TEXTS = de.weatherLocation;
 
 /**
  * Container der Wetter-Ort-Gruppe: lädt den Ist-Zustand EINMAL beim Mount
@@ -614,6 +611,8 @@ export const WEATHER_LOCATION_TEXTS = {
  * 404 ⇒ ehrlich „Ort nicht gefunden.", 409 ⇒ „beim Deploy deaktiviert".
  */
 export function WeatherLocationSection() {
+  const t = useUiStrings();
+  const WEATHER_LOCATION_TEXTS = t.weatherLocation;
   const [current, setCurrent] = useState<WeatherLocationSetting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -712,6 +711,8 @@ export function WeatherLocationSectionView({
   onPlace,
   onSave,
 }: WeatherLocationSectionViewProps) {
+  const t = useUiStrings();
+  const WEATHER_LOCATION_TEXTS = t.weatherLocation;
   return (
     <section className="settings__group">
       <label className="settings__label" htmlFor="settings-weather-place">
@@ -768,16 +769,12 @@ export function WeatherLocationSectionView({
 //  Online-Nachschlag — welches Modell fürs schnelle Lookup (Andi-Video-Auftrag)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Ehrliche Texte des Lookup-Modell-Settings (auch von Tests referenziert). */
-export const LOOKUP_MODEL_TEXTS = {
-  label: 'Online-Nachschlag',
-  hint: 'Welches Modell Hoshi beim schnellen Online-Nachschlag fragt (Extended Think). Betrifft NUR den schnellen Lookup, nicht die explizite Recherche.',
-  loadError: 'Lookup-Modell grad nicht lesbar.',
-  switching: 'wechselt…',
-  unknown: 'Unbekanntes Modell.',
-  failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
-  priceSuffix: (cents: number) => `ca. ${cents.toFixed(2)} ct/Nachschlag`,
-} as const;
+/**
+ * Ehrliche Texte des Lookup-Modell-Settings (auch von Tests referenziert) —
+ * jetzt eine Referenz auf den `de`-Katalog in `i18n/de.ts` (byte-gleich zum
+ * bisherigen Stand). Gerendert wird `useUiStrings().lookupModel`, s. unten.
+ */
+export const LOOKUP_MODEL_TEXTS = de.lookupModel;
 
 /**
  * Container der Lookup-Modell-Gruppe (Muster {@link WeatherLocationSection}):
@@ -787,6 +784,8 @@ export const LOOKUP_MODEL_TEXTS = {
  * Zustand zurück (Readback, kein optimistisches Umschalten).
  */
 export function LookupModelSection() {
+  const t = useUiStrings();
+  const LOOKUP_MODEL_TEXTS = t.lookupModel;
   const [current, setCurrent] = useState<LookupModelSetting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -862,6 +861,8 @@ export function LookupModelSectionView({
   note,
   onSelect,
 }: LookupModelSectionViewProps) {
+  const t = useUiStrings();
+  const LOOKUP_MODEL_TEXTS = t.lookupModel;
   const selected = current?.modelle.find((m) => m.id === current.aktiv);
   return (
     <section className="settings__group">
@@ -915,19 +916,12 @@ const TTS_ENGINE_LABELS: Record<string, string> = {
   voxtral: 'Voxtral (lokal)',
 };
 
-/** Ehrliche Texte des TTS-Engine-Settings (auch von Tests referenziert). */
-export const TTS_ENGINE_TEXTS = {
-  label: 'TTS-Engine',
-  hint: 'Welche Engine Hoshis Antworten spricht. Nur Engines, die gerade laufen, sind wählbar — ehrlicher Live-Status, kein Fake-Zustand.',
-  loadError: 'TTS-Engine-Status grad nicht lesbar.',
-  switching: 'wechselt…',
-  unavailable: (hinweis: string) => hinweis || 'gerade nicht verfügbar.',
-  unknown: 'Unbekannte Engine.',
-  failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
-  active: 'aktiv',
-  available: 'verfügbar',
-  notStarted: 'nicht gestartet',
-} as const;
+/**
+ * Ehrliche Texte des TTS-Engine-Settings (auch von Tests referenziert) — jetzt
+ * eine Referenz auf den `de`-Katalog in `i18n/de.ts` (byte-gleich zum
+ * bisherigen Stand). Gerendert wird `useUiStrings().ttsEngine`, s. unten.
+ */
+export const TTS_ENGINE_TEXTS = de.ttsEngine;
 
 export interface TtsEngineSectionViewProps {
   current: TtsSetting | null;
@@ -952,6 +946,8 @@ export function TtsEngineSectionView({
   note,
   onSelect,
 }: TtsEngineSectionViewProps) {
+  const t = useUiStrings();
+  const TTS_ENGINE_TEXTS = t.ttsEngine;
   return (
     <section className="settings__group">
       <h3 className="settings__label">{TTS_ENGINE_TEXTS.label}</h3>
@@ -1018,19 +1014,12 @@ export function TtsEngineSectionView({
 //  UND der Privacy-Hinweis richten sich nach `current.aktiv`.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Ehrliche Texte der Stimmen-Sektion (auch von Tests referenziert). */
-export const STIMME_TEXTS = {
-  label: 'Stimme',
-  loadError: 'Stimmen-Liste grad nicht lesbar.',
-  switching: 'wechselt…',
-  unknownVoice: 'Unbekannte Stimme für diese Engine.',
-  failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
-  cloudBadge: 'geht online',
-  cloudLine: 'Hoshis gesprochene Antwort-Stimme (Cloud-TTS).',
-  cloudPrivacy: 'Ehrlich: jede Hörprobe und jede Cloud-Stimme geht zu OpenAI.',
-  localLine: 'Hoshis gesprochene Antwort-Stimme — läuft lokal.',
-  localPrivacy: 'Verlässt das Gerät nicht.',
-} as const;
+/**
+ * Ehrliche Texte der Stimmen-Sektion (auch von Tests referenziert) — jetzt eine
+ * Referenz auf den `de`-Katalog in `i18n/de.ts` (byte-gleich zum bisherigen
+ * Stand). Gerendert wird `useUiStrings().stimme`, s. unten.
+ */
+export const STIMME_TEXTS = de.stimme;
 
 export interface StimmeSectionViewProps {
   current: TtsSetting | null;
@@ -1069,6 +1058,8 @@ export function StimmeSectionView({
   onSelectVoice,
   onPlaySample,
 }: StimmeSectionViewProps) {
+  const t = useUiStrings();
+  const STIMME_TEXTS = t.stimme;
   const isOpenAi = current?.aktiv === 'openai';
   const engineLabel = current ? (TTS_ENGINE_LABELS[current.aktiv] ?? current.aktiv) : '';
   const selectedVoice = current?.stimmen.find((v) => v.id === activeVoice);
@@ -1174,6 +1165,9 @@ export function TtsAndVoiceSection({
   voice: string;
   onVoice: (voice: string) => void;
 }) {
+  const t = useUiStrings();
+  const TTS_ENGINE_TEXTS = t.ttsEngine;
+  const STIMME_TEXTS = t.stimme;
   const [current, setCurrent] = useState<TtsSetting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1328,26 +1322,23 @@ export const BRAIN_POLL_INTERVAL_MS = 4000;
 /** Wie lange (ms) maximal gepollt wird, bevor ehrlich „dauert länger als erwartet" steht. */
 export const BRAIN_POLL_TIMEOUT_MS = 130000;
 
-/** Ehrliche Texte des Brain-Modell-Settings (auch von Tests referenziert). */
-export const BRAIN_MODEL_TEXTS = {
-  label: 'Brain (LLM)',
-  hint: 'Welches Sprachmodell der Brain-Sidecar fährt. Ein Wechsel dauert 60-120 Sekunden (Modell wird neu geladen) — kein optimistisches UI, Hoshi zeigt den echten Ladezustand.',
-  loadError: 'Brain-Status grad nicht lesbar.',
-  switching: (label: string) => `wechselt zu ${label} — das dauert 60-120 Sekunden…`,
-  timeout: 'Der Wechsel dauert ungewöhnlich lange — bitte den Status später prüfen.',
-  unknown: 'Unbekanntes Brain-Modell.',
-  switchUnavailable: 'Brain-Sidecar kann noch kein Umschalten / nicht erreichbar.',
-  failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
-  statusOk: 'läuft',
-  statusLoading: 'lädt…',
-  statusUnreachable: 'nicht erreichbar',
-} as const;
+/**
+ * Ehrliche Texte des Brain-Modell-Settings (auch von Tests referenziert) —
+ * jetzt eine Referenz auf den `de`-Katalog in `i18n/de.ts` (byte-gleich zum
+ * bisherigen Stand). Gerendert wird `useUiStrings().brainModel`, s. unten.
+ */
+export const BRAIN_MODEL_TEXTS = de.brainModel;
 
-/** Ehrlicher Klartext zum rohen `status`-Feld (roh durchgereicht, wenn unbekannt). */
-function brainStatusLabel(status: string): string {
-  if (status === 'ok') return BRAIN_MODEL_TEXTS.statusOk;
-  if (status === 'loading') return BRAIN_MODEL_TEXTS.statusLoading;
-  if (status === 'unreachable') return BRAIN_MODEL_TEXTS.statusUnreachable;
+/**
+ * Ehrlicher Klartext zum rohen `status`-Feld (roh durchgereicht, wenn
+ * unbekannt). Nimmt den aktiven Text-Katalog explizit entgegen (Default: der
+ * DE-Katalog) — der Aufrufer (eine Komponente, {@link useUiStrings}) reicht die
+ * aktive Sprache durch.
+ */
+function brainStatusLabel(status: string, texts: BrainModelStrings = BRAIN_MODEL_TEXTS): string {
+  if (status === 'ok') return texts.statusOk;
+  if (status === 'loading') return texts.statusLoading;
+  if (status === 'unreachable') return texts.statusUnreachable;
   return status;
 }
 
@@ -1360,6 +1351,8 @@ function brainStatusLabel(status: string): string {
  * zeigt IMMER den zuletzt vom Server gelesenen Zustand, nie das erhoffte Ziel.
  */
 export function BrainModelSection() {
+  const t = useUiStrings();
+  const BRAIN_MODEL_TEXTS = t.brainModel;
   const [current, setCurrent] = useState<BrainSetting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1486,6 +1479,8 @@ export function BrainModelSectionView({
   note,
   onSelect,
 }: BrainModelSectionViewProps) {
+  const t = useUiStrings();
+  const BRAIN_MODEL_TEXTS = t.brainModel;
   return (
     <section className="settings__group">
       <label className="settings__label" htmlFor="settings-brain-model">
@@ -1518,7 +1513,7 @@ export function BrainModelSectionView({
             ))}
           </select>
           <p className="settings__hint">
-            Status: {brainStatusLabel(current.status)}
+            Status: {brainStatusLabel(current.status, BRAIN_MODEL_TEXTS)}
             {current.aktiv && ` (${current.modelle.find((m) => m.id === current.aktiv)?.label ?? current.aktiv})`}
           </p>
         </>
@@ -1665,15 +1660,12 @@ export function SkillsSection({
 //  Privatsphäre (Toms Vertrauens-Screen) — ehrliche Übersicht + Lösch-API
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Ehrliche Notiz-Texte des Lösch-Flows (auch von den Tests referenziert). */
-export const PRIVACY_TEXTS = {
-  confirm: 'Wirklich? Klick nochmal',
-  delete: 'Löschen',
-  deleting: 'löscht…',
-  notYet: 'Kommt noch — serverseitig noch nicht gebaut.',
-  failed: 'Löschen fehlgeschlagen — Daten unverändert; bitte nochmal versuchen.',
-  loadError: 'Privatsphäre-Übersicht grad nicht lesbar.',
-} as const;
+/**
+ * Ehrliche Notiz-Texte des Lösch-Flows (auch von den Tests referenziert) —
+ * jetzt eine Referenz auf den `de`-Katalog in `i18n/de.ts` (byte-gleich zum
+ * bisherigen Stand). Gerendert wird `useUiStrings().privacy`, s. unten.
+ */
+export const PRIVACY_TEXTS = de.privacy;
 
 /** Wie lange der scharfe Zweitklick-Zustand hält, bevor er sich selbst entschärft. */
 const PRIVACY_ARM_TIMEOUT_MS = 5000;
@@ -1694,6 +1686,8 @@ const PRIVACY_UNITS: Record<PrivacyTarget, [string, string]> = {
  * (die Zahlen bleiben Server-Wahrheit, nicht geraten). 501 ⇒ ehrlich „kommt noch".
  */
 export function PrivacySection() {
+  const t = useUiStrings();
+  const PRIVACY_TEXTS = t.privacy;
   const [summary, setSummary] = useState<PrivacySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1821,6 +1815,8 @@ export function PrivacySectionView({
   notes,
   onDelete,
 }: PrivacySectionViewProps) {
+  const t = useUiStrings();
+  const PRIVACY_TEXTS = t.privacy;
   const deleteButton = (target: PrivacyTarget, label: string) => {
     const isArmed = armed === target;
     const isBusy = busy === target;

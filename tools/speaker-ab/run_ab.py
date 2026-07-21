@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """run_ab.py — Offline-A/B-Runner für die Speaker-Score-Aggregation (BEST_SAMPLE vs.
-CENTROID) gegen echte (oder synthetische) Voice-Proben.
+TOP_TWO_MEAN vs. CENTROID) gegen echte (oder synthetische) Voice-Proben.
 
 WARUM dieses Tool: der Test-Gate für `SpeakerProfileAggregation` (siehe
 web-inbound/src/main/kotlin/de/hoshi/web/SpeakerIdentifyService.kt) verlangt einen
@@ -14,6 +14,9 @@ selbst anzufassen.
 **Null Mathe-Divergenz zum Kotlin-Pfad (bewusstes Design):**
   - BEST_SAMPLE = max(cosine(probe, sample_i)) über `profile.samples` — exakt
     `CosineSpeakerIdentifyService.scoreProfile`.
+  - TOP_TWO_MEAN = Mittel der zwei hoechsten Sample-Cosines (bei einem Legacy-Sample
+    exakt dessen Score). Ein einzelner Sample-Ausreisser kann damit nicht allein
+    gewinnen; der Kandidat bleibt bis zum echten Holdout rein opt-in.
   - CENTROID = cosine(probe, profile.embedding) — das im Store BEREITS
     L2-renormalisiert gemittelte Embedding wird NUR GELESEN, nie neu berechnet
     (`SpeakerProfileStore.renormalizedMean` läuft ausschließlich beim Enroll/Append,
@@ -38,6 +41,11 @@ Modi:
                             verwendet (siehe `build_smoke_fixture`). Beweist: Report
                             entsteht, best-sample==centroid bei 1-Sample-Profil,
                             Margin-Regel greift.
+  --target-profile ID       Scoret im echten Lauf nur dieses eine Store-Profil.
+  --include-other-enrollment-samples
+                            Fuegt die Roh-Embeddings aller anderen Store-Profile
+                            als klar markierte Impostor-Sanity-Proben hinzu. Keine
+                            WAVs noetig, kein Store wird veraendert.
 
 Report (NIE ins Repo — Datenschutz hart, siehe README): `~/.hoshi/speaker-ab/<ts>/`
   - probes.tsv  je Probe: truth/channel/dauer/quality, ALLE Profil-Scores beider
@@ -72,8 +80,14 @@ DEFAULT_MARGIN = 0.10          # exakt der Kotlin-Default (hoshi.speaker.recogni
 THRESHOLD_MIN = 0.35
 THRESHOLD_MAX = 0.70
 THRESHOLD_STEP = 0.05
+ONE_PROFILE_THRESHOLDS = (0.45, 0.50, 0.55)
 GUEST_LABEL = "GAST"           # Report-Label für "kein sicherer Treffer" (== Recognition.GUEST)
-MODES = ("best-sample", "centroid")
+MODES = ("best-sample", "top-two-mean", "centroid")
+MODE_COLUMNS = {
+    "best-sample": "best",
+    "top-two-mean": "top_two",
+    "centroid": "centroid",
+}
 REPORT_ROOT = Path.home() / ".hoshi" / "speaker-ab"   # NIE ins Repo, s. Modul-Docstring
 REPO_ROOT = Path(__file__).resolve().parents[2]        # tools/speaker-ab/ → Repo-Wurzel
 
@@ -146,6 +160,11 @@ def score_profile(probe_emb: List[float], profile: Profile, mode: str) -> float:
     if mode == "best-sample":
         samples = profile.samples or [profile.embedding]
         return max(cosine(probe_emb, s) for s in samples)
+    if mode == "top-two-mean":
+        samples = profile.samples or [profile.embedding]
+        scores = sorted((cosine(probe_emb, s) for s in samples), reverse=True)
+        selected = scores[:2]
+        return sum(selected) / len(selected)
     if mode == "centroid":
         return cosine(probe_emb, profile.embedding)
     raise ValueError(f"unbekannter Modus {mode!r}")
@@ -251,6 +270,48 @@ def load_store(path: Path) -> List[Profile]:
     if not profiles:
         raise SystemExit(f"FEHLER: {path} enthält KEIN brauchbares Profil — Report wäre gegen 0 Profile sinnlos.")
     return profiles
+
+
+def select_scoring_profiles(profiles: List[Profile], target_profile: Optional[str]) -> List[Profile]:
+    """Optionaler Ein-Profil-Schattenmodus. Die Original-Liste und der Store bleiben
+    unveraendert; eine unbekannte ID bricht hart ab statt gegen 0 Profile einen
+    irrefuehrenden Report zu erzeugen."""
+    if target_profile is None:
+        return list(profiles)
+    matches = [profile for profile in profiles if profile.name == target_profile]
+    if len(matches) != 1:
+        raise SystemExit(
+            f"FEHLER: --target-profile passt auf {len(matches)} Store-Profile; exakt 1 erwartet."
+        )
+    return matches
+
+
+def enrollment_impostor_probes(profiles: List[Profile], target_profile: str) -> List[Probe]:
+    """Roh-Enrollment-Embeddings aller NICHT-Zielprofile als lokale Impostor-Sanity.
+
+    Die Proben sind keine unabhaengigen Guest-Sessions und werden deshalb explizit
+    als `enrollment-sanity` markiert. Sie duerfen ein Offline-Veto liefern, aber nie
+    als allgemeiner Gast-Sicherheitsbeweis behauptet werden.
+    """
+    probes: List[Probe] = []
+    for profile in profiles:
+        if profile.name == target_profile:
+            continue
+        for sample in profile.samples:
+            probes.append(
+                Probe(
+                    truth_speaker=profile.name,
+                    channel="enrollment",
+                    quality="enrollment-sanity",
+                    embedding=list(sample),
+                )
+            )
+    if not probes:
+        raise SystemExit(
+            "FEHLER: --include-other-enrollment-samples fand 0 Samples anderer Profile; "
+            "Impostor-Sanity waere leer."
+        )
+    return probes
 
 
 # ── Proben einlesen (Manifest / wav-dir) ───────────────────────────────────────
@@ -488,11 +549,14 @@ def write_probes_tsv(path: Path, results: List[ProbeResult], profiles: List[Prof
     names = sorted(p.name for p in profiles)
     header = ["wav_path", "truth_speaker", "channel", "quality", "duration_s", "error"]
     for n in names:
-        header += [f"score_best_{n}", f"score_centroid_{n}"]
-    header += ["top1_best", "top1_best_score", "runnerup_best_score", "margin_best",
-               "top1_centroid", "top1_centroid_score", "runnerup_centroid_score", "margin_centroid"]
+        for mode in MODES:
+            header.append(f"score_{MODE_COLUMNS[mode]}_{n}")
+    for mode in MODES:
+        slug = MODE_COLUMNS[mode]
+        header += [f"top1_{slug}", f"top1_{slug}_score", f"runnerup_{slug}_score", f"margin_{slug}"]
     for t in thresholds:
-        header += [f"decision_best_{t:.2f}", f"decision_centroid_{t:.2f}"]
+        for mode in MODES:
+            header.append(f"decision_{MODE_COLUMNS[mode]}_{t:.2f}")
 
     with path.open("w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh, delimiter="\t")
@@ -506,15 +570,15 @@ def write_probes_tsv(path: Path, results: List[ProbeResult], profiles: List[Prof
                 w.writerow(row)
                 continue
             for n in names:
-                row.append(f"{r.scores['best-sample'][n]:.6f}")
-                row.append(f"{r.scores['centroid'][n]:.6f}")
-            for mode in ("best-sample", "centroid"):
+                for mode in MODES:
+                    row.append(f"{r.scores[mode][n]:.6f}")
+            for mode in MODES:
                 ru = r.runner_up[mode]
                 margin_val = "" if ru is None else f"{(r.top1_score[mode] - ru):.6f}"
                 row += [r.top1[mode] or "", f"{r.top1_score[mode]:.6f}",
                         "" if ru is None else f"{ru:.6f}", margin_val]
             for t in thresholds:
-                for mode in ("best-sample", "centroid"):
+                for mode in MODES:
                     d = r.decisions[(mode, t)]
                     row.append(d if d is not None else GUEST_LABEL)
             w.writerow(row)
@@ -598,12 +662,16 @@ def write_report_md(path: Path, results: List[ProbeResult], profiles: List[Profi
     lines.append("")
     lines.append("## Übersicht — FAR-Proxy / FRR-Proxy je Modus × Schwelle")
     lines.append("")
-    lines.append("| Schwelle | best-sample FAR-Proxy | best-sample FRR-Proxy | centroid FAR-Proxy | centroid FRR-Proxy |")
-    lines.append("|---|---|---|---|---|")
+    lines.append("| Schwelle | " + " | ".join(
+        cell for mode in MODES for cell in (f"{mode} FAR-Proxy", f"{mode} FRR-Proxy")
+    ) + " |")
+    lines.append("|---|" + "---|" * (2 * len(MODES)))
     for t in thresholds:
-        (fb_k, fb_n), (rb_k, rb_n) = _far_frr(results, profile_names, "best-sample", t)
-        (fc_k, fc_n), (rc_k, rc_n) = _far_frr(results, profile_names, "centroid", t)
-        lines.append(f"| {t:.2f} | {_frac(fb_k, fb_n)} | {_frac(rb_k, rb_n)} | {_frac(fc_k, fc_n)} | {_frac(rc_k, rc_n)} |")
+        cells = []
+        for mode in MODES:
+            (far_k, far_n), (frr_k, frr_n) = _far_frr(results, profile_names, mode, t)
+            cells += [_frac(far_k, far_n), _frac(frr_k, frr_n)]
+        lines.append(f"| {t:.2f} | " + " | ".join(cells) + " |")
 
     lines.append("")
     lines.append("## Confusion-Matrizen — je Modus × Schwelle, GETRENNT je Kanal")
@@ -648,7 +716,15 @@ def _guard_out_dir_outside_repo(out_dir: Path) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    thresholds = threshold_list()
+    has_target = args.target_profile is not None
+    if has_target and (not args.target_profile or args.target_profile != args.target_profile.strip()):
+        raise SystemExit("FEHLER: --target-profile darf nicht leer oder ungetrimmt sein.")
+    if args.smoke and (has_target or args.include_other_enrollment_samples):
+        raise SystemExit("FEHLER: --target-profile/--include-other-enrollment-samples sind nur im echten Lauf erlaubt.")
+    if args.include_other_enrollment_samples and not has_target:
+        raise SystemExit("FEHLER: --include-other-enrollment-samples braucht --target-profile.")
+
+    thresholds = list(ONE_PROFILE_THRESHOLDS) if has_target else threshold_list()
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     if args.smoke:
@@ -672,9 +748,12 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit("FEHLER: genau EINES von --manifest ODER --wav-dir angeben (oder --smoke).")
 
     store_path = Path(args.store) if args.store else resolve_default_store_path()
-    profiles = load_store(store_path)
+    all_profiles = load_store(store_path)
+    profiles = select_scoring_profiles(all_profiles, args.target_profile)
     probes = read_manifest(Path(args.manifest)) if args.manifest else scan_wav_dir(Path(args.wav_dir))
     fetch_embeddings(probes, args.sidecar)
+    if args.include_other_enrollment_samples:
+        probes.extend(enrollment_impostor_probes(all_profiles, args.target_profile))
 
     out_dir = Path(args.out_dir) if args.out_dir else REPORT_ROOT / ts
     _guard_out_dir_outside_repo(out_dir)
@@ -684,8 +763,12 @@ def run(args: argparse.Namespace) -> int:
     probes_path = out_dir / "probes.tsv"
     report_path = out_dir / "report.md"
     write_probes_tsv(probes_path, results, profiles, thresholds)
-    write_report_md(report_path, results, profiles, thresholds, args.margin, store_path, args.sidecar,
-                     f"--manifest {args.manifest}" if args.manifest else f"--wav-dir {args.wav_dir}")
+    source_desc = f"--manifest {args.manifest}" if args.manifest else f"--wav-dir {args.wav_dir}"
+    if has_target:
+        source_desc += " + EIN-PROFIL-SCHATTENMODUS"
+        if args.include_other_enrollment_samples:
+            source_desc += " + fremde Enrollment-Samples (nur Impostor-Sanity)"
+    write_report_md(report_path, results, profiles, thresholds, args.margin, store_path, args.sidecar, source_desc)
 
     n_ok = sum(1 for p in probes if not p.error and p.embedding)
     print(f"[run] fertig: {n_ok}/{len(probes)} Proben ausgewertet", file=sys.stderr)
@@ -696,7 +779,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _smoke_assertions(results: List[ProbeResult], probes_path: Path, report_path: Path, margin: float) -> int:
-    """Die 3 im Auftrag verlangten Beweise. Druckt PASS/FAIL-Zeilen; Exit != 0 bei
+    """Die synthetischen Vertrags-Beweise. Druckt PASS/FAIL-Zeilen; Exit != 0 bei
     JEDEM Fail (ein grüner Smoke, der etwas Falsches beweist, ist schlimmer als
     ein roter)."""
     ok = True
@@ -709,14 +792,16 @@ def _smoke_assertions(results: List[ProbeResult], probes_path: Path, report_path
 
     solo_row = next((r for r in results if r.probe.truth_speaker == "solo"), None)
     if solo_row is None:
-        print("[smoke] Assertion 2 (best-sample==centroid bei 1-Sample-Profil): FAIL — Testprobe 'solo' fehlt")
+        print("[smoke] Assertion 2 (alle Modi gleich bei 1-Sample-Profil): FAIL — Testprobe 'solo' fehlt")
         ok = False
     else:
         s_best = solo_row.scores["best-sample"]["solo"]
+        s_top_two = solo_row.scores["top-two-mean"]["solo"]
         s_cent = solo_row.scores["centroid"]["solo"]
-        a2 = abs(s_best - s_cent) < 1e-9
-        print(f"[smoke] Assertion 2 (best-sample==centroid bei 1-Sample-Profil 'solo'): "
-              f"{'PASS' if a2 else 'FAIL'} — best={s_best:.6f} centroid={s_cent:.6f}")
+        a2 = abs(s_best - s_top_two) < 1e-9 and abs(s_best - s_cent) < 1e-9
+        print(f"[smoke] Assertion 2 (alle Modi gleich bei 1-Sample-Profil 'solo'): "
+              f"{'PASS' if a2 else 'FAIL'} — best={s_best:.6f} "
+              f"top-two={s_top_two:.6f} centroid={s_cent:.6f}")
         ok &= a2
 
     amb_row = next((r for r in results if r.probe.wav_path and "ambiguous" in r.probe.wav_path), None)
@@ -738,6 +823,18 @@ def _smoke_assertions(results: List[ProbeResult], probes_path: Path, report_path
               f"Entscheidung={decision or GUEST_LABEL}")
         ok &= a3
 
+    genuine_row = next((r for r in results if r.probe.truth_speaker == "alice"), None)
+    if genuine_row is None:
+        print("[smoke] Assertion 4 (Top-Two mindert Einzelspitze): FAIL — Testprobe 'alice' fehlt")
+        ok = False
+    else:
+        best = genuine_row.scores["best-sample"]["alice"]
+        top_two = genuine_row.scores["top-two-mean"]["alice"]
+        a4 = top_two < best
+        print(f"[smoke] Assertion 4 (Top-Two mindert Einzelspitze): {'PASS' if a4 else 'FAIL'} — "
+              f"best={best:.6f} top-two={top_two:.6f}")
+        ok &= a4
+
     print(f"[smoke] {'ALLE ASSERTIONS PASS' if ok else 'MINDESTENS EINE ASSERTION FAIL'}")
     return 0 if ok else 1
 
@@ -750,6 +847,9 @@ def main() -> int:
     ap.add_argument("--sidecar", default=DEFAULT_SIDECAR_URL, help=f"Speaker-Sidecar-Basis-URL (Default {DEFAULT_SIDECAR_URL})")
     ap.add_argument("--margin", type=float, default=DEFAULT_MARGIN, help=f"Bindungs-Margin (Default {DEFAULT_MARGIN}, == Kotlin-Default)")
     ap.add_argument("--out-dir", default=None, help="Report-Zielverzeichnis (Default: ~/.hoshi/speaker-ab/<ts>/ — MUSS außerhalb des Repos liegen)")
+    ap.add_argument("--target-profile", default=None, help="Ein-Profil-Schattenmodus: nur diese Store-ID scoren (Store bleibt unveraendert)")
+    ap.add_argument("--include-other-enrollment-samples", action="store_true",
+                    help="Roh-Samples anderer Store-Profile als Impostor-Sanity (braucht --target-profile)")
     ap.add_argument("--smoke", action="store_true", help="Sidecar-freier Selbsttest mit synthetischen Proben (siehe Modul-Docstring)")
     args = ap.parse_args()
     return run(args)

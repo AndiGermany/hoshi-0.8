@@ -31,7 +31,7 @@ import java.time.Duration
  */
 class TtsSettingsControllerTest {
 
-    private fun factory(sayBaseUrl: String = "http://127.0.0.1:8044") = TtsEngineFactory(
+    private fun factory(sayBaseUrl: String = "http://127.0.0.1:8044", piperBaseUrl: String = "http://127.0.0.1:8045") = TtsEngineFactory(
         voxtralBaseUrl = "http://localhost:8042",
         voxtralVoice = "de_female",
         openaiModel = "gpt-4o-mini-tts",
@@ -39,7 +39,7 @@ class TtsSettingsControllerTest {
         sayBaseUrl = sayBaseUrl,
         sayVoice = "",
         sayRate = 0,
-        piperBaseUrl = "http://127.0.0.1:8045",
+        piperBaseUrl = piperBaseUrl,
         piperVoice = "de_DE-thorsten-medium",
         sanitizeEnabled = false,
         ttsStreamEnabled = false,
@@ -317,6 +317,88 @@ class TtsSettingsControllerTest {
     fun `GET - DE aktiv bleibt byte-neutral - kein sayVoiceHint, nur der Boot-Default`(@TempDir dir: Path) {
         val view = controller(dir, ttsImpl = "say").ttsSettings().block(Duration.ofSeconds(2))!!
         assertNull(view.aktiveStimme, "DE traegt keinen sayVoiceHint (LangDe.PACK) ⇒ leerer sayVoice-Boot-Default bleibt null")
+    }
+
+    // ── piper folgt der Sprache genau wie say (Andi-Auftrag 21.07 Nachtrag: ────
+    // ── en_US-kristin-medium ist jetzt handverifiziert + lizenzgeprueft) ───────
+
+    @Test
+    fun `GET - aktiveStimme ist der EN-piperVoiceHint (kristin), wenn piper aktive Engine und EN aktive Sprache ist`(@TempDir dir: Path) {
+        val languageStore = JsonFileLanguageStore(dir.resolve("language.json")).also { it.setLanguageCode("en") }
+        val view = controller(dir, ttsImpl = "piper", languageStore = languageStore).ttsSettings().block(Duration.ofSeconds(2))!!
+        assertEquals("en_US-kristin-medium", view.aktiveStimme, "EN aktiv, nichts gemerkt ⇒ der piperVoiceHint greift genau wie bei say")
+    }
+
+    @Test
+    fun `GET - piper DE aktiv bleibt byte-neutral - kein piperVoiceHint, nur der Boot-Default (thorsten)`(@TempDir dir: Path) {
+        val view = controller(dir, ttsImpl = "piper").ttsSettings().block(Duration.ofSeconds(2))!!
+        assertEquals(
+            "de_DE-thorsten-medium",
+            view.aktiveStimme,
+            "DE traegt keinen piperVoiceHint (LangDe.PACK) ⇒ derselbe Boot-Default wie vor dieser Naht",
+        )
+    }
+
+    @Test
+    fun `GET - eine explizite Stimme fuer (piper,EN) gewinnt gegen den piperVoiceHint`(@TempDir dir: Path) {
+        val languageStore = JsonFileLanguageStore(dir.resolve("language.json")).also { it.setLanguageCode("en") }
+        val store = JsonFileTtsEngineStore(dir.resolve("tts-engine.json")).also { it.setVoice("piper", Language.EN, "en_US-anna-low") }
+        val view = controller(dir, ttsImpl = "piper", store = store, languageStore = languageStore)
+            .ttsSettings().block(Duration.ofSeconds(2))!!
+        assertEquals("en_US-anna-low", view.aktiveStimme, "eine explizite (piper,EN)-Wahl gewinnt gegen den automatischen Hint")
+    }
+
+    @Test
+    fun `PUT mit gueltiger Kristin-Stimme fuer piper - 200, der Delegat spricht danach WIRKLICH mit kristin`(@TempDir dir: Path) {
+        val captured = mutableListOf<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/tts") { ex ->
+            captured += ex.requestBody.readBytes().toString(Charsets.UTF_8)
+            val wav = ByteArray(16) { 1 }
+            ex.sendResponseHeaders(200, wav.size.toLong())
+            ex.responseBody.use { it.write(wav) }
+        }
+        server.start()
+        try {
+            val piperUrl = "http://127.0.0.1:${server.address.port}"
+            val piperCatalog = TtsVoiceCatalog { id ->
+                if (id == TtsEngineIds.PIPER) {
+                    Mono.just(
+                        TtsVoiceCatalogResult(
+                            listOf(
+                                TtsVoiceOption("de_DE-thorsten-medium", "de_DE-thorsten-medium (medium)", locale = "de_DE"),
+                                TtsVoiceOption("en_US-kristin-medium", "en_US-kristin-medium (medium)", locale = "en_US"),
+                            ),
+                        ),
+                    )
+                } else {
+                    defaultVoiceCatalog.voicesFor(id)
+                }
+            }
+            val delegate = DelegatingTtsPort("voxtral", TtsPortStub)
+            val store = JsonFileTtsEngineStore(dir.resolve("tts-engine.json"))
+            val response = controller(
+                dir,
+                delegate = delegate,
+                store = store,
+                factory = factory(piperBaseUrl = piperUrl),
+                voiceCatalog = piperCatalog,
+            ).setEngine(TtsEngineRequest(id = "piper", voice = "en_US-kristin-medium"))
+                .block(Duration.ofSeconds(2))!!
+
+            assertEquals(HttpStatus.OK, response.statusCode)
+            assertEquals("piper", delegate.currentEngineId())
+            assertEquals("en_US-kristin-medium", store.voiceFor("piper", Language.DE), "Store-Persist der expliziten Stimme bewiesen")
+
+            delegate.synth("Hello", Language.EN).block(Duration.ofSeconds(5))
+            assertTrue(captured.isNotEmpty(), "der Delegat muss den Fake-piper-Sidecar wirklich angefragt haben")
+            assertTrue(
+                captured.single().contains("\"voice\":\"en_US-kristin-medium\""),
+                "der Delegat muss mit der NEUEN Stimme sprechen: ${captured.single()}",
+            )
+        } finally {
+            server.stop(0)
+        }
     }
 }
 

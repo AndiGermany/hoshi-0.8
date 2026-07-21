@@ -80,4 +80,27 @@ class LanguageDetectorTest {
         assertEn("What is the best way to learn this?")
         assertEn("Is this the right answer for you?")
     }
+    /**
+     * Andi-Live-Befund 21.07 (iPad, englisch eingesprochen, deutsche Antwort):
+     * „Tell me something about Liverpool please." enthielt KEIN Wort der alten
+     * EN-Liste — 0:0 ⇒ Heimsprache DE. Whisper hatte korrekt englisch verstanden;
+     * erst diese Ableitung drehte den Turn nach Deutsch.
+     */
+    @Test
+    fun `englische Alltagssaetze ohne Artikel und Praepositionen werden erkannt`() {
+        assertEn("Tell me something about Liverpool please")
+        assertEn("Can you tell me more about that city")
+        assertEn("I would like to know something about it")
+        assertEn("Show me my alarms please")
+    }
+
+    @Test
+    fun `deutsche Alltagssaetze bleiben deutsch - keine Uebererkennung`() {
+        assertDe("Erzähl mir etwas über Liverpool bitte")
+        assertDe("Kannst du mir mehr über die Stadt sagen")
+        assertDe("Zeig mir bitte meine Wecker")
+        assertDe("Ich hätte gern etwas mehr Information")
+        assertDe("Wie wird das Wetter morgen")
+    }
+
 }

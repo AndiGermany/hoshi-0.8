@@ -1,4 +1,6 @@
 import type { FiredItem, FiredKind } from '../hooks/useFiredItems';
+import { de } from '../i18n/de';
+import { useUiStrings } from '../i18n';
 import { AlarmGlyph, GearGlyph } from './icons';
 import type { SettingsAnchorId, SettingsCategoryId } from './SettingsPanel';
 
@@ -27,19 +29,15 @@ import type { SettingsAnchorId, SettingsCategoryId } from './SettingsPanel';
  * (kein Button-in-Button), sondern als Geschwister-Knopf im selben Rahmen.
  */
 
-/** Kind-ehrliche Überschrift — ein Wecker ist kein Timer. */
-export const FIRED_HEADLINE: Record<FiredKind, string> = {
-  TIMER: 'Timer ist fertig',
-  ALARM: 'Wecker klingelt',
-  REMINDER: 'Erinnerung',
-};
+/**
+ * Kind-ehrliche Überschrift — ein Wecker ist kein Timer. Jetzt eine Referenz
+ * auf den `de`-Katalog in `i18n/de.ts` (byte-gleich zum bisherigen Stand);
+ * {@link FiredToast} rendert stattdessen `useUiStrings().firedToast.headline`.
+ */
+export const FIRED_HEADLINE: Record<FiredKind, string> = de.firedToast.headline;
 
-/** Kind-Nomen für die Verpasst-Meldung. */
-export const MISSED_NOUN: Record<FiredKind, string> = {
-  TIMER: 'Timer',
-  ALARM: 'Wecker',
-  REMINDER: 'Erinnerung',
-};
+/** Kind-Nomen für die Verpasst-Meldung — dieselbe Referenz-Regel wie oben. */
+export const MISSED_NOUN: Record<FiredKind, string> = de.firedToast.missedNoun;
 
 /** Fälligkeit als lokale Uhrzeit „HH:MM" (de-DE, 24h). */
 export function dueTimeLabel(dueAtEpochMs: number): string {
@@ -49,17 +47,30 @@ export function dueTimeLabel(dueAtEpochMs: number): string {
   });
 }
 
-/** Ehrliche Verpasst-Zeile: „Timer „Tee" war um 07:00 fällig — hab dich nicht erreicht". */
-export function missedLine(item: FiredItem): string {
-  const noun = MISSED_NOUN[item.kind];
+/**
+ * Ehrliche Verpasst-Zeile: „Timer „Tee" war um 07:00 fällig — hab dich nicht
+ * erreicht". `missedNoun` ist injizierbar (Default: der DE-Katalog, s. oben) —
+ * {@link FiredToast} reicht den Katalog der AKTIVEN UI-Sprache durch; Tests, die
+ * ohne zweites Argument aufrufen, sehen unverändert Deutsch.
+ */
+export function missedLine(item: FiredItem, missedNoun: Record<FiredKind, string> = MISSED_NOUN): string {
+  const noun = missedNoun[item.kind];
   const subject = item.label ? `${noun} „${item.label}"` : noun;
   return `${subject} war um ${dueTimeLabel(item.dueAtEpochMs)} fällig — hab dich nicht erreicht`;
 }
 
-/** Eine Banner-Zeile pro Item: frisch = Überschrift (+ Label), verpasst = ehrliche Meldung. */
-export function firedLine(item: FiredItem): string {
-  if (item.missed) return missedLine(item);
-  return item.label ? `${FIRED_HEADLINE[item.kind]} — ${item.label}` : FIRED_HEADLINE[item.kind];
+/**
+ * Eine Banner-Zeile pro Item: frisch = Überschrift (+ Label), verpasst =
+ * ehrliche Meldung. `headline`/`missedNoun` injizierbar (Default: DE) — siehe
+ * {@link missedLine}.
+ */
+export function firedLine(
+  item: FiredItem,
+  headline: Record<FiredKind, string> = FIRED_HEADLINE,
+  missedNoun: Record<FiredKind, string> = MISSED_NOUN,
+): string {
+  if (item.missed) return missedLine(item, missedNoun);
+  return item.label ? `${headline[item.kind]} — ${item.label}` : headline[item.kind];
 }
 
 export function FiredToast({
@@ -78,6 +89,7 @@ export function FiredToast({
    */
   onOpenSettings?: (category: SettingsCategoryId, anchor?: SettingsAnchorId) => void;
 }) {
+  const t = useUiStrings();
   // Nichts gefeuert → NICHTS rendern (kein Lärm, Konvention wie OpsStatusPill).
   if (items.length === 0) return null;
 
@@ -96,7 +108,7 @@ export function FiredToast({
           <span className="fired-toast__body">
             {items.map((item) => (
               <span key={item.id} className="fired-toast__line">
-                {firedLine(item)}
+                {firedLine(item, t.firedToast.headline, t.firedToast.missedNoun)}
               </span>
             ))}
           </span>

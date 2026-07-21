@@ -65,20 +65,29 @@ object TtsEngineIds {
  *     ([JsonFileTtsEngineStore.voiceFor] mit Sprache) — gewinnt IMMER, auch
  *     gegen einen späteren Sprachwechsel hin und zurück (jede Sprache behält
  *     ihre EIGENE gemerkte Wahl, s. Store-KDoc).
- *  2. sonst — NUR für die `say`-Engine — der dokumentarische
- *     [de.hoshi.core.pipeline.lang.LanguagePack.sayVoiceHint] der aktiven
- *     Sprache (z.B. EN → „Samantha", ES → „Mónica"; DE trägt `null`, s. dort).
+ *  2. sonst der dokumentarische Sprach-Hint des [de.hoshi.core.pipeline.lang.LanguagePack]
+ *     der aktiven Sprache — für `say` [de.hoshi.core.pipeline.lang.LanguagePack.sayVoiceHint]
+ *     (z.B. EN → „Samantha", ES → „Mónica"), für `piper`
+ *     [de.hoshi.core.pipeline.lang.LanguagePack.piperVoiceHint] (aktuell NUR
+ *     EN → „en_US-kristin-medium" — handverifiziert + lizenzgeprüft, s.
+ *     `sidecars/piper/artifacts.lock.json`); DE trägt für beide `null`.
  *  3. sonst `null` ⇒ der Aufrufer fällt auf den bisherigen Default zurück
  *     (Boot-Property der Factory / bereits gemerkte Engine-Stimme).
  *
- * **piper bewusst OHNE automatischen Hint** (Live-Befund beim Bau dieser Naht):
- * `piper` liefert über `/voices` zwar Locale-Tags (s. [TtsVoiceCatalog] Punkt c,
- * Sortierung), aber KEINE statisch verlässliche Stimmen-ID über alle Installationen
- * hinweg (welches Modell installiert ist, entscheidet Andis Sidecar-Setup, nicht
- * dieser Code) — anders als `say`s benannte macOS-Systemstimmen. Ein geratener
- * Piper-Modellname wäre unehrlich. Punkt 1 (explizite Wahl) deckt piper trotzdem
- * ab, sobald Andi eine Sprach-passende Piper-Stimme selbst über die Settings-UI
- * wählt — nur der AUTOMATISCHE Fallback (Punkt 2) bleibt `say`-exklusiv.
+ * **piper: Hint NUR für Sprachen mit einem wirklich installierten Modell**
+ * (Nachtrag 21.07 zum ursprünglichen Live-Befund unten: die Video-Stimme
+ * `en_US-kristin-medium` ist jetzt handverifiziert + lizenzgeprüft gepinnt,
+ * s. Lockfile — der Sidecar meldet sie über `/voices` nur, wenn ihre Dateien
+ * WIRKLICH auf der Platte liegen, s. dortiges KDoc). Für ES/FR/IT existiert
+ * bewusst KEIN Piper-Modell — [de.hoshi.core.pipeline.lang.LanguagePack.piperVoiceHint]
+ * bleibt dort `null` (kein geratener Modellname), Punkt 3 greift: der
+ * bisherige Boot-Default der Factory (typischerweise `de_DE-thorsten-medium`).
+ * Das ist ein BEKANNTER, unveränderter Bestandszustand (piper liest ohne
+ * expliziten Andi-Wunsch fürs Setup dann Spanisch/Französisch/Italienisch
+ * MIT der deutschen Stimme vor) — kein neues Verhalten dieser Naht, aber
+ * ausdrücklich NICHT durch einen erfundenen Hint kaschiert. Punkt 1 (explizite
+ * Wahl) deckt auch diese drei Sprachen ab, sobald Andi selbst eine Piper-Stimme
+ * über die Settings-UI wählt.
  *
  * **openai/voxtral bewusst außen vor:** openai ist multilingual (EINE Stimme
  * liest jede Sprache verständlich, Andi-Vorgabe „keine Stimm-Umschaltung nötig")
@@ -87,10 +96,17 @@ object TtsEngineIds {
  */
 object TtsVoiceResolver {
     fun resolveVoice(engineId: String, language: Language, store: JsonFileTtsEngineStore?): String? =
-        store?.voiceFor(engineId, language) ?: sayHintFor(engineId, language)
+        store?.voiceFor(engineId, language) ?: languageHintFor(engineId, language)
 
-    private fun sayHintFor(engineId: String, language: Language): String? =
-        if (engineId == TtsEngineIds.SAY) LanguagePackRegistry.forLanguage(language).sayVoiceHint else null
+    /** Der dokumentarische Sprach-Hint des aktiven [LanguagePack] — `say`/`piper` je ihr eigenes Feld, sonst `null`. */
+    private fun languageHintFor(engineId: String, language: Language): String? {
+        val pack = LanguagePackRegistry.forLanguage(language)
+        return when (engineId) {
+            TtsEngineIds.SAY -> pack.sayVoiceHint
+            TtsEngineIds.PIPER -> pack.piperVoiceHint
+            else -> null
+        }
+    }
 }
 
 /**
@@ -140,6 +156,18 @@ class TtsEngineFactory(
      * nicht-leer — die konfigurierte Boot-Stimme NUR dieser einen Engine.
      */
     fun build(engineId: String, voice: String?): TtsPort {
+        // Sanitize-Hülle um JEDE Engine (Andi-Befund 21.07.: piper/say lasen Quellen-URLs
+        // vor, weil der Sanitizer NUR im OpenAI-Adapter hing — die „sprich niemals ein
+        // Geheimnis"-Regel galt damit ausgerechnet nicht für die lokalen Engines).
+        // Neue Engines sind dadurch automatisch geschützt; man kann es nicht vergessen.
+        return wrapSanitizing(buildRaw(engineId, voice))
+    }
+
+    /** Hüllt [port], solange die Sanitize-Regel scharf ist — sonst unverändert (byte-neutral). */
+    private fun wrapSanitizing(port: TtsPort): TtsPort =
+        if (sanitizeEnabled) SanitizingTtsPort(port, NeverSpeakTtsSanitizer()) else port
+
+    private fun buildRaw(engineId: String, voice: String?): TtsPort {
         val wish = voice?.trim()?.takeIf { it.isNotBlank() }
         return when (engineId) {
             TtsEngineIds.OPENAI -> OpenAiTtsAdapter(

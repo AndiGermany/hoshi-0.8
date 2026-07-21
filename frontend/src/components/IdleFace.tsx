@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import { greetingForHour } from './greeting';
+import { dayPartForHour } from './greeting';
 import { type HealthState } from '../hooks/useHealth';
 import { useOpsStatus, type OpsVoice } from '../hooks/useOpsStatus';
 import {
@@ -18,13 +18,37 @@ import {
 } from '../hooks/useWeatherToday';
 import { AlarmGlyph, CloudGlyph, GearGlyph, LockGlyph } from './icons';
 import type { SettingsAnchorId, SettingsCategoryId } from './SettingsPanel';
+import { de } from '../i18n/de';
+import { useUiStrings } from '../i18n';
+import type { IdleFaceStrings } from '../i18n/types';
+
+/**
+ * Sprach-Katalog-Default für die exportierten PUR-Funktionen unten (Muster
+ * {@link BRAIN_MODEL_TEXTS} in SettingsPanel.tsx): `idleface.test.tsx` ruft
+ * `alarmLineText`/`todayTileValue`/`planTileValue`/`weatherTile`/`statusChips`
+ * DIREKT mit der alten Signatur auf (kein Strings-Argument) — der Default
+ * `de.idleFace` hält dieses Rendering byte-gleich zum bisherigen Stand. Die
+ * echte Komponente {@link IdleFace} reicht stattdessen den LIVE-Katalog
+ * (`useUiStrings().idleFace`) durch.
+ */
+const IDLE_FACE_TEXTS = de.idleFace;
+
+/** Dezimaltrenner je Locale — dieselbe simple toFixed+replace-Technik wie zuvor, nur jetzt pro Sprache statt hart de. */
+const DECIMAL_SEPARATOR: Record<string, string> = {
+  'de-DE': ',',
+  'en-US': '.',
+  'es-ES': ',',
+  'fr-FR': ',',
+  'it-IT': ',',
+};
 
 /**
  * **IdleFace** — das Aoi-Idle-/Papier-Gesicht, Andis „Zuhause"-Layout
  * (Cowork-Spec 2026-07-02 §2, von Andi abgenommen). Vier Elemente:
  *
  *  1. **Typo-first Uhr**: echte Zeit, tabular-nums, groß/fluid — dazu der
- *     tageszeitbewusste Gruß ({@link greetingForHour}) + echtes Datum.
+ *     tageszeitbewusste Gruß ({@link dayPartForHour} + `idleFace.greeting`
+ *     aus dem UI-Sprach-Katalog) + echtes Datum.
  *  2. **Wecker-Zeile**: ⏰ + „Wecker 07:00 · noch X h" + 2px-Fortschritts-
  *     Haarlinie in accent + rechts der Vertrauens-Satz „klingelt auch offline"
  *     (Text ist Teil des Designs — und WAHR: der Wecker lebt im lokalen
@@ -51,9 +75,17 @@ import type { SettingsAnchorId, SettingsCategoryId } from './SettingsPanel';
  *  Chat-Voice-Flow, wenn ein Audio-Kanal wirklich offen ist; ihr Erscheinen
  *  dort IST das Signal „jetzt höre ich". Hier: ruhiges Papier.
  *
- * {@link IdleFace} ist rein prop-getrieben (kein Hook, kein Netz) → ohne
- * DOM/Fetch unit-testbar (test/idleface.test.tsx); die Live-Verdrahtung
- * (Ops/Scheduled/Diary-Hooks + Minuten-Tick) macht {@link IdleFaceLive}.
+ * {@link IdleFace} ist prop-getrieben (kein Netz) und braucht keine DOM-Umgebung
+ * → weiter unit-testbar per `renderToStaticMarkup` (test/idleface.test.tsx).
+ * Andi-Auftrag 21.07 (UI-Sprache betrifft auch den ersten Bildschirm): die
+ * Komponente ruft jetzt `useUiStrings()` (Muster {@link TileCard} in
+ * UebersichtView.tsx) — der EINZIGE Hook hier, kein Netz/Fetch. Die
+ * exportierten PUR-Helfer (`alarmLineText`, `todayTileValue`, `planTileValue`,
+ * `weatherTile`, `statusChips`, `fmtP50`) bleiben hook-frei und nehmen den
+ * Katalog optional als Parameter (Default `de.idleFace`/`de.locale` — Muster
+ * {@link BRAIN_MODEL_TEXTS} in SettingsPanel.tsx), damit `idleface.test.tsx`
+ * unverändert byte-gleich grün bleibt. Die Live-Verdrahtung (Ops/Scheduled/
+ * Diary-Hooks + Minuten-Tick) macht {@link IdleFaceLive}.
  */
 
 /* ── pure Helfer (exportiert für Tests) ─────────────────────────────────── */
@@ -80,10 +112,19 @@ export function alarmProgress(dueAtEpochMs: number, nowMs: number): number {
   return Math.max(0, Math.min(1, 1 - remaining / ALARM_PROGRESS_WINDOW_MS));
 }
 
-/** „Wecker 07:00 · noch 7 h 12 min" — Weck-Uhrzeit + Restzeit (nie negativ). */
-export function alarmLineText(alarm: ScheduledItem, nowMs: number): string {
+/**
+ * „Wecker 07:00 · noch 7 h 12 min" — Weck-Uhrzeit + Restzeit (nie negativ).
+ * `dueClock`/`fmtRemaining` (aus `hooks/useScheduledItems.ts`, außerhalb
+ * dieser Scheibe) bleiben hart de-DE/deutsche Einheiten („h"/„min") — nur der
+ * umgebende Satzbau („Wecker … · noch …") folgt der aktiven UI-Sprache.
+ */
+export function alarmLineText(
+  alarm: ScheduledItem,
+  nowMs: number,
+  t: IdleFaceStrings = IDLE_FACE_TEXTS,
+): string {
   const remaining = fmtRemaining(Math.max(0, alarm.dueAtEpochMs - nowMs));
-  return `Wecker ${dueClock(alarm.dueAtEpochMs)} · noch ${remaining}`;
+  return t.alarmLine(dueClock(alarm.dueAtEpochMs), remaining);
 }
 
 export interface DiaryTodayStats {
@@ -116,28 +157,42 @@ export function diaryTodayStats(turns: DiaryTurn[], nowMs: number): DiaryTodaySt
   return { turns: today.length, p50Ms, errors: today.filter((t) => t.error !== null).length };
 }
 
-/** ms → Sekunden mit deutscher Dezimal-Komma-Stelle: 1800 → „1,8 s". */
-export function fmtP50(ms: number): string {
-  return `${(ms / 1000).toFixed(1).replace('.', ',')} s`;
+/** ms → Sekunden mit dem Dezimaltrenner der aktiven Sprache: 1800 → „1,8 s" (de) / „1.8 s" (en). */
+export function fmtP50(ms: number, locale: string = de.locale): string {
+  const sep = DECIMAL_SEPARATOR[locale] ?? '.';
+  return `${(ms / 1000).toFixed(1).replace('.', sep)} s`;
 }
 
-/** „14 Turns · p50 1,8 s · 0 Aussetzer" — nur echte Diary-Zahlen. */
-export function todayTileValue(stats: DiaryTodayStats): string {
-  const word = stats.turns === 1 ? 'Turn' : 'Turns';
-  const p50 = stats.p50Ms !== null ? fmtP50(stats.p50Ms) : '—';
-  return `${stats.turns} ${word} · p50 ${p50} · ${stats.errors} Aussetzer`;
+/**
+ * „14 Turns · p50 1,8 s · 0 Aussetzer" — nur echte Diary-Zahlen. „p50" bleibt
+ * über alle Sprachen hinweg unübersetzt (Fachbegriff, Muster: `activity.
+ * stageLatencyHint` trägt „p50/p95" auch in en/es/fr/it wörtlich).
+ */
+export function todayTileValue(
+  stats: DiaryTodayStats,
+  t: IdleFaceStrings = IDLE_FACE_TEXTS,
+  locale: string = de.locale,
+): string {
+  const word = stats.turns === 1 ? t.heute.turnOne : t.heute.turnMany;
+  const p50 = stats.p50Ms !== null ? fmtP50(stats.p50Ms, locale) : '—';
+  return `${stats.turns} ${word} · p50 ${p50} · ${stats.errors} ${t.heute.outageWord}`;
 }
 
 const PLAN_KINDS: readonly ScheduledKind[] = ['TIMER', 'ALARM', 'REMINDER'];
 
-/** „2 Timer · 1 Wecker" aus den aktiven Items — leer ⇒ „Nichts geplant". */
-export function planTileValue(items: ScheduledItem[]): string {
+/**
+ * „2 Timer · 1 Wecker" aus den aktiven Items — leer ⇒ „Nichts geplant".
+ * `KIND_WORD` (aus `hooks/useScheduledItems.ts`, außerhalb dieser Scheibe)
+ * liefert die Timer/Wecker/Erinnerung-Nomen weiter hart deutsch — nur der
+ * ehrliche Leer-Text folgt der aktiven UI-Sprache.
+ */
+export function planTileValue(items: ScheduledItem[], t: IdleFaceStrings = IDLE_FACE_TEXTS): string {
   const parts = PLAN_KINDS.flatMap((kind) => {
     const count = items.filter((i) => i.kind === kind).length;
     if (count === 0) return [];
     return [`${count} ${count === 1 ? KIND_WORD[kind].one : KIND_WORD[kind].many}`];
   });
-  return parts.length === 0 ? 'Nichts geplant' : parts.join(' · ');
+  return parts.length === 0 ? t.geplant.nichtsGeplant : parts.join(' · ');
 }
 
 /** „18–29° · bedeckt" — kompakter Kachel-Wert aus den echten Tageswerten. */
@@ -153,37 +208,45 @@ export function weatherTileValue(w: WeatherToday): string {
  *  - `unreachable` ⇒ „—" + „Wetter grad nicht lesbar" (Muster „Heute"-Kachel
  *    bei Diary-Ausfall: LIVE-Rahmen, ehrliche Lücke, nie Fake-Werte).
  *  - `null` (erster Fetch läuft) ⇒ gestrichelt, ehrlich „wird gelesen".
+ *
+ * `weatherTileValue`/`w.codeText` (der WMO-Lagen-Text) kommt vom Backend
+ * (`hooks/useWeatherToday.ts`, außerhalb dieser Scheibe) und bleibt darum
+ * deutsch, unabhängig von der UI-Sprache — nur Kachel-Titel/Notizen hier
+ * folgen dem Katalog.
  */
-export function weatherTile(weather: WeatherTodayState | null): IdleTile {
+export function weatherTile(
+  weather: WeatherTodayState | null,
+  t: IdleFaceStrings = IDLE_FACE_TEXTS,
+): IdleTile {
   if (weather === null) {
     return {
-      name: 'Wetter',
+      name: t.wetter.name,
       honesty: 'pending',
       value: '—',
-      note: 'Wird gerade gelesen.',
+      note: t.wetter.loadingNote,
     };
   }
   switch (weather.kind) {
     case 'live':
       return {
-        name: 'Wetter',
+        name: t.wetter.name,
         honesty: 'live',
         value: weatherTileValue(weather.data),
-        note: `Echte Messwerte von Open-Meteo für ${weather.data.label}.`,
+        note: t.wetter.liveNote(weather.data.label),
       };
     case 'off':
       return {
-        name: 'Wetter',
+        name: t.wetter.name,
         honesty: 'pending',
         value: '—',
-        note: 'Kommt — ehrlich leer statt erfunden. Wetter ist bei diesem Deploy ausgeschaltet.',
+        note: t.wetter.offNote,
       };
     case 'unreachable':
       return {
-        name: 'Wetter',
+        name: t.wetter.name,
         honesty: 'live',
         value: '—',
-        note: 'Wetter grad nicht lesbar — hier steht nichts Erfundenes.',
+        note: t.wetter.unreachableNote,
       };
   }
 }
@@ -201,16 +264,20 @@ export interface StatusChip {
  * tragen den typografischen ●-Punkt (CSS-gefärbt), cloud/local ein muted
  * SVG-Glyph (Wolke/Schloss) — Emoji-Sweep 2026-07-06.
  */
-export function statusChips(health: HealthState, voice: OpsVoice | null): StatusChip[] {
+export function statusChips(
+  health: HealthState,
+  voice: OpsVoice | null,
+  t: IdleFaceStrings = IDLE_FACE_TEXTS,
+): StatusChip[] {
   const chips: StatusChip[] = [];
-  if (health === 'up') chips.push({ text: 'online', tone: 'ok' });
-  else if (health === 'down') chips.push({ text: 'offline', tone: 'down' });
-  else chips.push({ text: 'wird geprüft', tone: 'unknown' });
+  if (health === 'up') chips.push({ text: t.status.online, tone: 'ok' });
+  else if (health === 'down') chips.push({ text: t.status.offline, tone: 'down' });
+  else chips.push({ text: t.status.checking, tone: 'unknown' });
   if (voice) {
     chips.push(
       voice.cloud
-        ? { text: 'Stimme: Cloud', tone: 'cloud' }
-        : { text: 'Stimme: lokal', tone: 'local' },
+        ? { text: t.status.voiceCloud, tone: 'cloud' }
+        : { text: t.status.voiceLocal, tone: 'local' },
     );
   }
   return chips;
@@ -233,6 +300,7 @@ export interface IdleTile {
 }
 
 function IdleTileCard({ tile, onSettings }: { tile: IdleTile; onSettings?: () => void }) {
+  const { idleFace } = useUiStrings();
   return (
     <article
       className={`tile idle__tile tile--${tile.honesty}`}
@@ -241,7 +309,7 @@ function IdleTileCard({ tile, onSettings }: { tile: IdleTile; onSettings?: () =>
     >
       <div className="tile__head">
         <span className="tile__name">{tile.name}</span>
-        <span className="tile__pill">{tile.honesty === 'live' ? 'live' : 'kommt'}</span>
+        <span className="tile__pill">{tile.honesty === 'live' ? idleFace.live : idleFace.pending}</span>
         {/* Kontextueller Settings-Anker (Cowork-Spec V1): springt in „Standort &
             Integrationen"/Wetter-Standort — nur an der Wetter-Kachel, wo das
             Setting wirklich wirkt. Dezent (--text-4, .ctxgear), kein Layout-
@@ -251,8 +319,8 @@ function IdleTileCard({ tile, onSettings }: { tile: IdleTile; onSettings?: () =>
             type="button"
             className="ctxgear"
             onClick={onSettings}
-            aria-label="Wetter-Einstellungen öffnen (Standort & Integrationen)"
-            title="Wetter-Ort einstellen"
+            aria-label={idleFace.wetter.settingsAria}
+            title={idleFace.wetter.settingsTitle}
           >
             <GearGlyph className="ctxgear__icon" />
           </button>
@@ -298,43 +366,49 @@ export function IdleFace({
   weather,
   onOpenSettings,
 }: IdleFaceProps) {
+  const { idleFace, locale } = useUiStrings();
   const date = new Date(nowMs);
-  const greeting = greetingForHour(date.getHours());
-  const dateLine = date.toLocaleDateString('de-DE', {
+  const greeting = idleFace.greeting(dayPartForHour(date.getHours()));
+  const dateLine = date.toLocaleDateString(locale, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
   });
   const alarm = nextAlarm(scheduled);
-  const chips = statusChips(health, voice);
+  const chips = statusChips(health, voice, idleFace);
 
   // Kachel „Heute": echte Diary-Zahlen — oder die ehrliche Lücke.
   const stats = turns !== null ? diaryTodayStats(turns, nowMs) : null;
   const heute: IdleTile = {
-    name: 'Heute',
+    name: idleFace.heute.name,
     honesty: 'live',
-    value: stats === null ? '—' : stats.turns === 0 ? 'Noch kein Turn' : todayTileValue(stats),
+    value:
+      stats === null
+        ? '—'
+        : stats.turns === 0
+          ? idleFace.heute.noTurnYet
+          : todayTileValue(stats, idleFace, locale),
     note:
       stats === null
-        ? 'Diary nicht erreichbar — hier steht nichts Erfundenes.'
+        ? idleFace.heute.noteUnavailable
         : stats.turns === 0
-          ? 'Ehrlich leer — nichts erfunden.'
-          : 'Echte Zahlen aus deinem heutigen Verlauf.',
+          ? idleFace.heute.noteEmpty
+          : idleFace.heute.noteWithData,
   };
 
   const geplant: IdleTile = {
-    name: 'Geplant',
+    name: idleFace.geplant.name,
     honesty: 'live',
-    value: planTileValue(scheduled),
-    note: 'Echte aktive Timer, Wecker und Erinnerungen.',
+    value: planTileValue(scheduled, idleFace),
+    note: idleFace.geplant.note,
   };
 
   // Kachel „Wetter": echte heutige Vorhersage — oder die ehrliche Lücke
   // (Deploy-OFF gestrichelt, nicht lesbar „—"). Nie Fake-Grade.
-  const wetter = weatherTile(weather);
+  const wetter = weatherTile(weather, idleFace);
 
   return (
-    <section className="idle" aria-label="Zuhause">
+    <section className="idle" aria-label={idleFace.sectionAria}>
       {/* 1 · Typo-first Uhr + tageszeitbewusster Gruß (beides echt). */}
       <header className="idle__head">
         <time className="idle__clock" dateTime={date.toISOString()}>
@@ -351,12 +425,9 @@ export function IdleFace({
           <span className="idle__alarmicon" aria-hidden="true">
             <AlarmGlyph />
           </span>
-          <span className="idle__alarmtext">{alarmLineText(alarm, nowMs)}</span>
-          <span
-            className="idle__alarmtruth"
-            title="Der Wecker lebt im lokalen Backend-Store, nicht in einer Cloud — er feuert auch ohne Internet."
-          >
-            klingelt auch offline
+          <span className="idle__alarmtext">{alarmLineText(alarm, nowMs, idleFace)}</span>
+          <span className="idle__alarmtruth" title={idleFace.alarmTrustTitle}>
+            {idleFace.alarmTrustText}
           </span>
           <span className="idle__alarmtrack" aria-hidden="true">
             <span
@@ -371,7 +442,7 @@ export function IdleFace({
           <span className="idle__alarmicon" aria-hidden="true">
             <AlarmGlyph />
           </span>
-          <span className="idle__alarmtext">Kein Wecker gestellt</span>
+          <span className="idle__alarmtext">{idleFace.noAlarm}</span>
         </div>
       )}
 

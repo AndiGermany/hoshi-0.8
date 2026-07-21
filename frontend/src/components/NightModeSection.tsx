@@ -9,6 +9,8 @@ import {
   fetchNightModeDevices,
   saveNightModeDevice,
 } from '../api/nightMode';
+import { de } from '../i18n/de';
+import { useUiStrings } from '../i18n';
 import { NightWindowDial } from './NightWindowDial';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,34 +20,12 @@ import { NightWindowDial } from './NightWindowDial';
 //  der Nacht-Fenster-Dial.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Alle sichtbaren Texte an einem Ort (auch von den Tests referenziert). */
-export const NIGHT_MODE_TEXTS = {
-  groupTitle: 'Nachtmodus',
-  intro: 'Dämpft Licht/Ton eines Satelliten in der Nacht — pro Gerät einstellbar.',
-  loadError: 'Nachtmodus-Geräte grad nicht lesbar.',
-  empty: 'Noch kein Satellit verbunden.',
-  emptyHint:
-    'Sobald sich ein Voice-PE-Satellit verbindet, taucht er hier automatisch auf. Du kannst eine Geräte-Id auch schon jetzt manuell hinterlegen — die Einstellung greift automatisch, sobald das Gerät sich verbindet.',
-  manualLabel: 'Geräte-Id manuell hinterlegen',
-  manualPlaceholder: 'z. B. voice-pe-wohnzimmer',
-  manualButton: 'Übernehmen',
-  manualNotFound: 'Konnte diese Geräte-Id grad nicht laden — bitte nochmal versuchen.',
-  onlineHint: 'verbunden',
-  neverSeenHint: 'nicht verbunden · noch nicht gesehen',
-  offlineHint: (when: string) => `nicht verbunden · zuletzt gesehen ${when}`,
-  master: 'Nachtmodus',
-  modeSchedule: 'Zeitplan',
-  modeAlways: 'Immer an',
-  fromLabel: 'Von',
-  toLabel: 'Bis',
-  dimLabel: 'Dimmen',
-  save: 'Speichern',
-  saving: 'speichert…',
-  saved: 'Gespeichert.',
-  locked: 'Serverseitig noch aus — die Einstellung wird gespeichert, greift aber erst, wenn der Nachtmodus beim Deploy aktiviert ist.',
-  invalid: 'Ungültige Eingabe — bitte Werte prüfen.',
-  failed: 'Speichern fehlgeschlagen — bitte nochmal versuchen.',
-} as const;
+/**
+ * Alle sichtbaren Texte an einem Ort (auch von den Tests referenziert) — jetzt
+ * eine Referenz auf den `de`-Katalog in `i18n/de.ts` (byte-gleich zum
+ * bisherigen Stand). Gerendert wird `useUiStrings().nightMode`, s. unten.
+ */
+export const NIGHT_MODE_TEXTS = de.nightMode;
 
 /** Wie lange ein „zuletzt gesehen" nur clientseitig beobachtet werden kann. */
 const LAST_SEEN_KEY = 'hoshi.nightMode.lastSeen';
@@ -175,6 +155,8 @@ export function NightModeDeviceListView({
   onManualId,
   onManualSubmit,
 }: NightModeDeviceListViewProps) {
+  const t = useUiStrings();
+  const NIGHT_MODE_TEXTS = t.nightMode;
   const isEmpty = !loading && rows.length === 0;
   return (
     <>
@@ -284,6 +266,8 @@ export function NightModeDeviceCard({
   onDim,
   onSave,
 }: NightModeDeviceCardProps) {
+  const t = useUiStrings();
+  const NIGHT_MODE_TEXTS = t.nightMode;
   const dimPercent = Math.round(draft.dim * 100);
   return (
     <div className="settings__nightcard">
@@ -416,6 +400,8 @@ export function NightModeSection({
   fetchDevice = fetchNightModeDevice,
   saveDevice = saveNightModeDevice,
 }: NightModeSectionProps = {}) {
+  const t = useUiStrings();
+  const NIGHT_MODE_TEXTS = t.nightMode;
   const [devices, setDevices] = useState<NightModeDevice[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

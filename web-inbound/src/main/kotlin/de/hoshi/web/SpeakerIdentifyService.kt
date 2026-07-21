@@ -9,8 +9,9 @@ import org.slf4j.LoggerFactory
  * ueber der Konfidenz-Schwelle gesetzt; im Zweifel bleibt [name]==null und
  * [isGuest]==true. Es wird NIE eine Person geraten (Fehl-Zuordnung == 0).
  *
- * [confidence] ist der beste Cosine-Score (∈[-1,1]) — auch im Gast-Fall gefuellt
- * (informativer Near-Miss fuers FE/Diagnose), aber ohne [name] ⇒ keine Bindung.
+ * [confidence] ist der beste Profil-Score der aktiven Aggregation (∈[-1,1]) — auch
+ * im Gast-Fall gefuellt (informativer Near-Miss fuers FE/Diagnose), aber ohne [name]
+ * ⇒ keine Bindung. Bei BEST_SAMPLE entspricht er dem besten einzelnen Cosine.
  */
 data class Recognition(
     val name: String?,
@@ -66,22 +67,26 @@ interface SpeakerIdentifyService {
 /**
  * Legt fest, wie mehrere Enrollment-Aufnahmen zu genau einem Profil-Score werden.
  *
- * [BEST_SAMPLE] erhaelt das bestehende Verhalten. [CENTROID] vergleicht genau einmal
- * gegen das im Store bereits L2-normalisiert gemittelte Profil und haelt dadurch die
- * Anzahl der Score-Versuche pro Profil konstant. Ein Wechsel der Strategie braucht
- * immer eine neue Kalibrierung; deshalb bleibt der Bestand der Default.
+ * [BEST_SAMPLE] erhaelt das bestehende Verhalten. [TOP_TWO_MEAN] verlangt Unterstuetzung
+ * durch mehr als ein Enrollment-Sample: gewertet wird der Mittelwert der zwei hoechsten
+ * Sample-Cosines. Ein einzelner zufaellig hoher Treffer kann damit nicht allein den
+ * Profil-Score bestimmen. [CENTROID] vergleicht genau einmal gegen das im Store bereits
+ * L2-normalisiert gemittelte Profil. Ein Wechsel der Strategie braucht immer eine neue
+ * Kalibrierung; deshalb bleibt der Bestand der Default.
  */
 enum class SpeakerProfileAggregation {
     BEST_SAMPLE,
+    TOP_TWO_MEAN,
     CENTROID;
 
     companion object {
         /** Strikte Config-Grenze: unbekannte Werte starten nicht mit still falscher Semantik. */
         fun parse(value: String): SpeakerProfileAggregation = when (value.trim().lowercase().replace('_', '-')) {
             "best-sample" -> BEST_SAMPLE
+            "top-two-mean" -> TOP_TWO_MEAN
             "centroid" -> CENTROID
             else -> throw IllegalArgumentException(
-                "Unbekannte Speaker-Profil-Aggregation '$value'; erwartet: best-sample|centroid",
+                "Unbekannte Speaker-Profil-Aggregation '$value'; erwartet: best-sample|top-two-mean|centroid",
             )
         }
     }
@@ -89,8 +94,8 @@ enum class SpeakerProfileAggregation {
 
 /**
  * Cosine-Erkennung gegen ALLE enrollten Profile: Probe embedden ([SpeakerEmbedPort.embed]),
- * bester Cosine ([SpeakerEmbedPort.similarity]) ueber [SpeakerProfileStore.all]. Ist der
- * beste Score >= [threshold], wird der Name gebunden; sonst Gast.
+ * Profil-Score der aktiven [SpeakerProfileAggregation] ueber [SpeakerProfileStore.all].
+ * Ist der beste Profil-Score >= [threshold], wird der Name gebunden; sonst Gast.
  *
  * **Schwellen-Wahl ([threshold], Default 0.80):** der 0.5-`hoshi-speaker-id`-Sidecar
  * (`/verify`, `_decide`) entscheidet 2-schwellig — `known` (>= 0.80, bindet eine
@@ -109,9 +114,13 @@ enum class SpeakerProfileAggregation {
  *
  * **Profil-Aggregation:** [aggregation] ist absichtlich explizit und steht standardmaessig
  * auf [SpeakerProfileAggregation.BEST_SAMPLE], damit das Feature im Default-Pfad neutral
- * bleibt. [SpeakerProfileAggregation.CENTROID] nutzt das vom Store bereits berechnete,
- * L2-normalisierte Mittel-Embedding und vermeidet die mit der Samplezahl wachsende Zahl
- * an Impostor-Score-Versuchen. Ein Strategie-Wechsel erfordert eine neue Kalibrierung.
+ * bleibt. [SpeakerProfileAggregation.TOP_TWO_MEAN] mindert den Einfluss eines einzelnen
+ * Sample-Ausreissers, ohne die Roh-Samples vor dem Cosine-Vergleich zu verwischen.
+ * [SpeakerProfileAggregation.CENTROID] nutzt das vom Store bereits berechnete,
+ * L2-normalisierte Mittel-Embedding. [allowedProfileNames] kann die Kandidatenmenge
+ * fuer einen reversiblen Verify-only-Versuch einschraenken, ohne den biometrischen Store
+ * zu mutieren. Leer bedeutet alle Profile und bleibt der Default. Ein Strategie- oder
+ * Scope-Wechsel erfordert eine neue Kalibrierung.
  */
 class CosineSpeakerIdentifyService(
     private val embedPort: SpeakerEmbedPort,
@@ -119,20 +128,31 @@ class CosineSpeakerIdentifyService(
     private val threshold: Double,
     /**
      * **Abstands-Regel (Vera, nach Live-Fehl-Zuordnung 2026-07-07):** Andis Stimme traf
-     * Cindys 1-Sample-Profil mit 0.564 — über der Schwelle, FALSCH gebunden. Bei ≥2
+     * Person Bs 1-Sample-Profil mit 0.564 — über der Schwelle, FALSCH gebunden. Bei ≥2
      * Profilen wird nur noch gebunden, wenn der beste Kandidat den zweiten um
      * [margin] schlägt; Paar-Stimmen im Graubereich ⇒ ehrlich Gast (Gast ist sicher,
      * die falsche Person nie). Konfigurierbar: `hoshi.speaker.recognition.margin`.
      */
     private val margin: Double = 0.10,
     private val aggregation: SpeakerProfileAggregation = SpeakerProfileAggregation.BEST_SAMPLE,
+    allowedProfileNames: Set<String> = emptySet(),
 ) : SpeakerIdentifyService {
+    /** Defensive Kopie: ein nachtraeglich mutiertes Caller-Set darf den Scope nie erweitern. */
+    private val allowedProfileNames = allowedProfileNames.toSet()
     private val log = LoggerFactory.getLogger(javaClass)
 
     init {
+        require(allowedProfileNames.none { it.isBlank() || it != it.trim() }) {
+            "Speaker-Profil-Allowlist enthaelt einen leeren oder ungetrimmten Eintrag"
+        }
         // Ops-Readback (Test-Gate Punkt 6): der aktive Aggregationsmodus muss beim
         // Testen BEWEISBAR sein — eine eindeutige Boot-Zeile statt Config-Glauben.
         log.info("[speaker-identify] aktiv: aggregation={} threshold={} margin={}", aggregation, threshold, margin)
+        // Privacy-Readback: Scope beweisen, ohne die privaten Profil-IDs zu loggen.
+        log.info(
+            "[speaker-identify] profile-scope={}",
+            if (allowedProfileNames.isEmpty()) "all" else "allowlist(${allowedProfileNames.size})",
+        )
     }
 
     override val enabled: Boolean = true
@@ -146,7 +166,9 @@ class CosineSpeakerIdentifyService(
         }
         if (probe == null || probe.isEmpty()) return Recognition.GUEST
 
-        val profiles = store.all()
+        val profiles = store.all().let { all ->
+            if (allowedProfileNames.isEmpty()) all else all.filter { it.name in allowedProfileNames }
+        }
         if (profiles.isEmpty()) return Recognition.GUEST // leerer Store ⇒ Gast
 
         var bestName: String? = null
@@ -202,6 +224,17 @@ class CosineSpeakerIdentifyService(
             // Der Fallback schuetzt Legacy-Profile; der Store liefert regulaer mindestens ein Sample.
             val samples = profile.samples.ifEmpty { listOf(profile.embedding) }
             samples.maxOf { sample -> embedPort.similarity(probe, sample) }
+        }
+
+        SpeakerProfileAggregation.TOP_TWO_MEAN -> {
+            // Feste Zwei-von-n-Regel statt konfigurierbarem k: kleiner Hypothesenraum fuer
+            // das Offline-Gate. Legacy-Profile mit einem Sample bleiben mathematisch identisch.
+            val samples = profile.samples.ifEmpty { listOf(profile.embedding) }
+            samples.asSequence()
+                .map { sample -> embedPort.similarity(probe, sample) }
+                .sortedDescending()
+                .take(2)
+                .average()
         }
 
         SpeakerProfileAggregation.CENTROID -> embedPort.similarity(probe, profile.embedding)

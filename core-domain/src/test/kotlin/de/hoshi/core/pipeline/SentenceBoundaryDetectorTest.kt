@@ -78,4 +78,24 @@ class SentenceBoundaryDetectorTest {
         // Wort vor dem Punkt + Folgewort → Grenze wie bisher (Index 11).
         assertEquals(11, SentenceBoundaryDetector.firstSentenceBoundary("Es ist warm. Juli eben.", 5, ".!?"))
     }
+    /**
+     * Andi-Befund 21.07 abends: „der liest immer noch die komplette quelle vor."
+     * Ursache war NICHT der TTS-Filter (der war korrekt), sondern DIESE Stelle: eine
+     * URL steckt voller Satzzeichen, der Puffer zerlegte die Quellenangabe in
+     * Bruchstücke, und auf ein Bruchstück passt keine Filter-Regel mehr.
+     */
+    @Test
+    fun `Satzzeichen INNERHALB einer URL sind keine Satzgrenze`() {
+        val text = "Es erscheint am 19. November 2026. ([rockstargames.com](https://www.rockstargames.com/newswire/x?utm_source=openai))"
+        val idx = SentenceBoundaryDetector.firstSentenceBoundary(text, 12)
+        // Die einzige echte Grenze ist der Punkt nach "2026" — davor/danach nichts.
+        assertEquals(text.indexOf("2026.") + 4, idx)
+    }
+
+    @Test
+    fun `Uhrzeiten und Domains bleiben unzerschnitten`() {
+        assertEquals(-1, SentenceBoundaryDetector.firstSentenceBoundary("Es ist jetzt 20:15 Uhr", 12))
+        assertEquals(-1, SentenceBoundaryDetector.firstSentenceBoundary("Schau auf rockstargames.com nach", 12))
+    }
+
 }

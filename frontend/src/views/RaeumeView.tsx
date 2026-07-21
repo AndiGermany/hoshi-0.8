@@ -13,6 +13,7 @@ import {
 } from '../api/homeEdit';
 import { DomainGlyph } from '../components/domainGlyphs';
 import { WarnGlyph } from '../components/icons';
+import { useUiStrings } from '../i18n';
 
 /** Eine Raum-Option im Picker (aus dem Registry-Snapshot abgeleitet). */
 export interface AreaOption {
@@ -64,8 +65,6 @@ export interface RaeumeEdit {
  */
 
 /** Die Skizzen-Knoten sind bewusst KONZEPT, kein Bestand. Nie als „da" gelabelt. */
-const SKETCH_ROOMS = ['Raum', 'Raum', 'Raum', 'Raum'] as const;
-
 /** Polar → kartesisch auf einem 200×200-Viewbox-Kreis um (100,100). */
 function orbit(i: number, total: number, r: number): { x: number; y: number } {
   const a = (i / total) * Math.PI * 2 - Math.PI / 2; // Start oben
@@ -73,17 +72,19 @@ function orbit(i: number, total: number, r: number): { x: number; y: number } {
 }
 
 function HoshiSketch() {
+  const { rooms } = useUiStrings();
+  const sketchRooms = Array.from({ length: 4 }, () => rooms.sketchRoom);
   const r = 74;
   return (
     <svg
       className="sketch"
       viewBox="0 0 200 200"
       role="img"
-      aria-label="Skizze: Hoshi im Zentrum, noch leere Raum-Platzhalter ringsum"
+      aria-label={rooms.sketchAria}
     >
       {/* Verbindungslinien — gestrichelt = noch nicht verdrahtet. */}
-      {SKETCH_ROOMS.map((_, i) => {
-        const p = orbit(i, SKETCH_ROOMS.length, r);
+      {sketchRooms.map((_, i) => {
+        const p = orbit(i, sketchRooms.length, r);
         return (
           <line
             key={`l${i}`}
@@ -97,8 +98,8 @@ function HoshiSketch() {
       })}
 
       {/* Raum-Platzhalter — gestrichelt, leer, generisch. */}
-      {SKETCH_ROOMS.map((label, i) => {
-        const p = orbit(i, SKETCH_ROOMS.length, r);
+      {sketchRooms.map((label, i) => {
+        const p = orbit(i, sketchRooms.length, r);
         return (
           <g key={`n${i}`}>
             <circle className="sketch__room" cx={p.x} cy={p.y} r={20} />
@@ -133,6 +134,7 @@ function HoshiSketch() {
  * ein Nutzer nach einem Fehler zuerst versucht.
  */
 function RoomPicker({ entity, edit }: { entity: HomeRegistryEntity; edit: RaeumeEdit }) {
+  const { rooms } = useUiStrings();
   const busy = edit.busyEntityId === entity.entityId;
   const [value, setValue] = useState('');
   return (
@@ -141,7 +143,7 @@ function RoomPicker({ entity, edit }: { entity: HomeRegistryEntity; edit: Raeume
         className="room__pickerselect"
         value={value}
         disabled={busy}
-        aria-label={`Raum für ${entity.name} wählen`}
+        aria-label={rooms.pickerAria(entity.name)}
         onChange={(e) => {
           const areaId = e.currentTarget.value;
           setValue(''); // sofort zurück auf den Platzhalter (s. KDoc) — vor dem Assign-Aufruf.
@@ -149,7 +151,7 @@ function RoomPicker({ entity, edit }: { entity: HomeRegistryEntity; edit: Raeume
         }}
       >
         <option value="" disabled>
-          {busy ? 'wird zugeordnet…' : 'Raum wählen…'}
+          {busy ? rooms.assigning : rooms.chooseRoom}
         </option>
         {edit.areas.map((a) => (
           <option key={a.areaId} value={a.areaId}>
@@ -204,14 +206,15 @@ function DeviceRow({
 
 /** Eine Raum-Karte: Name, Geräte-Anzahl-Pille, Geräte-Liste (oder ehrlich „noch keine Geräte"). */
 function RoomCard({ area }: { area: HomeRegistryArea }) {
+  const { rooms } = useUiStrings();
   return (
     <article className="tile room tile--live" data-status="live">
       <div className="tile__head">
         <span className="tile__name">{area.label}</span>
-        <span className="tile__pill">{area.entities.length} Gerät{area.entities.length === 1 ? '' : 'e'}</span>
+        <span className="tile__pill">{rooms.deviceCount(area.entities.length)}</span>
       </div>
       {area.entities.length === 0 ? (
-        <p className="room__empty">Noch keine Geräte in diesem Raum.</p>
+        <p className="room__empty">{rooms.roomEmpty}</p>
       ) : (
         <ul className="room__devices">
           {area.entities.map((e) => (
@@ -229,18 +232,19 @@ function RoomCard({ area }: { area: HomeRegistryArea }) {
  * verstecken, und bestätigt ehrlich, wenn es gerade keine Lücke gibt.
  */
 function UnassignedCard({ entities, edit }: { entities: HomeRegistryEntity[]; edit?: RaeumeEdit }) {
+  const { rooms } = useUiStrings();
   const hint =
     entities.length === 0
-      ? 'Aktuell hat jedes gemeldete Gerät einen Raum in Home Assistant.'
+      ? rooms.allAssigned
       : edit?.enabled
-        ? 'Diese Geräte haben in Home Assistant noch keinen Raum. Wähle rechts einen Raum — gespeichert wird direkt in Home Assistant, dort jederzeit sichtbar und umkehrbar.'
-        : 'Diese Geräte haben in Home Assistant noch keinen Raum. Zuordnen geht bislang nur direkt in Home Assistant — Hoshi zeigt die Lücke hier nur ehrlich an.';
+        ? rooms.unassignedEditable
+        : rooms.unassignedReadOnly;
   return (
     <article className="tile room room--unassigned tile--live" data-status="live">
       <div className="tile__head">
         {/* Amber NUR bei einer echten Lücke (Mockup 11b, Andi-abgenommen) — ohne
             Lücke bleibt der Titel neutral, sonst wäre „aufmerksam" ein Dauerzustand. */}
-        <span className={`tile__name${entities.length > 0 ? ' room__name--gap' : ''}`}>Nicht zugeordnet</span>
+        <span className={`tile__name${entities.length > 0 ? ' room__name--gap' : ''}`}>{rooms.unassigned}</span>
         <span className="tile__pill">{entities.length}</span>
       </div>
       <p className="room__hint">{hint}</p>
@@ -257,11 +261,12 @@ function UnassignedCard({ entities, edit }: { entities: HomeRegistryEntity[]; ed
 
 /** Gestrichelte Leerkarte für `off`/`null` — dieselbe Karte, zwei ehrliche Texte. */
 function PendingCard({ note }: { note: string }) {
+  const { rooms } = useUiStrings();
   return (
     <article className="tile tile--pending empty" data-status="pending" aria-disabled="true">
       <div className="tile__head">
-        <span className="tile__name">Räume &amp; Geräte</span>
-        <span className="tile__pill">nicht verdrahtet</span>
+        <span className="tile__name">{rooms.pendingTitle}</span>
+        <span className="tile__pill">{rooms.notWired}</span>
       </div>
       <div className="tile__value">—</div>
       <p className="tile__note">{note}</p>
@@ -271,19 +276,17 @@ function PendingCard({ note }: { note: string }) {
 
 /** Solide Karte für `unreachable` — die Naht existiert, HA antwortet gerade nicht. */
 function UnreachableCard() {
+  const { rooms } = useUiStrings();
   return (
     <article className="tile tile--unreachable" data-status="unreachable">
       <div className="tile__head">
-        <span className="tile__name">Räume &amp; Geräte</span>
-        <span className="tile__pill">nicht erreichbar</span>
+        <span className="tile__name">{rooms.pendingTitle}</span>
+        <span className="tile__pill">{rooms.unreachable}</span>
       </div>
       <div className="tile__value">
         <WarnGlyph className="room__warnicon" /> —
       </div>
-      <p className="tile__note">
-        Home Assistant ist gerade nicht erreichbar — hier steht nichts Erfundenes. Es
-        versucht es automatisch erneut.
-      </p>
+      <p className="tile__note">{rooms.unreachableNote}</p>
     </article>
   );
 }
@@ -296,27 +299,25 @@ export interface RaeumeViewProps {
 }
 
 export function RaeumeView({ state, edit }: RaeumeViewProps) {
+  const { rooms } = useUiStrings();
   return (
     <section className="ueber">
       <header className="ueber__head">
-        <h1 className="ueber__title">Räume</h1>
+        <h1 className="ueber__title">{rooms.title}</h1>
         <p className="ueber__lede">
           {edit?.enabled
-            ? 'Das Zuhause, räumlich gedacht — direkt aus Home Assistant gelesen. Nicht zugeordnete Geräte kannst du hier einem Raum geben; gespeichert wird in Home Assistant, dort jederzeit sichtbar und umkehrbar.'
-            : 'Das Zuhause, räumlich gedacht — direkt aus Home Assistant gelesen. HA bleibt die eine Wahrheit; Räume ändern geht bislang nur dort (Zuordnen im Hoshi-UI kommt in einer späteren Scheibe).'}
+            ? rooms.ledeEditable
+            : rooms.ledeReadOnly}
         </p>
       </header>
 
-      {state === null && <PendingCard note="Wird gerade gelesen." />}
+      {state === null && <PendingCard note={rooms.loading} />}
 
       {state !== null && state.kind === 'off' && (
         <>
-          <PendingCard note="Räume kommen, sobald Home Assistant verdrahtet ist. Das 0.8-Backend exponiert heute noch keine Geräte- oder Raum-Registry — darum steht hier bewusst nichts Erfundenes." />
-          <h2 className="ueber__sec">Die Idee</h2>
-          <p className="ueber__sechint">
-            Eine ruhige Skizze der Verbindung — kein echter Bestand. Die Platzhalter sind
-            gestrichelt und leer; echte Räume erscheinen erst, wenn die Registry steht.
-          </p>
+          <PendingCard note={rooms.offNote} />
+          <h2 className="ueber__sec">{rooms.idea}</h2>
+          <p className="ueber__sechint">{rooms.ideaHint}</p>
           <div className="sketch__wrap">
             <HoshiSketch />
           </div>
@@ -338,10 +339,10 @@ export function RaeumeView({ state, edit }: RaeumeViewProps) {
 }
 
 /** Ehrliche Fehlermeldung aus einem fehlgeschlagenen Write (Server-Text bevorzugt). */
-function editErrorMessage(e: unknown): string {
+function editErrorMessage(e: unknown, assignFailed: string): string {
   if (e instanceof HomeEditLockedError || e instanceof HomeEditValidationError) return e.message;
   if (e instanceof Error && e.message) return e.message;
-  return 'Zuordnung fehlgeschlagen — bitte später erneut versuchen.';
+  return assignFailed;
 }
 
 export interface RaeumeViewLiveProps {
@@ -367,6 +368,7 @@ export function RaeumeViewLive({
   assign = assignEntityArea,
   intervalMs = 5 * 60 * 1000,
 }: RaeumeViewLiveProps = {}) {
+  const { rooms } = useUiStrings();
   const [state, setState] = useState<HomeRegistryState | null>(null);
   const [editEnabled, setEditEnabled] = useState(false);
   const [busyEntityId, setBusyEntityId] = useState<string | null>(null);
@@ -403,13 +405,13 @@ export function RaeumeViewLive({
       void assign(entityId, areaId)
         .then(() => reload()) // read-first: neu laden ⇒ die Karte wandert echt
         .catch((e: unknown) => {
-          if (aliveRef.current) setError({ entityId, message: editErrorMessage(e) });
+          if (aliveRef.current) setError({ entityId, message: editErrorMessage(e, rooms.assignFailed) });
         })
         .finally(() => {
           if (aliveRef.current) setBusyEntityId(null);
         });
     },
-    [assign, reload],
+    [assign, reload, rooms.assignFailed],
   );
 
   const edit: RaeumeEdit | undefined =

@@ -85,7 +85,7 @@ resolve_brain_model() {
 # true + fehlendes venv ⇒ LAUTER Fehler ("bootstrap.sh zuerst"), KEIN stiller
 # Rueckfall (Brief-15-Prinzip: nie einen kaputten Pfad scheinbar gesund starten).
 #
-# Args: name (brain|stt|speaker) legacy_run_script (bestehender 0.5-Pfad)
+# Args: name (brain|stt|speaker|knowledge) legacy_run_script (0.5-Pfad)
 # Setzt SIDECAR_RUN_SCRIPT (Pfad, leer bei Fehler). return 0 ok, 1 Fehler.
 SIDECAR_RUN_SCRIPT=""
 resolve_sidecar_run_script() {

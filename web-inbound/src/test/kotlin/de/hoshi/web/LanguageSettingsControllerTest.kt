@@ -29,7 +29,7 @@ import java.time.Duration
  */
 class LanguageSettingsControllerTest {
 
-    private fun testTtsEngineFactory(sayBaseUrl: String = "http://127.0.0.1:1") = TtsEngineFactory(
+    private fun testTtsEngineFactory(sayBaseUrl: String = "http://127.0.0.1:1", piperBaseUrl: String = "http://127.0.0.1:8045") = TtsEngineFactory(
         voxtralBaseUrl = "http://localhost:8042",
         voxtralVoice = "de_female",
         openaiModel = "gpt-4o-mini-tts",
@@ -37,7 +37,7 @@ class LanguageSettingsControllerTest {
         sayBaseUrl = sayBaseUrl,
         sayVoice = "",
         sayRate = 0,
-        piperBaseUrl = "http://127.0.0.1:8045",
+        piperBaseUrl = piperBaseUrl,
         piperVoice = "de_DE-thorsten-medium",
         sanitizeEnabled = false,
         ttsStreamEnabled = false,
@@ -214,6 +214,88 @@ class LanguageSettingsControllerTest {
                 "die explizite (say,EN)-Wahl muss den Hin-und-Zurueck-Wechsel ueberleben, nicht der Hint: ${captured.last()}",
             )
             assertEquals("Daniel", ttsEngineStore.voiceFor("say", Language.EN), "der Store selbst bleibt von reinen Sprachwechseln unangetastet")
+        }
+
+    // ── piper folgt der Sprache genau wie say (Andi-Auftrag 21.07 Nachtrag) ─────
+
+    /** Fake-`piper`-Sidecar (JDK-HttpServer), fängt den `voice`-Wert im Request-Body ein. */
+    private fun withFakePiperSidecar(block: (piperUrl: String, captured: MutableList<String>) -> Unit) {
+        val captured = mutableListOf<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/tts") { ex ->
+            captured += ex.requestBody.readBytes().toString(Charsets.UTF_8)
+            val wav = ByteArray(16) { 1 }
+            ex.sendResponseHeaders(200, wav.size.toLong())
+            ex.responseBody.use { it.write(wav) }
+        }
+        server.start()
+        try {
+            block("http://127.0.0.1:${server.address.port}", captured)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `PUT en - die aktive piper-Engine schwenkt live auf den EN-piperVoiceHint (kristin)`(@TempDir dir: Path) =
+        withFakePiperSidecar { piperUrl, captured ->
+            val ttsEngineStore = JsonFileTtsEngineStore(dir.resolve("tts-engine.json")).also { it.setEngineId("piper") }
+            val factory = testTtsEngineFactory(piperBaseUrl = piperUrl)
+            val delegate = DelegatingTtsPort("piper", factory.build("piper", null))
+
+            val response = controller(dir, ttsEngineStore = ttsEngineStore, ttsEngineFactory = factory, delegatingTtsPort = delegate)
+                .setLanguage(LanguageSettingsRequest(code = "en"))
+            assertEquals(HttpStatus.OK, response.statusCode)
+
+            delegate.synth("Hello", Language.EN).block(Duration.ofSeconds(5))
+            assertTrue(captured.isNotEmpty(), "der Delegat muss den Fake-piper-Sidecar wirklich angefragt haben")
+            assertTrue(
+                captured.last().contains("\"voice\":\"en_US-kristin-medium\""),
+                "piper muss nach dem EN-Wechsel mit dem piperVoiceHint sprechen: ${captured.last()}",
+            )
+        }
+
+    @Test
+    fun `PUT de nach zuvor EN (piper) - kein piperVoiceHint mehr, Boot-Default thorsten greift wieder`(@TempDir dir: Path) =
+        withFakePiperSidecar { piperUrl, captured ->
+            val ttsEngineStore = JsonFileTtsEngineStore(dir.resolve("tts-engine.json")).also { it.setEngineId("piper") }
+            val factory = testTtsEngineFactory(piperBaseUrl = piperUrl)
+            val delegate = DelegatingTtsPort("piper", factory.build("piper", null))
+            val ctrl = controller(dir, ttsEngineStore = ttsEngineStore, ttsEngineFactory = factory, delegatingTtsPort = delegate)
+
+            ctrl.setLanguage(LanguageSettingsRequest(code = "en"))
+            ctrl.setLanguage(LanguageSettingsRequest(code = "de"))
+
+            delegate.synth("Hallo", Language.DE).block(Duration.ofSeconds(5))
+            assertTrue(captured.isNotEmpty())
+            assertTrue(
+                captured.last().contains("\"voice\":\"de_DE-thorsten-medium\""),
+                "DE traegt keinen piperVoiceHint ⇒ derselbe Boot-Default wie vor dieser Naht: ${captured.last()}",
+            )
+        }
+
+    @Test
+    fun `explizite Stimm-Wahl fuer (piper,EN) gewinnt gegen den Hint und ueberlebt einen Sprachwechsel hin und zurueck`(@TempDir dir: Path) =
+        withFakePiperSidecar { piperUrl, captured ->
+            val ttsEngineStore = JsonFileTtsEngineStore(dir.resolve("tts-engine.json")).also {
+                it.setEngineId("piper")
+                it.setVoice("piper", Language.EN, "en_US-anna-low") // Andis explizite Wahl NUR fuer (piper, EN)
+            }
+            val factory = testTtsEngineFactory(piperBaseUrl = piperUrl)
+            val delegate = DelegatingTtsPort("piper", factory.build("piper", null))
+            val ctrl = controller(dir, ttsEngineStore = ttsEngineStore, ttsEngineFactory = factory, delegatingTtsPort = delegate)
+
+            ctrl.setLanguage(LanguageSettingsRequest(code = "en"))
+            ctrl.setLanguage(LanguageSettingsRequest(code = "fr"))
+            ctrl.setLanguage(LanguageSettingsRequest(code = "en"))
+
+            delegate.synth("Hello again", Language.EN).block(Duration.ofSeconds(5))
+            assertTrue(captured.isNotEmpty())
+            assertTrue(
+                captured.last().contains("\"voice\":\"en_US-anna-low\""),
+                "die explizite (piper,EN)-Wahl muss den Hin-und-Zurueck-Wechsel ueberleben, nicht der Hint: ${captured.last()}",
+            )
+            assertEquals("en_US-anna-low", ttsEngineStore.voiceFor("piper", Language.EN), "der Store selbst bleibt von reinen Sprachwechseln unangetastet")
         }
 }
 

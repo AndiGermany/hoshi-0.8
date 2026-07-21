@@ -81,4 +81,46 @@ class DateFastpathTest {
         assertNull(DateFastpath.DISABLED.handle("welcher Tag ist heute?", Language.DE))
         assertNull(DateFastpath.DISABLED.handle("what day is it?", Language.EN))
     }
+    /**
+     * Andi-Befund 21.07 abends: „Hoshi sagt mir grad nicht mal mehr die Uhrzeit."
+     * Es war keine Regression, sondern eine Lücke — das Brain hat gar keine Uhr.
+     * Diese Frage steht außerdem als Wake-Word-Beispiel im Video-Drehbuch.
+     */
+    @Test
+    fun `Uhrzeit wird deterministisch aus der Uhr beantwortet`() {
+        val fixed = Clock.fixed(
+            java.time.ZonedDateTime.of(2026, 7, 21, 20, 15, 0, 0, ZoneId.of("Europe/Berlin")).toInstant(),
+            ZoneId.of("Europe/Berlin"),
+        )
+        val fp = DateFastpath(clock = fixed)
+        assertEquals("Es ist 20 Uhr 15.", fp.handle("Wie spät ist es?", Language.DE))
+        assertEquals("It's 8:15 pm.", fp.handle("What time is it?", Language.EN))
+    }
+
+    @Test
+    fun `volle Stunde ohne Minutenangabe`() {
+        val fixed = Clock.fixed(
+            java.time.ZonedDateTime.of(2026, 7, 21, 9, 0, 0, 0, ZoneId.of("Europe/Berlin")).toInstant(),
+            ZoneId.of("Europe/Berlin"),
+        )
+        val fp = DateFastpath(clock = fixed)
+        assertEquals("Es ist 9 Uhr.", fp.handle("Wie viel Uhr ist es?", Language.DE))
+        assertEquals("It's 9 am.", fp.handle("What is the time?", Language.EN))
+    }
+
+    @Test
+    fun `Wecker-Fragen gehoeren NICHT hierher`() {
+        val fp = DateFastpath()
+        assertFalse(fp.isTimeQuery("Wie spät klingelt es?"))
+        assertFalse(fp.isTimeQuery("Wann klingelt mein Wecker?"))
+        assertFalse(fp.isTimeQuery("Wie lange läuft der Timer noch?"))
+    }
+
+    @Test
+    fun `Datum bleibt unveraendert erreichbar`() {
+        val fp = DateFastpath()
+        assertTrue(fp.isDateQuery("Welcher Tag ist heute?"))
+        assertFalse(fp.isTimeQuery("Welcher Tag ist heute?"))
+    }
+
 }

@@ -60,8 +60,10 @@ dependencies {
         exclude(group = "org.slf4j", module = "slf4j-simple")
     }
     // AMBIG-Routing: der EmbeddingRouterRefiner (embeddinggemma :11434) wird hier
-    // flag-gated (HOSHI_EMBEDDING_ROUTER, default ON) als echter RouteRefiner statt
-    // des Passthrough-Stubs verdrahtet — schärfere AMBIG-Auflösung, best-effort.
+    // flag-gated (HOSHI_EMBEDDING_ROUTER, default OFF seit OSS-Audit 2026-07-11) als
+    // echter RouteRefiner statt des Passthrough-Stubs verdrahtet — schärfere
+    // AMBIG-Auflösung, best-effort. Dormant by design: KeywordRouterImpl emittiert
+    // nie AMBIG, der Refiner-Zweig ist also aktuell unerreichbar (s. PipelineConfig.kt).
     implementation(project(":adapters-routing")) {
         exclude(group = "org.slf4j", module = "slf4j-simple")
     }

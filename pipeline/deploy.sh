@@ -30,21 +30,30 @@
 #   bash pipeline/deploy.sh --remote         # dito, aber HTTP — Achtung: rendert TLS RAUS (nur bewusst nutzen)
 #   bash pipeline/deploy.sh --remote --status   # ct-106: systemctl status + journal + health
 #   bash pipeline/deploy.sh --remote --rollback # ct-106: web-inbound.jar.prev zurück + restart
+#   HOSHI_DEPLOY_SKIP_FE=true bash pipeline/deploy.sh --remote  # nur Jar (FE-Sync übersprungen, Hotfix)
 #
 # Der LOKALE Deploy erbt die launchd-Mechanik (sed-Templating + bootout→bootstrap
 # →kickstart) von Hoshi_0.5/tools/hoshi-launchd-install.sh, mit echten Verhaltens-
 # Checks statt nur Health-200. Kein SSH, kein CI.
 #
 # Der REMOTE-Deploy (--remote) erbt den bewährten 0.5-Mechanismus aus
-# Hoshi_0.5/tools/hoshi-deploy.sh: bootJar → scp .new → Backup .prev + atomic mv
-# → PORT-WACHE (0.5-erwacht-Check + fuser -k :8082, Doppel-Incident 2026-07-06)
-# → systemctl restart → Health-Poll → Rollback. Er deployt 0.8 PARALLEL zu 0.5
-# (eigener Port :8082, eigenes /opt/hoshi-0.8, eigene Unit hoshi-0.8-backend) —
-# 0.5 bleibt UNANGETASTET. ct-106-SSH ist Andi-Gate: ohne erreichbares SSH bricht
-# --remote SAUBER ab (exit 4, Runbook-Hinweis), versucht NIE blind scp/systemctl.
+# Hoshi_0.5/tools/hoshi-deploy.sh: npm-run-build+rsync FE → bootJar → scp .new
+# → Backup .prev + atomic mv → PORT-WACHE (0.5-erwacht-Check + fuser -k :8082,
+# Doppel-Incident 2026-07-06) → systemctl restart → Health-Poll → Rollback. Er
+# deployt 0.8 PARALLEL zu 0.5 (eigener Port :8082, eigenes /opt/hoshi-0.8, eigene
+# Unit hoshi-0.8-backend) — 0.5 bleibt UNANGETASTET. ct-106-SSH ist Andi-Gate:
+# ohne erreichbares SSH bricht --remote SAUBER ab (exit 4, Runbook-Hinweis),
+# versucht NIE blind scp/systemctl.
 # Härtung 2026-07-12: die 3 Secrets (HOSHI_API_TOKEN/HOSHI_HA_TOKEN/OPENAI_API_KEY)
 # landen NICHT mehr inline in der Unit, sondern in einer root-only EnvironmentFile
 # (/etc/hoshi-0.8/secrets.env, chmod 600) — siehe write_remote_secrets_env().
+# Lehre 2026-07-20 (Nacht-Vorfall ~02:15): --remote deployte NUR die Jar — das FE
+# wird von ct-106:/opt/hoshi-0.8/web serviert (WebConfig.kt, hoshi.web.static-dir)
+# und musste stundenlang manuell nachgezogen werden, obwohl „Deploy grün". Seitdem
+# baut --remote VOR dem Jar-Schritt IMMER auch das Frontend (npm run build — tsc -b
+# ist das Typ-Netz, vitest allein typprüft nicht) und syncet dist/ nach
+# $REMOTE_WEB_DIR (rsync -a --delete, Fallback scp -r). Opt-out für reine
+# Jar-Hotfixes: HOSHI_DEPLOY_SKIP_FE=true (Default false).
 
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -76,6 +85,10 @@ REMOTE_PORT="${HOSHI_08_REMOTE_PORT:-8082}"
 # 2× am 2026-07-06 und ihr MCP-Launcher griff sich :8082 (→ Port-Wache unten).
 LEGACY_UNIT="${HOSHI_05_REMOTE_UNIT:-hoshi-backend}"
 REMOTE_JAR="$REMOTE_DIR/web-inbound.jar"
+# Frontend-Static-Root auf ct-106 — MUSS mit hoshi.web.static-dir (WebConfig.kt,
+# Default /opt/hoshi-0.8/web) übereinstimmen, sonst serviert das Backend woanders
+# als wir hinsyncen (Vorfall 2026-07-20, s.o.).
+REMOTE_WEB_DIR="${HOSHI_08_REMOTE_WEB:-/opt/hoshi-0.8/web}"
 UNIT_TEMPLATE="$REPO_ROOT/tools/systemd/${REMOTE_UNIT}.service"
 # BatchMode=yes ⇒ kein interaktiver Prompt/Passwort/Host-Key-Frage (fail-fast,
 # kein Hängen). ConnectTimeout bremst unerreichbare Hosts.
@@ -112,6 +125,13 @@ if [ "$HTTPS_ON" = "1" ]; then
 else
     SSL_ENABLED_VAL="false"; HEALTH_SCHEME="http";  CURL_K=""
 fi
+
+# ── 🌐 Frontend-Sync-Opt-out (reine Jar-Hotfixes) ─────────────────────────────
+# Default AUS: --remote baut+syncet das FE IMMER mit (Vorfall 2026-07-20, s.o.).
+# HOSHI_DEPLOY_SKIP_FE=true überspringt das bewusst — der Report sagt das dann
+# auch ehrlich ("FE ÜBERSPRUNGEN (Flag)"), statt es zu verschweigen.
+SKIP_FE_RAW="${HOSHI_DEPLOY_SKIP_FE:-false}"
+case "$SKIP_FE_RAW" in true|1|yes|on) SKIP_FE=1 ;; *) SKIP_FE=0 ;; esac
 
 usage() {
     sed -n '2,42p' "$0"
@@ -472,6 +492,65 @@ remote_guarded_restart() {
     return 0
 }
 
+# ── 🖥️ Frontend bauen + syncen (VOR dem Jar-Schritt) ──────────────────────────
+# Vorfall 2026-07-20: --remote deployte nur die Jar, das FE (serviert aus
+# $REMOTE_WEB_DIR, s.o.) blieb stundenlang veraltet, obwohl „Deploy grün". Darum
+# baut remote_deploy() jetzt IMMER zuerst `npm run build` (= tsc -b + vite build —
+# das Typ-Netz; vitest allein typprüft nicht, ein Fixture-Bruch schlüpfte so
+# durch) und syncet dist/ nach ct-106, BEVOR die Jar überhaupt gebaut wird. Bricht
+# der Build, bricht der GESAMTE Deploy mit klarer Meldung (gewollt — lieber ein
+# roter Deploy als ein grüner mit kaputtem/veraltetem FE). Setzt FE_BUNDLE_OLD
+# (Beweis-Zeile, vor dem Sync gemerkt) und FE_SKIPPED für den Report in
+# remote_deploy(). rsync bevorzugt (inkrementell + --delete gegen FE-Leichen),
+# scp -r als Fallback, falls ct-106 kein rsync hat (kein --delete dort).
+remote_sync_frontend() {
+    FE_BUNDLE_OLD=""
+    if [ "$SKIP_FE" = "1" ]; then
+        warn "Frontend-Sync ÜBERSPRUNGEN (HOSHI_DEPLOY_SKIP_FE=true) — nur die Jar wird deployt"
+        return 0
+    fi
+
+    local fe_dir="$REPO_ROOT/frontend"
+    [ -d "$fe_dir" ] || { fail "Frontend-Verzeichnis fehlt: ${fe_dir#$REPO_ROOT/}"; return 1; }
+    command -v npm >/dev/null 2>&1 || { fail "npm fehlt (für Frontend-Build nötig)"; return 1; }
+
+    say "Frontend bauen — npm run build (tsc -b + vite build) in ${fe_dir#$REPO_ROOT/}"
+    ensure_log_dir
+    local fe_log="$PIPELINE_LOG_DIR/deploy-remote-fe-build-$(timestamp).log"
+    if ! ( cd "$fe_dir" && npm run build >"$fe_log" 2>&1 ); then
+        fail "Frontend-Build fehlgeschlagen (tsc -b oder vite build) — siehe ${fe_log#$REPO_ROOT/}"
+        tail -25 "$fe_log"
+        return 1
+    fi
+    [ -d "$fe_dir/dist" ] || { fail "Build lief durch, aber dist/ fehlt: ${fe_dir#$REPO_ROOT/}/dist"; return 1; }
+    ok "Frontend gebaut: ${fe_dir#$REPO_ROOT/}/dist"
+
+    # Beweis Teil 1: aktuell live servierten Bundle-Namen VOR dem Sync merken.
+    FE_BUNDLE_OLD="$(ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" \
+        "ls $REMOTE_WEB_DIR/assets/ 2>/dev/null | grep -o 'index-[^.]*\.js' | head -1" 2>/dev/null)"
+    [ -z "$FE_BUNDLE_OLD" ] && FE_BUNDLE_OLD="(keins)"
+
+    ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "mkdir -p $REMOTE_WEB_DIR" 2>/dev/null \
+        || { fail "mkdir -p $REMOTE_WEB_DIR auf $REMOTE_HOST fehlgeschlagen (Rechte?)"; return 1; }
+
+    say "Frontend syncen → $REMOTE_HOST:$REMOTE_WEB_DIR"
+    if ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "command -v rsync" >/dev/null 2>&1; then
+        if rsync -a --delete -e "ssh ${SSH_OPTS[*]}" "$fe_dir/dist/" "$REMOTE_HOST:$REMOTE_WEB_DIR/"; then
+            ok "rsync fertig (dist/ → $REMOTE_WEB_DIR, --delete gegen FE-Leichen)"
+        else
+            fail "rsync nach $REMOTE_HOST fehlgeschlagen"; return 1
+        fi
+    else
+        warn "rsync auf $REMOTE_HOST nicht gefunden — Fallback scp -r (kein --delete, stale Dateien möglich)"
+        if scp "${SSH_OPTS[@]}" -q -r "$fe_dir/dist/." "$REMOTE_HOST:$REMOTE_WEB_DIR/"; then
+            ok "scp -r fertig (Fallback)"
+        else
+            fail "scp -r nach $REMOTE_HOST fehlgeschlagen"; return 1
+        fi
+    fi
+    return 0
+}
+
 # ── --remote (Default-Action: deploy) ─────────────────────────────────────────
 remote_deploy() {
     cd "$REPO_ROOT" || { fail "REPO_ROOT nicht erreichbar"; return 1; }
@@ -509,6 +588,10 @@ remote_deploy() {
     else
         log "HTTPS-Modus AUS (Default) — :$REMOTE_PORT bleibt reines HTTP (byte-neutral)"
     fi
+
+    # (1c) Frontend bauen + syncen — VOR der Jar, siehe remote_sync_frontend()
+    #      (Vorfall 2026-07-20: FE-Vergessen trotz „Deploy grün").
+    remote_sync_frontend || return 1
 
     # (2) bootJar bauen (frisches Bündeln, wie der lokale Deploy).
     say "bootJar bauen — ./gradlew :web-inbound:bootJar --rerun-tasks"
@@ -606,6 +689,19 @@ remote_deploy() {
     if remote_health_poll; then
         echo
         say "${C_GREEN}REMOTE-DEPLOY GRÜN${C_RESET} — 0.8 läuft auf $REMOTE_HOST:$REMOTE_PORT (parallel zu 0.5:8081)."
+        if [ "$SKIP_FE" = "1" ]; then
+            log "FE ÜBERSPRUNGEN (Flag) — nur Jar deployt, Frontend unangetastet gelassen"
+        else
+            local fe_bundle_new
+            fe_bundle_new="$(ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" \
+                "curl -sS $CURL_K -m 3 $HEALTH_SCHEME://127.0.0.1:$REMOTE_PORT/ 2>/dev/null | grep -o 'index-[^.]*\.js' | head -1" 2>/dev/null)"
+            [ -z "$fe_bundle_new" ] && fe_bundle_new="(nicht gefunden)"
+            if [ "$FE_BUNDLE_OLD" = "$fe_bundle_new" ]; then
+                log "FE-Bundle: unverändert (kein FE-Diff)"
+            else
+                log "FE-Bundle: $FE_BUNDLE_OLD → $fe_bundle_new"
+            fi
+        fi
         log "HA-Turn echt testbar (Linux kann LAN): siehe Runbook Verifikation."
         log "Status: bash pipeline/deploy.sh --remote --status  ·  Rollback: --remote --rollback"
         return 0

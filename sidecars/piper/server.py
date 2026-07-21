@@ -78,6 +78,29 @@ def _load_voice_spec(voice_id: str, model_dir: Path) -> VoiceSpec:
     )
 
 
+def _available_voice_specs(model_dir: Path) -> dict[str, VoiceSpec]:
+    """Alle Stimmen aus dem Manifest, IN MANIFEST-REIHENFOLGE, deren Modell- UND
+    Konfig-Datei WIRKLICH unter ``model_dir`` auf der Platte liegen — ehrlich
+    statt behauptet: eine im Lockfile stehende, aber (noch) nicht heruntergeladene
+    Stimme wird NICHT gemeldet (s. ``/voices``-KDoc bei :class:`VoiceCache`).
+    Rein lesend, keine Seiteneffekte — direkt mit einem temporaeren Verzeichnis
+    testbar, unabhaengig vom tatsaechlichen ``models/``-Bestand dieser Maschine.
+    """
+    data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    specs: dict[str, VoiceSpec] = {}
+    for voice in data["voices"]:
+        model_path = model_dir / voice["model"]["artifact"]
+        config_path = model_dir / voice["config"]["artifact"]
+        if model_path.is_file() and config_path.is_file():
+            specs[voice["id"]] = _load_voice_spec(voice["id"], model_dir)
+    return specs
+
+
+# Byte-identische Default-Aufloesung: EXAKT wie vor der Mehrstimmen-Naht — reine
+# Manifest-Mitgliedschaft, KEINE Datei-Existenzpruefung hier (die passiert erst
+# beim tatsaechlichen Laden, s. PiperSynthesizer.load). Ein fehlendes Default-
+# Modell faellt also weiterhin erst beim ersten Laden auf (serve()/_selftest()),
+# nicht schon beim Modul-Import.
 VOICE_SPEC = _load_voice_spec(args.default_voice, Path(args.model_dir))
 
 
@@ -208,34 +231,113 @@ class PiperSynthesizer:
 
 
 PIPER_THREADS = max(1, min(8, int(os.environ.get("HOSHI_PIPER_THREADS", "2"))))
-synthesizer: Synthesizer = PiperSynthesizer(VOICE_SPEC, threads=PIPER_THREADS)
+
+
+class VoiceCache:
+    """**Mehrstimmen-Cache** (Andi-Auftrag 21.07 Build-Week-Video: „Sprache auf
+    Englisch stellen -> Hoshi antwortet auch mit englischer TTS-Stimme" —
+    piper war bis dahin architektonisch einstimmig, ein globales [VoiceSpec]/
+    [PiperSynthesizer]-Paar).
+
+    **Ehrlich statt behauptet:** [available_ids]/[/voices][voices_payload] melden
+    NUR Stimmen aus ``artifacts.lock.json``, deren Modell- UND Konfig-Datei
+    WIRKLICH unter ``model_dir`` liegen (s. [_available_voice_specs]) — eine im
+    Lockfile gepinnte, aber (noch) nicht heruntergeladene Stimme (z.B. eine
+    zukuenftige es/fr/it-Stimme) taucht NICHT auf. [get] wirft [ValueError] fuer
+    jede unbekannte ODER nicht vorhandene Stimme — NIE ein stiller Rueckfall auf
+    die deutsche Default-Stimme (Andi-Vorgabe: eine englische Anfrage, die
+    heimlich deutsch klingt, ist schlimmer als ein ehrlicher Fehler).
+
+    **Lazy + dauerhaft gecacht:** jede Stimme wird ERST beim ersten Request
+    geladen (ein volles ONNX-``InferenceSession``-Setup dauert spuerbar, s.
+    [PiperSynthesizer.load]s Warmup-Kommentar) und danach NIE wieder entladen —
+    kein LRU, kein TTL. Diese Klasse ist NICHT nebenlaeufigkeitskritisch: der
+    Sidecar laeuft ueber die stdlib-``HTTPServer`` (kein ``ThreadingMixIn``),
+    Requests werden also ohnehin seriell abgearbeitet; [_lock] ist reine
+    Verteidigung gegen eine kuenftige Server-Umstellung, kein aktives Bottleneck.
+
+    **RAM-Anhaltspunkt (GEMESSEN, nicht geschaetzt — s. Report/PR-Notiz):** eine
+    geladene Stimme (medium-Qualitaet, 22 kHz) kostet auf diesem Mac rund 129 MB
+    RSS (``/health`` ``rss_mb`` mit nur Thorsten geladen). Eine ZWEITE Stimme
+    desselben Formats (Kristin) kostet ungefaehr denselben Betrag NOCHMAL dazu
+    — onnxruntime haelt pro ``InferenceSession`` ein eigenes Arena, es wird
+    NICHTS zwischen Stimmen geteilt. Auf dem 16-GB-Mac, auf dem das LLM der mit
+    Abstand groesste Verbraucher ist, ist das klein, aber NICHT gratis — genau
+    deshalb bleibt das Laden lazy (nur eine wirklich angefragte Stimme kostet
+    RAM) statt beim Start alle Manifest-Stimmen eager vorzuladen.
+    """
+
+    def __init__(self, specs: dict[str, VoiceSpec], threads: int):
+        self._specs = dict(specs)
+        self._threads = threads
+        self._lock = threading.Lock()
+        self.cache: dict[str, Synthesizer] = {}
+        # Austauschbar fuer Tests (Andi-Vorgabe „Standalone-Contract-Tests
+        # brauchen weder Piper noch Modell"): test_server.py tauscht hier eine
+        # Fake-Fabrik ein, damit KEIN echtes ONNX/Piper-Paket noetig ist.
+        self.synthesizer_factory = lambda spec: PiperSynthesizer(spec, threads=self._threads)
+
+    def available_ids(self) -> list[str]:
+        """Alle wirklich vorhandenen Stimmen, IN MANIFEST-REIHENFOLGE."""
+        return list(self._specs.keys())
+
+    def spec_for(self, voice_id: str) -> VoiceSpec | None:
+        return self._specs.get(voice_id)
+
+    def get(self, voice_id: str) -> Synthesizer:
+        """Der (ggf. frisch geladene) Synthesizer fuer ``voice_id`` — aus dem
+        Cache, sonst on-demand gebaut+geladen und danach dauerhaft gecacht.
+
+        :raises ValueError: ``voice_id`` steht nicht im Manifest ODER ihre
+            Dateien fehlen auf der Platte — der Aufrufer (`tts_response`)
+            macht daraus einen ehrlichen 422, NIE einen stillen Rueckfall.
+        """
+        with self._lock:
+            existing = self.cache.get(voice_id)
+            if existing is not None:
+                return existing
+            spec = self._specs.get(voice_id)
+            if spec is None:
+                raise ValueError(f"Stimme nicht geladen: {voice_id}")
+            synth = self.synthesizer_factory(spec)
+            synth.load()
+            self.cache[voice_id] = synth
+            return synth
+
+
+VOICE_CACHE = VoiceCache(_available_voice_specs(Path(args.model_dir)), threads=PIPER_THREADS)
 
 
 def health_payload() -> dict:
+    default_synth = VOICE_CACHE.cache.get(VOICE_SPEC.voice_id)
     return {
-        "status": "ok" if synthesizer.ready else "starting",
+        "status": "ok" if default_synth is not None and default_synth.ready else "starting",
         "engine": "piper",
         "runtime_license": "GPL-3.0-or-later",
         "default_voice": VOICE_SPEC.voice_id,
         "sample_rate": VOICE_SPEC.sample_rate,
         "threads": PIPER_THREADS,
-        "warmup_ms": getattr(synthesizer, "warmup_ms", None),
+        "warmup_ms": getattr(default_synth, "warmup_ms", None),
         "rss_mb": _current_rss_mb(),
         "peak_rss_mb": _peak_rss_mb(),
     }
 
 
 def voices_payload() -> dict:
+    """ALLE Stimmen, deren Dateien wirklich vorliegen (s. [VoiceCache]-KDoc) —
+    NICHT nur die eine, gerade aktiv geladene. Fuer Thorsten byte-identisch zum
+    Vor-Mehrstimmen-Zustand (gleiches Dict, gleiche Feld-Reihenfolge)."""
     return {
         "voices": [
             {
-                "id": VOICE_SPEC.voice_id,
-                "locale": VOICE_SPEC.locale,
-                "quality": VOICE_SPEC.quality,
-                "sample_rate": VOICE_SPEC.sample_rate,
-                "model_license": VOICE_SPEC.model_license,
-                "dataset_license": VOICE_SPEC.dataset_license,
+                "id": spec.voice_id,
+                "locale": spec.locale,
+                "quality": spec.quality,
+                "sample_rate": spec.sample_rate,
+                "model_license": spec.model_license,
+                "dataset_license": spec.dataset_license,
             }
+            for spec in (VOICE_CACHE.spec_for(vid) for vid in VOICE_CACHE.available_ids())
         ]
     }
 
@@ -271,21 +373,31 @@ def tts_response(payload: object) -> ApiResponse:
     raw_voice = payload.get("voice")
     if raw_voice is not None and not isinstance(raw_voice, str):
         return _json_api_response(422, {"detail": "voice ist kein String"})
-    voice = raw_voice or VOICE_SPEC.voice_id
-    if voice != VOICE_SPEC.voice_id:
-        return _json_api_response(422, {"detail": f"Stimme nicht geladen: {voice}"})
+    # Kein/leerer Stimm-Wunsch -> HOSHI_PIPER_DEFAULT_VOICE (byte-identisch zum
+    # Vor-Mehrstimmen-Verhalten). Ein GESETZTER, aber unbekannter/nicht vorhandener
+    # Wunsch ist NIE ein stiller Rueckfall auf die deutsche Stimme (Andi-Vorgabe).
+    voice_id = raw_voice.strip() if isinstance(raw_voice, str) and raw_voice.strip() else VOICE_SPEC.voice_id
     try:
-        result = synthesizer.synthesize(text)
+        synth = VOICE_CACHE.get(voice_id)
+    except ValueError:
+        return _json_api_response(422, {"detail": f"Stimme nicht geladen: {voice_id}"})
+    except Exception as exc:  # noqa: BLE001 — Laden kann auch an ONNX/Runtime scheitern
+        log.exception("Piper-Stimme konnte nicht geladen werden (voice=%s)", voice_id)
+        return _json_api_response(500, {"detail": f"Piper-Stimme laden fehlgeschlagen: {type(exc).__name__}"})
+    try:
+        result = synth.synthesize(text)
     except Exception as exc:  # noqa: BLE001 — HTTP-Rand meldet Fehler, nie Textinhalt
         log.exception("Piper-Synthese fehlgeschlagen (text_len=%d)", len(text))
         return _json_api_response(500, {"detail": f"Piper-Synthese fehlgeschlagen: {type(exc).__name__}"})
     rtf = result.synthesis_ms / result.audio_ms if result.audio_ms else 0.0
     log.info(
-        "Piper-Synthese: text_len=%d synth_ms=%d audio_ms=%d rtf=%.3f",
+        "Piper-Synthese: voice=%s text_len=%d synth_ms=%d audio_ms=%d rtf=%.3f TEXT=%r",
+        voice_id,
         len(text),
         result.synthesis_ms,
         result.audio_ms,
         rtf,
+        text,
     )
     return ApiResponse(
         status=200,
@@ -294,7 +406,7 @@ def tts_response(payload: object) -> ApiResponse:
         headers={
             "X-Hoshi-TTS-Ms": str(result.synthesis_ms),
             "X-Hoshi-Audio-Ms": str(result.audio_ms),
-            "X-Hoshi-Voice": VOICE_SPEC.voice_id,
+            "X-Hoshi-Voice": voice_id,
         },
     )
 
@@ -351,8 +463,10 @@ class PiperHandler(BaseHTTPRequestHandler):
 
 
 def serve(host: str, port: int) -> None:
-    if not synthesizer.ready:
-        synthesizer.load()
+    # NUR die Default-Stimme wird beim Start geladen (byte-identisch zum
+    # Vor-Mehrstimmen-Verhalten) — jede weitere Stimme (z.B. die englische
+    # Video-Stimme) laedt lazy beim ersten Request (s. VoiceCache-KDoc).
+    VOICE_CACHE.get(VOICE_SPEC.voice_id)
     httpd = HTTPServer((host, port), PiperHandler)
     log.info("hoshi-tts-piper lauscht auf %s:%d (stdlib HTTP, seriell)", host, port)
     try:
@@ -365,8 +479,8 @@ def serve(host: str, port: int) -> None:
 
 def _selftest() -> bool:
     try:
-        synthesizer.load()
-        result = synthesizer.synthesize("Hallo, ich bin Hoshi und arbeite lokal.")
+        synth = VOICE_CACHE.get(VOICE_SPEC.voice_id)
+        result = synth.synthesize("Hallo, ich bin Hoshi und arbeite lokal.")
         rtf = result.synthesis_ms / result.audio_ms if result.audio_ms else float("inf")
         print(
             f"[selftest] PASS voice={VOICE_SPEC.voice_id} wav_bytes={len(result.wav)} "

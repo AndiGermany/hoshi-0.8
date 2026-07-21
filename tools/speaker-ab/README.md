@@ -1,6 +1,6 @@
 # speaker-ab — Offline-A/B-Runner für die Speaker-Score-Aggregation
 
-Test-Gate-Werkzeug für `SpeakerProfileAggregation` (BEST_SAMPLE vs. CENTROID,
+Test-Gate-Werkzeug für `SpeakerProfileAggregation` (BEST_SAMPLE vs. TOP_TWO_MEAN vs. CENTROID,
 `web-inbound/src/main/kotlin/de/hoshi/web/SpeakerIdentifyService.kt`): spielt Proben
 offline gegen einen Speaker-Profile-Store und liefert einen FAR/FRR-Proxy +
 kanalgetrennte Confusion-Matrix statt Anekdoten ("bei mir hat's geklappt").
@@ -11,6 +11,10 @@ Damit ein A/B-Vergleich über viele Proben/Schwellen NICHT den Produktiv-Store o
 `identify()` selbst anfassen muss. Das Skript portiert die reine Mathematik 1:1:
 
 - **BEST_SAMPLE** = `max(cosine(probe, sample_i))` über `profile.samples`.
+- **TOP_TWO_MEAN** = Mittelwert der zwei höchsten Sample-Cosines; bei einem
+  Legacy-Sample exakt derselbe Score wie BEST_SAMPLE. Der Kandidat prüft die
+  Hypothese, dass ein einzelner Sample-Ausreißer die Paarentscheidung nicht
+  allein bestimmen sollte.
 - **CENTROID** = `cosine(probe, profile.embedding)` — das im Store bereits
   L2-renormalisiert gemittelte Embedding wird nur **gelesen**, nie neu berechnet
   (Null Mathe-Divergenz zum Kotlin-Pfad).
@@ -36,6 +40,15 @@ python3 tools/speaker-ab/run_ab.py --manifest manifest.tsv \
 
 # Echter Lauf über ein Verzeichnis-Layout <truth_speaker>/<channel>/*.wav:
 python3 tools/speaker-ab/run_ab.py --wav-dir proben/ --sidecar http://127.0.0.1:9002
+
+# Reversibler Ein-Profil-Schattenlauf: nur das Zielprofil scoren und die
+# Enrollment-Embeddings aller anderen Store-Profile als Impostor-Sanity anfuegen.
+# Echte ID/Pfade nur lokal einsetzen, nie in Bus/Repo kopieren:
+python3 tools/speaker-ab/run_ab.py --manifest owner-proben.tsv \
+    --store /privat/frozen/speaker-profiles.json \
+    --target-profile '<private-profile-id>' \
+    --include-other-enrollment-samples \
+    --sidecar http://127.0.0.1:9002
 ```
 
 `--store` Default = derselbe Auflösungspfad wie `PipelineConfig.resolveSpeakerStorePath`
@@ -52,13 +65,30 @@ den FAR-Proxy-Nenner ein.
 Landet **immer** unter `~/.hoshi/speaker-ab/<timestamp>/` — nie im Repo (das Skript
 verweigert `--out-dir`-Pfade innerhalb des Repos hart):
 
-- `probes.tsv` — je Probe: truth/channel/dauer_s/quality, alle Profil-Scores beider
+- `probes.tsv` — je Probe: truth/channel/dauer_s/quality, alle Profil-Scores aller drei
   Modi, Top-1/Runner-up/Margin je Modus, Entscheidung je Schwelle × Modus.
 - `report.md` — je Modus × Schwelle (0.35–0.70, Schritt 0.05): FAR-Proxy
   (fremd/Impostor als bekannt gebunden), FRR-Proxy (wahre Person nicht gebunden),
   Confusion-Matrix **getrennt je Kanal**, plus ein expliziter Hinweis, dass die
   Proben-Zahl klein ist (kein ROC/EER-Ersatz, sondern ein Test-Gate-Ersatz für
-  Anekdoten).
+Anekdoten).
+
+### Ein-Profil-Schattenmodus
+
+`--target-profile` filtert ausschließlich die in-memory Score-Kandidaten des
+Runners; der Store wird nicht kopiert, geschrieben oder verändert. In diesem
+Modus ist die Schwellenmatrix absichtlich auf `0.45 | 0.50 | 0.55`
+vorregistriert. Da nur ein Profil gescored wird, gibt es keinen Runner-up und die
+Margin ist mathematisch ohne Wirkung — die Entscheidung ist schlicht
+`target_score >= tau`.
+
+`--include-other-enrollment-samples` fügt die Roh-Embeddings aller anderen
+Store-Profile als zusätzliche Impostor-Proben hinzu. Sie brauchen keinen
+Sidecar-Aufruf und verlassen den privaten Reportpfad nicht. Ihre Aussage ist
+eng begrenzt: Samples derselben Enrollment-Sitzung sind korreliert und ersetzen
+weder eine frische Aufnahme der anderen Person noch echte Gaststimmen. Sie
+können einen Kandidaten offline widerlegen, aber niemals allgemeine
+Gast-Sicherheit beweisen.
 
 ## Datenschutz (hart)
 
@@ -74,19 +104,23 @@ ohnehin nie Proben-/Embedding-Daten ins Repo).
 Fake-Store (3 Profile: `alice`/`bob` mit je 3 deterministisch geseedeten
 Zufalls-Samples, `solo` mit genau 1 Sample) + 4 synthetische WAVs (Sinus/Rauschen,
 echt per `wave` gelesen für `duration_s`) werden direkt mit vorgegebenen
-Fake-Embeddings ausgewertet. Drei Assertions:
+Fake-Embeddings ausgewertet. Vier Assertions:
 
 1. **Report entsteht** — `probes.tsv` + `report.md` werden geschrieben.
-2. **best-sample == centroid bei einem 1-Sample-Profil** (`solo`) — bei genau einem
-   Sample ist `max(samples)` per Definition derselbe Wert wie `cosine(centroid)`.
+2. **Alle drei Modi sind bei einem 1-Sample-Profil identisch** (`solo`) — bei genau
+   einem Sample sind Best-Sample, Top-Two-Mittel und Centroid derselbe Cosine.
 3. **Margin-Regel greift** — eine Probe, algebraisch exakt gleich weit von
    `alice` und `bob` konstruiert (`normalize(alice_sample0 + bob_sample0)`), erhält
    in beiden Profilen denselben Top-Score (Abstand ≈ 0 < `margin`) und wird trotz
    Score ≥ Schwelle korrekt zu Gast entschieden.
+4. **Top-Two mindert eine Einzelspitze** — bei einem 3-Sample-Profil liegt der
+   Mittelwert der beiden höchsten Scores strikt unter dem einzelnen Maximum.
 
 ## Verboten / außerhalb des Scopes dieses Tools
 
-Kein Commit, kein Deploy, keine Änderung an Kotlin-Code/Schwellen/Flags. Dieses
+Kein Deploy und keine Änderung an Schwellen/Flags. Der neue Kotlin-Modus ist nur
+eine opt-in Rechenstrategie; Default bleibt BEST_SAMPLE und der Live-Flip bleibt
+gesperrt, bis echte gelabelte Holdout-Daten null Cross-Bindungen zeigen. Dieses
 Skript ist rein lesend gegenüber dem Store (öffnet ihn nur zum Score-Vergleich) und
 rein lesend gegenüber dem Sidecar (`POST /embed`, nie `/verify`, nie Enroll).
 
@@ -94,7 +128,8 @@ rein lesend gegenüber dem Sidecar (`POST /embed`, nie `/verify`, nie Enroll).
 
 ## Paar-Kalibrierung nach dem A/B (`calibrate_pair.py`)
 
-`run_ab.py` erzeugt die Roh-Scores. `calibrate_pair.py` ist der bewusst kleinere
+`run_ab.py` erzeugt die Roh-Scores aller Aggregationskandidaten. `calibrate_pair.py`
+bleibt bewusst auf die aktive BEST_SAMPLE-Baseline begrenzt und ist der kleinere
 zweite Schritt für ein festes Zwei-Personen-Hard-Case: Es wählt einen
 `Schwelle × Margin`-Betriebspunkt **nur auf Train-Sessions** und bewertet ihn
 danach einmal auf vorher ungesehenen Holdout-Sessions. Es liest keine WAVs,

@@ -165,18 +165,21 @@ Environment=HOSHI_SPEAKER_BASE_URL=http://__MAC_IP__:9002
 # Runtime-Flip. Scharf: HOSHI_SPEAKER_ENROLL_ENABLED=true.
 Environment=HOSHI_SPEAKER_ENROLL_ENABLED=true
 # 🪪 Stimm-Erkennung (identify aus Voice-Audio -> speakerContext; im Zweifel Gast). Andi zieht (will es testen). Scharf:
-Environment=HOSHI_SPEAKER_RECOGNITION_ENABLED=false   # ← P0 21.07: Andi→Cindy-Cross-Bind (Browser), Owner-GO via Codex 2355 — OFF bis 0-Cross-Bind-Holdout + neues Andi-Gate. Profile bleiben, Enroll bleibt an, Capture-Tee sammelt weiter Proben. OFF macht Identify zum DISABLED-Sentinel (ws-Rand no-op, WebSocketConfig).
+Environment=HOSHI_SPEAKER_RECOGNITION_ENABLED=false   # ← P0 21.07: Cross-Bind (Browser), Owner-GO via Codex 2355 — OFF bis 0-Cross-Bind-Holdout + neues Andi-Gate. Profile bleiben, Enroll bleibt an. OFF macht Identify zum DISABLED-Sentinel (ws-Rand no-op, WebSocketConfig) und damit auch die Capture-Tee in den Voice-Rändern inaktiv.
 # Schwelle kalibriert 2026-07-05 nach dem Format-Fix (webm→WAV): Andis echter Live-Score 0.578.
 # 0.80-Default war die known-Grenze der 0.5-Referenz; dort galt <0.50 = "sicher fremd".
 # 0.50 = informierter Call bei Ein-Profil-Store — im-Zweifel-Gast bleibt darunter erhalten.
 # 2. Kalibrierung 05.07 abends: Live-Scores 0.578/0.494 (n=2, kurzes Ein-Satz-Profil) —
 # 0.45 überbrückt die Streuung; echter Hebel = Re-Enroll länger / Multi-Sample (Scheibe offen).
 Environment=HOSHI_SPEAKER_RECOGNITION_THRESHOLD=0.45
-# Score-Aggregation je Profil (S1, 19.07): best-sample = Bestandsverhalten. centroid
-# (Mittel-Embedding, samplezahl-neutral) erst nach Offline-A/B + Owner-Gate flippen —
-# der Wert steht hier EXPLIZIT, damit der Betriebspunkt sichtbar konfiguriert ist
-# (Boot-Zeile im Log beweist den aktiven Modus: "[speaker-identify] aktiv: ...").
+# Score-Aggregation je Profil: best-sample = Bestandsverhalten. top-two-mean
+# (Mittel der zwei hoechsten Rohsample-Cosines) und centroid (Mittel-Embedding)
+# erst nach Offline-A/B + Owner-Gate flippen — der Wert steht hier EXPLIZIT, damit
+# der Betriebspunkt sichtbar konfiguriert ist (Boot-Zeile: "[speaker-identify] aktiv: ...").
 Environment=HOSHI_SPEAKER_RECOGNITION_AGGREGATION=best-sample
+# Optionaler Verify-only-Scope: HOSHI_SPEAKER_RECOGNITION_PROFILES als CSV-Allowlist.
+# Leer/nicht gesetzt = alle Profile (Bestand). Echte Profil-IDs NICHT ins Repo committen;
+# ein Versuch setzt sie nur im privaten Runtime-Override. Der Store bleibt unveraendert.
 # 🛰️ Sprecher-Erkennung + Gedächtnis-Schreiben auch am Satelliten-Rand (/ws/audio):
 # der Cosine-Identify-Service läuft damit an ALLEN Audio-Rändern, nicht nur /api/v1/voice.
 # Gedächtnis wird NUR bei echt erkanntem Sprecher geschrieben (Client-Claims nie).
@@ -186,9 +189,11 @@ Environment=HOSHI_WS_SPEAKER_ENABLED=true
 # ergebnis-freie captures.jsonl-Meta-Zeile weg — Proben für den Offline-A/B-Runner
 # (tools/speaker-ab). ACHTUNG Privacy: rohes biometrisches Audio inkl. jedem
 # mitsprechenden Gast, kein Consent-Text. Nur für die Build-Week AN — danach wieder
-# LEEREN (Environment-Zeile entfernen/leer lassen), das ist Andis Betreiber-Call,
+# LEEREN (Environment-Zeile entfernen/leer lassen), das ist ein Betreiber-Call,
 # kein Dauerzustand. Leer = AUS = byte-neutral (kein Boolean-Flag, Pfad-Präsenz ist
-# der Schalter, s. PipelineConfig.speakerCaptureTee).
+# der Schalter, s. PipelineConfig.speakerCaptureTee). Solange Recognition OFF ist,
+# erreicht kein Audio die Tee; neue Proben entstehen erst nach einem separaten
+# Owner-Flip der Recognition.
 Environment=HOSHI_SPEAKER_CAPTURE_DIR=/var/lib/hoshi-0.8/speaker-captures
 # 🧠 Serverseitige Gesprächs-Session (räumliches Gedächtnis): Turns ohne Client-History
 # (Satellit!) bekommen serverseitigen Verlauf pro erkanntem Sprecher — die Website

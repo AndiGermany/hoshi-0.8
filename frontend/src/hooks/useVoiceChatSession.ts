@@ -9,8 +9,11 @@ import { playTurnEarcon } from '../audio/earcon';
 import { voiceTurnUploadBlob } from '../audio/wav';
 import { VoiceRecorder, VoiceRecorderError } from '../audio/recorder';
 import { emaLevel } from '../audio/level';
+import { newVadState, vadStep, type VadState } from '../audio/vad';
 import { gammaLevel } from '../audio/motionTokens';
 import { anatomyOnEvent, emptyAnatomy, type TurnAnatomyState } from '../components/TurnAnatomy';
+import { useUiStrings } from '../i18n';
+import { de } from '../i18n/de';
 
 /**
  * **useVoiceChatSession** — die EINE Quelle des Chat-/Sprach-Zustands, aus
@@ -147,7 +150,7 @@ export function fmtTime(totalSec: number): string {
 export const SLOW_TURN_MS = 8000;
 
 /** Die Ehrlichkeits-Zeile für lange Turns — warm, kein Alarm. */
-export const SLOW_TURN_TEXT = 'dauert grad länger als sonst — ich bin dran.';
+export const SLOW_TURN_TEXT = de.voiceChat.slowTurn;
 
 /**
  * Sicherheitsnetz für den „spricht"-Zustand (Andi-Befund 20.07 ~23:35: nach
@@ -219,6 +222,7 @@ export function useVoiceChatSession({
   language,
   voice,
 }: VoiceChatSessionArgs): VoiceChatSession {
+  const { voiceChat } = useUiStrings();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   // Dynamische Sprecher-Identität (S3): steuert `speakerContext.speakerId` für
@@ -454,7 +458,7 @@ export function useVoiceChatSession({
         case 'error':
           patchAssistant((p) =>
             withAnatomy(
-              { ...p, error: true, meta: `Fehler · ${ev.stage ?? 'LLM'}`, text: p.text || ev.message },
+              { ...p, error: true, meta: voiceChat.errorStage(ev.stage ?? 'LLM'), text: p.text || ev.message },
               ev,
             ),
           );
@@ -490,7 +494,7 @@ export function useVoiceChatSession({
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      patchAssistant((p) => ({ ...p, error: true, meta: 'Verbindung', text: p.text || message }));
+      patchAssistant((p) => ({ ...p, error: true, meta: voiceChat.connection, text: p.text || message }));
     } finally {
       setBusy(false);
       clearTurnFeedback();
@@ -518,6 +522,22 @@ export function useVoiceChatSession({
     setMic('idle');
   };
 
+  // ── „Es kommt kein Ton mehr" (VAD) ───────────────────────────────────────
+  // Der Satellit beendet seine Aufnahme selbst; im Browser musste man bis heute
+  // tippen. Die Zustandsmaschine lebt rein in audio/vad.ts, hier hängt sie nur am
+  // ECHTEN Pegel (nicht am geglätteten Anzeige-Pegel — Glättung verschleppt die
+  // Stille). Notausgang ohne Rebuild: `localStorage.hoshiVad = 'off'` in der
+  // Browser-Konsole ⇒ wieder rein manuell, ab dem nächsten Aufnahme-Start.
+  const vadRef = useRef<VadState | null>(null);
+  const stopAndSendRef = useRef<() => void>(() => {});
+  const vadEnabled = () => {
+    try {
+      return localStorage.getItem('hoshiVad') !== 'off';
+    } catch {
+      return true; // kein localStorage (privater Modus o.ä.) ⇒ Default an
+    }
+  };
+
   const startRecording = async () => {
     setMicError(null);
     queue.stop();
@@ -526,10 +546,18 @@ export function useVoiceChatSession({
 
     displayLevelRef.current = 0;
     resetLevel(); // leerer Verlauf zum Aufnahme-Start
+    vadRef.current = vadEnabled() ? newVadState(performance.now()) : null;
     const rec = new VoiceRecorder({
       onLevel: (raw) => {
         displayLevelRef.current = emaLevel(displayLevelRef.current, gammaLevel(raw));
         pushLevel(displayLevelRef.current);
+
+        const vad = vadRef.current;
+        if (!vad || micStateRef.current !== 'listening') return;
+        if (vadStep(vad, raw, performance.now())) {
+          vadRef.current = null; // genau EINMAL auslösen
+          stopAndSendRef.current();
+        }
       },
     });
     recorderRef.current = rec;
@@ -549,6 +577,7 @@ export function useVoiceChatSession({
     const rec = recorderRef.current;
     if (!rec || micStateRef.current !== 'listening') return;
     recorderRef.current = null;
+    vadRef.current = null; // manueller Stopp gewinnt: keine späte Auto-Auslösung
     displayLevelRef.current = 0;
     resetLevel();
     setMic('transcribing');
@@ -564,11 +593,12 @@ export function useVoiceChatSession({
     }
     if (blob.size === 0) {
       setMic('idle');
-      setMicError('Ich habe nichts gehört — halt das Mikro gedrückt und sprich.');
+      setMicError(voiceChat.noAudioHeard);
       return;
     }
     await runVoiceTurn(await voiceTurnUploadBlob(blob));
   };
+  stopAndSendRef.current = () => { void stopAndSend(); };
 
   /** Lädt die Aufnahme hoch und rendert den SSE-Strom (Transkript → Antwort). */
   const runVoiceTurn = async (blob: Blob) => {
@@ -636,7 +666,7 @@ export function useVoiceChatSession({
         case 'error':
           patchAssistant((p) =>
             withAnatomy(
-              { ...p, error: true, meta: `Fehler · ${ev.stage ?? 'STT'}`, text: p.text || ev.message },
+              { ...p, error: true, meta: voiceChat.errorStage(ev.stage ?? 'STT'), text: p.text || ev.message },
               ev,
             ),
           );
@@ -663,7 +693,7 @@ export function useVoiceChatSession({
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
         const message = err instanceof Error ? err.message : String(err);
-        patchAssistant((p) => ({ ...p, error: true, meta: 'Verbindung', text: p.text || message }));
+        patchAssistant((p) => ({ ...p, error: true, meta: voiceChat.connection, text: p.text || message }));
       }
     } finally {
       patchUser((p) => (p.pending ? { ...p, pending: false, text: p.text || '…' } : p));

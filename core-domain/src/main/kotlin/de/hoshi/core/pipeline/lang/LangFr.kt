@@ -67,5 +67,9 @@ object LangFr {
         promptLanguageInstruction = "Réponds TOUJOURS en français.",
         smartHomeNotice = "Commandes domotiques : uniquement en allemand pour l'instant.",
         sayVoiceHint = "Thomas",
+        // Kein Piper-Modell fuer Franzoesisch vorhanden (nur DE+EN sind
+        // lizenzgeprueft gepinnt) — bewusst null statt geraten, s.
+        // LanguagePack.piperVoiceHint-KDoc.
+        piperVoiceHint = null,
     )
 }

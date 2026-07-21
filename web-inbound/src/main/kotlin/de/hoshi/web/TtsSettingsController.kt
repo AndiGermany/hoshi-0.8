@@ -43,8 +43,8 @@ import reactor.core.publisher.Mono
  * [LanguageSettingsController]s Sprachwechsel-PUT, s. [TtsVoiceResolver]): ein
  * PUT OHNE `voice` wendet nicht mehr blind die zuletzt gemerkte Engine-Stimme
  * an, sondern die für (Engine, AKTUELL AKTIVE Sprache) resolvierte — eine
- * explizite Wahl GENAU für dieses Paar, sonst (nur `say`) der
- * `sayVoiceHint` der aktiven Sprache, sonst der bisherige Default. `stimmen`
+ * explizite Wahl GENAU für dieses Paar, sonst der `say`/`piper`-Sprach-Hint
+ * der aktiven Engine (s. [TtsVoiceResolver]-KDoc), sonst der bisherige Default. `stimmen`
  * (GET, via [TtsVoiceCatalog]) listet bei nicht-deutscher aktiver Sprache die
  * sprach-passenden Stimmen zuerst. **Persistiert** wird dabei NUR eine
  * WIRKLICH explizite `voice` aus dem PUT-Body — ein automatisch resolvierter
@@ -106,8 +106,8 @@ class TtsSettingsController(
                 }
             } else {
                 // Kein Stimm-Wunsch in diesem PUT — NICHTS Neues persistieren, aber sprachbewusst
-                // bauen: eine ZUVOR gemerkte Wahl für (id, aktive Sprache), sonst (nur say) der
-                // Sprach-Hint, sonst der bisherige Default (TtsVoiceResolver, s. Klassen-KDoc).
+                // bauen: eine ZUVOR gemerkte Wahl für (id, aktive Sprache), sonst der
+                // say/piper-Sprach-Hint, sonst der bisherige Default (TtsVoiceResolver, s. Klassen-KDoc).
                 applyAndRespond(id, persistVoice = null, buildVoice = TtsVoiceResolver.resolveVoice(id, activeLanguage(), store))
             }
         }

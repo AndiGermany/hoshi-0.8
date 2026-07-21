@@ -12,11 +12,12 @@ package de.hoshi.core.dto
  * **Sprachpaket-Kern (2026-07-20, Andi-Auftrag „DE/EN/ES/FR/IT wählbar"):** ES/FR/IT
  * kommen NEU dazu — Konversations-Schicht (Prompt/Deflect/Consent/Lookup-Filler),
  * Smart-Home-/Timer-Reflexe bleiben BEWUSST Deutsch (s. `LanguagePack.smartHomeNotice`).
- * ES/FR/IT sind strukturell fertig, ihre eigentlichen Phrasen-Pools sind aber
- * NOCH EN-Fallback (s. `de.hoshi.core.pipeline.lang.LangEs/LangFr/LangIt` TODO-Marker)
- * — ein Übersetzer-Pod füllt sie, ohne dieses Enum oder ResponseFormatter erneut
- * anzufassen. Jedes bestehende exhaustive `when(language)` OHNE `else` zwingt den
- * Compiler dazu, JEDE neue Sprache bewusst zu behandeln (s. `Language.deOr`).
+ * ES/FR/IT sind strukturell UND inhaltlich fertig: der Übersetzer-Pod (Commit
+ * 17363ef) hat echte Phrasen-Pools geliefert, kein EN-Fallback mehr (s.
+ * `de.hoshi.core.pipeline.lang.LangEs/LangFr/LangIt`). Jedes bestehende exhaustive
+ * `when(language)` OHNE `else` zwingt den Compiler dazu, JEDE neue Sprache bewusst
+ * zu behandeln (s. `Language.deOr`, das weiterhin ehrlich EN-Fallback für die paar
+ * Bausteine AUSSERHALB des LanguagePack-Kerns dokumentiert).
  *
  * Querschnitts-Design: [[tracks/MULTILINGUAL]].
  */

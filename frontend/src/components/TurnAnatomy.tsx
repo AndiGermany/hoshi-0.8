@@ -1,5 +1,8 @@
 import type { ChatEvent, RecognizedSpeaker } from '../api/types';
 import { CloudGlyph, LockGlyph } from './icons';
+import { useUiStrings } from '../i18n';
+import { de } from '../i18n/de';
+import type { TurnAnatomyStrings } from '../i18n/types';
 
 /**
  * **§4 Turn-Anatomie** (Cowork-Aoi-Spec 20260702-2201): die Denk-Stufen-Zeile
@@ -125,24 +128,24 @@ export interface TurnStage {
  * Pipeline-Reihenfolge (so treffen die Events auch ein). Jede gerenderte
  * Stufe IST passiert; nichts wird vorab versprochen.
  */
-export function turnStages(a: TurnAnatomyState): TurnStage[] {
+export function turnStages(a: TurnAnatomyState, t: TurnAnatomyStrings = de.turnAnatomy): TurnStage[] {
   const items: TurnStage[] = [];
-  if (a.kind === 'voice' && a.heard) items.push({ key: 'heard', label: 'gehört' });
+  if (a.kind === 'voice' && a.heard) items.push({ key: 'heard', label: t.heard });
   if (a.speaker) {
     // Vera-Regel sichtbar: unter der Schwelle NIE ein geratener Name.
-    const wer = !a.speaker.isGuest && a.speaker.name ? a.speaker.name : 'Gast';
-    items.push({ key: 'speaker', label: `erkannt: ${wer}` });
+    const wer = !a.speaker.isGuest && a.speaker.name ? a.speaker.name : t.guest;
+    items.push({ key: 'speaker', label: t.recognized(wer) });
   }
-  if (a.understood) items.push({ key: 'understood', label: 'verstanden' });
+  if (a.understood) items.push({ key: 'understood', label: t.understood });
   if (a.route) {
     items.push({
       key: 'route',
-      label: 'Weg gewählt',
+      label: t.route,
       title: `${a.route.provider} · ${a.route.model} · ${a.route.category}`,
     });
   }
-  if (a.answering) items.push({ key: 'answering', label: 'antwortet' });
-  if (a.speaking) items.push({ key: 'speaking', label: 'spricht' });
+  if (a.answering) items.push({ key: 'answering', label: t.answering });
+  if (a.speaking) items.push({ key: 'speaking', label: t.speaking });
   if (a.errorStage) items.push({ key: 'error', label: a.errorStage, failed: true });
   return items;
 }
@@ -170,10 +173,11 @@ export function providerChipText(provider: string): string {
  * keine Stufe passiert ist (Text-Turn vor `start`).
  */
 export function TurnStagesRow({ anatomy }: { anatomy: TurnAnatomyState }) {
-  const stages = turnStages(anatomy);
+  const { turnAnatomy } = useUiStrings();
+  const stages = turnStages(anatomy, turnAnatomy);
   if (stages.length === 0) return null;
   return (
-    <ol className="turnstages" aria-label="Was dieser Turn wirklich getan hat">
+    <ol className="turnstages" aria-label={turnAnatomy.rowLabel}>
       {stages.map((s) => (
         <li
           key={s.key}

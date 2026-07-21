@@ -50,6 +50,8 @@ class LanguagePackRegistryTest {
         )
         assertEquals("Antworte IMMER auf Deutsch.", de.promptLanguageInstruction)
         assertNull(de.smartHomeNotice, "Deutsch selbst braucht keinen Smart-Home-Hinweis")
+        assertNull(de.sayVoiceHint, "DE braucht keinen say-Stimm-Hinweis (Boot-Default ist schon deutsch)")
+        assertNull(de.piperVoiceHint, "DE braucht keinen piper-Stimm-Hinweis (Boot-Default ist schon deutsch)")
     }
 
     @Test
@@ -70,6 +72,23 @@ class LanguagePackRegistryTest {
         assertTrue(en.smartHomeNotice!!.contains("German"), "EN-Hinweis muss ehrlich auf Deutsch verweisen")
         for (phrase in en.cloudConsentAsk) {
             assertTrue(phrase.contains("?"), "cloudConsentAsk soll als Frage erkennbar sein: '$phrase'")
+        }
+        assertEquals("Samantha", en.sayVoiceHint)
+        assertEquals(
+            "en_US-kristin-medium",
+            en.piperVoiceHint,
+            "EN ist die einzige Sprache mit einem handverifizierten Piper-Modell (s. artifacts.lock.json)",
+        )
+    }
+
+    @Test
+    fun `ES-FR-IT haben bewusst KEINEN piperVoiceHint - kein Piper-Modell vorhanden, nichts geraten`() {
+        for (pack in listOf(LangEs.PACK, LangFr.PACK, LangIt.PACK)) {
+            assertNull(
+                pack.piperVoiceHint,
+                "${pack.language}: kein Piper-Modell installiert ⇒ piperVoiceHint bleibt null (nicht geraten)",
+            )
+            assertTrue(!pack.sayVoiceHint.isNullOrBlank(), "${pack.language}: say hat trotzdem eine echte macOS-Stimme")
         }
     }
 

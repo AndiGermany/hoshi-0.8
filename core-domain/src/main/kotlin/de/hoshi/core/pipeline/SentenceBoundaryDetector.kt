@@ -42,6 +42,15 @@ object SentenceBoundaryDetector {
                 if (next == null) return -1 // Streaming-Race: Folgetext abwarten
                 if (next.isLetter()) continue // Ordinal ("1. Juli") -> keine Grenze
             }
+            // WORT-INNEN ist NIE ein Satzende (Andi-Befund 21.07 abends): eine URL
+            // steckt voller Satzzeichen — „rockstargames.com" hat einen Punkt,
+            // „https://" einen Doppelpunkt, „?utm_source=" ein Fragezeichen. Ohne
+            // diese Regel zerlegt der Puffer eine Quellenangabe in Bruchstücke, und
+            // der TTS-Sanitizer sieht nur noch Fragmente, auf die keine Regel passt
+            // ⇒ die halbe URL wird vorgelesen. Ein ECHTES Satzende trägt hinter sich
+            // Leerraum oder das Puffer-Ende. Nebeneffekt, erwünscht: auch Uhrzeiten
+            // („20:15") und Dezimalzahlen werden nicht mehr mitten entzweigeschnitten.
+            if (i + 1 < text.length && !text[i + 1].isWhitespace()) continue
             return i
         }
         return -1

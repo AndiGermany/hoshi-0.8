@@ -58,6 +58,21 @@ data class LanguagePack(
      * Empfehlung (z.B. DE: die Boot-Default-Stimme ist ohnehin schon deutsch).
      */
     val sayVoiceHint: String?,
+
+    /**
+     * Piper-Stimmen-ID-HINWEIS (Andi-Auftrag 21.07 Nachtrag „TTS soll auf
+     * Englisch umschwenken", Build-Week-Video): GENUTZT von
+     * [de.hoshi.web.TtsVoiceResolver] genau wie [sayVoiceHint], NUR ehrlich
+     * begrenzt auf Sprachen, für die tatsächlich ein handverifiziertes,
+     * lizenzgeprüftes Piper-Modell existiert (s.
+     * `sidecars/piper/artifacts.lock.json`) — aktuell NUR Englisch
+     * (`en_US-kristin-medium`). `null` für DE (die Boot-Default-Stimme
+     * `de_DE-thorsten-medium` ist ohnehin schon deutsch) UND für ES/FR/IT
+     * (es gibt dafür schlicht kein Piper-Modell — ein geratener Hint wäre
+     * unehrlich, s. [de.hoshi.web.TtsVoiceResolver]-KDoc: NIE Spanisch/
+     * Französisch/Italienisch mit einer erfundenen Stimmen-ID vortäuschen).
+     */
+    val piperVoiceHint: String?,
 )
 
 /**
@@ -70,9 +85,11 @@ data class LanguagePack(
  * jede Nuance einzeln Negativ-getestet) — ein Recognizer, der pro aktiver Sprache
  * SEINE Muster aus hier neu zusammenbaut, würde dieses fein kalibrierte Regelwerk
  * ohne Not verdoppeln/riskieren. Dieses Feld hält fest, WAS je Sprache abgedeckt
- * ist (für FE-Hinweise/Reports) und markiert ES/FR/IT ehrlich als TODO — ein
- * Folge-Pod liefert dort eigene, negativ-getestete Muster (s. PREP-multilingual.md
- * „Reflex-Qualität steht und fällt mit den Mustern — halbgar schadet").
+ * ist (für FE-Hinweise/Reports); ES/FR/IT sind seit Commit 17363ef mit echten
+ * dokumentarischen Signalwörtern gefüllt (kein TODO mehr, s. `status`) — der Ausbau
+ * zu eigenen, negativ-getesteten Recognizer-MUSTERN bleibt bewusst Post-Build-Week
+ * (s. PREP-multilingual.md „Reflex-Qualität steht und fällt mit den Mustern —
+ * halbgar schadet").
  */
 data class IntentPatternNotes(
     val lookupVerbs: List<String> = emptyList(),
@@ -125,11 +142,13 @@ data class SmartHomeAckPack(
 /**
  * **Die EINE Fallback-Regel** für Deterministik-Bausteine, die (noch) nur eigene
  * DE+EN-Inhalte haben (TurnOrchestrator-Fallbacks, FactCoverageGate-Deflect,
- * AmbientWarmth, OpenAiEscalationAdapter-System-Prompt): ES/FR/IT fallen auf [en]
- * zurück, bis ein Übersetzer-Pod eigene Strings liefert — s. [LangEs]/[LangFr]/
- * [LangIt] TODO-Marker. NUR [Language.DE] bekommt [de] — jede andere Sprache
- * (EN eingeschlossen) bekommt [en]. Für DE/EN byte-identisch zum vorherigen
- * `when(language){DE->..;EN->..}`; für ES/FR/IT NEU (vorher gar nicht kompilierbar).
+ * AmbientWarmth, OpenAiEscalationAdapter-System-Prompt): ES/FR/IT fallen für GENAU
+ * diese vier Bausteine auf [en] zurück, bis ein Folge-Pod eigene Strings liefert —
+ * unabhängig davon, dass [LangEs]/[LangFr]/[LangIt] selbst längst echte, übersetzte
+ * LanguagePack-Pools tragen (Commit 17363ef, keine TODO-Marker mehr dort). NUR
+ * [Language.DE] bekommt [de] — jede andere Sprache (EN eingeschlossen) bekommt
+ * [en]. Für DE/EN byte-identisch zum vorherigen `when(language){DE->..;EN->..}`;
+ * für ES/FR/IT NEU (vorher gar nicht kompilierbar).
  */
 fun <T> Language.deOr(de: T, en: T): T = if (this == Language.DE) de else en
 

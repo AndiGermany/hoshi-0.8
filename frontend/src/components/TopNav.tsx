@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OpsStatusPillLive } from './OpsStatusPill';
 import { CrewOverlayLive } from './CrewOverlay';
 import { GearGlyph } from './icons';
+import { useUiStrings } from '../i18n';
 
 export type Tab = 'overview' | 'rooms' | 'activity' | 'chat';
 
@@ -17,13 +18,13 @@ interface Props {
  * die Landing (App.tsx defaultet `tab` weiter auf 'overview'); Chat folgt
  * direkt danach, weil der neue Home-Orb (VoiceOrb) den schnellen Sprach-Weg
  * abdeckt und Chat jetzt der zweite, nicht mehr der letzte Reiter ist.
+ *
+ * Die Labels selbst kommen aus `useUiStrings().topNav` (Video-Tag-Befund
+ * 21.07: die Reiter riefen den Hook bisher NICHT auf und blieben deutsch,
+ * egal welche Sprache aktiv war) — darum baut {@link TopNav} das Array jetzt
+ * INNERHALB der Komponente, die `id`-Schlüssel (Programmier-Werte) bleiben
+ * unverändert.
  */
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'overview', label: 'Übersicht' },
-  { id: 'chat', label: 'Chat' },
-  { id: 'rooms', label: 'Räume' },
-  { id: 'activity', label: 'Aktivität' },
-];
 
 /** 7× auf das 星 (leise Marke links vor dem Wortmark) in diesem Fenster öffnet die Crew. */
 const TAP_WINDOW_MS = 3000;
@@ -45,6 +46,16 @@ const KONAMI: readonly string[] = [
 
 /** Schlanke status-first Top-Nav: Übersicht / Räume / Aktivität / Chat + Health-Badge. */
 export function TopNav({ tab, onTab, onOpenSettings }: Props) {
+  const { topNav } = useUiStrings();
+  const TABS: { id: Tab; label: string }[] = useMemo(
+    () => [
+      { id: 'overview', label: topNav.overview },
+      { id: 'chat', label: topNav.chat },
+      { id: 'rooms', label: topNav.rooms },
+      { id: 'activity', label: topNav.activity },
+    ],
+    [topNav],
+  );
   const [crewOpen, setCrewOpen] = useState(false);
   // Tap-Zähler aufs 星 (Refs → kein Re-Render pro Klick, kein Timer-Leak).
   const tapsRef = useRef(0);
@@ -113,7 +124,7 @@ export function TopNav({ tab, onTab, onOpenSettings }: Props) {
           <span className="nav__ver">0.8 · Nagareboshi</span>
         </div>
 
-        <nav className="nav__tabs" aria-label="Hauptnavigation">
+        <nav className="nav__tabs" aria-label={topNav.mainNav}>
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -141,8 +152,8 @@ export function TopNav({ tab, onTab, onOpenSettings }: Props) {
             type="button"
             className="nav__settings"
             onClick={onOpenSettings}
-            aria-label="Einstellungen öffnen"
-            title="Einstellungen"
+            aria-label={topNav.openSettingsAria}
+            title={topNav.settingsTitle}
           >
             <GearGlyph className="nav__settingsicon" />
           </button>

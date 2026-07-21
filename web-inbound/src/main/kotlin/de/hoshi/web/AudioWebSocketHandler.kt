@@ -3,6 +3,7 @@ package de.hoshi.web
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import de.hoshi.core.dto.ChatEvent
+import de.hoshi.core.dto.ChatMessage
 import de.hoshi.core.dto.ChatRequest
 import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.Persona
@@ -242,6 +243,30 @@ class AudioWebSocketHandler(
     // für die Downlink-Registrierung ([registerDevice]) und das saubere Aufräumen
     // in [closeSession] (Muster [speakers]/[languages]).
     private val satelliteIds = ConcurrentHashMap<String, String>()
+    /**
+     * **Gesprächsverlauf je ws-Session (Andi-Befund 2026-07-21, "Coldplay"-Bug):**
+     * Folgefragen über den Satelliten verloren ihren Bezug, weil der [ChatRequest]
+     * am ws-Rand OHNE [ChatRequest.history] gebaut wurde — jeder Sprach-Turn war
+     * strukturell ein Einzelgespräch, unabhängig davon, was der Nutzer gerade eben
+     * gesagt hatte (derselbe Zwei-Turn-Dialog über den Chat-Rand MIT History
+     * funktioniert). Diese Map hält die letzten Nachrichten (abwechselnd
+     * user/assistant, ältester zuerst) GENAU für die Dauer der WS-Session — Muster
+     * [speakers]/[languages]: sessionId-gekeyt, in [openSession] angelegt, in
+     * [closeSession] entfernt (kein Leck zwischen Sessions/Satelliten). Bewusst
+     * GETRENNT von der personen-gekeyten [de.hoshi.core.port.WorkingSessionPort]
+     * (S1+S2, `TurnOrchestrator.effectiveSession`): diese Map braucht KEINE
+     * Sprecher-Erkennung — sie greift für JEDE Session, auch Gast/unerkannt — und
+     * gewinnt ohnehin nichts über einen NICHT-leeren [ChatRequest.history] (der
+     * Orchestrator nimmt Client-history immer vorrangig).
+     *
+     * Gefüllt NUR nach einem ERFOLGREICH abgeschlossenen Turn ([appendHistoryAfter]);
+     * Deckel auf [MAX_HISTORY_MESSAGES] (Schutz gegen unbegrenztes Wachsen im
+     * Speicher — die fachliche Fensterung übernimmt weiterhin
+     * `HOSHI_MEMORY_WINDOW_TURNS` im `TurnPromptAssembler`). Leer ⇒ [ChatRequest]
+     * trägt `history = emptyList()`, byte-identisch zum bisherigen Verhalten
+     * (Regressionsgrenze: der ERSTE Turn einer Session bleibt unverändert).
+     */
+    private val conversationHistories = ConcurrentHashMap<String, List<ChatMessage>>()
     // internal (statt private): Test-Seam für die P1-Race-Regressionstests
     // (überlappender Turn / Terminate-Race), Muster [sinks]/[enforceSessionGuard].
     internal val activeTurns = ConcurrentHashMap<String, Disposable>()
@@ -304,6 +329,7 @@ class AudioWebSocketHandler(
         buffers[sessionId] = ByteArrayOutputStream()
         sinks[sessionId] = Sinks.many().unicast().onBackpressureBuffer()
         languages[sessionId] = defaultLanguage
+        conversationHistories[sessionId] = emptyList()
     }
 
     // internal (statt private): Test-Seam für die Downlink-Registry-Lifecycle-Tests
@@ -317,6 +343,7 @@ class AudioWebSocketHandler(
         speakers.remove(sessionId)
         languages.remove(sessionId)
         requestedPersonas.remove(sessionId)
+        conversationHistories.remove(sessionId)
         activeTurns.remove(sessionId)?.dispose()
         stopHandled.remove(sessionId)
         cappedSessions.remove(sessionId)
@@ -646,6 +673,11 @@ class AudioWebSocketHandler(
             // heute. Unabhängig vom Downlink-Push-Flag: dieselbe Session→Satellit-Kennung, die
             // [registerDevice] (falls scharf) auch in die Registry hängt.
             originSatelliteId = satelliteIds[sessionId],
+            // Session-Gedächtnis (Andi-Befund 2026-07-21, "Coldplay"-Bug): der bisher lückenlos
+            // leere Default hier war die WURZEL des Bugs — jeder Sprach-Turn kam ohne Bezug zum
+            // vorherigen an. Leer, solange kein Vorgänger-Turn erfolgreich abgeschlossen hat ⇒
+            // erster Turn einer Session ist BYTE-IDENTISCH zum bisherigen `emptyList()`-Default.
+            history = conversationHistories[sessionId] ?: emptyList(),
         )
         // S-D: Gedächtnis-Write NUR bei echt erkanntem Sprecher. [rememberAfter] umhüllt den
         // ORCHESTRATOR-Strom VOR der TtsStage (wie am Chat-Rand: es sammelt die Antwort-TextDelta
@@ -653,13 +685,18 @@ class AudioWebSocketHandler(
         // ⇒ kein Write ⇒ byte-neutral.
         val turnRaw = runTurn(request)
         val remembered = if (rememberSpeaker != null) rememberAfter(request, turnRaw) else turnRaw
+        // Session-Gedächtnis Fortsetzung: dieselbe Sammel-Technik wie [rememberAfter] (TextDelta
+        // einsammeln, NACH `onComplete` schreiben, kein zweiter Brain-Call) — hier ins ws-Session-
+        // history statt in die personen-gekeyten Stores, s. [appendHistoryAfter]-KDoc für die
+        // Fehler-/Abbruch-Grenzen.
+        val withHistory = appendHistoryAfter(sessionId, transcript, remembered)
         // Turn-Diary (#10): Tap um den ÄUSSERSTEN ChatEvent-Strom des WS-Turns (nach TtsStage),
         // source="ws" — dieselben Felder wie am Chat-/Voice-Rand. Privacy: chatId bewusst LEER —
         // die WS-sessionId ist eine Geräte-/Session-Kennung und gehört NICHT ins Diary. NOOP ⇒
         // Strom ungehüllt zurück ⇒ byte-neutral (exakt der heutige Pfad).
         return TurnDiaryTap.traced(
             turnTrace = turnTrace,
-            stream = ttsStage.transform(remembered, lang),
+            stream = ttsStage.transform(withHistory, lang),
             source = TurnDiaryTap.SOURCE_WS,
             chatId = "",
             persona = request.persona.name,
@@ -668,6 +705,54 @@ class AudioWebSocketHandler(
             // Perf-Diary: die am Rand gemessene STT-Dauer (Parameter-Naht des Taps).
             sttMs = sttMs,
         )
+    }
+
+    /**
+     * **Session-Gedächtnis-Sammel-Hook** (Andi-Befund 2026-07-21, "Coldplay"-Bug) — hängt
+     * ans Ende von [stream] GENAU wie [RememberAfter.rememberAfter]: sammelt die Antwort aus
+     * den [ChatEvent.TextDelta]-Events best-effort mit, KEIN zweiter Brain-Call, KEINE
+     * zusätzliche Latenz (reines `doOnNext`/`doOnComplete`, der Wire-Strom fließt unverändert
+     * durch jeden Subscriber).
+     *
+     * Schreibt NUR bei einem ERFOLGREICH abgeschlossenen Turn ins [conversationHistories]-
+     * Fenster dieser Session ([appendToHistory]):
+     *  - ein [ChatEvent.Error] irgendwo im Strom (never-silent-Fehlerpfad, der Turn läuft trotzdem
+     *    bis `onComplete` durch) setzt [failed] ⇒ `doOnComplete` hängt nichts an.
+     *  - ein echter Flux-Fehler (seltener "Stream-Fehler nach Subscribe"-Pfad in [onStop]) oder
+     *    ein Abbruch/`dispose()` (Barge-in/Overlap) lösen `onComplete` GAR NICHT aus (Reactor-
+     *    Vertrag: cancel/error sind eigene Terminalsignale) ⇒ ebenfalls nichts angehängt.
+     *  - leeres Transkript (`no_input`) ruft diese Methode gar nicht erst (der frühe Return in
+     *    [buildTurnStream] liegt VOR dem [ChatRequest]-Bau).
+     */
+    private fun appendHistoryAfter(sessionId: String, userText: String, stream: Flux<ChatEvent>): Flux<ChatEvent> {
+        val answer = StringBuilder()
+        val failed = java.util.concurrent.atomic.AtomicBoolean(false)
+        return stream
+            .doOnNext { ev ->
+                when (ev) {
+                    is ChatEvent.TextDelta -> answer.append(ev.text)
+                    is ChatEvent.Error -> failed.set(true)
+                    else -> {}
+                }
+            }
+            .doOnComplete {
+                if (!failed.get()) appendToHistory(sessionId, userText, answer.toString())
+            }
+    }
+
+    /**
+     * Hängt genau ein user/assistant-Paar ans Ende des Session-Verlaufs und kappt danach auf
+     * die letzten [MAX_HISTORY_MESSAGES] Nachrichten (Speicher-Schutz — die fachliche
+     * Fensterung fürs Brain-Prompt macht ohnehin `TurnPromptAssembler.windowHistory`).
+     * [ConcurrentHashMap.computeIfPresent]: ist der Eintrag zwischenzeitlich schon durch
+     * [closeSession] entfernt (Session ging genau zwischen Turn-Ende und diesem Callback zu),
+     * bleibt das Fehlen erhalten — KEIN Wiederauferstehen eines Eintrags für eine tote Session.
+     */
+    private fun appendToHistory(sessionId: String, userText: String, answerText: String) {
+        conversationHistories.computeIfPresent(sessionId) { _, existing ->
+            (existing + ChatMessage(role = "user", content = userText) + ChatMessage(role = "assistant", content = answerText))
+                .takeLast(MAX_HISTORY_MESSAGES)
+        }
     }
 
     /**
@@ -777,6 +862,15 @@ class AudioWebSocketHandler(
          * wirksam bei `audioCapEnabled` (Default OFF ⇒ kein Cap, byte-neutral).
          */
         const val DEFAULT_MAX_AUDIO_BYTES = 1_500_000
+
+        /**
+         * Obergrenze des Session-Gesprächsverlaufs ([conversationHistories]): 24 Nachrichten
+         * = 12 Turns (user+assistant je Turn) — deckt sich mit `HOSHI_MEMORY_WINDOW_TURNS=12`,
+         * das der `TurnPromptAssembler` ohnehin fensterte. Diese Grenze ist NUR der Schutz
+         * gegen unbegrenztes Wachsen im Speicher bei einer sehr langen Session, nicht die
+         * fachliche Fensterung fürs Brain-Prompt.
+         */
+        const val MAX_HISTORY_MESSAGES = 24
 
         /** Warme, ehrliche Absage beim Audio-Cap-Abbruch (stage=STT, never-silent). */
         const val AUDIO_CAP_MESSAGE =

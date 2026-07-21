@@ -1,0 +1,10 @@
+# sidecars/knowledge — lokale Wikipedia-FTS5-Bridge (:8035)
+#
+# Direkte Runtime-Dependencies, exakt aus dem echten 0.5-Quell-venv
+# (`pip freeze`, Python 3.14.6, 2026-07-21). Transitive Blaetter loest pip
+# innerhalb des isolierten Sidecar-venv. Keine Datenbank und kein Modell werden
+# durch pip geladen.
+fastapi==0.136.3
+pydantic==2.13.4
+uvicorn==0.49.0
+zstandard==0.25.0

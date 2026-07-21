@@ -2,11 +2,15 @@
 
 Hoshis Speaker-ID-Sidecar (CAM++-Embeddings via ONNX) — nimmt Audio entgegen
 und liefert ein 512-d Sprecher-Embedding bzw. eine Known/Uncertain/Guest-
-Entscheidung zurück. `server.py`/`embedder.py` sind ein 1:1-Umzug aus
-`Hoshi_0.5/hoshi-speaker-id/` — Embed-/Verify-/Decode-Flow unverändert. Bis
-zum bewiesenen Cutover (siehe unten) bleibt die 0.5-Kopie die laufende
-Wahrheit — dies hier ist der portierte, aber noch nicht produktiv geschaltete
-Nachbau.
+Entscheidung zurück. `server.py`/`embedder.py` entstanden als Port aus
+`Hoshi_0.5/hoshi-speaker-id/`; der Repo-Sidecar ist der gepflegte 0.8-Pfad,
+der 0.5-Run-Pfad bleibt als kompatibler Rückweg erhalten.
+
+Wichtig: Ein gesunder Sidecar beweist nur, dass Embedding/Verify erreichbar
+sind. Die nutzerseitige Sprechererkennung ist ein separates Backend-Flag und
+ist nach einem reproduzierten Cross-Bind derzeit **OFF**. Profile und Enroll-
+Rand können vorhanden sein, ohne dass Voice-Turns eine Identität zugewiesen
+bekommen.
 
 Bewusst **kein torch/funasr**: CAM++ läuft als ONNX (onnxruntime +
 kaldi-native-fbank), RSS ~100-130 MB steady-state — klein genug, dass Brain
@@ -55,9 +59,9 @@ Env-Variablen (`run.sh` + `server.py`):
 
 | Datei | Herkunft (Hoshi_0.5) |
 |---|---|
-| `server.py` | `hoshi-speaker-id/server.py` (1:1, Docstring-Pfadverweise + 1 Log-Meldung `setup.sh`→`bootstrap.sh`) |
-| `embedder.py` | `hoshi-speaker-id/embedder.py` (byte-identisch) |
-| `test_decode_audio.py` | `hoshi-speaker-id/test_decode_audio.py` (1:1, Docstring-Pfadverweise) — braucht das geladene Modell (Import von `server` lädt es). |
+| `server.py` | aus `hoshi-speaker-id/server.py` portiert und in 0.8 gepflegt |
+| `embedder.py` | aus `hoshi-speaker-id/embedder.py` portiert |
+| `test_decode_audio.py` | aus `hoshi-speaker-id/test_decode_audio.py` portiert — braucht das geladene Modell (Import von `server` lädt es). |
 | `requirements.txt` | `hoshi-speaker-id/requirements.txt`, ersetzt durch die vollen Kern-Pins aus dem echten 0.5-venv (`pip freeze`) |
 | `bootstrap.sh` | neu; venv-Teil nach `sidecars/brain/bootstrap.sh`-Muster, Modell-Download 1:1 aus `hoshi-speaker-id/setup.sh` (curl+Byte-Check+SHA256), Erwartungswerte jetzt aus `models.json` gelesen statt hart im Skript kopiert |
 | `run.sh` | neu, nach dem Muster aus `sidecars/brain/run.sh` |
@@ -67,16 +71,12 @@ Nicht portiert: `setup.sh` (durch `bootstrap.sh` ersetzt), `smoke_test.py`
 Verzeichnisses — in 0.8 nicht vorhanden; echte Adaption statt reinem Umzug,
 daher bewusst ausgelassen, kein Verlust an Kernfunktion).
 
-## Cutover-Status
+## Pfad-Auflösung und Cutover
 
-**Die 0.5-Kopie (`Hoshi_0.5/hoshi-speaker-id/server.py`, Port 9002) ist bis
-zum bewiesenen Cutover die laufende Wahrheit.** `pipeline/stack-lib.sh`/
-`pipeline/up.sh` starten den Speaker-ID-Sidecar heute noch über
-`$HOSHI_05_ROOT/tools/hoshi-speakerid-run.sh` — die Umstellung auf dieses
-Verzeichnis ist ein eigener, bewusster Schritt (Scheibe 4), nicht Teil dieses
-Ports. `models.json`s `speaker-campplus`-Eintrag behält deshalb `local_path`
-auf dem 0.5-Speicherort (der von `tools/models-verify.sh` geprüfte Live-Pfad)
-und trägt zusätzlich `sidecar_local_path` als Zeiger auf den neuen Ort — bis
-Scheibe 4 lauffähig cuttet, existiert das Modell an BEIDEN Orten unabhängig
-voneinander (zwei Downloads, kein Symlink). Bis dahin NICHT parallel zum
-laufenden 0.5-Speaker-ID starten (Port-Kollision auf 9002).
+`pipeline/up.sh` wählt den Repo-Sidecar automatisch, sobald dessen `.venv`
+existiert. Fehlt es, bleibt der 0.5-Run-Pfad als sichtbarer Rückweg;
+`HOSHI_SIDECARS_FROM_REPO=true|false` erzwingt eine Seite. `models.json`
+führt weiterhin beide Modellpfade. Der aktive Prozess ist am Start-Log/
+`doctor` zu prüfen; beide Varianten nie parallel starten (Port-Kollision auf
+9002). Ein Prozess-Cutover ändert das Recognition-Flag nicht und ist kein
+Freigabebeweis für Identitätszuweisung.

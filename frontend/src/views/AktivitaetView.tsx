@@ -4,6 +4,7 @@ import { useDiary, type DiaryTurn } from '../hooks/useDiary';
 import { aggregateToday, stageSegments, stageSparkSeries, STAGES } from '../components/stageStats';
 import { StageSparkline, isP95Elevated } from '../components/StageSparkline';
 import { MutedGlyph, WarnGlyph } from '../components/icons';
+import { useUiStrings } from '../i18n';
 
 /**
  * Aktivität — der verdichtete Feed des Zuhauses.
@@ -28,20 +29,14 @@ export interface HealthObservation {
   at: number;
 }
 
-const STATE_LABEL: Record<HealthState, string> = {
-  up: 'online',
-  down: 'offline',
-  unknown: 'wird geprüft',
-};
-
-function fmtTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString('de-DE');
+function fmtTime(ts: number, locale: string): string {
+  return new Date(ts).toLocaleTimeString(locale);
 }
 
 /** ISO-Zeitstempel → lokale Uhrzeit; Unlesbares ehrlich als „—" statt „Invalid Date". */
-function fmtTurnTime(iso: string): string {
+function fmtTurnTime(iso: string, locale: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('de-DE');
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString(locale);
 }
 
 /** ms-Wert → „420 ms"; null ehrlich als „—" (nie eine erfundene Zahl). */
@@ -55,6 +50,7 @@ function fmtMs(v: number | null): string {
  * heutige Messwerte zeigen ehrlich „—".
  */
 function StageSummary({ turns, now }: { turns: DiaryTurn[]; now: Date }) {
+  const { activity } = useUiStrings();
   const stats = aggregateToday(turns, now);
   return (
     <div className="tiles tiles--stages">
@@ -66,7 +62,7 @@ function StageSummary({ turns, now }: { turns: DiaryTurn[]; now: Date }) {
           <div className={`tile${live ? ' tile--live' : ' tile--pending'}`} key={key}>
             <div className="tile__head">
               <span className="tile__name">{label}</span>
-              <span className="tile__pill">{live ? `${s.n}×` : 'keine Daten'}</span>
+              <span className="tile__pill">{live ? `${s.n}×` : activity.noData}</span>
             </div>
             <div className="tile__value stagesum__value">
               <span>
@@ -100,22 +96,23 @@ function StageSummary({ turns, now }: { turns: DiaryTurn[]; now: Date }) {
  * Alt-Zeilen (ohne Stage-Keys) sagen ehrlich „keine Stage-Daten (vor 06.07.)".
  */
 function TurnStageDetail({ turn }: { turn: DiaryTurn }) {
+  const { activity } = useUiStrings();
   if (turn.stages === null) {
-    return <p className="stagebar__none">keine Stage-Daten (vor 06.07.)</p>;
+    return <p className="stagebar__none">{activity.noStageData}</p>;
   }
   const segments = stageSegments(turn);
   if (segments.length === 0) {
-    return <p className="stagebar__none">keine Stage-Werte in diesem Turn gemessen</p>;
+    return <p className="stagebar__none">{activity.noStageValues}</p>;
   }
   return (
     <div className="stagebar">
-      <div className="stagebar__track" role="img" aria-label="Stage-Zerlegung des Turns">
+      <div className="stagebar__track" role="img" aria-label={activity.stageBreakdown}>
         {segments.map((s) => (
           <span
             key={s.key}
             className={`stagebar__seg stagebar__seg--${s.key}`}
             style={{ width: `${s.widthPct}%` }}
-            title={`${s.label}: ${fmtMs(s.ms)}`}
+            title={`${s.key === 'rest' ? activity.rest : s.label}: ${fmtMs(s.ms)}`}
           />
         ))}
       </div>
@@ -124,7 +121,7 @@ function TurnStageDetail({ turn }: { turn: DiaryTurn }) {
           <div className="stagebar__item" key={s.key}>
             <dt>
               <span className={`stagebar__dot stagebar__seg--${s.key}`} aria-hidden="true" />
-              {s.label}
+              {s.key === 'rest' ? activity.rest : s.label}
             </dt>
             <dd>{fmtMs(s.ms)}</dd>
           </div>
@@ -136,7 +133,7 @@ function TurnStageDetail({ turn }: { turn: DiaryTurn }) {
           </div>
         )}
         <div className="stagebar__item stagebar__item--total" key="total">
-          <dt>gesamt</dt>
+          <dt>{activity.total}</dt>
           <dd>{fmtMs(turn.totalMs)}</dd>
         </div>
       </dl>
@@ -156,26 +153,25 @@ export interface AktivitaetViewProps {
 }
 
 export function AktivitaetView({ observations, turns, onRefresh, now }: AktivitaetViewProps) {
+  const { activity, locale } = useUiStrings();
+  const stateLabel: Record<HealthState, string> = {
+    up: activity.stateOnline,
+    down: activity.stateOffline,
+    unknown: activity.stateChecking,
+  };
   return (
     <section className="ueber">
       <header className="ueber__head">
-        <h1 className="ueber__title">Aktivität</h1>
-        <p className="ueber__lede">
-          Was zuletzt im Zuhause passiert ist — der Turn-Feed aus Hoshis Nutzungs-Diary
-          und der Health-Verlauf, beides echt.
-        </p>
+        <h1 className="ueber__title">{activity.title}</h1>
+        <p className="ueber__lede">{activity.lede}</p>
       </header>
 
       {/* Echt: heutige Stage-Latenzen (p50/p95), client-seitig aus dem Diary aggregiert. */}
-      <h2 className="ueber__sec">Stage-Latenzen heute</h2>
-      <p className="ueber__sechint">
-        p50/p95 je Pipeline-Stage, aus denselben Diary-Zeilen aggregiert (nur heutige
-        Turns; Turns ohne Messwert fallen aus der jeweiligen Stage heraus). „—" heißt
-        ehrlich: heute keine Messwerte.
-      </p>
+      <h2 className="ueber__sec">{activity.stageLatencyTitle}</h2>
+      <p className="ueber__sechint">{activity.stageLatencyHint}</p>
       {turns === null ? (
         <p className="feed__empty stagesum__unreachable">
-          Diary nicht erreichbar — keine Zusammenfassung ohne Daten.
+          {activity.diaryUnavailable}
         </p>
       ) : (
         <StageSummary turns={turns} now={now ?? new Date()} />
@@ -183,26 +179,22 @@ export function AktivitaetView({ observations, turns, onRefresh, now }: Aktivita
 
       {/* Echt seit dem Diary (#10): der Turn-Feed aus GET /api/v1/diary/recent. */}
       <h2 className="ueber__sec">
-        Turn-Feed
+        {activity.turnFeedTitle}
         {onRefresh && (
           <button type="button" className="feed__refresh" onClick={onRefresh}>
-            Aktualisieren
+            {activity.refresh}
           </button>
         )}
       </h2>
-      <p className="ueber__sechint">
-        Jede Zeile ist ein realer Turn aus deinem Tagesbuch (heute + gestern, neueste
-        zuerst). Geladen beim Öffnen und per „Aktualisieren" — kein Dauerpoll.
-      </p>
+      <p className="ueber__sechint">{activity.turnFeedHint}</p>
       <ol className="feed feed--turns" data-status={turns === null ? 'unreachable' : 'live'}>
         {turns === null ? (
           <li className="feed__empty">
-            Diary nicht erreichbar — hier steht nichts Erfundenes. „Aktualisieren" versucht
-            es erneut.
+            {activity.diaryUnavailableRetry}
           </li>
         ) : turns.length === 0 ? (
           <li className="feed__empty">
-            Noch kein Turn im Diary (heute + gestern) — leer ist ehrlich leer.
+            {activity.diaryEmpty}
           </li>
         ) : (
           turns.map((t, i) => (
@@ -210,15 +202,15 @@ export function AktivitaetView({ observations, turns, onRefresh, now }: Aktivita
               {/* Aufklappbar per <details> (kein JS-State): zu die Zeile, auf die Stage-Zerlegung. */}
               <details className="feed__details">
                 <summary className="feed__row feed__row--turn">
-                  <time className="feed__time">{fmtTurnTime(t.ts)}</time>
+                  <time className="feed__time">{fmtTurnTime(t.ts, locale)}</time>
                   <span className="feed__chip">{t.category || '—'}</span>
                   <span className="feed__persona">{t.persona || '—'}</span>
                   {t.deflected && (
                     <span
                       className="feed__flag feed__flag--deflected"
                       role="img"
-                      aria-label="deflected"
-                      title="Ehrliches „wusste ich nicht“ statt einer erfundenen Antwort"
+                      aria-label={activity.deflected}
+                      title={activity.deflectedTitle}
                     >
                       <MutedGlyph />
                     </span>
@@ -227,8 +219,8 @@ export function AktivitaetView({ observations, turns, onRefresh, now }: Aktivita
                     <span
                       className="feed__flag feed__flag--error"
                       role="img"
-                      aria-label="Fehler"
-                      title={`Fehler-Stage: ${t.error}`}
+                      aria-label={activity.error}
+                      title={activity.errorStage(t.error)}
                     >
                       <WarnGlyph />
                     </span>
@@ -241,33 +233,24 @@ export function AktivitaetView({ observations, turns, onRefresh, now }: Aktivita
           ))
         )}
       </ol>
-      <p className="feed__privacy">
-        Privacy by Design: das Diary trägt bewusst keine Gesprächs-Inhalte — nur Zeitpunkt,
-        Kategorie, Persona und Messwerte. Darum steht hier auch kein Text der Turns.
-        Jede Zeile lässt sich aufklappen und zeigt die Stage-Zerlegung
-        (stt → grounding → brain → tts, Rest = sonstiges).
-      </p>
+      <p className="feed__privacy">{activity.privacy}</p>
 
       {/* Echt: der Health-Verlauf aus GET /api/health. */}
-      <h2 className="ueber__sec">Health-Verlauf</h2>
-      <p className="ueber__sechint">
-        Jede Zeile ist eine reale Beobachtung des Verbindungsstatus. Aufgezeichnet werden
-        Zustands­wechsel, neueste zuerst.
-      </p>
+      <h2 className="ueber__sec">{activity.healthTitle}</h2>
+      <p className="ueber__sechint">{activity.healthHint}</p>
       <ol className="feed" data-status="live">
         {observations.length === 0 ? (
           <li className="feed__empty">
-            Noch keine Beobachtung — die erste Health-Antwort steht aus. (Kein erfundener
-            Verlauf.)
+            {activity.noObservation}
           </li>
         ) : (
           observations.map((o, i) => (
             <li className={`feed__row feed__row--${o.state}`} key={`${o.at}-${i}`}>
               <span className="feed__dot" aria-hidden="true" />
               <span className="feed__what">
-                Backend {STATE_LABEL[o.state]}
+                {activity.backendState(stateLabel[o.state])}
               </span>
-              <time className="feed__when">{fmtTime(o.at)}</time>
+              <time className="feed__when">{fmtTime(o.at, locale)}</time>
             </li>
           ))
         )}

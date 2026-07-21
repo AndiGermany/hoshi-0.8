@@ -143,7 +143,7 @@ class SpeakerIdentifyServiceTest {
 
 /**
  * Abstands-Regel (Vera, nach Live-Fehl-Zuordnung 2026-07-07: Andis Stimme traf
- * Cindys 1-Sample-Profil mit 0.564 und wurde FALSCH gebunden): bei mehreren
+ * Person Bs 1-Sample-Profil mit 0.564 und wurde FALSCH gebunden): bei mehreren
  * Profilen bindet der Service nur, wenn der beste den zweiten klar schlägt.
  */
 class SpeakerIdentifyMarginTest {
@@ -163,7 +163,7 @@ class SpeakerIdentifyMarginTest {
 
     @org.junit.jupiter.api.Test
     fun `mehrdeutiger Sieg (Paar-Stimmen im Graubereich) wird Gast, nie raten`() {
-        val store = storeWith("Cindy" to 2f, "andi" to 3f)
+        val store = storeWith("person-b" to 2f, "andi" to 3f)
         val svc = CosineSpeakerIdentifyService(
             embedPort = fakeEmbed(mapOf(2f to 0.564, 3f to 0.52)),
             store = store, threshold = 0.45, margin = 0.10,
@@ -175,7 +175,7 @@ class SpeakerIdentifyMarginTest {
 
     @org.junit.jupiter.api.Test
     fun `eindeutiger Sieg bindet weiterhin`() {
-        val store = storeWith("Cindy" to 2f, "andi" to 3f)
+        val store = storeWith("person-b" to 2f, "andi" to 3f)
         val svc = CosineSpeakerIdentifyService(
             embedPort = fakeEmbed(mapOf(2f to 0.30, 3f to 0.58)),
             store = store, threshold = 0.45, margin = 0.10,
@@ -195,7 +195,7 @@ class SpeakerIdentifyMarginTest {
 }
 
 /**
- * Best-of-Sample-Matching (Vera, nach Cindy-Anomalie 07.07: ihr eigener Bestscore lag nur bei
+ * Best-of-Sample-Matching (Vera, nach Person-B-Anomalie 07.07: ihr eigener Bestscore lag nur bei
  * 0.27..0.34 gegen das renormalisierte Profil-Mittel): der Score eines Profils ist der MAX
  * Cosine ueber dessen einzelne rohe Samples, nicht der Cosine gegen das verwaschene Mittel.
  */
@@ -325,9 +325,219 @@ class SpeakerIdentifyCentroidTest {
     fun `Config-Parser akzeptiert nur dokumentierte Strategien`() {
         assertEquals(SpeakerProfileAggregation.BEST_SAMPLE, SpeakerProfileAggregation.parse("best-sample"))
         assertEquals(SpeakerProfileAggregation.BEST_SAMPLE, SpeakerProfileAggregation.parse("BEST_SAMPLE"))
+        assertEquals(SpeakerProfileAggregation.TOP_TWO_MEAN, SpeakerProfileAggregation.parse("top_two_mean"))
         assertEquals(SpeakerProfileAggregation.CENTROID, SpeakerProfileAggregation.parse(" centroid "))
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException::class.java) {
             SpeakerProfileAggregation.parse("maximum")
+        }
+    }
+}
+
+/**
+ * TOP_TWO_MEAN ist ein opt-in Offline-Kandidat fuer Multi-Sample-Profile: ein einzelner
+ * hoher Sample-Ausreisser darf nicht allein die Identitaet bestimmen. Der Default bleibt
+ * BEST_SAMPLE, bis echte Holdout-Daten die Alternative bestaetigen.
+ */
+class SpeakerIdentifyTopTwoMeanTest {
+
+    private fun storeAt(dir: Path) = SpeakerProfileStore(dir.resolve("profiles.json"))
+
+    private fun keyedPort(scores: Map<Float, Double>) = object : SpeakerEmbedPort {
+        override fun embed(audioBytes: ByteArray, mime: String): FloatArray = floatArrayOf(99f)
+        override fun similarity(a: FloatArray, b: FloatArray): Double =
+            scores[b[0]] ?: error("unerwarteter Sample-Key ${b[0]}")
+    }
+
+    @Test
+    fun `Top-Two-Mittel nutzt die zwei hoechsten Sample-Scores`(@TempDir dir: Path) {
+        val store = storeAt(dir)
+        store.upsert("profil-a", floatArrayOf(1f))
+        store.appendSample("profil-a", floatArrayOf(2f))
+        store.appendSample("profil-a", floatArrayOf(3f))
+        val svc = CosineSpeakerIdentifyService(
+            embedPort = keyedPort(mapOf(1f to 0.90, 2f to 0.70, 3f to 0.10)),
+            store = store,
+            threshold = 0.75,
+            aggregation = SpeakerProfileAggregation.TOP_TWO_MEAN,
+        )
+
+        val rec = svc.identify(byteArrayOf(1), "audio/wav")
+
+        assertEquals("profil-a", rec.name)
+        assertEquals(0.80, rec.confidence, 1e-9, "(0.90 + 0.70) / 2; der niedrigste Score zaehlt nicht")
+    }
+
+    @Test
+    fun `ein einzelner falscher Spitzenwert kann Paarentscheidung nicht allein kippen`(@TempDir dir: Path) {
+        val store = storeAt(dir)
+        store.upsert("profil-a", floatArrayOf(1f))
+        store.appendSample("profil-a", floatArrayOf(2f))
+        store.appendSample("profil-a", floatArrayOf(3f))
+        store.upsert("profil-b", floatArrayOf(4f))
+        store.appendSample("profil-b", floatArrayOf(5f))
+        store.appendSample("profil-b", floatArrayOf(6f))
+        val port = keyedPort(
+            mapOf(
+                1f to 0.81, 2f to 0.10, 3f to 0.05,
+                4f to 0.63, 5f to 0.62, 6f to 0.20,
+            ),
+        )
+
+        val bestSample = CosineSpeakerIdentifyService(
+            embedPort = port,
+            store = store,
+            threshold = 0.45,
+            margin = 0.10,
+            aggregation = SpeakerProfileAggregation.BEST_SAMPLE,
+        ).identify(byteArrayOf(1), "audio/wav")
+        val topTwoMean = CosineSpeakerIdentifyService(
+            embedPort = port,
+            store = store,
+            threshold = 0.45,
+            margin = 0.10,
+            aggregation = SpeakerProfileAggregation.TOP_TWO_MEAN,
+        ).identify(byteArrayOf(1), "audio/wav")
+
+        assertEquals("profil-a", bestSample.name, "BEST_SAMPLE folgt dem einzelnen 0.81-Ausreisser")
+        assertEquals("profil-b", topTwoMean.name, "zwei konsistente Scores schlagen den Einzel-Ausreisser")
+        assertEquals(0.625, topTwoMean.confidence, 1e-9)
+    }
+
+    @Test
+    fun `Ein-Sample-Profil bleibt mathematisch identisch zu Best-Sample`(@TempDir dir: Path) {
+        val store = storeAt(dir)
+        store.upsert("profil-a", floatArrayOf(1f))
+        val port = keyedPort(mapOf(1f to 0.77))
+
+        val best = CosineSpeakerIdentifyService(
+            port, store, threshold = 0.5, aggregation = SpeakerProfileAggregation.BEST_SAMPLE,
+        ).identify(byteArrayOf(1), "audio/wav")
+        val topTwo = CosineSpeakerIdentifyService(
+            port, store, threshold = 0.5, aggregation = SpeakerProfileAggregation.TOP_TWO_MEAN,
+        ).identify(byteArrayOf(1), "audio/wav")
+
+        assertEquals(best.name, topTwo.name)
+        assertEquals(best.confidence, topTwo.confidence, 1e-12)
+    }
+}
+
+/**
+ * Ein optionaler Profil-Scope filtert nur die Read-only-Kandidaten der Erkennung.
+ * Der Store bleibt vollstaendig und der leere Default behaelt das Mehrprofil-Verhalten.
+ */
+class SpeakerIdentifyProfileScopeTest {
+
+    private fun storeAt(dir: Path): SpeakerProfileStore {
+        val store = SpeakerProfileStore(dir.resolve("profiles.json"))
+        store.upsert("profil-a", floatArrayOf(1f))
+        store.upsert("profil-b", floatArrayOf(2f))
+        return store
+    }
+
+    private fun port(scores: Map<Float, Double>) = object : SpeakerEmbedPort {
+        override fun embed(audioBytes: ByteArray, mime: String): FloatArray = floatArrayOf(99f)
+        override fun similarity(a: FloatArray, b: FloatArray): Double =
+            scores[b[0]] ?: error("unerwarteter Profil-Key ${b[0]}")
+    }
+
+    @Test
+    fun `leerer Scope behaelt alle Profile und damit das Default-Verhalten`(@TempDir dir: Path) {
+        val svc = CosineSpeakerIdentifyService(
+            embedPort = port(mapOf(1f to 0.80, 2f to 0.60)),
+            store = storeAt(dir),
+            threshold = 0.45,
+            margin = 0.10,
+        )
+
+        val rec = svc.identify(byteArrayOf(1), "audio/wav")
+
+        assertEquals("profil-a", rec.name)
+        assertEquals(0.80, rec.confidence, 1e-9)
+    }
+
+    @Test
+    fun `Allowlist scored ausschliesslich das erlaubte Profil ohne Store-Mutation`(@TempDir dir: Path) {
+        val store = storeAt(dir)
+        val svc = CosineSpeakerIdentifyService(
+            embedPort = port(mapOf(1f to 0.80, 2f to 0.60)),
+            store = store,
+            threshold = 0.45,
+            margin = 0.10,
+            allowedProfileNames = setOf("profil-b"),
+        )
+
+        val rec = svc.identify(byteArrayOf(1), "audio/wav")
+
+        assertEquals("profil-b", rec.name, "profil-a ist kein Kandidat, obwohl es im Store bleibt")
+        assertEquals(setOf("profil-a", "profil-b"), store.all().map { it.name }.toSet(), "Scope mutiert den Store nie")
+    }
+
+    @Test
+    fun `unbekannter Allowlist-Eintrag endet fail-closed als Gast`(@TempDir dir: Path) {
+        val svc = CosineSpeakerIdentifyService(
+            embedPort = port(emptyMap()),
+            store = storeAt(dir),
+            threshold = 0.45,
+            allowedProfileNames = setOf("nicht-vorhanden"),
+        )
+
+        val rec = svc.identify(byteArrayOf(1), "audio/wav")
+
+        assertTrue(rec.isGuest)
+        assertNull(rec.name)
+        assertEquals(0.0, rec.confidence, 1e-9)
+    }
+
+    @Test
+    fun `nachtraegliche Caller-Mutation kann den Scope nicht erweitern`(@TempDir dir: Path) {
+        val mutableScope = mutableSetOf("profil-b")
+        val svc = CosineSpeakerIdentifyService(
+            embedPort = port(mapOf(1f to 0.80, 2f to 0.60)),
+            store = storeAt(dir),
+            threshold = 0.45,
+            allowedProfileNames = mutableScope,
+        )
+
+        mutableScope.clear()
+        val rec = svc.identify(byteArrayOf(1), "audio/wav")
+
+        assertEquals("profil-b", rec.name, "leeres Caller-Set darf nicht nachtraeglich all-profile bedeuten")
+    }
+
+    @Test
+    fun `leerer oder ungetrimmter Scope-Eintrag startet nicht mit breiterer Semantik`(@TempDir dir: Path) {
+        for (invalid in listOf("", " profil-a")) {
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException::class.java) {
+                CosineSpeakerIdentifyService(
+                    embedPort = port(mapOf(1f to 0.80, 2f to 0.60)),
+                    store = storeAt(dir),
+                    threshold = 0.45,
+                    allowedProfileNames = setOf(invalid),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `Scope-Readback nennt nur Anzahl und nie Profil-ID`(@TempDir dir: Path) {
+        val logger = org.slf4j.LoggerFactory.getLogger(CosineSpeakerIdentifyService::class.java)
+            as ch.qos.logback.classic.Logger
+        val appender = ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>()
+        appender.start()
+        logger.addAppender(appender)
+        try {
+            CosineSpeakerIdentifyService(
+                embedPort = port(mapOf(1f to 0.80, 2f to 0.60)),
+                store = storeAt(dir),
+                threshold = 0.45,
+                allowedProfileNames = setOf("profil-a"),
+            )
+
+            val scopeLines = appender.list.map { it.formattedMessage }.filter { it.contains("profile-scope") }
+            assertTrue(scopeLines.any { it.contains("allowlist(1)") }, "Scope-Anzahl muss beweisbar sein: $scopeLines")
+            assertTrue(scopeLines.none { it.contains("profil-a") }, "Readback darf keine Profil-ID tragen: $scopeLines")
+        } finally {
+            logger.detachAppender(appender)
         }
     }
 }

@@ -432,7 +432,7 @@ class OpenAiEscalationAdapter(
      * aber der Adapter verlässt sich nicht darauf).
      */
     private fun splitSource(text: String): Pair<String, String> {
-        val lines = text.lines()
+        val lines = stripInlineCitations(text).lines()
         val idx = lines.indexOfLast { SOURCE_LINE.matches(it.trim()) }
         if (idx < 0) return text.trim() to "openai/$model (ohne Quellenangabe)"
         val source = SOURCE_LINE.matchEntire(lines[idx].trim())!!.groupValues[1].trim()
@@ -440,6 +440,31 @@ class OpenAiEscalationAdapter(
             .joinToString("\n").trim()
         return remaining to source.ifBlank { "openai/$model (ohne Quellenangabe)" }
     }
+
+    /**
+     * **Entfernt die vom Modell SELBST in den Fließtext geschriebene Quellenangabe.**
+     *
+     * Andi-Befund 21.07 (vier Anläufe, drei davon an der falschen Ebene): eine
+     * Recherche-Antwort endete auf
+     * `([rockstargames.com](https://…?utm_source=openai)) Quelle: Quellen: https://…`.
+     * Der [SOURCE_LINE]-Split entfernt nur eine EIGENE `Quelle:`-Zeile — ein INLINE
+     * gesetztes Markdown-Zitat blieb im Antworttext stehen. Folge: es stand sichtbar
+     * im Chat, wurde mitgesprochen, landete im Nachschlag-Cache und wurde von dort bei
+     * jedem Wiederabruf erneut ins Brain injiziert und wiederholt.
+     *
+     * Warum HIER und nicht im TTS-Sanitizer: die belegbaren Quellen reisen längst
+     * strukturiert in [EscalationResult.Answer.sources] und speisen das „i" am Turn.
+     * Der Fließtext braucht sie deshalb gar nicht — sie hier zu entfernen heilt Anzeige,
+     * Sprachausgabe UND Cache an EINER Stelle, statt an dreien hinterherzuputzen.
+     * (Andis Frage dazu wörtlich: „warum wird das denn nicht auch über das i angezeigt?")
+     */
+    private fun stripInlineCitations(text: String): String =
+        text
+            .replace(MARKDOWN_CITATION, "")
+            .replace(TRAILING_SOURCE_TAIL, "")
+            .replace(MULTI_SPACE, " ")
+            .lines().joinToString("\n") { it.trimEnd() }
+            .trim()
 
     /**
      * Konservativ-Prompt (Nachtschicht-Linie): kurze belegbare Antwort +
@@ -468,6 +493,19 @@ class OpenAiEscalationAdapter(
 
         /** Der wörtliche Ich-weiß-es-nicht-Ausweg des Konservativ-Prompts. */
         const val UNCLEAR_MARKER: String = "UNKLAR"
+
+        /** Markdown-Zitat `[Label](http…)`, optional in runde Klammern gefasst. */
+        private val MARKDOWN_CITATION =
+            Regex("""\s*\(?\[[^\]\n]{1,120}]\(\s*https?://[^)\s]+\s*\)\)?""", RegexOption.IGNORE_CASE)
+
+        /** Nackter Quellen-Schwanz „(Quelle|Quellen|Source|Sources): http…" am Zeilen-/Satzende. */
+        private val TRAILING_SOURCE_TAIL = Regex(
+            """\s*(?:(?:quellen?|sources?)\s*:\s*)+https?://[^\s)]*\)?\.?""",
+            RegexOption.IGNORE_CASE,
+        )
+
+        /** Doppelte Leerzeichen, die das Entfernen hinterlässt. */
+        private val MULTI_SPACE = Regex(""" {2,}""")
 
         /** `Quelle: …` / `Source: …` — die Quellen-Zeile der Antwort. */
         private val SOURCE_LINE = Regex("""^(?:Quelle|Source)\s*:\s*(.+)$""", RegexOption.IGNORE_CASE)

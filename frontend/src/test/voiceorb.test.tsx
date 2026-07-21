@@ -7,20 +7,17 @@ import type { StreamChatOptions } from '../api/chat';
 import type { StreamVoiceOptions } from '../api/voice';
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  Voice-Orb (Andi-Auftrag 19.07): „Chat rückt auf Reiter 2, Übersicht bleibt
-//  Reiter 1 (Start-Ansicht)" + der Home-Orb hängt an ECHTEN Signalen derselben
-//  Session, die auch der Chat-Reiter treibt. Vier Verträge:
-//   A) Reiter-Reihenfolge/Default: Übersicht zuerst, Chat als zweiter Reiter —
-//      und der Orb sitzt auf dem Start-Reiter.
+//  Voice-Orb (Andi-Auftrag 19.07): der Home-Orb hängt an ECHTEN Signalen
+//  derselben Session, die auch der Chat-Reiter treibt. Drei Verträge (die
+//  Reiter-Reihenfolge/App-Default-Suiten aus dieser Datei sind per Audit T3,
+//  2026-07-21 nach test/topnav.test.tsx umgezogen — reine
+//  Datei-Reorganisation, kein Testinhalt geändert):
 //   B) Die Orb-Zustandsmaschine idle→listening→thinking→speaking→idle hängt an
 //      ECHTEN (hier: gefakten, aber Event-für-Event zugestellten) Wire-Events —
 //      keine geschätzten/erfundenen Zwischenzustände.
 //   C) reduced-motion: der Orb fügt KEIN eigenes JS-Motion hinzu und reicht
 //      dieselben `.vc-orb__*`-Klassen, die die bestehende reduced-motion-Regel
 //      (voicebar.css) schon abdeckt — Wiederverwendung statt Duplikat.
-//   D) Chat-Regression: die 578 bestehenden Tests (u. a. identity/turnanatomy/
-//      emojisweep/history) laufen unverändert grün — bewiesen durch denselben
-//      `npm test`-Lauf, kein gesonderter Test hier nötig.
 //   E) Ausgabe-Pegel (Andi-Auftrag 19.07 Nachschlag): speaking bloomt auf
 //      HOSHIS ECHTEM TTS-Ausgabepegel (AnalyserNode in audio/playback.ts) —
 //      derselbe Level-Sink-Kanal wie beim Mikro (Symmetrie rein/raus). Liefert
@@ -89,7 +86,6 @@ vi.mock('../audio/earcon', async (importOriginal) => {
 });
 
 import App from '../App';
-import { TopNav } from '../components/TopNav';
 import { VoiceOrb } from '../components/VoiceOrb';
 import type { VoiceChatSession } from '../hooks/useVoiceChatSession';
 
@@ -128,45 +124,6 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-//  A) Reiter-Reihenfolge + Default-Ansicht
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('TopNav — Reiter-Reihenfolge (Andi-Auftrag 19.07)', () => {
-  it('Übersicht zuerst, Chat als ZWEITER Reiter (vor Räume/Aktivität)', () => {
-    const html = renderToStaticMarkup(
-      <TopNav tab="overview" onTab={() => {}} onOpenSettings={() => {}} />,
-    );
-    const order = ['Übersicht', 'Chat', 'Räume', 'Aktivität'].map((label) => html.indexOf(label));
-    expect(order.every((i) => i >= 0)).toBe(true);
-    expect(order).toEqual([...order].sort((a, b) => a - b)); // exakt diese Reihenfolge im Markup
-  });
-});
-
-describe('App — Übersicht ist die Start-Ansicht, der Orb sitzt dort', () => {
-  it('lädt auf dem Übersicht-Reiter mit sichtbarem Voice-Orb; Chat-Reiter zeigt die Compose-Bar', async () => {
-    await mount(<App />);
-
-    // Default: Übersicht ist aktiv (aria-current) und trägt den Orb.
-    const tabs = () => Array.from(container.querySelectorAll<HTMLButtonElement>('.nav__tab'));
-    const activeLabel = () => tabs().find((b) => b.getAttribute('aria-current') === 'true')?.textContent;
-    expect(activeLabel()).toBe('Übersicht');
-    expect(container.querySelector('.voiceorb')).not.toBeNull();
-    expect(container.querySelector('.compose__input')).toBeNull(); // Chat noch nicht gemountet
-
-    // Zum Chat-Reiter wechseln: die Compose-Bar erscheint, der Orb verschwindet
-    // (die Views mounten/unmounten per Reiter — die Session dahinter bleibt,
-    // s. Zustandsmaschine-Test unten, der genau das ausnutzt).
-    const chatTab = tabs().find((b) => b.textContent === 'Chat')!;
-    await act(async () => {
-      chatTab.click();
-      await flush();
-    });
-    expect(container.querySelector('.compose__input')).not.toBeNull();
-    expect(container.querySelector('.voiceorb')).toBeNull();
-  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

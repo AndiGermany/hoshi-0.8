@@ -70,5 +70,9 @@ object LangIt {
         promptLanguageInstruction = "Rispondi SEMPRE in italiano.",
         smartHomeNotice = "Comandi smart-home: per ora solo in tedesco.",
         sayVoiceHint = "Alice",
+        // Kein Piper-Modell fuer Italienisch vorhanden (nur DE+EN sind
+        // lizenzgeprueft gepinnt) — bewusst null statt geraten, s.
+        // LanguagePack.piperVoiceHint-KDoc.
+        piperVoiceHint = null,
     )
 }

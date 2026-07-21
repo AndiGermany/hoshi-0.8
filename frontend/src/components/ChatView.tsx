@@ -32,10 +32,11 @@ import { SendButton } from './SendButton';
 // §4 Turn-Anatomie: Denk-Stufen-Zeile (echte Häkchen) + Chips unter der Antwort.
 import { TurnChips, TurnStagesRow } from './TurnAnatomy';
 import { VoiceWaveform, type VoiceWaveformHandle } from './VoiceWaveform';
-import { greetingForHour } from './greeting';
+import { dayPartForHour } from './greeting';
 // Schlichte SVG-Glyphs (0.5-Lehre: „SVG-Icons statt Emojis") — Mic/Speaker
 // sizen in der Compose-Bar weiter über die vc-ico-Klasse (voicebar.css).
 import { GearGlyph, InfoGlyph, MicGlyph, SpeakerGlyph } from './icons';
+import { useUiStrings } from '../i18n';
 // Visuals der Sprach-Eingabe (Mic-/Speaker-Icons + scrollende Waveform). Global
 // gebündelt — deckt die vc-*-Klassen der Waveform UND der Compose-Bar-Buttons ab.
 import '../styles/voicebar.css';
@@ -97,12 +98,6 @@ const MAX_COMPOSE_HEIGHT = 148;
 const STICK_BOTTOM_TOLERANCE_PX = 48;
 
 /** Empty-State: 3 Vorschlags-Chips → klicken füllt + sendet die Composer. */
-const SUGGESTIONS = [
-  'Licht im Wohnzimmer aus',
-  'Wie wird das Wetter morgen?',
-  'Wie warm ist es im Wohnzimmer?',
-] as const;
-
 /**
  * **WaveTap** — macht die Ausgabe-Waveform antippbar (Barge-in per Tap), ohne
  * die VoiceWaveform selbst anzufassen: ein role="button"-Wrapper, der als
@@ -110,6 +105,7 @@ const SUGGESTIONS = [
  * damit kein CSS anderer Lanes nötig ist). Enter/Space wirken wie der Tap.
  */
 export function WaveTap({ onTap, children }: { onTap: () => void; children: ReactNode }) {
+  const { chat } = useUiStrings();
   return (
     <div
       role="button"
@@ -122,8 +118,8 @@ export function WaveTap({ onTap, children }: { onTap: () => void; children: Reac
           onTap();
         }
       }}
-      aria-label="Antippen stoppt Hoshi"
-      title="Antippen stoppt Hoshi"
+      aria-label={chat.waveTap}
+      title={chat.waveTap}
       style={{ display: 'flex', flex: '1 1 auto', minWidth: 0, cursor: 'pointer' }}
     >
       {children}
@@ -198,6 +194,7 @@ export interface ChatViewBodyProps {
 
 /** Die reine Ansicht auf eine {@link VoiceChatSession} — kein eigener Netz-/Audio-Zustand. */
 export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
+  const { chat, voiceChat } = useUiStrings();
   const {
     turns,
     busy,
@@ -331,10 +328,10 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
 
   const micBusy = micState !== 'idle';
   const micTitle: Record<MicState, string> = {
-    idle: 'Gedrückt halten und sprechen (oder antippen zum Umschalten)',
-    listening: 'Loslassen zum Senden — oder Esc zum Verwerfen',
-    transcribing: 'Verstehe…',
-    responding: 'Mikro/Esc bricht die Antwort ab (Barge-in)',
+    idle: chat.micIdle,
+    listening: chat.micListening,
+    transcribing: chat.micTranscribing,
+    responding: chat.micResponding,
   };
 
   const slot = composeSlot(micState, speaking);
@@ -342,7 +339,7 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
   const showWaveOut = slot === 'wave-out';
   const processing = slot === 'processing';
 
-  const greeting = greetingForHour(new Date().getHours());
+  const dayPart = dayPartForHour(new Date().getHours());
   const empty = turns.length === 0;
   const canSend = !busy && !micBusy && input.trim().length > 0;
 
@@ -352,7 +349,7 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
       className={`vc-tts ${voiceOn ? 'is-on' : ''}`}
       onClick={toggleVoice}
       aria-pressed={voiceOn}
-      title={voiceOn ? 'Sprich-Modus an — Hoshi spricht die Antwort' : 'Sprich-Modus aus — nur Text'}
+      title={voiceOn ? chat.ttsOn : chat.ttsOff}
     >
       <SpeakerGlyph on={voiceOn} className="vc-ico" />
     </button>
@@ -368,9 +365,9 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
       >
         {empty ? (
           <div className="chat__welcome">
-            <h2 className="chat__greeting">{greeting} — was darf ich tun?</h2>
+            <h2 className="chat__greeting">{chat.greeting(dayPart)}</h2>
             <div className="chat__chips">
-              {SUGGESTIONS.map((s) => (
+              {chat.suggestions.map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -403,8 +400,8 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
                         type="button"
                         className="ctxgear"
                         onClick={() => onOpenSettings('gedaechtnis-privatsphaere', 'sprecher')}
-                        aria-label="Sprecher-Einstellungen öffnen (Gedächtnis & Privatsphäre)"
-                        title="Sprecher verwalten"
+                        aria-label={chat.speakerSettingsAria}
+                        title={chat.manageSpeakers}
                       >
                         <GearGlyph className="ctxgear__icon" />
                       </button>
@@ -418,7 +415,7 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
                   <div
                     className="msg__body"
                     role="status"
-                    aria-label="Deine Aufnahme wird verstanden"
+                    aria-label={chat.recordingUnderstood}
                   >
                     <ThinkingDots />
                   </div>
@@ -440,9 +437,9 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
                   turn.sources &&
                   turn.sources.length > 0 && (
                     <details className="msg__sources">
-                      <summary className="msg__sources__summary" title="Quellen dieser Antwort anzeigen">
+                      <summary className="msg__sources__summary" title={chat.sourcesTitle}>
                         <InfoGlyph className="msg__sources__icon" />
-                        Quellen
+                        {chat.sources}
                       </summary>
                       <ul className="msg__sources__list">
                         {turn.sources.map((s, idx) => (
@@ -492,7 +489,7 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
             onPointerCancel={onMicPointerEnd}
             disabled={busy || micState === 'transcribing'}
             aria-pressed={recording}
-            aria-label="Mikro — gedrückt halten und sprechen"
+            aria-label={chat.micAria}
             title={micTitle[micState]}
           >
             <MicGlyph className="vc-ico" />
@@ -508,8 +505,8 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
                 type="button"
                 className="compose__cancel"
                 onClick={cancelRecording}
-                aria-label="Aufnahme verwerfen"
-                title="Verwerfen (Esc)"
+                aria-label={chat.discardRecording}
+                title={chat.discard}
               >
                 ✕
               </button>
@@ -520,16 +517,16 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
                 <VoiceWaveform ref={waveformRef} />
               </WaveTap>
               <span className="compose__proc-label" role="status">
-                spricht…
+                {chat.speaking}
               </span>
               {ttsToggle}
             </>
           ) : processing ? (
             <>
-              <div className="compose__proc" role="status" aria-label="Verarbeite deine Aufnahme">
+              <div className="compose__proc" role="status" aria-label={chat.processingRecording}>
                 <ThinkingDots />
                 <span className="compose__proc-label">
-                  {stepLabel ?? (micState === 'transcribing' ? 'verstehe…' : 'denkt nach…')}
+                  {stepLabel ?? (micState === 'transcribing' ? chat.transcribing : chat.thinking)}
                 </span>
               </div>
               {ttsToggle}
@@ -539,7 +536,7 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
               <textarea
                 ref={taRef}
                 className="compose__input"
-                placeholder="Nachricht an Hoshi…"
+                placeholder={chat.placeholder}
                 value={input}
                 rows={1}
                 onChange={(e) => setInput(e.target.value)}
@@ -555,7 +552,7 @@ export function ChatViewBody({ session, onOpenSettings }: ChatViewBodyProps) {
 
         {slow && (
           <p className="compose__hint compose__hint--slow" role="status">
-            {SLOW_TURN_TEXT}
+            {voiceChat.slowTurn}
           </p>
         )}
       </form>

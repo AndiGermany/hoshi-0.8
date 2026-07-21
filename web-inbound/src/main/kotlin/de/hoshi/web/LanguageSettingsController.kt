@@ -32,9 +32,11 @@ import org.springframework.web.bind.annotation.RestController
  *    resolvierten Stimme neu gebaut und der [delegatingTtsPort] schaltet SOFORT
  *    um — [TtsVoiceResolver] ist dieselbe Auflösungs-Wahrheit wie ein expliziter
  *    TTS-Settings-PUT ([TtsSettingsController]): eine zuvor für (Engine, neue
- *    Sprache) explizit gemerkte Stimme gewinnt, sonst (nur `say`) der
- *    [de.hoshi.core.pipeline.lang.LanguagePack.sayVoiceHint] der neuen Sprache,
- *    sonst der bisherige Default. openai/voxtral bleiben unberührt (openai ist
+ *    Sprache) explizit gemerkte Stimme gewinnt, sonst der Sprach-Hint des
+ *    [de.hoshi.core.pipeline.lang.LanguagePack] der neuen Sprache (`say` →
+ *    [de.hoshi.core.pipeline.lang.LanguagePack.sayVoiceHint], `piper` →
+ *    [de.hoshi.core.pipeline.lang.LanguagePack.piperVoiceHint], je nach aktiver
+ *    Engine), sonst der bisherige Default. openai/voxtral bleiben unberührt (openai ist
  *    multilingual, s. [TtsVoiceResolver]-KDoc). Bewusst KEIN Store-Write hier:
  *    ein automatisch angewandter Hint wird NIE zur „expliziten Wahl" (nur der
  *    Delegat wechselt den Adapter, der Store bleibt Andis Wahrheit).

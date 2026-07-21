@@ -285,6 +285,7 @@ describe('Emoji-Sweep — Chrome/Controls emoji-frei (SVG-Glyphs oder gestrichen
           memory: { level: 'WARN', source: 'brain-health', detail: 'RAM-Druck steigt.' },
           sidecars: [{ name: 'brain', status: 'DEGRADED', detail: 'langsam' }],
           voice: { engine: 'openai', cloud: true },
+          allLocal: false,
           ts: 1,
         }}
       />,

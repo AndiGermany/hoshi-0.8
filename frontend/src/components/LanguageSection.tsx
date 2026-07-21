@@ -5,6 +5,8 @@ import {
   fetchLanguageSettings,
   saveLanguageSetting,
 } from '../api/languageSettings';
+import { de } from '../i18n/de';
+import { setActiveUiLanguage, useUiStrings } from '../i18n';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Sprachpaket-Kern (Andi-Auftrag 2026-07-20): DE/EN/ES/FR/IT als SERVER-Default
@@ -16,16 +18,14 @@ import {
 //  Einhänge-Punkt hält den Integrations-Diff klein.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Alle sichtbaren Texte an einem Ort (auch von Tests referenziert). */
-export const LANGUAGE_SETTINGS_TEXTS = {
-  label: 'Hoshi spricht (Server-Standard)',
-  hint: 'Der Standard für Geräte ohne eigene Sprach-Wahl (z. B. den Voice-Satelliten). Deutsch ist vollständig; die anderen Sprachen sind Beta.',
-  loadError: 'Sprach-Einstellung grad nicht lesbar.',
-  switching: 'wechselt…',
-  unknown: 'Unbekannte Sprache.',
-  failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
-  betaSuffix: ' (Beta)',
-} as const;
+/**
+ * Alle sichtbaren Texte an einem Ort (auch von Tests referenziert) — jetzt eine
+ * Referenz auf den `de`-Katalog in `i18n/de.ts` (Quelle der Wahrheit, byte-
+ * gleich zum bisherigen Stand). Gerendert wird NICHT dieser Fixwert, sondern
+ * `useUiStrings().language` (s. unten) — der hier exportierte Name bleibt aus
+ * Kompatibilitätsgründen (Tests importieren ihn direkt).
+ */
+export const LANGUAGE_SETTINGS_TEXTS = de.language;
 
 /**
  * Container der Sprach-Gruppe (Muster {@link LookupModelSection} in
@@ -34,6 +34,8 @@ export const LANGUAGE_SETTINGS_TEXTS = {
  * AUTORITATIVEN Server-Zustand zurück (Readback, kein optimistisches Umschalten).
  */
 export function LanguageSection() {
+  const t = useUiStrings();
+  const LANGUAGE_SETTINGS_TEXTS = t.language;
   const [current, setCurrent] = useState<LanguageSetting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +52,10 @@ export function LanguageSection() {
         if (aliveRef.current) {
           setCurrent(next);
           setError(null);
+          // Speist die geteilte UI-Sprache (i18n/activeLanguageStore) mit dem
+          // Server-Ist-Zustand — die EINE Sprachwahl steuert jetzt auch die
+          // UI-Texte app-weit (Andi-Auftrag 21.07).
+          setActiveUiLanguage(next.aktiv);
         }
       } catch {
         if (aliveRef.current) setError(LANGUAGE_SETTINGS_TEXTS.loadError);
@@ -72,6 +78,9 @@ export function LanguageSection() {
         const updated = await saveLanguageSetting(code);
         if (!aliveRef.current) return;
         setCurrent(updated);
+        // Readback ist die AUTORITATIVE neue Sprache — sofort in den geteilten
+        // Store spiegeln, damit die gesamte UI ohne Remount umschaltet.
+        setActiveUiLanguage(updated.aktiv);
       } catch (e) {
         if (!aliveRef.current) return;
         setNote(e instanceof UnknownLanguageError ? LANGUAGE_SETTINGS_TEXTS.unknown : LANGUAGE_SETTINGS_TEXTS.failed);
@@ -103,6 +112,8 @@ export interface LanguageSectionViewProps {
  * bleiben (Reflexe werden NICHT übersetzt).
  */
 export function LanguageSectionView({ current, loading, error, busy, note, onSelect }: LanguageSectionViewProps) {
+  const t = useUiStrings();
+  const LANGUAGE_SETTINGS_TEXTS = t.language;
   return (
     <section className="settings__group">
       <label className="settings__label" htmlFor="settings-server-language">
@@ -132,6 +143,9 @@ export function LanguageSectionView({ current, loading, error, busy, note, onSel
       )}
       {busy && <p className="settings__hint">{LANGUAGE_SETTINGS_TEXTS.switching}</p>}
       <p className="settings__hint">{LANGUAGE_SETTINGS_TEXTS.hint}</p>
+      {/* Ehrlicher Hinweis (Andi-Auftrag 21.07): diese EINE Wahl steuert jetzt
+          auch die UI-Texte, nicht nur das Gespräch — Smart-Home bleibt Deutsch. */}
+      <p className="settings__hint">{LANGUAGE_SETTINGS_TEXTS.uiNotice}</p>
       {current?.smartHomeHinweis && <p className="settings__hint">{current.smartHomeHinweis}</p>}
       {note && (
         <p className="settings__hint settings__languagenote" role="status">

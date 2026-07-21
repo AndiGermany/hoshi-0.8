@@ -9,12 +9,10 @@ an; die aktive Implementierung ist `adapters-brain/.../MlxBrainAdapter.kt`.
 
 Ein Python/FastAPI-Prozess, der ein Gemma-4-E4B-Modell lokal über
 [MLX](https://github.com/ml-explore/mlx) (Apples Tensor-Framework für Apple
-Silicon) lädt und über HTTP bedient. `server.py` ist ein 1:1-Umzug aus
-`Hoshi_0.5/hoshi-llm-optiq/server_e4b.py` — nur der Dateiname wurde neutral
-(Sidecar statt Modell-Codename), der `gen()`-Flow (Prompt-Bau, Sampling,
-Streaming, Prompt-Cache, Sensoren) ist unverändert. Bis zum bewiesenen
-Cutover (siehe unten) bleibt die 0.5-Kopie die laufende Wahrheit — dies hier
-ist der portierte, aber noch nicht produktiv geschaltete Nachbau.
+Silicon) lädt und über HTTP bedient. `server.py` entstand als Port aus
+`Hoshi_0.5/hoshi-llm-optiq/server_e4b.py`, wurde in 0.8 aber weiterentwickelt;
+„1:1 unverändert" ist deshalb keine aktuelle Behauptung. Der gemeinsame Kern
+bleibt Prompt-Bau, Sampling, Streaming, Prompt-Cache und Sensorik.
 
 ## Mac/MLX heute, Plattform-Offenheit für morgen
 
@@ -55,19 +53,17 @@ und die bewusste Divergenz zu `pipeline/stack-lib.sh`s globalem `e2b`-Default).
 
 | Datei | Herkunft (Hoshi_0.5) |
 |---|---|
-| `server.py` | `hoshi-llm-optiq/server_e4b.py` (1:1, nur Datei-/Pfadnamen) |
-| `smoke_sensors.py` | `hoshi-llm-optiq/smoke_sensors.py` (1:1, Import-Umbenennung) |
+| `server.py` | aus `hoshi-llm-optiq/server_e4b.py` portiert, danach in 0.8 weiterentwickelt |
+| `smoke_sensors.py` | aus `hoshi-llm-optiq/smoke_sensors.py` portiert |
 | `requirements.txt` | `hoshi-llm-optiq/requirements.txt`, erweitert um die vollen Kern-Pins aus dem echten 0.5-venv (`pip freeze`) |
 | `bootstrap.sh` | neu, nach dem Vorbild-Adapter-Muster aus `hoshi-speaker-id/setup.sh` |
 | `run.sh` | `tools/hoshi-e4b-run.sh`, mechanisch gleichwertig aber selbstständig (kein Sourcen von `hoshi-lib.sh`) |
 
-## Cutover-Status
+## Pfad-Auflösung und Cutover
 
-**Die 0.5-Kopie (`Hoshi_0.5/hoshi-llm-optiq/server_e4b.py`, Port 8041) ist bis
-zum bewiesenen Cutover die laufende Wahrheit.** Dieser Sidecar ist der Port,
-noch nicht der produktive Ersatz. Bevor `bin/hoshi`/der Supervisor auf dieses
-Verzeichnis umgestellt wird, braucht es mindestens: eigenes `.venv` hier
-gebootstrapt + smoke-getestet, `pipeline/stack-lib.sh` auf diesen Pfad
-umgestellt (statt `Hoshi_0.5/tools/hoshi-e4b-run.sh`), und ein launchd-Template
-für den eigenständigen Start. Bis dahin NICHT parallel zum laufenden 0.5-Brain
-starten (16-GB-Wand, ein Mac trägt nur ein warmes Modell).
+`pipeline/stack-lib.sh` wählt den Repo-Sidecar automatisch, sobald dessen
+`.venv` existiert. Fehlt es, bleibt der 0.5-Run-Pfad als sichtbarer Rückweg;
+`HOSHI_SIDECARS_FROM_REPO=true|false` erzwingt die Auswahl. Der tatsächlich
+laufende Prozess ist deshalb am Start-Log/`doctor` zu prüfen, nicht aus diesem
+README abzuleiten. Repo- und 0.5-Brain nie parallel starten: Port 8041 und die
+16-GB-Wand erlauben genau ein residentes Brain.

@@ -282,15 +282,16 @@ class PipelineConfig {
         @Value("\${hoshi.brain.presence-penalty:1.1}") presencePenalty: Double,
         // D1b (Stufe-0-Rest: XTC + Öffner-Bias) — eigener Rollback-Hebel, unabhängig von
         // SAMPLING. Default OFF; Flip erst nach Andis Ohr-Urteil zu D1 (ein Hebel, eine
-        // Messung). Braucht server_e4b mit D1b-Code resident (0.5@ffe109e + Brain-Restart).
+        // Messung). Braucht D1b-Code resident im Brain — seit Cutover S4 der Repo-Brain
+        // (sidecars/brain; die 0.5-Referenz ffe109e ist Historie).
         @Value("\${HOSHI_BRAIN_D1B_ENABLED:false}") d1bEnabled: Boolean,
         @Value("\${hoshi.brain.xtc-probability:0.5}") xtcProbability: Double,
         @Value("\${hoshi.brain.xtc-threshold:0.1}") xtcThreshold: Double,
         @Value("\${hoshi.brain.opener-bias:true}") openerBias: Boolean,
         // Antwort-Entropie S1 (Meta-Signal, default OFF = byte-identisch): bei ON bittet
         // der Adapter den Brain um logprobs + misst mittlere Token-Entropie (messen-only).
-        // Wirkt erst, wenn server_e4b das logprobs-Feld liest (Patch-Vorschlag liegt,
-        // 0.5-Prod-Brain-Restart = Gate).
+        // Der Brain liest das logprobs-Feld seit dem Restart 15.07 (beide Sensoren
+        // entsperrt, /v1/score liefert Logprobs) — Flip bleibt ein Mess-Gate.
         @Value("\${HOSHI_ANSWER_ENTROPY_ENABLED:false}") entropyEnabled: Boolean,
     ): BrainPort = MlxBrainAdapter(
         baseUrl = baseUrl,
@@ -1099,13 +1100,21 @@ class PipelineConfig {
         onFired = { id, label, originSatelliteId -> timerRingDownlinkService.onFired(id, label, originSatelliteId) },
     ).also { it.start() }
 
-    /** Wecker-Store-Pfad: explizit ▷ Prod-Datenverzeichnis (falls beschreibbar) ▷ ~/.hoshi (Dev). */
-    private fun resolveScheduledStorePath(configured: String): java.nio.file.Path {
+    /**
+     * Daten-Store-Pfad, EIN Muster für alle vier JSON-Stores (Audit C1, 21.07):
+     * explizit ▷ Prod-Datenverzeichnis (falls beschreibbar) ▷ ~/.hoshi (Dev).
+     * [resolveSettingsPath] bleibt bewusst eigenständig (anderes Fallback-Muster).
+     */
+    private fun resolveDataStorePath(configured: String, fileName: String): java.nio.file.Path {
         if (configured.isNotBlank()) return java.nio.file.Path.of(configured)
-        val prod = java.nio.file.Path.of("/var/lib/hoshi-0.8/scheduled-items.json")
+        val prod = java.nio.file.Path.of("/var/lib/hoshi-0.8", fileName)
         return if (java.nio.file.Files.isWritable(prod.parent)) prod
-        else java.nio.file.Path.of(System.getProperty("user.home"), ".hoshi", "scheduled-items.json")
+        else java.nio.file.Path.of(System.getProperty("user.home"), ".hoshi", fileName)
     }
+
+    /** Wecker-Store-Pfad — s. [resolveDataStorePath]. */
+    private fun resolveScheduledStorePath(configured: String): java.nio.file.Path =
+        resolveDataStorePath(configured, "scheduled-items.json")
 
     /**
      * **ListPort-Store (Andi-JA 2026-07-08 „Listen auf die Ring-1-Karte") — flag-gated,
@@ -1121,13 +1130,9 @@ class PipelineConfig {
         @Value("\${hoshi.list.store.path:\${HOSHI_LIST_STORE_PATH:}}") listStorePath: String,
     ): ListPort = if (listEnabled) JsonFileListStore(resolveListStorePath(listStorePath)) else ListPort.NONE
 
-    /** Listen-Store-Pfad: explizit ▷ Prod-Datenverzeichnis (falls beschreibbar) ▷ ~/.hoshi (Dev). */
-    private fun resolveListStorePath(configured: String): java.nio.file.Path {
-        if (configured.isNotBlank()) return java.nio.file.Path.of(configured)
-        val prod = java.nio.file.Path.of("/var/lib/hoshi-0.8/lists.json")
-        return if (java.nio.file.Files.isWritable(prod.parent)) prod
-        else java.nio.file.Path.of(System.getProperty("user.home"), ".hoshi", "lists.json")
-    }
+    /** Listen-Store-Pfad — s. [resolveDataStorePath]. */
+    private fun resolveListStorePath(configured: String): java.nio.file.Path =
+        resolveDataStorePath(configured, "lists.json")
 
     /**
      * **ListFastpath-Vollzug — flag-gated, default OFF.** Brain-freie Anlage/Lese/
@@ -1155,13 +1160,9 @@ class PipelineConfig {
         @Value("\${hoshi.night-mode.store.path:\${HOSHI_NIGHT_MODE_STORE_PATH:}}") storePath: String,
     ): JsonFileNightModeStore = JsonFileNightModeStore(resolveNightModeStorePath(storePath))
 
-    /** Nachtmodus-Store-Pfad: explizit ▷ Prod-Datenverzeichnis (falls beschreibbar) ▷ ~/.hoshi (Dev). */
-    private fun resolveNightModeStorePath(configured: String): java.nio.file.Path {
-        if (configured.isNotBlank()) return java.nio.file.Path.of(configured)
-        val prod = java.nio.file.Path.of("/var/lib/hoshi-0.8/night-mode.json")
-        return if (java.nio.file.Files.isWritable(prod.parent)) prod
-        else java.nio.file.Path.of(System.getProperty("user.home"), ".hoshi", "night-mode.json")
-    }
+    /** Nachtmodus-Store-Pfad — s. [resolveDataStorePath]. */
+    private fun resolveNightModeStorePath(configured: String): java.nio.file.Path =
+        resolveDataStorePath(configured, "night-mode.json")
 
     /**
      * **NightModeService — Push-Wahrheit + ~60s-Tick, flag-gated, default OFF**
@@ -1232,13 +1233,9 @@ class PipelineConfig {
         @Value("\${hoshi.speaker.store.path:\${HOSHI_SPEAKER_STORE_PATH:}}") storePath: String,
     ): SpeakerProfileStore = SpeakerProfileStore(resolveSpeakerStorePath(storePath))
 
-    /** Speaker-Store-Pfad: explizit ▷ Prod-Datenverzeichnis (falls beschreibbar) ▷ ~/.hoshi (Dev). */
-    private fun resolveSpeakerStorePath(configured: String): java.nio.file.Path {
-        if (configured.isNotBlank()) return java.nio.file.Path.of(configured)
-        val prod = java.nio.file.Path.of("/var/lib/hoshi-0.8/speaker-profiles.json")
-        return if (java.nio.file.Files.isWritable(prod.parent)) prod
-        else java.nio.file.Path.of(System.getProperty("user.home"), ".hoshi", "speaker-profiles.json")
-    }
+    /** Speaker-Store-Pfad — s. [resolveDataStorePath]. */
+    private fun resolveSpeakerStorePath(configured: String): java.nio.file.Path =
+        resolveDataStorePath(configured, "speaker-profiles.json")
 
     /**
      * **SpeakerIdentifyService (S3) — Stimm-ERKENNUNG, flag-gated `HOSHI_SPEAKER_RECOGNITION_ENABLED`,
@@ -1262,12 +1259,17 @@ class PipelineConfig {
     fun speakerIdentifyService(
         @Value("\${HOSHI_SPEAKER_RECOGNITION_ENABLED:false}") recognitionEnabled: Boolean,
         @Value("\${hoshi.speaker.recognition.threshold:0.80}") threshold: Double,
-        // Abstands-Regel (Live-Fehl-Zuordnung 07.07: Andi→Cindy 0.564) — Sieg muss eindeutig sein.
+        // Abstands-Regel (Live-Fehl-Zuordnung 07.07: Person A→Person B 0.564) — Sieg muss eindeutig sein.
         @Value("\${hoshi.speaker.recognition.margin:\${HOSHI_SPEAKER_RECOGNITION_MARGIN:0.10}}") margin: Double,
-        // Score-Aggregation je Profil (S1, Codex 19.07): best-sample = Bestand; centroid
-        // scored gegen das Mittel-Embedding (samplezahl-neutraler Betriebspunkt). Unbekannter
-        // Wert ⇒ fail-fast beim Boot statt stillem Default — Urteils-Config darf nicht raten.
+        // Score-Aggregation je Profil: best-sample = Bestand; top-two-mean verlangt
+        // Unterstuetzung durch zwei Roh-Samples; centroid scored gegen das Mittel-Embedding.
+        // Unbekannter Wert ⇒ fail-fast beim Boot statt stillem Default — Urteils-Config darf nicht raten.
         @Value("\${hoshi.speaker.recognition.aggregation:\${HOSHI_SPEAKER_RECOGNITION_AGGREGATION:best-sample}}") aggregation: String,
+        // Reversibler Profil-Scope (Codex d66f62b, P0-Folge 21.07): leer = alle Profile (Bestand),
+        // "id" = Owner-Verifikation gegen genau dieses Profil, Store bleibt unangetastet. Leere
+        // Tokens ("a,,b") NICHT wegfiltern — der Service lehnt sie fail-fast ab (nie still breiter).
+        // Echte Profil-IDs nur im privaten Runtime-Override, NIE im Repo/Unit-Template.
+        @Value("\${hoshi.speaker.recognition.profiles:\${HOSHI_SPEAKER_RECOGNITION_PROFILES:}}") recognitionProfiles: String,
         embedPortProvider: ObjectProvider<SpeakerEmbedPort>,
         storeProvider: ObjectProvider<SpeakerProfileStore>,
     ): SpeakerIdentifyService {
@@ -1281,6 +1283,11 @@ class PipelineConfig {
                 threshold = threshold,
                 margin = margin,
                 aggregation = SpeakerProfileAggregation.parse(aggregation),
+                allowedProfileNames = if (recognitionProfiles.isBlank()) {
+                    emptySet()
+                } else {
+                    recognitionProfiles.split(',').map { it.trim() }.toSet()
+                },
             )
         } else {
             SpeakerIdentifyService.DISABLED

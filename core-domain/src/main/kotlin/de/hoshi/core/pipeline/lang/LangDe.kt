@@ -63,6 +63,7 @@ object LangDe {
         promptLanguageInstruction = "Antworte IMMER auf Deutsch.",
         smartHomeNotice = null,
         sayVoiceHint = null,
+        piperVoiceHint = null,
     )
 
     /**

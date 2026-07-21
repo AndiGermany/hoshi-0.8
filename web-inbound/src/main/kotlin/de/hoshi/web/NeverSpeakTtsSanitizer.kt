@@ -10,7 +10,11 @@ import de.hoshi.core.port.TtsSanitizePort
  *
  * **Maskiert (Never-Speak — diese Spans duerfen NIE in einen Cloud-Call):**
  *  - Token / API-Key (JWT `eyJ…`, `Bearer …`, `sk-…`, lange Hex-Secrets) → `[TOKEN]`
- *  - URL (`http(s)://…`) → `[URL]`
+ *  - URL (`http(s)://…`) → ENTFERNT (nicht maskiert: eine vorgelesene
+ *    „eckige Klammer U-R-L" waere selbst Laerm — Weglassen ist strikt sicherer)
+ *  - Markdown-Quellenangabe `[Label](http…)` und Quellen-Schwaenze
+ *    („Source: Quellen: https://…") → ENTFERNT
+ *  - Markdown-Auszeichnung (`**`, `*`, `` ` ``, `~~`, fuehrende `#`) → ENTFERNT
  *  - Private LAN-IP (RFC-1918 + Loopback) → `[IP]`
  *  - UUID (8-4-4-4-12) → `[ID]`
  *  - HA-Entity-ID (`domain.objekt`, z.B. `light.wohnzimmer`) → `[ID]`
@@ -36,8 +40,34 @@ class NeverSpeakTtsSanitizer : TtsSanitizePort {
         out = BEARER_PATTERN.replace(out, TOKEN_MASK)
         out = SK_KEY_PATTERN.replace(out, TOKEN_MASK)
         out = LONG_HEX_PATTERN.replace(out, TOKEN_MASK)
-        // 2. URL ZUERST vor IP — eine URL mit eingebetteter LAN-IP wird als Ganzes maskiert.
-        out = URL_PATTERN.replace(out, URL_MASK)
+        // 1b. Markdown-Quellenangabe KOMPLETT WEG, bevor die URL-Maske greift.
+        //     Andi-Befund 21.07: Recherche-Antworten enden auf „([toureiffel.paris](https://…))".
+        //     Ohne diese Regel maskiert Schritt 2 nur die URL — gesprochen wurde dann
+        //     „Klammer auf toureiffel Punkt paris Klammer zu Klammer auf URL …", also der
+        //     Klammer-Salat statt der Quelle. Der ANGEZEIGTE Text behält die Quelle
+        //     (Info-Icon/`escalationSources`); gesprochen wird sie nie — genau das war das
+        //     Ziel des Quellen-Umbaus (f3113ae), nur griff es nicht für die Inline-Zitate,
+        //     die das externe Modell selbst in seinen Fließtext schreibt.
+        out = MARKDOWN_CITATION_PATTERN.replace(out, "")
+        // 1c. Quellen-SCHWANZ am Satzende: „Source: Quellen: https://…" (Andi 21.07 —
+        //     das Label kommt real doppelt und in zwei Sprachen). Muss VOR der
+        //     URL-Behandlung greifen, sonst bliebe „Source: Quellen:" allein stehen und
+        //     würde vorgelesen.
+        out = SOURCE_TAIL_PATTERN.replace(out, "")
+        // 2. URL: für GESPROCHENEN Text ENTFERNEN statt maskieren. Eine vorgelesene
+        //    „eckige Klammer U-R-L" ist selbst Lärm — und Weglassen ist für die
+        //    „sprich niemals ein Geheimnis"-Regel strikt sicherer als Maskieren.
+        //    (Der angezeigte Text ist davon unberührt; dies ist der TTS-Pfad.)
+        out = URL_PATTERN.replace(out, "")
+        // 2c. Markdown-Auszeichnung, die sonst als Zeichen gesprochen würde:
+        //     **fett**, *kursiv*, `code`, ~~durchgestrichen~~, führende #-Überschriften.
+        //     Der TEXT bleibt, nur die Steuerzeichen fallen weg.
+        out = MARKDOWN_MARKS_PATTERN.replace(out, "")
+        out = HEADING_MARKS_PATTERN.replace(out, "")
+        // 2b. Aufräumen, was das Entfernen hinterlässt: doppelte Leerzeichen und ein
+        //     Leerzeichen vor Satzzeichen. Sonst hört man die Lücke als Stolperer.
+        out = LEFTOVER_SPACE_BEFORE_PUNCT.replace(out, "$1")
+        out = MULTI_SPACE.replace(out, " ").trim()
         // 3. Private LAN-IP.
         out = LAN_IP_PATTERN.replace(out, IP_MASK)
         // 4. UUID.
@@ -49,7 +79,37 @@ class NeverSpeakTtsSanitizer : TtsSanitizePort {
 
     private companion object {
         const val TOKEN_MASK = "[TOKEN]"
-        const val URL_MASK = "[URL]"
+
+        /**
+         * Markdown-Quellenangabe `[Label](http…)`, optional selbst noch in runde Klammern
+         * gefasst — genau die Form, die das Recherche-Modell an seine Antworten hängt.
+         * Bewusst NUR mit `http(s)`-Ziel: ein Fließtext-`[so]` oder eine Klammer ohne Link
+         * bleibt unangetastet. Ein evtl. vorangehendes Leerzeichen wird mitgenommen.
+         */
+        /**
+         * Quellen-Schwanz: ein oder mehrere Labels („Quelle(n)"/„Source(s)", beliebig
+         * verschachtelt) gefolgt von einer URL, optional mit Schlusspunkt. Real gesehen:
+         * `Source: Quellen: https://…`. Ohne diese Regel bliebe das Label stehen.
+         */
+        private val SOURCE_TAIL_PATTERN = Regex(
+            """\s*(?:\((?=\s*(?:quellen?|sources?)\s*:))?(?:(?:quellen?|sources?)\s*:\s*)+https?://[^\s)]*\)?\.?""",
+            RegexOption.IGNORE_CASE,
+        )
+
+        /** Markdown-Auszeichnungszeichen, die gesprochen als Zeichen hörbar wären. */
+        private val MARKDOWN_MARKS_PATTERN = Regex("""\*{1,3}|_{2,}|~~|`""")
+
+        /** Führende Überschriften-Rauten am Zeilenanfang. */
+        private val HEADING_MARKS_PATTERN = Regex("""(?m)^\s{0,3}#{1,6}\s*""")
+
+        private val MARKDOWN_CITATION_PATTERN =
+            Regex("""\s*\(?\[[^\]\n]{1,120}]\(\s*https?://[^)\s]+\s*\)\)?""", RegexOption.IGNORE_CASE)
+
+        /** Leerzeichen, das nach dem Entfernen vor einem Satzzeichen übrig bleibt. */
+        private val LEFTOVER_SPACE_BEFORE_PUNCT = Regex("""\s+([.,;:!?])""")
+
+        /** Mehrfache Leerzeichen nach dem Entfernen. */
+        private val MULTI_SPACE = Regex(""" {2,}""")
         const val IP_MASK = "[IP]"
         const val ID_MASK = "[ID]"
 

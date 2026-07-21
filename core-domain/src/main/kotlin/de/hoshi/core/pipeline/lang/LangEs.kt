@@ -71,5 +71,8 @@ object LangEs {
         promptLanguageInstruction = "Responde SIEMPRE en español.",
         smartHomeNotice = "Órdenes de domótica: por ahora solo en alemán.",
         sayVoiceHint = "Mónica",
+        // Kein Piper-Modell fuer Spanisch vorhanden (nur DE+EN sind lizenzgeprueft
+        // gepinnt) — bewusst null statt geraten, s. LanguagePack.piperVoiceHint-KDoc.
+        piperVoiceHint = null,
     )
 }

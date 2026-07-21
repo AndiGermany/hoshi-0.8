@@ -37,7 +37,7 @@ data class SpeakerDiagnostics(
  * [selfCohesion] = mittlere paarweise Cosine der EIGENEN Roh-Samples eines Profils
  * (Streuung der eigenen Aufnahmen untereinander) — `null` bei genau 1 Sample (nichts zu
  * mitteln). Niedrige Werte sind ein Warnsignal: ein Anlern-Sample koennte kontaminiert/
- * verrutscht sein (Live-Befund 07.07: Cindy scorte nur 0.27..0.34 gegen ihr eigenes Profil).
+ * verrutscht sein (Live-Befund 07.07: Person B scorte nur 0.27..0.34 gegen ihr eigenes Profil).
  */
 data class SpeakerProfileDiagnostics(val name: String, val samples: Int, val selfCohesion: Double?)
 
@@ -60,7 +60,7 @@ data class SpeakerProfileDiagnostics(val name: String, val samples: Int, val sel
  *  - `GET /api/v1/speakers` → `[{name, enrolledAt, samples}]` — **NIE Vektoren**.
  *  - `GET /api/v1/speakers/diagnostics` → [SpeakerDiagnostics] — je Profil Sample-Zahl +
  *    `selfCohesion` (eigene Samples untereinander) sowie die `crossSimilarity`-Matrix aller
- *    Profil-MITTEL. **NUR ZAHLEN, NIE Vektoren** — macht Anomalien wie „Cindys Abdruck
+ *    Profil-MITTEL. **NUR ZAHLEN, NIE Vektoren** — macht Anomalien wie „Person Bs Abdruck
  *    aehnelt Andi mehr als ihr selbst" (Live-Befund 07.07) sofort ablesbar und jedes
  *    Re-Enroll direkt bewertbar.
  *  - `DELETE /api/v1/speakers/{name}` → `204` (Profil + Embedding wirklich weg) / `404` / `400`.

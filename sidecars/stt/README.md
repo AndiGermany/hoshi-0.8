@@ -1,12 +1,11 @@
 # sidecars/stt
 
 Hoshis STT-Sidecar (Whisper via Apple MLX) — nimmt Audio entgegen und liefert
-das Transkript zurück. `server.py` ist ein 1:1-Umzug aus
-`Hoshi_0.5/hoshi-stt-mlx/server.py` — nur der Modulname wurde neutral
-(Sidecar statt Projektname), der Transcribe-Flow (ffmpeg-Konvertierung,
-Silence-Gate, `mlx_whisper.transcribe`-Aufruf) ist unverändert. Bis zum
-bewiesenen Cutover (siehe unten) bleibt die 0.5-Kopie die laufende Wahrheit —
-dies hier ist der portierte, aber noch nicht produktiv geschaltete Nachbau.
+das Transkript zurück. `server.py` entstand als Port aus
+`Hoshi_0.5/hoshi-stt-mlx/server.py`; der Transcribe-Flow umfasst
+ffmpeg-Konvertierung, Silence-Gate und `mlx_whisper.transcribe`. Die
+Repo-Fassung ist der gepflegte 0.8-Pfad, während der 0.5-Run-Pfad als
+kompatibler Rückweg erhalten bleibt.
 
 ## Mac/MLX heute, Plattform-Offenheit für morgen
 
@@ -48,20 +47,19 @@ Env-Variablen (`run.sh`):
 
 | Datei | Herkunft (Hoshi_0.5) |
 |---|---|
-| `server.py` | `hoshi-stt-mlx/server.py` (1:1, nur Docstring-Pfadverweise) |
-| `silence_gate.py` | `hoshi-stt-mlx/silence_gate.py` (byte-identisch) |
-| `test_silence_gate.py` | `hoshi-stt-mlx/test_silence_gate.py` (byte-identisch, pytest, keine mlx_whisper-Abhängigkeit) |
+| `server.py` | aus `hoshi-stt-mlx/server.py` portiert |
+| `silence_gate.py` | aus `hoshi-stt-mlx/silence_gate.py` portiert |
+| `test_silence_gate.py` | aus `hoshi-stt-mlx/test_silence_gate.py` portiert (pytest, keine mlx_whisper-Abhängigkeit) |
 | `requirements.txt` | `hoshi-stt-mlx/requirements.txt`, ersetzt durch die vollen Kern-Pins aus dem echten 0.5-venv (`pip freeze`) |
 | `bootstrap.sh` | neu, nach dem Muster aus `sidecars/brain/bootstrap.sh` |
 | `run.sh` | neu, nach dem Muster aus `sidecars/brain/run.sh` (ohne Model-Cache-Preflight — mlx_whisper lädt selbst lazy) |
 
 Nicht portiert: `setup.sh` (durch `bootstrap.sh` ersetzt, siehe oben).
 
-## Cutover-Status
+## Pfad-Auflösung und Cutover
 
-**Die 0.5-Kopie (`Hoshi_0.5/hoshi-stt-mlx/server.py`, Port 9001) ist bis zum
-bewiesenen Cutover die laufende Wahrheit.** `pipeline/stack-lib.sh` startet
-den STT-Sidecar heute noch über `$HOSHI_05_ROOT/tools/hoshi-whisper-run.sh`
-(siehe `pipeline/up.sh`) — die Umstellung auf dieses Verzeichnis ist ein
-eigener, bewusster Schritt (Scheibe 4), nicht Teil dieses Ports. Bis dahin
-NICHT parallel zum laufenden 0.5-Whisper starten (Port-Kollision auf 9001).
+`pipeline/up.sh` wählt den Repo-Sidecar automatisch, sobald dessen `.venv`
+existiert. Fehlt es, bleibt der 0.5-Run-Pfad als sichtbarer Rückweg;
+`HOSHI_SIDECARS_FROM_REPO=true|false` erzwingt eine Seite. Der aktive Pfad ist
+am Start-Log/`doctor` zu prüfen. Beide Varianten nie parallel starten
+(Port-Kollision auf 9001).

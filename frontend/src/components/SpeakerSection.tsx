@@ -8,6 +8,8 @@ import {
   fetchSpeakers,
 } from '../api/speakers';
 import { type EnrollCapture, createBrowserEnrollCapture } from '../audio/enrollCapture';
+import { de } from '../i18n/de';
+import { useUiStrings } from '../i18n';
 import { LockGlyph, MicGlyph } from './icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,46 +41,12 @@ export function sampleProgress(i: number): string {
   return `Satz ${i} von ${ENROLL_SAMPLE_COUNT}`;
 }
 
-/** Alle sichtbaren Texte an einem Ort (auch von den Tests referenziert). */
-export const SPEAKER_TEXTS = {
-  groupTitle: 'Erkannte Sprecher',
-  intro:
-    'Hoshi kann lernen, wer gerade spricht, und euch beim Namen ansprechen. Das läuft lokal auf der Box.',
-  consent: 'Jede/r lernt die EIGENE Stimme an — dein Profil gehört dir.',
-  empty: 'Noch niemand angelernt. Lern deine Stimme an, dann erkennt Hoshi dich wieder.',
-  enrollButton: 'Meine Stimme anlernen',
-  delete: 'Löschen',
-  confirm: 'Wirklich? Klick nochmal',
-  deleting: 'löscht…',
-  deleteFailed: 'Löschen fehlgeschlagen — dein Profil ist unverändert. Bitte erneut versuchen.',
-  enrolledNote: 'Angelernt — Hoshi erkennt dich jetzt.',
-  loadError: 'Sprecher-Liste grad nicht lesbar.',
-  // ── Anlern-Dialog (3 Aufnahmen → EIN Profil) ───────────────────────────────
-  dialogTitle: 'Deine Stimme anlernen',
-  dialogIntro:
-    'Sprich drei kurze Sätze, einen nach dem anderen — ganz natürlich, so wie du redest. Nach dem dritten Satz ist dein Profil komplett.',
-  nameLabel: 'Dein Name',
-  nameHint: 'So nennt Hoshi dich. Nur deine eigene Stimme — der Name steht später in der Liste.',
-  nameInvalid: 'Bitte nur Buchstaben, Ziffern, _ oder − (1–64 Zeichen).',
-  recordSample: 'aufnehmen', // Button: „Satz i von 3 aufnehmen"
-  recordingHint: 'Ich höre zu — sprich den Satz in Ruhe.',
-  finish: 'Satz fertig — speichern',
-  cancel: 'Abbrechen',
-  saving: 'Ich lerne deine Stimme…',
-  sampleSaved: 'gespeichert.', // Status: „✓ Satz i von 3 gespeichert."
-  nextUp: 'Als Nächstes:',
-  partialHint: `Noch nicht fertig — dein Profil ist erst nach Satz ${ENROLL_SAMPLE_COUNT} komplett.`,
-  done: 'Profil komplett — ich erkenne dich jetzt.',
-  close: 'Schließen',
-  retry: 'Nochmal von vorn',
-  errorPartialHint: 'Dein Profil ist so noch nicht komplett — starte am besten nochmal von vorn.',
-  abortedNote: 'Anlernen abgebrochen — das unfertige Profil wurde verworfen.',
-  // ── Ehrliche Degradation (kein Fake-Erfolg) ──────────────────────────────────
-  insecure:
-    'Mikro-Aufnahme braucht eine sichere Verbindung (https). Öffne die Seite über https und versuch es erneut.',
-  noMic: 'Kein Mikrofon verfügbar. Schließ eines an und öffne die Seite über https.',
-  genericFail: 'Anlernen hat nicht geklappt. Es wurde nichts gespeichert — bitte erneut versuchen.',
-} as const;
+/**
+ * Alle sichtbaren Texte an einem Ort (auch von den Tests referenziert) — jetzt
+ * eine Referenz auf den `de`-Katalog in `i18n/de.ts` (byte-gleich zum
+ * bisherigen Stand). Gerendert wird `useUiStrings().speaker`, s. unten.
+ */
+export const SPEAKER_TEXTS = de.speaker;
 
 /** Wie lange der scharfe Zweitklick-Zustand hält, bevor er sich selbst entschärft (wie Privacy). */
 const ARM_TIMEOUT_MS = 5000;
@@ -138,6 +106,8 @@ export function SpeakerListView({
   onDelete,
   onEnroll,
 }: SpeakerListViewProps) {
+  const t = useUiStrings();
+  const SPEAKER_TEXTS = t.speaker;
   const isEmpty = speakers !== null && speakers.length === 0;
   return (
     <section className="settings__group">
@@ -243,6 +213,8 @@ export function EnrollDialog({
   removeProfile = deleteSpeaker,
   support = micSupport,
 }: EnrollDialogProps) {
+  const t = useUiStrings();
+  const SPEAKER_TEXTS = t.speaker;
   const [step, setStep] = useState<EnrollStep>('intro');
   /** Welcher Satz als Nächstes aufgenommen wird (1-basiert). */
   const [sampleIndex, setSampleIndex] = useState(1);
@@ -514,6 +486,8 @@ export function EnrollDialog({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function SpeakerSection() {
+  const t = useUiStrings();
+  const SPEAKER_TEXTS = t.speaker;
   const [speakers, setSpeakers] = useState<SpeakerSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

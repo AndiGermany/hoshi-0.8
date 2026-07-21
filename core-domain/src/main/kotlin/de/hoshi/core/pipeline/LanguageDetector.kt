@@ -65,6 +65,9 @@ class HeuristicLanguageDetector : LanguageDetector {
             // (3) Deutsche Morphologie: -ung / -keit Endungen + sch-Cluster.
             if (t.length > 4 && (t.endsWith("ung") || t.endsWith("keit"))) de++
             if (t.contains("sch")) de++
+            // (3b) Englische Morphologie — Gegenstück zu (3). Ohne sie zählt ein
+            // englischer Satz ohne Funktionswörter weiterhin null.
+            if (t.length > 4 && (t.endsWith("ing") || t.endsWith("tion") || t.endsWith("ly"))) en++
         }
 
         // Gewinner = hoehere Summe; Gleichstand / mehrdeutig / kein Signal -> DE.
@@ -85,11 +88,33 @@ class HeuristicLanguageDetector : LanguageDetector {
             "der", "die", "das", "und", "ist", "nicht", "ich", "du", "wir",
             "ein", "eine", "mit", "auf", "für", "von", "wie", "was",
             "wann", "wo", "warum",
+            // Erweiterung 21.07 (s. Klassen-KDoc): Alltagsdeutsch, das in kurzen
+            // Sprach-Turns wirklich vorkommt. Bewusst NUR Wörter ohne englische
+            // Doppelbedeutung — „will", „so", „all", „man", „in" bleiben DRAUSSEN,
+            // weil sie in beiden Sprachen existieren und sonst Rauschen erzeugen.
+            "mir", "mich", "dir", "dich", "sich", "den", "dem", "des",
+            "im", "zum", "zur", "bei", "nach", "vor", "über", "unter",
+            "aber", "auch", "noch", "schon", "jetzt", "heute", "gibt",
+            "habe", "hast", "kann", "kannst", "soll", "mach", "sag", "erzähl",
+            "bitte", "danke", "etwas", "keine", "kein", "sind", "wird",
         )
 
         val EN_STOPWORDS = setOf(
             "the", "and", "is", "are", "you", "what", "when", "where", "why",
             "how", "a", "an", "of", "to", "in", "on", "for", "with", "this", "that",
+            // Erweiterung 21.07 — Andi-Befund: „Tell me something about Liverpool
+            // please." enthielt KEIN einziges Wort der alten Liste ⇒ 0:0 ⇒ Deutsch.
+            // Ein normaler englischer Satz braucht keine Artikel und Präpositionen.
+            // Auch hier: keine Wörter mit deutscher Doppelbedeutung aufnehmen.
+            "tell", "told", "me", "my", "your", "yours", "can", "could",
+            "would", "should", "does", "did", "have", "has", "had",
+            "about", "please", "something", "anything", "everything", "nothing",
+            "there", "their", "they", "them", "its", "he", "she",
+            "just", "like", "know", "show", "give", "need", "want", "get", "got",
+            "make", "find", "from", "by", "at", "as", "but", "or", "not", "yes",
+            "more", "most", "much", "many", "very", "then", "than", "if", "any",
+            "who", "which", "whose", "been", "being", "thanks", "thank",
+            "hello", "okay", "really", "maybe", "because", "again", "around",
         )
     }
 }

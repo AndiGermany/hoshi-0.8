@@ -84,10 +84,9 @@ start_sidecar() { # label port run_script
 }
 
 say "Sidecars (best-effort, launchd ist eigentlich zuständig):"
-# whisper-stt + speaker-id: S4-Cutover auf sidecars/{stt,speaker}/run.sh mit
+# whisper-stt + speaker-id + knowledge: sanfter Cutover auf die Repo-Sidecars mit
 # sanftem Übergang (Repo-Pfad nur wenn dessen .venv existiert, sonst 0.5 +
-# INFO-Zeile; HOSHI_SIDECARS_FROM_REPO=true|false erzwingt). knowledge-bridge
-# hat noch KEIN Repo-Sidecar → bleibt unverändert auf dem 0.5-Pfad.
+# INFO-Zeile; HOSHI_SIDECARS_FROM_REPO=true|false erzwingt).
 if resolve_sidecar_run_script "stt" "$HOSHI_05_ROOT/tools/hoshi-whisper-run.sh"; then
     start_sidecar "whisper-stt" "$WHISPER_PORT" "$SIDECAR_RUN_SCRIPT"
 else
@@ -96,7 +95,11 @@ else
     # nicht als best-effort-Degradation durchrutschen: laut abbrechen.
     exit 1
 fi
-start_sidecar "knowledge"   "$BRIDGE_PORT"     "$HOSHI_05_ROOT/tools/hoshi-bridge-run.sh"
+if resolve_sidecar_run_script "knowledge" "$HOSHI_05_ROOT/tools/hoshi-bridge-run.sh"; then
+    start_sidecar "knowledge" "$BRIDGE_PORT" "$SIDECAR_RUN_SCRIPT"
+else
+    exit 1
+fi
 if resolve_sidecar_run_script "speaker" "$HOSHI_05_ROOT/tools/hoshi-speakerid-run.sh"; then
     start_sidecar "speaker-id" "$SPEAKERID_PORT" "$SIDECAR_RUN_SCRIPT"
 else

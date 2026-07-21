@@ -57,5 +57,8 @@ object LangEn {
         promptLanguageInstruction = "Always answer in English.",
         smartHomeNotice = "Smart-home commands: German only for now.",
         sayVoiceHint = "Samantha",
+        // Handverifiziert + lizenzgeprueft, s. sidecars/piper/artifacts.lock.json
+        // (Andi-Wunsch fuers Build-Week-Video: "de -> en, piper spricht englisch mit").
+        piperVoiceHint = "en_US-kristin-medium",
     )
 }
