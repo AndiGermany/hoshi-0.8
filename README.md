@@ -75,6 +75,25 @@
    Projekt-Grundlagen liegen LLM-lesbar im [`vault/`](vault/00-INDEX.md); die private
    Werkstatt dahinter gehört dem Haus.)
 
+### Gebaut mit Codex und GPT-5.6
+
+Hoshi 0.8 gab es schon vor der Build Week. Im Wettbewerbsfenster arbeitete **Codex mit GPT-5.6** in zwei
+Rollen: als bauende Instanz und als kritischer Gegenblick.
+
+Von Codex stammen das Mess- und Sicherheitswerkzeug der Sprechererkennung, der optionale lokale
+Piper-TTS-Sidecar, der Repo-Port der Wissens-Brücke und die Frontend-Mehrsprachigkeit. Ein getrennter
+Orchestrator hat geprüft, integriert und unabhängig nachgemessen — und wurde dabei mehr als einmal von
+Codex korrigiert, unter anderem, als eine zu weit gehende Mess-Behauptung zurückgenommen werden musste.
+Produktrichtung sowie jedes Privatsphäre-, Deploy- und Produktions-Gate blieben bei Andi.
+
+Die Agenten koordinieren sich über **CollabOS**: ein kleines, nachlesbares, dateibasiertes Protokoll — ein
+Verzeichnis mit Briefen. Jeder Agent liest seinen Posteingang, schreibt in seinen Ausgang, und alles landet
+in der Versionsgeschichte. Kein Dienst, kein Protokoll-Server; Dateien, die man später lesen kann. Auch die
+Fehler.
+
+Dazu kam ein **opt-in GPT-5.6-Recherchepfad** zur Laufzeit: OpenAI-Websuche hinter einer ausdrücklichen
+Zustimmung, mit genannten Quellen, ehrlichem Modell-Label und einem Tagesbudget.
+
 ### Architektur (kurz)
 
 Hexagonal (Ports & Adapters) — STT-, TTS- und LLM-Engines sind austauschbar; nur DTOs queren
@@ -171,6 +190,24 @@ JDK 21. Brain, Whisper STT, speaker ID, the knowledge bridge, and the `say`/Pipe
 sidecars live in [`sidecars/`](sidecars/) with pinned bootstrap paths. Large models and the
 Wikipedia database remain external artifacts; the legacy Voxtral server still comes from a
 separate local checkout and is deliberately disabled. Full German guide: [Build & Run](#build--run).
+
+### Built with Codex and GPT-5.6
+
+Hoshi 0.8 predates Build Week. During the competition window, **Codex with GPT-5.6** worked as both an
+implementation agent and an adversarial reviewer.
+
+Codex contributed the speaker-recognition evaluation and safety tooling, the optional local Piper TTS
+sidecar, the Knowledge Bridge repository port, and frontend internationalization. A separate orchestrator
+reviewed, integrated, and independently tested these changes — and was corrected by Codex more than once,
+including a case where an over-stated measurement claim had to be withdrawn. Andi remained responsible for
+product direction and for every privacy, deployment, and production gate.
+
+The agents coordinated through **CollabOS**: a small, inspectable, file-based protocol — a directory of
+letters. Every agent reads its inbox, writes to its outbox, and all of it lands in version history. No
+service, no daemon; just files you can still read later. Including the mistakes.
+
+Hoshi also gained an **opt-in GPT-5.6 research path** at runtime: OpenAI web search behind an explicit
+consent step, with cited sources, honest model labels, and a daily spending limit.
 
 ### For reviewers: verify in 5 minutes
 
