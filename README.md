@@ -297,6 +297,23 @@ Apple-Silicon-Mac (16 GB) in einem spezifischen Zuhause-Setup (ein bestimmtes Ho
 Es ist kein für beliebige Umgebungen poliertes Produkt — Pfade, Ports und Annahmen spiegeln diese eine
 Maschine. Wer es adaptiert, sollte Kanten erwarten (siehe Abschnitt oben zu den Sidecars).
 
+## Die drei Repos · The three repositories
+
+Hoshi ist eines von drei Stücken, die zusammengehören:
+
+| | |
+|---|---|
+| **hoshi-0.8** *(hier)* | Der Assistent: Backend, Oberfläche, Sidecars, Wire-Protokolle · *The assistant itself* |
+| [**hoshi-satellite**](https://github.com/AndiGermany/hoshi-satellite) | Die Hardware-Seite: eigene ESPHome-Firmware für den Sprach-Satelliten — LED-Ring als Sprache, Wake-Word on-device · *The hardware side* |
+| [**collab-os**](https://github.com/AndiGermany/collab-os) | **Das Making-of:** wie eine Person mit KI-Agenten das hier gebaut hat — die Methode, die Messdisziplin und ein Log jeder Lehre, die zweimal gelernt werden musste · *How it was actually built, mistakes included* |
+
+> Wenn dich weniger interessiert, *was* Hoshi kann, als *wie* so etwas entsteht:
+> [collab-os](https://github.com/AndiGermany/collab-os) ist der ehrlichere Teil der Geschichte.
+> Er enthält auch die Ideen, die gestorben sind — und warum.
+>
+> *If you care less about what Hoshi does and more about how something like this gets built,
+> collab-os is the more honest half of the story. It includes the ideas that died, and why.*
+
 ## Mitmachen
 Siehe [`CONTRIBUTING.md`](CONTRIBUTING.md) — inkl. Lizenz-Zustimmung und DCO (`Signed-off-by`). Die
 Vision, die Invarianten und die Roadmap leben im Vault: [`vault/00-INDEX.md`](vault/00-INDEX.md).
