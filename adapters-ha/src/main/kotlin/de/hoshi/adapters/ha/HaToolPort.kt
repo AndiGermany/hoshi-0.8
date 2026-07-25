@@ -1,6 +1,8 @@
 package de.hoshi.adapters.ha
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import de.hoshi.core.pipeline.lang.HaExecutorPack
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import de.hoshi.core.port.ToolPort
 import de.hoshi.core.tools.ToolAreas
 import de.hoshi.core.tools.ToolCall
@@ -78,6 +80,20 @@ import java.time.Duration
  * Der Body wird NUR aus [ToolCall.data] gebaut — das ist die bereits Grant-
  * normalisierte data des [de.hoshi.core.port.CapabilityPort]. domain/service sind
  * kernel-validiert (Slash-Injection geblockt). Das Token wird nie geloggt.
+ *
+ * **Mehrsprachig seit 2026-07-25** (Andi: „Smart-Home-Bestätigungen -> sowas soll
+ * natürlich auch auf englisch […] es soll multilingual werden. von A-Z"): KEINE
+ * Quittung steht mehr als Literal in dieser Datei. Jede Phrase kommt aus dem
+ * [HaExecutorPack] der Sprache, die auf dem [ToolCall.language] mitgereist ist
+ * (Default DE ⇒ byte-identisch zum Bestand). Der Kontrollfluss oben — WELCHE
+ * Phrase wann fällt — ist davon unberührt: die Ehrlichkeits-Abstufung liegt in der
+ * Klassifikation, nicht in der Sprache.
+ *
+ * **Raumnamen sind Nutzerdaten und werden NIE übersetzt.** Sie kommen aus der
+ * HA-Registry und werden nur in den `{room}`-Slot gesetzt — „Wohnzimmer" bleibt
+ * „Wohnzimmer", auch im englischen Satz. Beibehalten ist auch, WELCHE Form je
+ * Phrase eingesetzt wird: der Licht-Readback nennt den rohen Area-Slug
+ * (`kueche`), Klima/Temperatur das sprechbare [ToolAreas.label] (`Küche`).
  */
 class HaToolPort(
     baseUrl: String,
@@ -114,15 +130,21 @@ class HaToolPort(
         .connectTimeout(Duration.ofMillis(timeoutMs))
         .build()
 
+    /**
+     * Die Quittungs-Texte der Sprache DIESES Turns. Kein Feld, kein globaler
+     * Zustand: die Sprache reist auf dem [ToolCall] mit (der Port ist ein
+     * langlebiger Singleton, die Sprache ist per-Turn wählbar).
+     */
+    private fun phrases(call: ToolCall): HaExecutorPack =
+        LanguagePackRegistry.forLanguage(call.language).haExecutor
+
     override fun execute(call: ToolCall): ToolResult {
         // READ-ONLY-Pfad (z.B. „wie warm ist es?"): NUR lesen, NIE schalten — eigener
         // Zweig, der kein /api/services anfasst. Best-effort + honest (nie Throw).
         if (call.read) return readTemperature(call)
         // Kein Token ⇒ ehrlich nichts tun (kein Call, kein Fake).
         if (token.isBlank()) {
-            return ToolResult.NoEffect(
-                "Ganz ehrlich: ich hab gerade kein HA-Token konfiguriert, also hab ich nichts geschaltet.",
-            )
+            return ToolResult.NoEffect(phrases(call).noToken)
         }
         // Klima-Ehrlichkeit VOR dem Schalten: eine Area OHNE climate-Entity liefert von
         // HA trotzdem eine leere 200-Quittung (Area-Targeting trifft schlicht nichts) —
@@ -130,7 +152,8 @@ class HaToolPort(
         // NICHT blockiert (fail-open), sonst würde ein Lese-Problem die echte Tat kosten.
         val climateArea = areaOf(call)?.takeIf { call.domain == "climate" }
         if (climateArea != null && hasClimateEntity(climateArea) == false) {
-            return ToolResult.NoEffect("Im ${ToolAreas.label(climateArea)} kenne ich kein Thermostat.")
+            // Area-LABEL (sprechbar), NICHT der Slug — Nutzerdatum, unübersetzt.
+            return ToolResult.NoEffect(phrases(call).noThermostatInArea.room(ToolAreas.label(climateArea)))
         }
         return try {
             // Delta-Baseline VOR dem Schalten (NUR nacktes light.turn_on mit area, s. KDoc):
@@ -152,12 +175,12 @@ class HaToolPort(
             } else {
                 // HTTP-Status zählt, nicht der Body (Token nie loggen).
                 log.warn("[ha-tool] HA {}.{} → HTTP {}", call.domain, call.service, resp.statusCode())
-                failed()
+                failed(call)
             }
         } catch (e: Exception) {
             // never-throw: jeder Fehler (Timeout/Netz/Serialisierung) endet warm, nie als Crash.
             log.warn("[ha-tool] HA-Call {}.{} warf: {}", call.domain, call.service, e.message)
-            failed()
+            failed(call)
         }
     }
 
@@ -325,32 +348,35 @@ class HaToolPort(
             "[ha-tool] readback area={} service={} baseline={} → gesamt={} an={} offline={}",
             area, call.service, baseline?.on ?: "-", counts.total, counts.on, counts.unavailable,
         )
+        // Alle Licht-Phrasen tragen den ROHEN Area-Slug (wie im Bestand), nie ein
+        // übersetztes Wort — der Raumname ist Nutzerdatum aus der HA-Registry.
+        val p = phrases(call)
         if (call.service == "turn_off") {
             return if (counts.on == 0) {
-                ToolResult.Ok("Licht im $area ist aus.")
+                ToolResult.Ok(p.lightOffArea.room(area))
             } else {
-                ToolResult.NoEffect("Ein paar Lampen im $area sind noch an — die haben evtl. nicht reagiert.")
+                ToolResult.NoEffect(p.lightSomeStillOn.room(area))
             }
         }
         val offlineHint = if (counts.unavailable > 0) {
-            " — ${counts.unavailable} Lampen sind gerade nicht erreichbar (evtl. am Schalter aus)."
+            p.offlineHintCount.replace(COUNT_SLOT, counts.unavailable.toString())
         } else {
-            " — vielleicht sind die Lampen offline."
+            p.offlineHintVague
         }
         return when {
-            counts.total == 0 -> ToolResult.NoEffect("Im $area hab ich gar keine Lampen gefunden.")
+            counts.total == 0 -> ToolResult.NoEffect(p.noLightsInArea.room(area))
             // Bewusst OHNE genaue Zahl: der Poll früh-stoppt beim ersten Delta-/„on"-
             // Treffer, eine weitere Lampe kann Millisekunden später kommen → „1 von 8"
             // wäre ein Unterzähl-Race (live gemessen). „ist an" ist verifiziert + ehrlich.
-            baseline != null && counts.on > baseline.on -> ToolResult.Ok("Licht im $area ist an.")
+            baseline != null && counts.on > baseline.on -> ToolResult.Ok(p.lightOnArea.room(area))
             baseline != null && counts.on >= 1 && reachable(counts) > 0 && baseline.on >= reachable(counts) ->
-                ToolResult.Ok("Im $area ist das Licht schon an.")
+                ToolResult.Ok(p.lightAlreadyOnArea.room(area))
             baseline != null && counts.on >= 1 -> ToolResult.NoEffect(
-                "Im $area brennt zwar schon Licht, aber neu angegangen ist nichts$offlineHint",
+                p.lightNothingNewOn.room(area) + offlineHint,
             )
-            baseline == null && counts.on >= 1 -> ToolResult.Ok("Licht im $area ist an.")
+            baseline == null && counts.on >= 1 -> ToolResult.Ok(p.lightOnArea.room(area))
             else -> ToolResult.NoEffect(
-                "Ich hab's an Home Assistant geschickt, aber im $area ging kein Licht an$offlineHint",
+                p.lightNoneWentOn.room(area) + offlineHint,
             )
         }
     }
@@ -400,10 +426,12 @@ class HaToolPort(
     private fun honestClimateOutcome(call: ToolCall, area: String): ToolResult {
         val target = targetTemperature(call) ?: return ToolResult.Ok(okPhrase(call))
         val value = readbackClimateSettled(area, target)
+        val p = phrases(call)
         return if (value != null && Math.round(value).toInt() == target) {
-            ToolResult.Ok("Heizung im ${ToolAreas.label(area)} auf $target Grad.")
+            // Area-LABEL (sprechbar) + Zielwert — beides unübersetzte Nutzer-/Messdaten.
+            ToolResult.Ok(p.climateSetArea.room(ToolAreas.label(area)).value(target.toString()))
         } else {
-            ToolResult.NoEffect("Hab's geschickt, die Heizung hat noch nicht reagiert.")
+            ToolResult.NoEffect(p.climateNotYet)
         }
     }
 
@@ -481,15 +509,12 @@ class HaToolPort(
     /** Warme, EHRLICHE Quittung — behauptet nur „an HA geschickt", nennt die Ziel-Area falls vorhanden. */
     private fun okPhrase(call: ToolCall): String {
         val area = areaOf(call)
-        return if (area != null) {
-            "Ist erledigt — ich hab's an die Geräte im $area geschickt."
-        } else {
-            "Ist erledigt — ich hab's an Home Assistant geschickt."
-        }
+        val p = phrases(call)
+        return if (area != null) p.sentToArea.room(area) else p.sentToHome
     }
 
-    private fun failed(): ToolResult =
-        ToolResult.Failed("Hat nicht geklappt — Home Assistant hat gerade nicht reagiert.")
+    private fun failed(call: ToolCall): ToolResult =
+        ToolResult.Failed(phrases(call).failed)
 
     // ── READ-ONLY: Ist-Temperatur lesen ─────────────────────────────────────────
 
@@ -509,9 +534,7 @@ class HaToolPort(
      */
     private fun readTemperature(call: ToolCall): ToolResult {
         if (token.isBlank()) {
-            return ToolResult.NoEffect(
-                "Ganz ehrlich: ich hab gerade kein HA-Token konfiguriert, also komm ich nicht an die Temperatur ran.",
-            )
+            return ToolResult.NoEffect(phrases(call).noTokenTemperature)
         }
         val area = (call.data["area_id"] as? String)?.takeIf { it.isNotBlank() }
         val template = if (area != null) areaTemperatureTemplate(area) else houseTemperatureTemplate()
@@ -527,14 +550,14 @@ class HaToolPort(
             val resp = client.send(req, HttpResponse.BodyHandlers.ofString())
             if (resp.statusCode() !in 200..299) {
                 log.warn("[ha-tool] Temperatur-Read /api/template → HTTP {}", resp.statusCode())
-                return readFailed()
+                return readFailed(call)
             }
             val value = parseTemperature(resp.body())
-                ?: return ToolResult.NoEffect("Dafür hab ich gerade keinen Wert.")
-            ToolResult.Ok(temperaturePhrase(area, value))
+                ?: return ToolResult.NoEffect(phrases(call).noValue)
+            ToolResult.Ok(temperaturePhrase(area, value, phrases(call)))
         } catch (e: Exception) {
             log.warn("[ha-tool] Temperatur-Read warf: {}", e.message)
-            readFailed()
+            readFailed(call)
         }
     }
 
@@ -545,20 +568,25 @@ class HaToolPort(
         return s.toDoubleOrNull()
     }
 
-    /** Warme deutsche Antwort; Komma-Dezimal, ganze Werte ohne „,0" (21.0 → „21", 21.5 → „21,5"). */
-    private fun temperaturePhrase(area: String?, value: Double): String {
+    /**
+     * Warme Antwort in der Turn-Sprache; ganze Werte ohne Nachkomma (21.0 → „21"),
+     * sonst mit dem Dezimal-Trenner der Sprache (DE/ES/FR/IT „21,5", EN „21.5" —
+     * [HaExecutorPack.decimalSeparator]). Der Raumname bleibt das unübersetzte
+     * [ToolAreas.label] aus der HA-Registry.
+     */
+    private fun temperaturePhrase(area: String?, value: Double, p: HaExecutorPack): String {
         val rounded = Math.round(value * 10.0) / 10.0
         val num = if (rounded % 1.0 == 0.0) rounded.toLong().toString()
-        else rounded.toString().replace('.', ',')
+        else rounded.toString().replace(".", p.decimalSeparator)
         return if (area != null) {
-            "Im ${ToolAreas.label(area)} sind es gerade $num Grad."
+            p.temperatureInArea.room(ToolAreas.label(area)).value(num)
         } else {
-            "Im Haus sind es gerade durchschnittlich $num Grad."
+            p.temperatureHouseAverage.value(num)
         }
     }
 
-    private fun readFailed(): ToolResult =
-        ToolResult.Failed("Ich komm gerade nicht an die Temperatur ran — versuch's gleich nochmal.")
+    private fun readFailed(call: ToolCall): ToolResult =
+        ToolResult.Failed(phrases(call).temperatureUnavailable)
 
     /**
      * READ-ONLY Jinja-Template: die Ist-Temperatur EINER Area — erst `climate.*`
@@ -577,4 +605,21 @@ class HaToolPort(
     private fun houseTemperatureTemplate(): String =
         "{% set temps = states.climate | map(attribute='attributes.current_temperature') | reject('none') | list %}" +
             "{{ (temps | average | round(1)) if (temps | count) > 0 else 'none' }}"
+
+    private companion object {
+        /** Slot für den HA-Raumnamen — **Nutzerdatum**, wird eingesetzt und NIE übersetzt. */
+        const val ROOM_SLOT = "{room}"
+
+        /** Slot für einen Messwert (Grad). */
+        const val VALUE_SLOT = "{value}"
+
+        /** Slot für die Anzahl nicht erreichbarer Lampen. */
+        const val COUNT_SLOT = "{count}"
+
+        /** Setzt den (unübersetzten) Raumnamen in eine Phrase des [HaExecutorPack] ein. */
+        fun String.room(name: String): String = replace(ROOM_SLOT, name)
+
+        /** Setzt einen Messwert in eine Phrase des [HaExecutorPack] ein. */
+        fun String.value(v: String): String = replace(VALUE_SLOT, v)
+    }
 }

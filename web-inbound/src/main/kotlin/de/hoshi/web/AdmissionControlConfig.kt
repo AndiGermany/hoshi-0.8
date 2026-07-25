@@ -31,6 +31,9 @@ class AdmissionControlConfig {
     ): BrainAdmissionGate = BrainAdmissionGate(
         enabled = enabled,
         maxConcurrent = maxConcurrent,
-        rejectPhrase = rejectPhrase.ifBlank { BrainAdmissionGate.DEFAULT_REJECT_PHRASE },
+        // Leer (Default) ⇒ null ⇒ die Absage kommt sprach-bewusst aus dem Sprachpaket
+        // der Turn-Sprache; eine GESETZTE Env-Phrase ist eine bewusste Betreiber-Wahl
+        // und gewinnt unverändert in jeder Sprache (s. BrainAdmissionGate.rejectPhrase).
+        rejectPhrase = rejectPhrase.takeIf { it.isNotBlank() },
     )
 }

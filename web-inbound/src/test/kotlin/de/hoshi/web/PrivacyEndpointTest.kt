@@ -3,6 +3,7 @@ package de.hoshi.web
 import de.hoshi.adapters.memory.EntityMemoryAdapter
 import de.hoshi.adapters.memory.EpisodicEmbedder
 import de.hoshi.adapters.memory.EpisodicMemoryAdapter
+import de.hoshi.core.dto.Language
 import de.hoshi.core.supervision.SidecarHealth
 import de.hoshi.core.supervision.SidecarPort
 import org.hamcrest.Matchers.nullValue
@@ -172,9 +173,9 @@ class PrivacyEndpointTest(
                 .jsonPath("$.deleted").isEqualTo(1)
 
             // Wirklich weg — und der offene Adapter arbeitet weiter (kein Korrupt, kein Reconnect).
-            assertNull(adapter.contextBlock("andi"), "nach DELETE kein Gedächtnis-Block mehr")
+            assertNull(adapter.contextBlock("andi", Language.DE), "nach DELETE kein Gedächtnis-Block mehr")
             adapter.remember("andi", "Meine Katze heißt Mia", "ok")
-            val block = adapter.contextBlock("andi")
+            val block = adapter.contextBlock("andi", Language.DE)
             assertNotNull(block, "Adapter muss den externen Wipe überleben")
             assertTrue(block!!.contains("Mia"))
         }

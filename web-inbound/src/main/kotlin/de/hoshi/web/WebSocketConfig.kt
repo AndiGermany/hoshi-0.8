@@ -135,7 +135,7 @@ class WebSocketConfig {
             // ⇒ byte-neutral; ein künftiges policy-Feld griffe automatisch.
             runTurn = { req ->
                 val resolved = req.copy(language = languageResolver.resolve(req))
-                admissionGate.gate { orchestrator.handle(resolved) }
+                admissionGate.gate(resolved.language) { orchestrator.handle(resolved) }
             },
             audioCapEnabled = audioCapEnabled,
             maxAudioBytesPerTurn = audioCapMaxBytes,

@@ -3,6 +3,7 @@ package de.hoshi.web
 import de.hoshi.core.port.SpeakerEmbedPort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -80,5 +81,115 @@ class SpeakerDiagnosticsTest {
 
         assertEquals(0, diag.profiles.size)
         assertEquals(0, diag.crossSimilarity.size)
+    }
+
+    // ── Auftrag A (25.07): Leave-one-out — EIN Wert PRO AUFNAHME ─────────────
+
+    @Test
+    fun `leaveOneOutSimilarity - mathematisch gepinnt gegen das Mittel der UEBRIGEN Samples`(@TempDir dir: Path) {
+        val store = SpeakerProfileStore(dir.resolve("profiles.json"))
+        store.upsert("andi", floatArrayOf(1f, 0f)) // Sample A (Index 0)
+        store.appendSample("andi", floatArrayOf(0f, 1f)) // Sample B (Index 1)
+        store.appendSample("andi", floatArrayOf(1f, 0f)) // Sample C == A (Index 2)
+        val ctrl = SpeakerController(store, RealSimilarityPort())
+
+        val diag = ctrl.diagnostics()
+        val p = diag.profiles.single { it.name == "andi" }
+
+        // Index 0 (A) vs Mittel(B,C) = Mittel((0,1),(1,0)) = (0.5,0.5) → renorm (1/√2,1/√2).
+        //   cos(A, (1/√2,1/√2)) = 1/√2.
+        // Index 1 (B) vs Mittel(A,C) = Mittel((1,0),(1,0)) = (1,0) → renorm (1,0). cos(B,(1,0)) = 0.
+        // Index 2 (C) vs Mittel(A,B) = Mittel((1,0),(0,1)) = (0.5,0.5) → renorm (1/√2,1/√2).
+        //   cos(C, (1/√2,1/√2)) = 1/√2 (C == A).
+        val invSqrt2 = 1.0 / kotlin.math.sqrt(2.0)
+        assertEquals(3, p.leaveOneOutSimilarity.size)
+        assertEquals(invSqrt2, p.leaveOneOutSimilarity[0], 1e-9)
+        assertEquals(0.0, p.leaveOneOutSimilarity[1], 1e-9)
+        assertEquals(invSqrt2, p.leaveOneOutSimilarity[2], 1e-9)
+    }
+
+    @Test
+    fun `leaveOneOutSimilarity ist leere Liste bei weniger als 2 Samples - nichts zu leaven`(@TempDir dir: Path) {
+        val store = SpeakerProfileStore(dir.resolve("profiles.json"))
+        store.upsert("bob", floatArrayOf(1f, 0f))
+        val ctrl = SpeakerController(store, RealSimilarityPort())
+
+        val diag = ctrl.diagnostics()
+
+        assertTrue(diag.profiles.single { it.name == "bob" }.leaveOneOutSimilarity.isEmpty())
+    }
+
+    // ── Auftrag A (25.07): Fremd-Bestwerte — Sample-gegen-Sample, nicht Mittel-gegen-Mittel ──
+
+    @Test
+    fun `bestForeignSimilarity - hoechste Sample-gegen-Sample-Aehnlichkeit, mathematisch gepinnt`(@TempDir dir: Path) {
+        val store = SpeakerProfileStore(dir.resolve("profiles.json"))
+        // andi hat 2 Samples, eines davon liegt (bewusst kontaminiert) NAH an bob.
+        store.upsert("andi", floatArrayOf(1f, 0f))
+        store.appendSample("andi", floatArrayOf(0.6f, 0.8f))
+        store.upsert("bob", floatArrayOf(0f, 1f))
+
+        val ctrl = SpeakerController(store, RealSimilarityPort())
+        val diag = ctrl.diagnostics()
+
+        // best(andi vs bob) = max(cos((1,0),(0,1)), cos((0.6,0.8),(0,1))) = max(0.0, 0.8) = 0.8.
+        // Toleranz 1e-6 statt 1e-9: (0.6f,0.8f) ist NICHT exakt binaer darstellbar (anders als
+        // die reinen 0/1-Vektoren in den anderen Tests) — Float32-Rundung liegt bei ~1e-7.
+        val andi = diag.profiles.single { it.name == "andi" }
+        assertEquals(0.8, andi.bestForeignSimilarity["bob"]!!, 1e-6)
+        val bob = diag.profiles.single { it.name == "bob" }
+        assertEquals(0.8, bob.bestForeignSimilarity["andi"]!!, 1e-6, "symmetrisch")
+
+        // Der Punkt des Auftrags: bestForeignSimilarity (0.8) ist NICHT crossSimilarity
+        // (Mittel-gegen-Mittel) — Andis Profil-Mittel liegt weiter von bob weg als sein
+        // schlechtestes Einzel-Sample.
+        val crossMeanVsMean = diag.crossSimilarity["andi"]!!["bob"]!!
+        assertTrue(crossMeanVsMean < andi.bestForeignSimilarity["bob"]!!, "Mittel-Vergleich unterschaetzt die Fremd-Naehe")
+    }
+
+    @Test
+    fun `bestForeignSimilarity ist leere Map bei nur einem Profil`(@TempDir dir: Path) {
+        val store = SpeakerProfileStore(dir.resolve("profiles.json"))
+        store.upsert("andi", floatArrayOf(1f, 0f))
+        val ctrl = SpeakerController(store, RealSimilarityPort())
+
+        val diag = ctrl.diagnostics()
+
+        assertTrue(diag.profiles.single { it.name == "andi" }.bestForeignSimilarity.isEmpty())
+    }
+
+    // ── Auftrag B+C (25.07): Herkunft + Qualitaet je Aufnahme in der Diagnose ────────────────
+
+    @Test
+    fun `sampleOrigins - Herkunft und Qualitaet 1 zu 1 zu samples, nichts erfunden`(@TempDir dir: Path) {
+        val store = SpeakerProfileStore(dir.resolve("profiles.json"))
+        store.upsert(
+            "andi", floatArrayOf(1f, 0f),
+            nowMs = 1_000, session = 1, device = "browser", durationSeconds = 3.2, rms = 0.12,
+        )
+        store.appendSample(
+            "andi", floatArrayOf(0f, 1f),
+            nowMs = 2_000, session = 2, device = "voice-pe", durationSeconds = 4.1, rms = 0.20,
+        )
+        // Drittes Sample OHNE Herkunft/Qualitaet (Client hat sie nicht mitgeschickt) — bleibt null.
+        store.appendSample("andi", floatArrayOf(1f, 0f), nowMs = 3_000)
+        val ctrl = SpeakerController(store, RealSimilarityPort())
+
+        val diag = ctrl.diagnostics()
+        val origins = diag.profiles.single { it.name == "andi" }.sampleOrigins
+
+        assertEquals(3, origins.size)
+        assertEquals(1_000, origins[0].recordedAt)
+        assertEquals(1, origins[0].session)
+        assertEquals("browser", origins[0].device)
+        assertEquals(3.2, origins[0].durationSeconds)
+        assertEquals(0.12, origins[0].rms)
+        assertEquals(2_000, origins[1].recordedAt)
+        assertEquals("voice-pe", origins[1].device)
+        assertEquals(3_000, origins[2].recordedAt)
+        assertNull(origins[2].session, "nicht mitgeschickt ⇒ null, nicht erfunden")
+        assertNull(origins[2].device)
+        assertNull(origins[2].durationSeconds)
+        assertNull(origins[2].rms)
     }
 }

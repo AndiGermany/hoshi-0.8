@@ -7,6 +7,7 @@ import de.hoshi.core.pipeline.lang.LangEn
 import de.hoshi.core.pipeline.lang.LangEs
 import de.hoshi.core.pipeline.lang.LangFr
 import de.hoshi.core.pipeline.lang.LangIt
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -18,8 +19,12 @@ import org.junit.jupiter.api.Test
  *
  *  - die Konversations-Schicht (Cloud-Consent/Abstain-Angebot) folgt der aktiven
  *    [Language] — EN liefert EN-Text, nie DE.
- *  - die Smart-Home-/Timer-Reflexe bleiben IMMER Deutsch, UNABHÄNGIG von der
- *    übergebenen [Language] (Andi-Vorgabe „Reflexe NICHT anfassen").
+ *  - **seit 2026-07-25 auch die Smart-Home-Bestätigungen** (Andis Ansage:
+ *    „Smart-Home-Bestätigungen -> sowas soll natürlich auch auf englisch […] es
+ *    soll multilingual werden. von A-Z"). Die frühere Ausnahme („Reflexe bleiben
+ *    IMMER Deutsch") ist AUFGEHOBEN — die zwei Tests, die sie festgeschrieben
+ *    hatten, prüfen jetzt das Gegenteil. Der DE-Bestand selbst ist davon
+ *    unberührt (s. [ResponseFormatterTest] + [SmartHomeMultilingualTest]).
  */
 class ResponseFormatterMultilingualTest {
 
@@ -77,28 +82,51 @@ class ResponseFormatterMultilingualTest {
         }
     }
 
-    // ── Smart-Home-/Timer-Reflexe bleiben IMMER Deutsch ──────────────────────
+    // ── Smart-Home-Acks folgen der Sprache (Ausnahme aufgehoben, 2026-07-25) ──
 
     @Test
-    fun `Smart-Home-Acks bleiben Deutsch, egal welche Sprache uebergeben wird`() {
+    fun `Smart-Home-Acks folgen der Sprache - DE bleibt DE, jede andere verlaesst den DE-Pool`() {
         for (language in Language.entries) {
-            val on = formatter.lightOn("Wohnzimmer", language)
-            assertTrue(
-                on.contains("Wohnzimmer") && (on.contains("an") || on.contains("hell")),
-                "lightOn muss für $language weiter Deutsch sein: '$on'",
-            )
-            val off = formatter.lightOff("Küche", language)
-            assertTrue(off.contains("Küche"), "lightOff muss für $language weiter Deutsch sein: '$off'")
+            val dePool = LangDe.SMART_HOME_ACKS.lightOnRoom
+            val ownPool = LanguagePackRegistry.forLanguage(language).smartHomeAcks.lightOnRoom
+            repeat(10) {
+                val on = formatter.lightOn("Wohnzimmer", language)
+                // Der Raumname reist IMMER mit — auch im fremdsprachigen Satz.
+                assertTrue(on.contains("Wohnzimmer"), "$language: Raumname muss erhalten bleiben: '$on'")
+                val template = on.replace("Wohnzimmer", "{room}")
+                assertTrue(ownPool.contains(template), "$language: eigene Pool-Phrase erwartet, war '$on'")
+                if (language != Language.DE) {
+                    assertFalse(dePool.contains(template), "$language: darf nicht mehr aus dem DE-Pool kommen: '$on'")
+                }
+            }
         }
     }
 
     @Test
-    fun `unsupported und noEffect bleiben Deutsch unabhaengig von der Sprache`() {
-        for (language in Language.entries) {
-            val unsupported = formatter.unsupported(SmartHomeAction.COVER_OPEN, language)
-            assertTrue(unsupported.contains("Rollo"), "unsupported muss für $language weiter Deutsch sein: '$unsupported'")
-            val noEffect = formatter.noEffect(SmartHomeAction.LIGHT_ON, "Bad", language = language)
-            assertTrue(noEffect.lowercase().contains("schon"), "noEffect muss für $language weiter Deutsch sein: '$noEffect'")
+    fun `unsupported und noEffect folgen der Sprache statt immer Deutsch zu sein`() {
+        // DE: der Bestandswortlaut steht unverändert.
+        assertTrue(formatter.unsupported(SmartHomeAction.COVER_OPEN, Language.DE).contains("Rollo"))
+        assertTrue(formatter.noEffect(SmartHomeAction.LIGHT_ON, "Bad", language = Language.DE).lowercase().contains("schon"))
+
+        for (language in Language.entries - Language.DE) {
+            val pack = LanguagePackRegistry.forLanguage(language).smartHomeAcks
+            repeat(10) {
+                val unsupported = formatter.unsupported(SmartHomeAction.COVER_OPEN, language)
+                assertTrue(
+                    pack.unsupportedCover.contains(unsupported),
+                    "$language: unsupported muss aus dem eigenen Pool kommen, war '$unsupported'",
+                )
+                assertFalse(
+                    LangDe.SMART_HOME_ACKS.unsupportedCover.contains(unsupported),
+                    "$language: kein DE-Text mehr: '$unsupported'",
+                )
+                val noEffect = formatter.noEffect(SmartHomeAction.LIGHT_ON, "Bad", language = language)
+                assertTrue(noEffect.contains("Bad"), "$language: Raumname muss erhalten bleiben: '$noEffect'")
+                assertFalse(
+                    noEffect.lowercase().contains("schon"),
+                    "$language: 'schon' ist deutsch — der Satz darf nicht mehr aus dem DE-Pool kommen: '$noEffect'",
+                )
+            }
         }
     }
 }

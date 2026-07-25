@@ -21,6 +21,8 @@ import de.hoshi.core.pipeline.KeywordRouter
  *     blanker bekannter Raum-Name + Zustand → SMART_HOME (0.5 `mentionsKnownRoom`,
  *     hier gegen das statische [IntentClassifier.Keywords.haRooms]-Set statt gegen
  *     den Spring-`RoomCatalog`).
+ *  1b. **Smart-Home englisch** (2026-07-25, s. [englishSmartHome]): dieselbe Regel
+ *     mit den englischen Wortlisten ([IntentClassifier.KeywordsEn]).
  *  2. **Wissen vs. Smalltalk** — Content-Token-Reduktion (portiert aus der
  *     0.5-`WikiGroundingService`-Such-Query-Reduktion): trägt der Satz nach Abzug
  *     der Grüße/Floskeln/Frage-Gerüst-Tokens noch ein Inhalts-Token („konrad
@@ -29,6 +31,13 @@ import de.hoshi.core.pipeline.KeywordRouter
  *     (kein Grounding). Das ist präziser als 0.5's reine Längen-Heuristik
  *     (kurz→AMBIG), trifft aber dieselbe Absicht — und liefert die vom M4-Schritt
  *     geforderte Trennung Wissen↔Smalltalk, die der Stub nicht konnte.
+ *
+ * **Sprach-agnostisch by design.** Die [KeywordRouter]-Naht trägt (bewusst) keine
+ * Sprache: der Router läuft VOR jeder Sprach-Festlegung und muss Code-Switching
+ * aushalten — Andis HA-Räume heißen deutsch, ein englischer Satz nennt sie also
+ * deutsch („turn on the light in the Wohnzimmer"). Darum werden die DE- und die
+ * EN-Regel NACHEINANDER geprüft, nicht per Sprach-Schalter. Die DE-Regel läuft
+ * zuerst und unverändert; die EN-Regel ist rein ADDITIV.
  *
  * Immer LOCAL-Provider (kein Cloud in 0.8).
  */
@@ -59,6 +68,9 @@ class KeywordRouterImpl(
             return RouteDecision(RouteCategory.SMART_HOME, RouteProvider.LOCAL, "smart_home_room_state")
         }
 
+        // ── Hop-1a-EN: dieselbe Regel auf Englisch (2026-07-25) ──────────────────
+        englishSmartHome(q)?.let { return it }
+
         // ── Hop-1c: Komfort-/Ambiente-Phrasen (0.8) — INDIREKTE Smart-Home-Absicht ──
         // „mir ist kalt", „es ist dunkel" nennen weder Gerät noch Raum, implizieren
         // aber eine Licht-/Klima-Aktion. KONSERVATIV: nur klare Mehrwort-Phrasen
@@ -76,6 +88,52 @@ class KeywordRouterImpl(
         } else {
             RouteDecision(RouteCategory.FACT_SHORT, RouteProvider.LOCAL, "fact")
         }
+    }
+
+    /**
+     * **Englische Smart-Home-Absicht** — dieselbe Regel wie Hop-1a, mit den
+     * englischen Wortlisten aus [IntentClassifier.KeywordsEn]:
+     *
+     *  - Geräte-Ziel + (Schalt-Verb ODER `on`/`off`) ⇒ SMART_HOME
+     *    („turn on the light in the living room", „lights off", „dim the light").
+     *  - Blanker Raum + `on`/`off` ⇒ SMART_HOME („kitchen off", „living room off") —
+     *    das englische Gegenstück zu „Schlafzimmer aus".
+     *
+     * **Ganze Wörter statt `contains`** (s. [IntentClassifier.KeywordsEn]-KDoc) und
+     * **Idiom-Riegel zuerst**: „turn on the charm" / „a bright idea" tragen Schalt-
+     * und Licht-Wörter, meinen aber keine Tat. Ein falsch erkannter Befehl schaltet
+     * echte Geräte in einer echten Wohnung — diese Richtung bleibt geschlossen.
+     *
+     * **Raum-Erkennung, beide Fälle:** ein englischer Satz nennt den Raum entweder
+     * deutsch („turn on the light in the Wohnzimmer" — der reale HA-Name) oder
+     * englisch („living room"). Beides zählt; der NAME selbst wird nirgends
+     * übersetzt, nur zugeordnet (die Alias→`area_id`-Auflösung macht
+     * `de.hoshi.core.tools.ToolAreas`).
+     *
+     * **Byte-neutral für Deutsch:** die Regel greift erst, wenn englische Wörter als
+     * ganze Tokens im Satz stehen; die deutschen Zustands-Wörter („an"/„aus") sind
+     * bewusst NICHT Teil des EN-Sets, und ein deutscher Satz trägt weder „turn"/
+     * „switch" noch „light"/„lights".
+     */
+    private fun englishSmartHome(q: String): RouteDecision? {
+        val en = IntentClassifier.KeywordsEn
+        if (en.isFigurative(q)) return null
+        val tokens = en.tokens(q)
+        val hasVerb = en.smartHomeVerbs.any { it in tokens }
+        val hasState = en.stateWords.any { it in tokens }
+        if (en.hasTarget(q, tokens) && (hasVerb || hasState)) {
+            return RouteDecision(RouteCategory.SMART_HOME, RouteProvider.LOCAL, "smart_home_en")
+        }
+        // Raum + `on`/`off` OHNE Geräte-Wort. Zusätzliche Bremse gegenüber der
+        // deutschen Regel: entweder ein Schalt-Verb steht dabei („switch the office
+        // off") oder der Satz ist wirklich knapp („living room off"). Grund: „off"
+        // trägt im Englischen viel mehr harmlose Bedeutungen als das deutsche „aus"
+        // („the meeting in the office is off") — ohne die Bremse würde eine Absage
+        // zum Licht-Befehl.
+        if (hasState && en.mentionsRoom(q, tokens) && (hasVerb || tokens.size <= TERSE_MAX_TOKENS)) {
+            return RouteDecision(RouteCategory.SMART_HOME, RouteProvider.LOCAL, "smart_home_room_state_en")
+        }
+        return null
     }
 
     /**
@@ -121,12 +179,20 @@ class KeywordRouterImpl(
     companion object {
         private val CONTENT_KEEP_CHARS = setOf('ä', 'ö', 'ü', 'ß', ' ')
 
+        /** Max. Token-Zahl, bis zu der ein englischer Raum+`on`/`off`-Satz als terser Befehl zählt. */
+        private const val TERSE_MAX_TOKENS = 4
+
         /**
          * Komfort-/Ambiente-Phrasen (0.8): INDIREKTE Smart-Home-Absicht ohne Gerät- oder
          * Raum-Nennung. KONSERVATIV als ganze Mehrwort-Phrasen gehalten (kein Einzel-Token),
          * damit sie normalen Smalltalk/Wissensfragen nicht kapern. DE + EN. EN bewusst nur
          * die eindeutigen Apostroph-/„i am"-Formen — die apostrophlosen „im"/„its" kollidieren
          * mit der dt. Präposition „im" („im cold war") bzw. dem engl. Possessiv („its dark side").
+         *
+         * **„warm" fehlt auf Englisch mit Absicht** (Andi-Vorgabe 2026-07-25): „I feel warm" /
+         * „it's warm in here" sind im Englischen viel häufiger eine Feststellung als ein
+         * Heizungs-Wunsch — sie dürfen NICHTS schalten. Das deutsche „mir ist warm" bleibt
+         * unverändert drin (Bestand, Andis Alltag).
          */
         private val COMFORT_PHRASES: List<String> = listOf(
             // DE — Temperatur/Klima
@@ -144,11 +210,22 @@ class KeywordRouterImpl(
          * Idiom-Blocker: hier kommt ein Komfort-Wort VOR, ist aber übertragen gemeint und
          * impliziert KEINE Aktion. Hat Vorrang vor [COMFORT_PHRASES] (z.B. „mir ist warm
          * ums herz" enthält die Phrase „mir ist warm", meint aber Rührung, nicht Klima).
+         * Die englischen Einträge sind das Gegenstück dazu („it's dark humor" ist keine
+         * Bitte um Licht) — DE-neutral, weil keine deutsche Wendung sie enthält.
          */
         private val COMFORT_BLOCKERS: List<String> = listOf(
+            // DE
             "lässt mich kalt", "lässt dich kalt", "lässt ihn kalt", "lässt sie kalt",
             "lässt uns kalt", "lässt euch kalt", "kalt erwischt", "warm ums herz",
             "zieht sich",
+            // EN — „dark"/„bright" übertragen
+            "dark humor", "dark humour", "dark side", "dark ages", "dark matter",
+            "dark web", "dark horse", "dark times", "in the dark about",
+            "bright side", "bright idea", "bright future", "bright and early",
+            // EN — „cold"/„hot" übertragen
+            "cold shoulder", "cold call", "cold turkey", "cold blood", "cold case",
+            "leaves me cold", "leaves you cold", "out cold", "cold feet",
+            "hot on the", "hot topic", "hot take", "hot air", "hot water", "hot dog",
         )
 
         /**
@@ -176,6 +253,21 @@ class KeywordRouterImpl(
             // echte Fragen („Wer war BEI der Mondlandung dabei?", „Wie LÄUFT eine
             // Herztransplantation ab?") tragen immer mind. ein weiteres Inhalts-Token.
             "bei", "wach", "läuft", "läufts", "heißt", "heisst", "heute", "drauf", "soweit",
+            // ── EN (2026-07-25): dasselbe Gerüst auf Englisch ────────────────────
+            // Ohne diese Tokens überlebte JEDER englische Smalltalk die Reduktion
+            // („how are you" → Rest „how/are/you") und wurde als Wissensfrage
+            // gegroundet → dieselbe kalte Deflection wie im DE-Live-Bug oben.
+            // Streng auf Gerüst-Wörter beschränkt: jedes Wort, das für sich schon
+            // eine Wissensfrage tragen könnte, bleibt bewusst DRAUSSEN.
+            "hello", "hiya", "howdy", "afternoon", "evening", "night",
+            "thanks", "thank", "please", "bye", "goodbye", "cheers",
+            "how", "hows", "what", "whats", "who", "whos", "when", "where", "why", "which", "whom",
+            "are", "you", "your", "yours", "the", "and", "but", "for", "with", "about",
+            "can", "could", "would", "should", "will", "does", "did", "have", "has", "had",
+            "doing", "going", "today", "there", "here", "this", "that", "them", "they",
+            "okay", "fine", "great", "awake", "everything", "anything", "something",
+            "tell", "say", "hear", "listening", "joke", "jokes", "funny",
+            "very", "much", "lot", "really", "just",
         )
     }
 }

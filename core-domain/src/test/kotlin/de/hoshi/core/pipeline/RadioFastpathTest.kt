@@ -186,4 +186,71 @@ class RadioFastpathTest {
         val port = FakeRadioPort(wdr2)
         assertEquals("WDR 2 is playing — on the receiver.", fastpath(port).handle("spiel radio wdr 2", Language.EN))
     }
+
+    // ── EN/ES/FR/IT-ERKENNUNG (Andi-Befund 2026-07-25: die Quittungen waren
+    //    längst mehrsprachig, die ERKENNUNG selbst blieb deutsch) ─────────────
+
+    @Test
+    fun `play radio name Prefix-Form matcht auf Englisch`() {
+        val port = FakeRadioPort(wdr2)
+        assertTrue(fastpath(port).matches("play radio wdr 2"))
+        assertEquals("WDR 2 läuft — auf dem Receiver.", fastpath(port).handle("play radio wdr 2", Language.DE))
+        assertEquals(listOf("wdr 2"), port.searches)
+    }
+
+    @Test
+    fun `play name radio Suffix-Form matcht auf Englisch inkl on the`() {
+        val port = FakeRadioPort(wdr2)
+        assertTrue(fastpath(port).matches("play wdr 2 on the radio"))
+        assertEquals("WDR 2 läuft — auf dem Receiver.", fastpath(port).handle("play wdr 2 radio", Language.DE))
+    }
+
+    @Test
+    fun `pon radio name matcht auf Spanisch (Prefix und Suffix)`() {
+        val port = FakeRadioPort(wdr2)
+        assertTrue(fastpath(port).matches("pon radio wdr 2"))
+        assertEquals("WDR 2 läuft — auf dem Receiver.", fastpath(port).handle("pon wdr 2 en la radio", Language.DE))
+    }
+
+    @Test
+    fun `mets radio name matcht auf Franzoesisch (Prefix und Suffix)`() {
+        val port = FakeRadioPort(wdr2)
+        assertTrue(fastpath(port).matches("mets radio wdr 2"))
+        assertEquals("WDR 2 läuft — auf dem Receiver.", fastpath(port).handle("mets wdr 2 la radio", Language.DE))
+    }
+
+    @Test
+    fun `metti radio name matcht auf Italienisch (Prefix und Suffix)`() {
+        val port = FakeRadioPort(wdr2)
+        assertTrue(fastpath(port).matches("metti radio wdr 2"))
+        assertEquals("WDR 2 läuft — auf dem Receiver.", fastpath(port).handle("metti wdr 2 alla radio", Language.DE))
+    }
+
+    @Test
+    fun `Stop-Phrasen matchen in allen vier neuen Sprachen`() {
+        for (text in listOf("radio off", "stop the radio", "apaga la radio", "coupe la radio", "spegni la radio")) {
+            val port = FakeRadioPort(wdr2)
+            assertEquals("Radio ist aus.", fastpath(port).handle(text, Language.DE), "Text war: $text")
+            assertEquals(listOf("media_player.rx_v6a"), port.stops, "Text war: $text")
+        }
+    }
+
+    @Test
+    fun `Alltagssaetze mit radio in EN ES FR IT triggern NICHT`() {
+        val port = FakeRadioPort(wdr2)
+        val fp = fastpath(port)
+        for (text in listOf(
+            "there was a good song on the radio yesterday",
+            "play it again", // kein "radio"-Wort ⇒ kein Radio-Wunsch
+            "ayer sonó una buena canción en la radio",
+            "hier il y avait une bonne chanson à la radio",
+            "ieri c'era una bella canzone alla radio",
+        )) {
+            assertNull(fp.handle(text, Language.EN), "Text war: $text")
+            assertFalse(fp.matches(text), "matches, Text war: $text")
+        }
+        assertTrue(port.searches.isEmpty())
+        assertTrue(port.plays.isEmpty())
+        assertTrue(port.stops.isEmpty())
+    }
 }

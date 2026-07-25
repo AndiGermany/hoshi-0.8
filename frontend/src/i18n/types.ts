@@ -1,4 +1,9 @@
 import type { FiredKind } from '../hooks/useFiredItems';
+import type { ScheduledKind } from '../hooks/useScheduledItems';
+import type { Persona, Theme, ThemeGroupId } from '../hooks/useSettings';
+import type { Language } from '../api/types';
+import type { PrivacyTarget } from '../api/privacy';
+import type { SettingsCategoryId } from '../components/SettingsPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  UI-Sprache (Andi-Auftrag 21.07: „Ich muss die Sprache der UI auch in den
@@ -129,6 +134,25 @@ export interface PrivacyStrings {
   loadError: string;
 }
 
+/**
+ * Exakt neun Nachsprech-Sätze — drei unabhängige Sitzungen à drei Sätze (Sätze 1–3 =
+ * Sitzung 1/Gruppe 1, 4–6 = Sitzung 2/Gruppe 2, 7–9 = Sitzung 3/Gruppe 3). Der Tuple-Typ
+ * erzwingt in ALLEN fünf Katalogen genau neun Einträge (Andi-Auftrag 25.07: drei
+ * unabhängige Sitzungen an verschiedenen Tagen/Räumen/Mikros statt dreimal derselbe
+ * Sitzung — die Sätze selbst waren bisher zudem eine deutsche Modul-Konstante).
+ */
+export type EnrollSentences = readonly [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+];
+
 /** Alle sichtbaren Texte der Sprecher-Sektion (Shape von SPEAKER_TEXTS). */
 export interface SpeakerStrings {
   groupTitle: string;
@@ -163,6 +187,20 @@ export interface SpeakerStrings {
   insecure: string;
   noMic: string;
   genericFail: string;
+  /** Ehrliche „lädt…"-Zeile, solange die Sprecher-Liste noch nicht da ist. */
+  loading: string;
+  /** Die neun Nachsprech-Sätze — Gruppe 1 (Index 0–2) ist in `de.ts` byte-gleich zum alten Stand. */
+  sentences: EnrollSentences;
+  /** „Sitzung i von 3" — zusätzlich zu {@link sampleProgress} sichtbar, s. `SpeakerSection.tsx`. */
+  sessionLabel: (session: number) => string;
+  /** Fertig-Text NACH Sitzung 1 oder 2 (noch NICHT die letzte): ehrlich „anderer Tag, andere Sätze". */
+  sessionDoneHint: (session: number) => string;
+  /** Abbruch einer ANGEHÄNGTEN Sitzung: nichts wird gelöscht, nur ehrlich „war unvollständig". */
+  sessionIncompleteNote: string;
+  /** Status-Badge in der Profil-Liste: Profil hat noch keine 9 Sätze. */
+  statusInProgress: string;
+  /** Status-Badge in der Profil-Liste: Profil hat alle 9 Sätze (3 Sitzungen komplett). */
+  statusComplete: string;
 }
 
 /** Alle sichtbaren Texte des Nachtmodus (Shape von NIGHT_MODE_TEXTS). */
@@ -220,6 +258,210 @@ export interface SkillsStrings {
   /** Badge der Zukunfts-Skills (noch nicht gebaut). */
   badgeSoon: string;
   future: Record<FutureSkillId, { label: string; reason: string }>;
+  /** Fallback-Fehlzeile, wenn der Skills-GET ohne Message scheitert (useSkills). */
+  loadFailed: string;
+  /** Fallback-Fehlzeile, wenn der Skill-PUT ohne Message scheitert (useSkills). */
+  toggleFailed: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Langschwanz-Sweep 25.07 (Fortsetzung von 380c779): der bewusst vertagte Rest
+//  des Einstellungs-Panels, der Timer-/Wecker-Zeile über der Eingabe, der
+//  Ops-Pille in der Kopfzeile, der API-Fehlertexte (landen wörtlich als
+//  Chat-Blase) und des Sprecher-Chips. DE bleibt byte-gleich zum Hardcode.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Ein Farbthema im Panel: Name + kurzer Charakter-Hinweis. */
+export interface ThemeEntryStrings {
+  label: string;
+  hint: string;
+}
+
+/**
+ * Eine Gruppe im Farbthema-Picker (Andi 25.07 „übersichtlicher"): Überschrift +
+ * EINE ruhige Zeile, die sagt, was diese Gruppe von den anderen unterscheidet.
+ */
+export interface ThemeGroupStrings {
+  title: string;
+  note: string;
+}
+
+/** Eine Persönlichkeit im Panel: Name, Beschreibung und gesprochener Beispielsatz. */
+export interface PersonaEntryStrings {
+  label: string;
+  description: string;
+  /** EIN sprechbarer Beispielsatz im echten Ton dieser Persona. */
+  sample: string;
+}
+
+/**
+ * Der Langschwanz des Einstellungs-Drawers: alles, was {@link
+ * ../components/SettingsPanel} selbst textet und bis 25.07 als deutsche
+ * Modul-Konstante (SETTINGS_CATEGORIES, THEMES, LANGUAGES, PERSONAS,
+ * PRIVACY_UNITS) oder als hartkodiertes JSX dastand — auch in der englischen
+ * Oberfläche.
+ */
+export interface SettingsPanelStrings {
+  /** Die sieben Reiter-Labels (Reihenfolge/Ids liegen im Panel, nicht hier). */
+  categories: Record<SettingsCategoryId, string>;
+  /** aria-label der Reiter-Leiste (`role="tablist"`). */
+  categoryNavAria: string;
+  themeLabel: string;
+  /** aria-label der Farbthema-Radiogroup. */
+  themeGroupAria: string;
+  themes: Record<Theme, ThemeEntryStrings>;
+  /** Überschrift + Einordnungs-Zeile je Gruppe des Pickers (Reihenfolge liegt in THEME_GROUPS). */
+  themeGroups: Record<ThemeGroupId, ThemeGroupStrings>;
+  /**
+   * Das Beiwort je Thema — die Übersetzung des japanischen Namens („Nagareboshi
+   * · Sternschnuppe"). Bewusst NEBEN {@link ThemeEntryStrings}, nicht darin:
+   * `THEMES` (useSettings) spiegelt diesen Katalog-Eintrag 1:1, und dessen Form
+   * ist von Bestandstests gepinnt.
+   */
+  themeGlosses: Record<Theme, string>;
+  /** Wie das Beiwort an den Namen tritt (Trennzeichen inklusive Sprach-Typografie). */
+  themeGlossSuffix: (gloss: string) => string;
+  /** Die Sora-Zeile: „folgt dem Tag · jetzt Kasumi" (was die Regel GERADE zeigt). */
+  themeSoraNow: (themeName: string) => string;
+  /** Trennzeichen des nicht klickbaren Tagesbogens (Nagareboshi › Asa › …). */
+  themeArcSeparator: string;
+  /** aria-label des Tagesbogens unter Sora (reine Vorschau, nicht wählbar). */
+  themeArcAria: string;
+  /** Leiser Hinweis, wenn ein Rotations-Theme fest gewählt ist (Automatik pausiert). */
+  themePinnedNote: (themeName: string) => string;
+  /** aria-label einer Theme-Karte: Gruppe + Name, z. B. „Tageszeiten: Asa". */
+  themeOptionAria: (groupTitle: string, themeName: string) => string;
+  languageLabel: string;
+  /** Anzeigenamen der drei Chat-/STT-Sprachwahlen (auto/de/en). */
+  languages: Record<Language, string>;
+  languageHint: string;
+  languageAutoHint: string;
+  personaLabel: string;
+  personas: Record<Persona, PersonaEntryStrings>;
+  /** Die Hörproben-Zeile inkl. sprach-eigener Anführungszeichen. */
+  personaSample: (sample: string) => string;
+  escalationLabel: string;
+  /** Einheit rechts neben dem Zahl-Input („Sekunden"). */
+  escalationUnit: string;
+  escalationHint: (seconds: number) => string;
+  /** Überschrift der Skills-Gruppe (der Eigenname „Skills" bleibt überall gleich). */
+  skillsTitle: string;
+  privacyTitle: string;
+  privacyIntro: string;
+  privacyLoading: string;
+  /** „Stimme (TTS): {engine}" — der einzige Egress-Pfad, ehrlich benannt. */
+  privacyVoiceLine: (engine: string) => string;
+  privacyVoiceCloud: string;
+  privacyVoiceLocal: string;
+  privacySanitizeOn: string;
+  privacySanitizeOff: string;
+  privacySanitizeOnDetail: string;
+  privacySanitizeOffDetail: string;
+  privacyMemoryLine: string;
+  privacyEpisodicLine: string;
+  privacyDiaryLine: string;
+  /** Kurz-Label je Lösch-Knopf (fließt in `{label} löschen`). */
+  privacyTargetLabels: Record<PrivacyTarget, string>;
+  /** aria-label des Lösch-Knopfs, z. B. „Gedächtnis löschen". */
+  privacyDeleteAria: (label: string) => string;
+  /** Detailzeile der beiden lokalen Stores („lokale Datei · …"). */
+  privacyLocalFile: (detail: string) => string;
+  privacyStoreEmpty: string;
+  privacyStoreUnreadable: string;
+  privacyStoreEntries: (entries: number) => string;
+  /** Aufzeichnung aus, alte Einträge liegen noch da. */
+  privacyStoreDisabled: (count: string) => string;
+  privacyDiaryDetail: (days: number) => string;
+  /** Erfolgs-Notiz nach dem Löschen („Gelöscht: 3 Einträge."). */
+  privacyDeleted: (deleted: number, target: PrivacyTarget) => string;
+}
+
+/**
+ * Timer-/Wecker-Zeile über der Eingabe ({@link ../hooks/useScheduledItems} +
+ * {@link ../components/ScheduledPanel}). Die Uhrzeit selbst formatiert
+ * `dueClock` jetzt über {@link UiStrings.locale} statt hart „de-DE".
+ */
+export interface ScheduledStrings {
+  /** Kind-ehrliche Nomen: TIMER→„Timer", ALARM→„Wecker", REMINDER→„Erinnerung". */
+  kindWord: Record<ScheduledKind, { one: string; many: string }>;
+  /** Restdauer unter einer Minute. */
+  remainingUnderMinute: string;
+  remainingMinutes: (minutes: number) => string;
+  remainingHours: (hours: number) => string;
+  remainingHoursMinutes: (hours: number, minutes: number) => string;
+  /** Ein Item: „Timer · noch 44 min". */
+  lineOne: (word: string, remaining: string) => string;
+  /** Mehrere: „2 Timer · nächster in 12 min". */
+  lineMany: (count: number, word: string, remaining: string) => string;
+  /** Wecker-Zeile einer Verwaltungs-Zeile: „um 07:00". */
+  atClock: (clock: string) => string;
+  /** Timer-/Erinnerungs-Zeile einer Verwaltungs-Zeile: „noch 12 min". */
+  inRemaining: (remaining: string) => string;
+  /** aria-label der ganzen Sektion. */
+  panelAria: string;
+  /** title des Aufklapp-Knopfs, wenn er offen ist. */
+  collapse: string;
+  /** title des Aufklapp-Knopfs, wenn er zu ist. */
+  expand: string;
+  /** Knopf-Text, solange (noch) keine Zusammenfassung da ist. */
+  fallbackSummary: string;
+  /** Aufgeklappt, aber leer. */
+  empty: string;
+  /** aria-label des ✕-Knopfs, z. B. „Timer „Tee" löschen". */
+  deleteAria: (word: string, label?: string) => string;
+  /** title des ✕-Knopfs. */
+  deleteTitle: string;
+  deleteAll: string;
+}
+
+/** Sichtbare Texte der Ops-Pille in der Kopfzeile ({@link ../components/OpsStatusPill}). */
+export interface OpsStrings {
+  toneWarn: string;
+  toneCritical: string;
+  ramCritical: string;
+  ramWarn: string;
+  /** Der title/aria-label-Satz: „Ops: Gesamt OK · RAM WARN". */
+  title: (overall: string, level: string) => string;
+  /** Anhang mit dem ehrlichen Detail: „ — RAM-Druck steigt.". */
+  titleDetail: (detail: string) => string;
+  voiceCloud: string;
+  voiceLocal: (engine: string) => string;
+  allLocal: string;
+}
+
+/**
+ * Fehlertexte der API-Schicht (`api/chat.ts`/`api/voice.ts`). Sie landen
+ * WÖRTLICH als Chat-Blase im Gespräch — darum sind sie besonders sichtbar und
+ * müssen der aktiven Sprache folgen.
+ */
+export interface ApiErrorStrings {
+  unauthorized: string;
+  unsupportedAudioType: string;
+  httpStatus: (status: number) => string;
+}
+
+/** Sichtbare Texte des „Wer sprach"-Chips ({@link ../components/SpeakerChip}). */
+export interface SpeakerChipStrings {
+  guest: string;
+  guestTitle: string;
+  recognized: (name: string) => string;
+  recognizedWithConfidence: (name: string, percent: string) => string;
+  /** Konfidenz als Prozent-Text fürs Tooltip („97 %" / „97%"). */
+  percent: (value: number) => string;
+}
+
+/** Tooltip-/aria-Texte der Stage-Sparkline ({@link ../components/StageSparkline}). */
+export interface StageSparklineStrings {
+  /** Messwert-Suffix im Tooltip („1234 ms"). */
+  ms: (ms: number) => string;
+  /** Anhang bei einem über den Deckel geklemmten Wert. */
+  outlierSuffix: string;
+  /** Anhang bei einem Fehler-Turn. */
+  errorSuffix: string;
+  /** aria-Kopf: „STT heute: 7 Messwerte". */
+  ariaHead: (label: string, count: number) => string;
+  ariaMedian: (ms: number) => string;
+  ariaP95: (ms: number) => string;
 }
 
 /**
@@ -236,6 +478,8 @@ export interface LanguageSettingsStrings {
   failed: string;
   betaSuffix: string;
   uiNotice: string;
+  /** Ehrliche „lädt…"-Zeile, solange der Server-Standard noch nicht da ist. */
+  loading: string;
 }
 
 /** Die zwei Record-Dictionaries des Klingel-Banners (FIRED_HEADLINE/MISSED_NOUN). */
@@ -480,6 +724,12 @@ export interface UiStrings {
   voiceChat: VoiceChatStrings;
   turnAnatomy: TurnAnatomyStrings;
   voiceOrb: VoiceOrbStrings;
+  settings: SettingsPanelStrings;
+  scheduled: ScheduledStrings;
+  ops: OpsStrings;
+  apiErrors: ApiErrorStrings;
+  speakerChip: SpeakerChipStrings;
+  stageSparkline: StageSparklineStrings;
 }
 
 /** Denk-Stufen-Zeile über der Antwort (TurnAnatomy) — jede Stufe IST passiert. */

@@ -8,6 +8,8 @@ import de.hoshi.core.dto.RouteDecision
 import de.hoshi.core.dto.RouteProvider
 import de.hoshi.core.dto.SpeakerContext
 import de.hoshi.core.dto.TurnPrompt
+import de.hoshi.core.pipeline.lang.LangDe
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import de.hoshi.core.pipeline.lang.deOr
 import de.hoshi.core.port.BrainPort
 import de.hoshi.core.port.CapabilityPort
@@ -320,8 +322,15 @@ class TurnOrchestrator(
      * byte-identisch auf [brainStreamTurn] (heutiger Grounding-Injektions-Pfad).
      */
     private val verbatimReplayEnabled: Boolean = false,
-    /** Warme Fallback-Phrase für den Never-Silent-Vertrag (leerer/fehlerhafter Brain-Stream). */
-    private val warmFallback: () -> String = { DEFAULT_FALLBACK },
+    /**
+     * Warme Fallback-Phrase für den Never-Silent-Vertrag (leerer/fehlerhafter
+     * Brain-Stream) — **sprach-bewusst seit 2026-07-25** (Andi: „Multilingualität
+     * von A-Z"): der Satz fällt genau dann, wenn ohnehin schon etwas schiefging,
+     * und darf deshalb erst recht nicht auch noch in der falschen Sprache fallen.
+     * Default [defaultFallback] ⇒ die Phrase des jeweiligen Sprachpakets; für
+     * [Language.DE] byte-identisch zu [DEFAULT_FALLBACK].
+     */
+    private val warmFallback: (Language) -> String = { defaultFallback(it) },
     /**
      * Zeitquelle der Brain-TTFT-Messung ([ChatEvent.StageTimings.brainTtftMs]) —
      * injizierbar für deterministische Tests (Fake-Clock), Default die echte
@@ -378,6 +387,11 @@ class TurnOrchestrator(
      *    Consent — der Orchestrator löst ein offenes [pendingLookup]-Angebot ein oder
      *    eskaliert die VORHERIGE User-Frage direkt (Egress-Gesetz: NUR die Frage geht
      *    raus). Statt dass das 4B über „das Internet" konfabuliert.
+     *  - **Naht C4 (Themen-Rückfrage, Andi-Vorfall 2026-07-25):** hatte die Bitte
+     *    KEIN Thema („Take a look online."), merkt sich die Rückfrage „was genau
+     *    soll ich nachschauen?" als [PendingLookup] mit `awaitsTopic = true` —
+     *    die NÄCHSTE Nachricht ist dann selbst das Thema und wird nachgeschlagen,
+     *    statt lokal beantwortet zu werden.
      *  - **Naht D ([maybeOfferAbstainPending]):** passt das Brain bei einem
      *    LOCAL-FACT-Turn ehrlich ([BrainAbstainRecognizer]), registriert der
      *    Orchestrator ein [PendingLookup] mit der User-Frage — OHNE die Antwort
@@ -399,6 +413,33 @@ class TurnOrchestrator(
      * ⇒ jeder Pfad bleibt byte-identisch zu heute.
      */
     private val lookupIntentEnabled: Boolean = false,
+    /**
+     * **Spiel-Erkenner (Vorfall „Kuh mit Hose", 2026-07-25) — default
+     * [PlayfulModeDetector.DISABLED] ⇒ konstant `false` ⇒ byte-neutral.**
+     *
+     * Ein erfundenes Gedankenexperiment („Stell dir vor, eine Kuh …") trägt
+     * Inhalts-Tokens und wird deshalb vom Keyword-Router als FACT_SHORT geroutet —
+     * also durch die volle Wissens-/Grounding-Maschinerie geschickt. Die ist bewusst
+     * vorsichtig und erzeugt auf einer Quatsch-Hypothese zögerliche Sachsätze samt
+     * Faktenkorrektur („Du meinst die Beine, oder?"). Es fehlt das REGISTER, nicht
+     * das Gedächtnis (der Verlauf kam nachweislich an).
+     *
+     * Erkennt dieser Detektor ein Spiel, tut [routedTurn] GENAU DREI Dinge:
+     *  1. die Route wird auf [RouteCategory.SMALLTALK] gesetzt ⇒ **kein Grounding**
+     *     (alle Grounding-Provider gaten auf Wissens-Kategorien), **keine
+     *     Fakten-Deckungs-Prüfung** ([FactCoverageGate] deflektet nur FACT_SHORT),
+     *     kein FACT-Temperatur-Clamp, kein Verbatim-Replay;
+     *  2. daraus folgt **ehrlich** `Start.grounded=false` ⇒ der „Wissen gedeckt"-Chip
+     *     erscheint NICHT mehr über einer erfundenen Kuh (er wurde zuvor gesetzt,
+     *     weil ein BM25-Treffer den laxen Deckungs-Check passierte — eine
+     *     Falschaussage gegenüber dem Nutzer);
+     *  3. [PlayfulModeDetector.playfulHint] geht als `followBlock` ins Prompt
+     *     („mitspielen, den Faden halten, Erfundenes nie als Tatsache ausgeben").
+     *
+     * **Nie über einer Tat:** ein SMART_HOME-gerouteter Turn wird NIE zum Spiel
+     * umgebogen (s. [routedTurn]) — ein Befehl bleibt ein Befehl.
+     */
+    private val playfulMode: PlayfulModeDetector = PlayfulModeDetector.DISABLED,
 ) {
 
     /**
@@ -422,7 +463,7 @@ class TurnOrchestrator(
         val ctx = TurnPrompt.from(request)
         // Leere Eingabe ist auch ein Turn — never-silent, ohne Routing/Brain.
         if (ctx.text.isBlank()) {
-            return warmDirectAnswer(provider = "LOCAL", category = "EMPTY", phrase = warmFallback())
+            return warmDirectAnswer(provider = "LOCAL", category = "EMPTY", phrase = warmFallback(ctx.language), language = ctx.language)
         }
         val speakerId = ctx.speaker?.speakerId
         val key = pendingKey(ctx)
@@ -435,7 +476,16 @@ class TurnOrchestrator(
         //    (Decke offen, Setting aus) gibt es den ehrlich-warmen Setting-Hinweis
         //    statt eines stillen Calls. Default (NONE-Store) ⇒ consume()==null ⇒
         //    dieser Zweig ist tot ⇒ byte-neutral.
-        val pendingThink = pendingLookup.consume(key)
+        val pendingConsumed = pendingLookup.consume(key)
+        // ── Die ZWEI Sorten des einen Stores strikt getrennt (s. [PendingLookup]-KDoc,
+        //    Andi-Vorfall 2026-07-25): [pendingThink] ist das klassische ANGEBOT
+        //    („soll ich nachschauen?" — Thema bekannt, Zustimmung fehlt), [pendingTopic]
+        //    die offene THEMEN-RÜCKFRAGE („was genau soll ich nachschauen?" — Zustimmung
+        //    da, Thema fehlt). Jeder bestehende Zweig unten sieht AUSSCHLIESSLICH
+        //    [pendingThink] und verhält sich damit exakt wie vor diesem Fix; die
+        //    Themen-Rückfrage hat ihren eigenen, einzigen Einlöse-Zweig (Naht C4). ──
+        val pendingThink = pendingConsumed?.takeIf { !it.awaitsTopic }
+        val pendingTopic = pendingConsumed?.takeIf { it.awaitsTopic }
         // ── Naht B2 (Wetter S3): die offene Orts-Nachfrage wird bei JEDEM Turn
         //    one-shot konsumiert (auch ein Fremd-Turn räumt sie — kein alter
         //    Orts-Köder), noch BEVOR unten entschieden wird, ob sie einlöst.
@@ -475,7 +525,11 @@ class TurnOrchestrator(
             // das ohnehin auf den Standard-Port, solange kein Recherche-Modell
             // konfiguriert ist ([researchEscalationProvider] leer) ⇒ byte-neutral.
             val research = ResearchIntentRecognizer.matches(ctx.text)
-            return lookupIntentTurn(ctx, pendingThink, research)
+            // [topicAskOpen]: DIESER Turn hat gerade eine offene Themen-Rückfrage
+            // abgeräumt und ist SELBST wieder eine themenlose Bitte ⇒ die Rückfrage
+            // darf sich NICHT erneut merken (sonst schaukeln sich Bitte und Rückfrage
+            // endlos auf). Die Rückfrage kommt trotzdem — nur eben ohne neues Pending.
+            return lookupIntentTurn(ctx, pendingThink, research, topicAskOpen = pendingTopic != null)
         }
         // ── Naht B2-Einlösung: NUR wenn KEIN Extended-Think-Angebot in flight war
         //    (Ketten sauber getrennt — ein Orts-Name löst NIE während einer offenen
@@ -494,23 +548,23 @@ class TurnOrchestrator(
         //    Store-Wahrheit wie der Settings-PUT. Default (DISABLED) ⇒ null ⇒
         //    toter Zweig ⇒ byte-neutral. ──
         escalationModeSwitch.handle(ctx.text, ctx.language)?.let { phrase ->
-            return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_SETTINGS, phrase)
+            return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_SETTINGS, phrase, language = ctx.language)
         }
         // ── Tagesnote-Fastpath (Andi-Faktor): „Tagesnote 4(, weil …)" ⇒ datiert
         //    in die eigene JSONL (async best-effort), warme deterministische
         //    Quittung, brain-frei — ebenfalls VOR dem Routing. Der Eingangs-Rand
         //    ([ChatRequest.source]; alt-Client null ⇒ "chat") fließt nur in die
         //    JSONL-Zeile. Default (DISABLED) ⇒ null ⇒ toter Zweig ⇒ byte-neutral. ──
-        dailyNote.handle(ctx.text, request.source ?: SOURCE_CHAT_DEFAULT)?.let { phrase ->
-            return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_NOTE, phrase)
+        dailyNote.handle(ctx.text, request.source ?: SOURCE_CHAT_DEFAULT, ctx.language)?.let { phrase ->
+            return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_NOTE, phrase, language = ctx.language)
         }
         // ── Werkstatt-Notiz-Fastpath (Cowork-Idee, S1): „Notiz an die
         //    Werkstatt: …" ⇒ verbatim in den JSONL-Briefkasten (async
         //    best-effort), warme deterministische Quittung, brain-frei —
         //    ebenfalls VOR dem Routing. Default (DISABLED) ⇒ null ⇒ toter
         //    Zweig ⇒ byte-neutral. ──
-        workshopNote.handle(ctx.text, speakerId)?.let { phrase ->
-            return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_NOTE, phrase)
+        workshopNote.handle(ctx.text, speakerId, ctx.language)?.let { phrase ->
+            return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_NOTE, phrase, language = ctx.language)
         }
         // ── Probe-Fastpath (Golden-Utterance #20, Andis Selbsttest-Ritual):
         //    „Hoshi, Probe." ⇒ EIN warmer, statischer Status-Satz, der Ohren/
@@ -519,11 +573,45 @@ class TurnOrchestrator(
         //    plaudern oder in eine andere Kategorie geroutet werden). Default
         //    (DISABLED) ⇒ null ⇒ toter Zweig ⇒ byte-neutral, exakt wie
         //    Calc/Timer/Date/Tagesnote/Werkstatt-Notiz. ──
-        probe.handle(ctx.text)?.let { phrase ->
-            return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_PROBE, phrase)
+        probe.handle(ctx.text, ctx.language)?.let { phrase ->
+            return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_PROBE, phrase, language = ctx.language)
+        }
+        // ── Naht C4 (Themen-Rückfrage-Einlösung, Andi-Vorfall 2026-07-25) ──
+        //    Hoshi hat „was genau soll ich nachschauen?" gefragt ⇒ DIESE Nachricht IST
+        //    das Thema, und sie wird online nachgeschlagen statt lokal beantwortet.
+        //    Bewusst HIER, ganz am Ende der brain-freien Fastpath-Kette: alles, was
+        //    deterministisch als etwas ANDERES erkannt wird (Stufen-Schaltbefehl,
+        //    Tagesnote, Werkstatt-Notiz, Probe — und über [claimedByCommand] auch
+        //    Datum/Radio/Tool-Befehl), gewinnt und lässt die Rückfrage still
+        //    verfallen. Das ist die „offensichtlicher Themenwechsel"-Regel, ohne
+        //    zweite Heuristik: ein Befehl ist nie ein Nachschlag-Thema.
+        if (lookupIntentEnabled && pendingTopic != null && pendingPlace == null &&
+            TopicAnswerRecognizer.isTopic(ctx.text) && !claimedByCommand(ctx, speakerId)
+        ) {
+            // Recherche-Modell-Wahl aus der URSPRÜNGLICHEN Bitte (dort stand ggf.
+            // „recherchiere…", nicht im Thema selbst) — [PendingLookup.query] trägt
+            // in dieser Sorte genau dafür die themenlose Bitte, NIE als Query.
+            return redeemLookup(ctx.text, ctx.language, ResearchIntentRecognizer.matches(pendingTopic.query))
         }
         return routedTurn(request, ctx, speakerId)
     }
+
+    /**
+     * **„Ist das ein Befehl statt eines Themas?"** (Naht C4) — die deterministischen
+     * Erkenner der Fastpaths INNERHALB von [routedTurn] (Datum/Uhrzeit, Radio,
+     * Tool-Befehl inkl. Timer/Calc/Liste), rein prüfend vorgezogen. Alle drei sind
+     * seiteneffekt-frei ([DateFastpath.handle] liest nur die Clock,
+     * [RadioFastpath.matches] ist der bewusst netzfreie Erkenner,
+     * [ToolIntentClassifier.classify] ist reine Klassifikation) und laufen NUR,
+     * wenn wirklich eine Themen-Rückfrage offen ist — im Normalbetrieb also nie.
+     *
+     * Ohne diese Klausel würde „mach das Licht an" direkt nach der Rückfrage als
+     * Nachschlag-Thema nach draußen gehen, statt das Licht zu schalten.
+     */
+    private fun claimedByCommand(ctx: TurnPrompt, speakerId: String?): Boolean =
+        date.handle(ctx.text, ctx.language) != null ||
+            radio.matches(ctx.text) ||
+            resolveToolCall(intent.classify(ctx.text, ctx.language), ctx.text, speakerId) != null
 
     /**
      * **Verhör-Detektor (S1, MESSEN-first, additiv) — hüllt [stream] mit einer
@@ -585,12 +673,31 @@ class TurnOrchestrator(
      * bei „kein Geocode-Treffer" ehrlich als normaler Turn weiterlaufen kann.
      */
     private fun routedTurn(request: ChatRequest, ctx: TurnPrompt, speakerId: String?): Flux<ChatEvent> {
-        return routing.resolve(ctx.text).flatMapMany { decision ->
+        return routing.resolve(ctx.text).flatMapMany { hop ->
+            // ── Spiel-Register (Vorfall „Kuh mit Hose", 2026-07-25) ──────────────────
+            //    Ein erfundenes Gedankenexperiment ist KEINE Wissensfrage. Erkennt der
+            //    [playfulMode]-Detektor eines (explizite Marker wie „stell dir vor"/
+            //    „imagine" oder ein enges Absurditäts-Paar Tier×Menschen-Objekt; Faden-
+            //    Fortsetzung nur mit Token-Anker am Eröffner), wird die Route auf
+            //    SMALLTALK gesetzt: kein Grounding, keine Fakten-Deckungs-Prüfung, kein
+            //    lügender „Wissen gedeckt"-Chip — und [brainStreamTurn] hängt den
+            //    Spiel-Hinweis ans Prompt.
+            //    NIE über einer TAT: eine SMART_HOME-Route bleibt SMART_HOME (ein Befehl
+            //    bleibt ein Befehl, auch wenn er verspielt formuliert ist).
+            //    Default ⇒ DISABLED ⇒ `playful` konstant false ⇒ `decision === hop` ⇒
+            //    byte-neutral.
+            val playful = hop.category != RouteCategory.SMART_HOME &&
+                playfulMode.detect(ctx.text, ctx.request.history)
+            val decision = if (playful) {
+                hop.copy(category = RouteCategory.SMALLTALK, reason = PLAYFUL_ROUTE_REASON)
+            } else {
+                hop
+            }
             // ── Datums-Fastpath: „welcher Tag ist heute?" → deterministisch aus der
             //    Code-Uhr (Clock), brain-frei. Ohne HOSHI_DATE_FASTPATH_ENABLED ist
             //    date == DISABLED ⇒ handle()==null ⇒ dieser Zweig bleibt tot. ──
             date.handle(ctx.text, ctx.language)?.let { phrase ->
-                return@flatMapMany warmDirectAnswer(decision.provider.name, decision.category.name, phrase)
+                return@flatMapMany warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = ctx.language)
             }
             // ── Radio-Fastpath: „spiel radio <name>" / „radio aus" → RadioPort
             //    (Stream-Suche + Abspielziel), brain-frei. Ohne HOSHI_RADIO_ENABLED
@@ -603,7 +710,7 @@ class TurnOrchestrator(
                 return@flatMapMany Mono.fromCallable { radio.handle(ctx.text, ctx.language).orEmpty() }
                     .subscribeOn(Schedulers.boundedElastic())
                     .flatMapMany { phrase ->
-                        warmDirectAnswer(decision.provider.name, decision.category.name, phrase.ifBlank { warmFallback() })
+                        warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = ctx.language)
                     }
             }
             // ── Tool-Pfad: eindeutiger Befehl ⇒ Gate → Executor, OHNE Brain ──
@@ -636,9 +743,9 @@ class TurnOrchestrator(
                     //    OHNE Tat liefern) — brain-frei, exakt wie Timer/Calc/List. Der
                     //    Classifier klassifiziert diesen Zweig NUR, wenn HOSHI_TOOLS_ENABLED
                     //    (SMART_HOME-Skill) ohnehin an ist ⇒ kein neues Flag nötig. ──
-                    clarifyTurn(toolCall, decision)
+                    clarifyTurn(toolCall, decision, ctx.language)
                 } else {
-                    toolTurn(toolCall, decision, speakerId)
+                    toolTurn(toolCall, decision, speakerId, ctx.language)
                 }
             }
             // ── Wetter-Orts-Nachfrage (Wetter S3): eine WETTER-Frage, für die WEDER
@@ -656,6 +763,7 @@ class TurnOrchestrator(
                     decision.provider.name,
                     decision.category.name,
                     weatherLocationAsk(ctx.language),
+                    language = ctx.language,
                 )
             }
             // ── Ehrlichkeits-Gate VOR dem Brain — OFF der Event-Loop ──
@@ -674,7 +782,7 @@ class TurnOrchestrator(
                     when (verdict) {
                         // ── Abstention: warme Direkt-Antwort, der Brain wird NIE gerufen ──
                         is HonestyGate.Verdict.Refuse ->
-                            warmDirectAnswer(decision.provider.name, decision.category.name, verdict.phrase)
+                            warmDirectAnswer(decision.provider.name, decision.category.name, verdict.phrase, language = ctx.language)
                         HonestyGate.Verdict.AskConsent ->
                             honestyLookupOffer(ctx, decision, explicit = false)
                         HonestyGate.Verdict.AskConsentExplicit ->
@@ -692,12 +800,12 @@ class TurnOrchestrator(
                         HonestyGate.Verdict.Pass ->
                             if (agenticTools != null && decision.category == RouteCategory.SMART_HOME)
                                 agenticBrainTurn(ctx, decision)
-                            else brainTurn(ctx, decision)
+                            else brainTurn(ctx, decision, playful)
                     }
                 }
         }.onErrorResume { e ->
             // Fängt auch Fehler aus Routing/Assembly ab (vor dem Brain) — never-silent.
-            warmDirectAnswer(provider = "LOCAL", category = "ERROR", phrase = warmFallback())
+            warmDirectAnswer(provider = "LOCAL", category = "ERROR", phrase = warmFallback(ctx.language), language = ctx.language)
         }
     }
 
@@ -714,8 +822,13 @@ class TurnOrchestrator(
      *
      * Ruft den [brain] NIE (0 Brain-Calls/Turn).
      */
-    private fun toolTurn(call: ToolCall, decision: RouteDecision, speakerId: String?): Flux<ChatEvent> =
-        if (call.read) toolReadTurn(call, decision) else writeToolTurn(call, decision, speakerId)
+    private fun toolTurn(
+        call: ToolCall,
+        decision: RouteDecision,
+        speakerId: String?,
+        language: Language = Language.DEFAULT,
+    ): Flux<ChatEvent> =
+        if (call.read) toolReadTurn(call, decision, language) else writeToolTurn(call, decision, speakerId, language)
 
     /**
      * Der **Timer**-Pfad — strukturell brain-frei UND HA-gate-frei (ein Timer ist ein
@@ -729,7 +842,7 @@ class TurnOrchestrator(
      */
     private fun timerTurn(call: ToolCall, decision: RouteDecision, language: Language, origin: String?, originSatelliteId: String? = null): Flux<ChatEvent> {
         val phrase = timer.handle(call, language, origin, originSatelliteId)
-        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase.ifBlank { warmFallback() })
+        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = language)
     }
 
     /**
@@ -740,7 +853,7 @@ class TurnOrchestrator(
      */
     private fun calcTurn(call: ToolCall, decision: RouteDecision, language: Language): Flux<ChatEvent> {
         val phrase = calculator.handle(call, language)
-        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase.ifBlank { warmFallback() })
+        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = language)
     }
 
     /**
@@ -752,7 +865,7 @@ class TurnOrchestrator(
      */
     private fun listTurn(call: ToolCall, decision: RouteDecision, language: Language): Flux<ChatEvent> {
         val phrase = list.handle(call, language)
-        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase.ifBlank { warmFallback() })
+        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = language)
     }
 
     /**
@@ -763,9 +876,9 @@ class TurnOrchestrator(
      * — er kennt Sprache + Areas, s. [DeterministicToolIntentClassifier]-KDoc
      * Schritt (5)). Leer ⇒ warmer Fallback (never-silent).
      */
-    private fun clarifyTurn(call: ToolCall, decision: RouteDecision): Flux<ChatEvent> {
+    private fun clarifyTurn(call: ToolCall, decision: RouteDecision, language: Language): Flux<ChatEvent> {
         val phrase = call.data[AreaClarifyIntent.PHRASE] as? String ?: ""
-        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase.ifBlank { warmFallback() })
+        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = language)
     }
 
     /**
@@ -823,7 +936,11 @@ class TurnOrchestrator(
      * EpisodicMemoryAdapter/EmbeddingRouterRefiner). Mit dem Default-Placeholder ist
      * execute nicht-blockierend ⇒ byte-neutral (nur ein zusätzlicher Scheduler-Hop).
      */
-    private fun toolReadTurn(call: ToolCall, decision: RouteDecision): Flux<ChatEvent> =
+    private fun toolReadTurn(
+        call: ToolCall,
+        decision: RouteDecision,
+        language: Language = Language.DEFAULT,
+    ): Flux<ChatEvent> =
         Mono.fromCallable {
             when (val result = tools.execute(call)) {
                 is ToolResult.Ok -> result.phrase
@@ -833,7 +950,7 @@ class TurnOrchestrator(
         }
             .subscribeOn(Schedulers.boundedElastic())
             .flatMapMany { phrase ->
-                warmDirectAnswer(decision.provider.name, decision.category.name, phrase.ifBlank { warmFallback() })
+                warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = language)
             }
 
     /**
@@ -848,7 +965,12 @@ class TurnOrchestrator(
      * (reine, schnelle In-Memory-Gate-Prüfung). Mit dem Default-Placeholder/Store
      * nicht-blockierend ⇒ byte-neutral (nur ein Scheduler-Hop).
      */
-    private fun writeToolTurn(call: ToolCall, decision: RouteDecision, speakerId: String?): Flux<ChatEvent> =
+    private fun writeToolTurn(
+        call: ToolCall,
+        decision: RouteDecision,
+        speakerId: String?,
+        language: Language = Language.DEFAULT,
+    ): Flux<ChatEvent> =
         when (val gate = capability.check(call)) {
             is GateDecision.Grant -> {
                 val executed = call.copy(data = gate.normalizedData)
@@ -865,11 +987,11 @@ class TurnOrchestrator(
                 }
                     .subscribeOn(Schedulers.boundedElastic())
                     .flatMapMany { phrase ->
-                        warmDirectAnswer(decision.provider.name, decision.category.name, phrase)
+                        warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = language)
                     }
             }
             is GateDecision.Deny ->
-                warmDirectAnswer(decision.provider.name, decision.category.name, gate.phrase.ifBlank { warmFallback() })
+                warmDirectAnswer(decision.provider.name, decision.category.name, gate.phrase, language = language)
         }
 
     /**
@@ -949,9 +1071,19 @@ class TurnOrchestrator(
      * Ein (per Vertrag nie geworfener) Fehler des Replay-Calls propagiert an den
      * `onErrorResume` in [routedTurn] (warme FEHLER-Antwort) — Never-Silent gewahrt.
      */
-    private fun brainTurn(ctx: TurnPrompt, decision: RouteDecision): Flux<ChatEvent> {
+    private fun brainTurn(
+        ctx: TurnPrompt,
+        decision: RouteDecision,
+        /**
+         * Spiel-Register dieses Turns ([playfulMode], s. dessen Feld-KDoc). Reicht nur
+         * durch bis [brainStreamTurn] (Prompt-Hinweis); default `false` ⇒ byte-neutral.
+         * Der Replay-Zweig darüber ist ohnehin unerreichbar, weil eine Spiel-Route
+         * SMALLTALK ist und [LookupReplayPort.bestNote] nur Wissens-Kategorien bedient.
+         */
+        playful: Boolean = false,
+    ): Flux<ChatEvent> {
         if (!verbatimReplayEnabled || decision.provider != RouteProvider.LOCAL) {
-            return brainStreamTurn(ctx, decision)
+            return brainStreamTurn(ctx, decision, playful)
         }
         // Mono.fromCallable behandelt `null` (kein sicherer Treffer) als LEERES Mono —
         // die `!!` ist damit sicher (die Lambda läuft NUR bei non-null Emission), und
@@ -960,7 +1092,7 @@ class TurnOrchestrator(
         return Mono.fromCallable { lookupReplay.bestNote(ctx.text, decision.category) }
             .subscribeOn(Schedulers.boundedElastic())
             .flatMapMany { note -> verbatimReplayTurn(note!!, decision, ctx.language) }
-            .switchIfEmpty(Flux.defer { brainStreamTurn(ctx, decision) })
+            .switchIfEmpty(Flux.defer { brainStreamTurn(ctx, decision, playful) })
     }
 
     /**
@@ -1014,8 +1146,18 @@ class TurnOrchestrator(
      * extrahiert): Persona-System-Prompt schichten, Grounding/Episodic parallel
      * holen, dann GENAU EINMAL `brain.streamChat`, umhüllt vom Never-Silent-Vertrag.
      * Siehe [brainTurn] für den vorgelagerten Replay-Off-Ramp.
+     *
+     * [playful] (Spiel-Register, s. [playfulMode]): `true` hängt GENAU EINEN Block ans
+     * Prompt — [PlayfulModeDetector.playfulHint] als `followBlock`. Kein zweiter
+     * Brain-Call, kein Eingriff in Grounding/Wand an dieser Stelle: das erledigt schon
+     * die SMALLTALK-Route aus [routedTurn]. Default `false` ⇒ `followBlock=""` ⇒
+     * byte-identisch zum bisherigen Aufruf.
      */
-    private fun brainStreamTurn(ctx: TurnPrompt, decision: RouteDecision): Flux<ChatEvent> {
+    private fun brainStreamTurn(
+        ctx: TurnPrompt,
+        decision: RouteDecision,
+        playful: Boolean = false,
+    ): Flux<ChatEvent> {
         val speaker = ctx.speaker ?: SpeakerContext()
         // Working-Session (S1+S2): history-Quelle + Segment-Diary-Felder GENAU EINMAL
         // bestimmen — speist den Brain-Call UND das ehrliche Start-Event.
@@ -1023,7 +1165,10 @@ class TurnOrchestrator(
         // Sprache aus dem Turn an die Persona durchstechen → der System-Prompt
         // instruiert die Antwortsprache explizit (Multilingual-Sprachsteuerung).
         val baseSystemPrompt = promptAssembler.baseSystemPrompt(speaker, ctx.language, ctx.persona)
-        return promptAssembler.assemble(ctx, decision, baseSystemPrompt, followBlock = "")
+        // Spiel-Hinweis (nur im Spiel-Register): „mitspielen, den Faden halten, nichts
+        // Erfundenes als Tatsache ausgeben". OFF ⇒ "" ⇒ assemble() schichtet nichts ein.
+        val followBlock = if (playful) PlayfulModeDetector.playfulHint(ctx.language) else ""
+        return promptAssembler.assemble(ctx, decision, baseSystemPrompt, followBlock = followBlock)
             .flatMapMany { assembled ->
                 // ── Anti-Konfabulations-Wand: FACT_SHORT ohne gedecktes Grounding ⇒ den
                 //    Brain NICHT freestylen lassen (er erfindet dann Falsches), sondern
@@ -1077,6 +1222,7 @@ class TurnOrchestrator(
                         // Perf-Diary: das Grounding LIEF (und fand nichts Deckendes) —
                         // seine ehrlich gemessene Dauer reist auch am Deflect-Done mit.
                         stageTimings = assembled.groundingMs?.let { ChatEvent.StageTimings(groundingMs = it) },
+                        language = ctx.language,
                     )
                 }
                 // ── Perf-Diary: Brain-TTFT — Brain-Call-Start (Subscribe) → ERSTE
@@ -1225,7 +1371,10 @@ class TurnOrchestrator(
                     ),
                     sessionId = ctx.chatId,
                     userId = speaker.speakerId,
-                    tools = registry.schemas(),
+                    // Tool-Schemas in der Turn-Sprache: das Brain LIEST diese Beschreibungen, um zu
+                    // entscheiden, welches Werkzeug es ruft. Deutsche Schemas in einem englischen
+                    // Turn ziehen es zurück ins Deutsche — derselbe Effekt wie beim Grounding-Block.
+                    tools = registry.schemas(ctx.language),
                     toolGrammar = true,
                 )
                     .map { it.text }
@@ -1278,7 +1427,11 @@ class TurnOrchestrator(
             // (Call) Der Brain hat ein Tool gewählt → resolve → Kernel-Gate → ggf. Tat.
             is ToolGrammarParser.Result.Call -> {
                 // resolve→null: unbekanntes/unerlaubtes Tool/Raum → warme Absage, NICHTS gaten/tun.
-                val call = registry.resolve(result.parsed)
+                // Sprache mitstempeln: ToolCall.language ist der EINZIGE Kanal, über den Gate und
+                // Executor die Turn-Sprache erreichen (CapabilityPort.check/ToolPort.execute nehmen
+                // je genau ein Argument). Ohne das quittiert ausgerechnet der agentische Pfad
+                // deutsch, während der deterministische längst mehrsprachig ist.
+                val call = registry.resolve(result.parsed)?.copy(language = language)
                 if (call == null) {
                     warmDirectAnswer(provider, category, agenticRefusal(language))
                 } else {
@@ -1296,7 +1449,7 @@ class TurnOrchestrator(
                                 }
                             }
                                 .subscribeOn(Schedulers.boundedElastic())
-                                .flatMapMany { phrase -> warmDirectAnswer(provider, category, phrase) }
+                                .flatMapMany { phrase -> warmDirectAnswer(provider, category, phrase, language = language) }
                         // Deny ⇒ warme Absage, der Executor wird NIE gerufen.
                         is GateDecision.Deny ->
                             warmDirectAnswer(provider, category, gate.phrase.ifBlank { agenticRefusal(language) })
@@ -1443,8 +1596,9 @@ class TurnOrchestrator(
         category: String,
         phrase: String,
         stageTimings: ChatEvent.StageTimings? = null,
+        language: Language = Language.DEFAULT,
     ): Flux<ChatEvent> {
-        val text = phrase.ifBlank { warmFallback() }
+        val text = phrase.ifBlank { warmFallback(language) }
         return Flux.just(
             ChatEvent.Start(provider = provider, category = category, model = "policy"),
             ChatEvent.TextDelta(text, provider = provider),
@@ -1485,7 +1639,7 @@ class TurnOrchestrator(
     ): Flux<ChatEvent> {
         pendingLookup.offer(pendingKey(ctx), PendingLookup(query = ctx.text, language = ctx.language))
         val phrase = if (explicit) formatter.cloudConsentAskExplicit(ctx.language) else formatter.cloudConsentAsk(ctx.language)
-        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase)
+        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = ctx.language)
     }
 
     /**
@@ -1508,6 +1662,7 @@ class TurnOrchestrator(
                 RouteProvider.LOCAL.name,
                 RouteCategory.FACT_SHORT.name,
                 extendedThinkOffHint(language),
+                language = language,
             )
             EscalationMode.ERST_FRAGEN, EscalationMode.AUTOMATISCH -> {
                 val (port, label) = escalationChoice(research)
@@ -1554,14 +1709,31 @@ class TurnOrchestrator(
      *     ehrlicher Setting-Hinweis über [redeemLookup]). Egress-Gesetz: NUR die
      *     Frage reist, nie die History selbst.
      *  4. **Nichts zum Nachschlagen** ⇒ ehrliche, brain-freie Rückfrage
-     *     ([lookupIntentClarify]) — 0 Brain-Calls, kein Raten.
+     *     ([lookupIntentClarify]) — 0 Brain-Calls, kein Raten. **Und sie MERKT
+     *     sich, dass sie gefragt hat** (Andi-Vorfall 2026-07-25: „Take a look
+     *     online" ⇒ „was genau soll ich nachschauen?" ⇒ „A Recept of Pizza" ⇒ das
+     *     4B plauderte lokal über Pizzateig, weil die Rückfrage eine Sackgasse
+     *     war): ein [PendingLookup] mit `awaitsTopic = true`, das die NÄCHSTE
+     *     Nachricht als das gesuchte Thema einlöst (Naht C4 in [handleTurn]).
+     *     Derselbe Store, dieselbe TTL, dieselbe One-shot-Disziplin wie das
+     *     „ja"-Angebot — nur die andere Sorte (s. [PendingLookup]-KDoc).
      *
      * [research] (Andi-Auftrag 2026-07-19): das AKTUELLE Turn-Wort war ein
      * Recherche-Imperativ — reist in ALLE [redeemLookup]-Ausgänge (1+2+3), auch
      * wenn das eingelöste Angebot selbst NICHT recherche-ausgelöst war (die
      * JETZIGE Bitte entscheidet, nicht die Herkunft des Angebots).
+     *
+     * [topicAskOpen] (Endlosschleifen-Bremse): dieser Turn hat gerade selbst eine
+     * offene Themen-Rückfrage abgeräumt und ist WIEDER eine themenlose Bitte ⇒
+     * Fall 4 antwortet unverändert, merkt sich aber NICHTS mehr. Zwei themenlose
+     * Bitten hintereinander beenden die Kette, statt sie zu verlängern.
      */
-    private fun lookupIntentTurn(ctx: TurnPrompt, pendingThink: PendingLookup?, research: Boolean = false): Flux<ChatEvent> {
+    private fun lookupIntentTurn(
+        ctx: TurnPrompt,
+        pendingThink: PendingLookup?,
+        research: Boolean = false,
+        topicAskOpen: Boolean = false,
+    ): Flux<ChatEvent> {
         if (pendingThink != null) {
             return redeemLookup(pendingThink.query, pendingThink.language, research)
         }
@@ -1573,10 +1745,17 @@ class TurnOrchestrator(
         if (previous != null) {
             return redeemLookup(previous, ctx.language, research)
         }
+        if (!topicAskOpen) {
+            pendingLookup.offer(
+                pendingKey(ctx),
+                PendingLookup(query = ctx.text, language = ctx.language, awaitsTopic = true),
+            )
+        }
         return warmDirectAnswer(
             RouteProvider.LOCAL.name,
             RouteCategory.FACT_SHORT.name,
             lookupIntentClarify(ctx.language),
+            language = ctx.language,
         )
     }
 
@@ -1679,7 +1858,7 @@ class TurnOrchestrator(
                 }
             }
             .switchIfEmpty(Flux.defer { routedTurn(ctx.request, ctx, speakerId) })
-            .onErrorResume { warmDirectAnswer(provider = "LOCAL", category = "ERROR", phrase = warmFallback()) }
+            .onErrorResume { warmDirectAnswer(provider = "LOCAL", category = "ERROR", phrase = warmFallback(ctx.language), language = ctx.language) }
 
     /**
      * **Der Eskalations-Turn (Extended Think S2)** — strukturell **brain-frei**
@@ -1922,15 +2101,28 @@ class TurnOrchestrator(
         provider: String,
         phrase: String,
         stageTimings: ChatEvent.StageTimings? = null,
+        language: Language = Language.DEFAULT,
     ): Flux<ChatEvent> = Flux.just(
-        ChatEvent.TextDelta(phrase.ifBlank { warmFallback() }, provider = provider),
+        ChatEvent.TextDelta(phrase.ifBlank { warmFallback(language) }, provider = provider),
         ChatEvent.Done(provider = provider, stageTimings = stageTimings),
     )
 
     companion object {
-        /** Hartcodierte warme Phrase, falls kein Phrasen-Pool injiziert / keine Sprache bekannt ist (nie leer). */
-        const val DEFAULT_FALLBACK =
-            "Hab dich gehört, aber bei mir hakt's grad kurz. Sag's gleich nochmal?"
+        /**
+         * Die warme DEUTSCHE Never-Silent-Phrase — exakt gepinnt in den Bestands-Tests.
+         * Seit der Mehrsprachigkeit nur noch der DE-Zeiger auf die EINE Quelle
+         * ([LangDe]): der byte-identische Beweis, dass der de-Pfad nicht wackelt.
+         */
+        val DEFAULT_FALLBACK: String = LangDe.PACK.warmFallback
+
+        /**
+         * Pure, deterministische Auswahl der **Never-Silent**-Phrase nach Turn-Sprache
+         * ([LanguagePackRegistry]). Anders als [emptyFallback]/[errorFallback] gibt es
+         * hier keinen EN-Zwischenfallback mehr: ES/FR/IT haben eine eigene, echte
+         * Phrase im Sprachpaket.
+         */
+        fun defaultFallback(language: Language): String =
+            LanguagePackRegistry.forLanguage(language).warmFallback
 
         /** Start-Kategorie eines Settings-Fastpath-Turns (Stufe per Sprache) — freie Kategorie wie "EMPTY"/"ERROR". */
         const val CATEGORY_SETTINGS = "SETTINGS"
@@ -2031,6 +2223,14 @@ class TurnOrchestrator(
          * **LEER**-Phrase: Brain kam leer zurück (kein Text, kein Fehler) — „nochmal
          * sagen" hilft hier, weil nichts strukturell kaputt ist.
          */
+        /**
+         * [RouteDecision.reason] eines Turns, den der [PlayfulModeDetector] ins
+         * Spiel-Register gezogen hat. Die KATEGORIE ist dann SMALLTALK (das steuert
+         * Grounding/Wand/Chip), der `reason` sagt dem Diary EHRLICH, WARUM sie es ist —
+         * „smalltalk" wäre hier eine halbe Wahrheit.
+         */
+        const val PLAYFUL_ROUTE_REASON = "playful"
+
         const val EMPTY_FALLBACK_DE = "Da ist mir grad nichts gekommen — sag's mir nochmal?"
         const val EMPTY_FALLBACK_EN = "I drew a blank just now — say it again?"
 

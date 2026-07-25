@@ -40,7 +40,7 @@ class BrainSettingsControllerTest {
 
         assertEquals("e4b", view.aktiv)
         assertEquals("ok", view.status)
-        assertEquals(2, view.modelle.size, "die HARTE Zwei-Modell-Whitelist")
+        assertEquals(3, view.modelle.size, "die HARTE Whitelist — seit 25.07 drei Modelle (e2b, e4b, 12b)")
         assertTrue(view.modelle.any { it.id == "e2b" && it.repo == "mlx-community/gemma-4-e2b-it-4bit" })
     }
 
@@ -72,7 +72,7 @@ class BrainSettingsControllerTest {
             switchPort,
         )
 
-        val response = controller.setModel(BrainModelRequest(id = "12b")).block(Duration.ofSeconds(2))!!
+        val response = controller.setModel(BrainModelRequest(id = "e12b")).block(Duration.ofSeconds(2))!!
 
         assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, response.statusCode)
         assertEquals("unknown-model", (response.body as SettingsError).error)
@@ -94,6 +94,34 @@ class BrainSettingsControllerTest {
         // Readback statt Behauptung: das Body ist der ECHTE (Fake-)Health-Zustand,
         // nicht das behauptete Ziel-Modell — hier noch "loading"/e2b, wie die Probe liefert.
         assertEquals("e2b", (response.body as BrainSettingsView).aktiv)
+    }
+
+    /**
+     * Andi will das dichte 12B testen (Auftrag 2026-07-25). Zwei Dinge müssen stimmen,
+     * sonst läuft der Versuch ins Leere: die Id ist bekannt (kein 422), und der Sidecar
+     * bekommt die Repo-Id mit **großem B** — `gemma-4-12B-it-4bit` existiert auf HF nur
+     * in dieser Schreibweise, ein kleines `b` lädt nichts.
+     */
+    @Test
+    fun `PUT 12b - die Id ist bekannt und die Repo-Id traegt das grosse B`() {
+        val switchPort = FakeSwitchPort(BrainSwitchResult.Accepted)
+        val controller = BrainSettingsController(
+            FakeHealthProbe(BrainHealthSnapshot("ok", "mlx-community/gemma-4-e4b-it-4bit")),
+            switchPort,
+        )
+
+        val response = controller.setModel(BrainModelRequest(id = "12b")).block(Duration.ofSeconds(2))!!
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        assertEquals("mlx-community/gemma-4-12B-it-4bit", switchPort.lastRepo)
+    }
+
+    /** Die Whitelist ist die Reihenfolge, die Andi im Auswahlfeld sieht: sparsam → gründlich. */
+    @Test
+    fun `Katalog - drei Modelle, aufsteigend nach Bedarf`() {
+        assertEquals(listOf("e2b", "e4b", "12b"), BrainModelCatalog.MODELS.map { it.id })
+        assertEquals("mlx-community/gemma-4-12B-it-4bit", BrainModelCatalog.byId("12b")?.repo)
+        assertNull(BrainModelCatalog.byId("e12b"), "es gibt kein E12B — die E-Reihe endet bei E4B")
     }
 
     @Test
@@ -142,7 +170,7 @@ class BrainSettingsControllerTest {
             store,
         )
 
-        controller.setModel(BrainModelRequest(id = "12b")).block(Duration.ofSeconds(2))
+        controller.setModel(BrainModelRequest(id = "e12b")).block(Duration.ofSeconds(2))
 
         assertNull(store.selectedRepo(), "eine unbekannte Id darf NIE das Drift-Soll verändern")
     }

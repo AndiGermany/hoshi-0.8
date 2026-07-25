@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.fallsBackToEnglish
 import java.time.Clock
 import java.time.LocalDate
 import java.time.LocalTime
@@ -80,7 +81,7 @@ class DateFastpath(
     private fun timeReceipt(time: LocalTime, language: Language): String {
         val h = time.hour
         val m = time.minute
-        return if (language == Language.EN) {
+        return if (language.fallsBackToEnglish) {
             val suffix = if (h < 12) "am" else "pm"
             val h12 = when (val x = h % 12) { 0 -> 12; else -> x }
             if (m == 0) "It's $h12 $suffix." else "It's $h12:${m.toString().padStart(2, '0')} $suffix."
@@ -106,7 +107,7 @@ class DateFastpath(
         val monthIdx = date.monthValue - 1 // 1..12 → 0..11
         val day = date.dayOfMonth
         val year = date.year
-        return if (language == Language.EN) {
+        return if (language.fallsBackToEnglish) {
             "Today is ${WEEKDAYS_EN[weekdayIdx]}, $day ${MONTHS_EN[monthIdx]} $year."
         } else {
             "Heute ist ${WEEKDAYS_DE[weekdayIdx]}, der $day. ${MONTHS_DE[monthIdx]} $year."

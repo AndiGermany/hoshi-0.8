@@ -63,6 +63,25 @@ class PendingLookupPortTest {
         assertEquals(query, store.consume("local")?.query, "119 s < TTL ⇒ Angebot gilt")
     }
 
+    /**
+     * REGRESSION (25.07): [PendingLookup.ts] stempelt sich per Default aus
+     * `Instant.now()` — die Verfallsprüfung misst aber gegen die injizierte Uhr.
+     * Wer beides mischt, hat eine TTL, die nur zufällig stimmt: der TTL-Test der
+     * Themen-Kette wurde exakt in der Sekunde dauerhaft rot, in der die Wanduhr
+     * seinen fest verdrahteten Zeitpunkt überholte. Hier steht der Vertrag:
+     * **der Store stempelt**, deshalb verfällt auch ein Angebot ohne eigenes `ts`.
+     */
+    @Test
+    fun `der Store stempelt - ein Angebot ohne eigenes ts verfaellt nach der Store-Uhr`() {
+        val clock = MutableClock(Instant.parse("2026-07-05T12:00:00Z"))
+        val store = InMemoryPendingLookupStore(clock = clock)
+        // Bewusst OHNE ts ⇒ der Default aus Instant.now() liegt Jahre nach der Store-Uhr.
+        store.offer("local", PendingLookup(query, Language.DE))
+
+        clock.advanceSeconds(121)
+        assertNull(store.consume("local"), "die Store-Uhr entscheidet, nicht die Wanduhr")
+    }
+
     // ── Key-Isolation: chatId-A konsumiert nie das Angebot von chatId-B ────────
     @Test
     fun `Keys sind isoliert - fremder Key konsumiert nichts`() {

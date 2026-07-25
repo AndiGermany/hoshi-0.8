@@ -2,8 +2,16 @@
    Laternen-Gold-Akzent (提灯) — der Default-Look von 0.5 (smarthome-assistant-ui,
    src/styles/tokens.css [data-theme="yoru"], accent-auto h45/s0.13). Hintergründe,
    Text-Treppe und Semantik sind byte-genau Yoru; der Akzent war in 0.8 zuvor
-   eis-violett (h274) — jetzt auf Yorus warmes Gold zurückgeholt. */
-:root {
+   eis-violett (h274) — jetzt auf Yorus warmes Gold zurückgeholt.
+
+   `[data-theme='yoru']` steht bewusst NEBEN `:root`: Yoru hat (als Basis-Set)
+   keinen eigenen Override-Block in themes.css, und CSS-Custom-Properties erben.
+   Ohne diesen zweiten Selektor würde eine Yoru-Vorschau-Kachel im Theme-Picker
+   (ein Element, das `data-theme` SELBST setzt — s. .settings__swatch) die Farben
+   des gerade aktiven Themas erben statt Yorus eigene zu zeigen. Am <html> ändert
+   der Zusatz nichts: dort sind beide Selektoren deckungsgleich. */
+:root,
+[data-theme='yoru'] {
   --bg-base: oklch(0.115 0.006 66);
   --bg-surface: oklch(0.155 0.006 64);
   --bg-elevated: oklch(0.195 0.006 62);
@@ -794,6 +802,20 @@ button.ops__pill {
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--text-1);
+}
+
+/* Der Tagesabschnitt („PM") bei 12-Stunden-Sprachen: gehört zur Uhr, soll sie aber
+   nicht anspringen (Andi 25.07). Deutlich kleiner, etwas leiser, leicht abgesetzt und
+   nicht mit-gesperrt — die Ziffern bleiben das Gesicht, der Abschnitt ist die Fußnote.
+   24-Stunden-Sprachen rendern das Element gar nicht erst. */
+.idle__clockperiod {
+  font-size: 0.28em;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin-left: 0.18em;
+  vertical-align: 0.9em;
+  text-transform: uppercase;
 }
 .idle__greet {
   margin: 0;

@@ -121,6 +121,9 @@ class Evaluation:
     candidate: Candidate
     counts: SliceCounts
     by_truth_channel: dict[str, SliceCounts] = field(default_factory=dict)
+    by_channel: dict[str, SliceCounts] = field(default_factory=dict)
+    by_quality: dict[str, SliceCounts] = field(default_factory=dict)
+    by_duration_bucket: dict[str, SliceCounts] = field(default_factory=dict)
     cross_probe_ids: list[str] = field(default_factory=list)
     guest_bind_probe_ids: list[str] = field(default_factory=list)
 
@@ -270,14 +273,30 @@ def _update(counts: SliceCounts, row: ProbeScore, decision: str) -> None:
         counts.cross_bind += 1
 
 
+def _duration_bucket(duration_s: float) -> str:
+    if duration_s < 2.0:
+        return "lt_2s"
+    if duration_s <= 4.0:
+        return "2_to_4s"
+    return "gt_4s"
+
+
+def _update_slice(
+    slices: dict[str, SliceCounts], key: str, row: ProbeScore, decision: str
+) -> None:
+    slices.setdefault(key, SliceCounts())
+    _update(slices[key], row, decision)
+
+
 def evaluate(rows: Iterable[ProbeScore], candidate: Candidate) -> Evaluation:
     result = Evaluation(candidate=candidate, counts=SliceCounts())
     for row in rows:
         decision = decide(row.score_a, row.score_b, candidate)
         _update(result.counts, row, decision)
-        key = f"{row.truth}:{row.channel}"
-        result.by_truth_channel.setdefault(key, SliceCounts())
-        _update(result.by_truth_channel[key], row, decision)
+        _update_slice(result.by_truth_channel, f"{row.truth}:{row.channel}", row, decision)
+        _update_slice(result.by_channel, row.channel, row, decision)
+        _update_slice(result.by_quality, row.quality, row, decision)
+        _update_slice(result.by_duration_bucket, _duration_bucket(row.duration_s), row, decision)
         if row.truth in ("a", "b") and decision in ("a", "b") and decision != row.truth:
             result.cross_probe_ids.append(row.probe_id)
         if row.truth == "guest" and decision != "guest":
@@ -319,6 +338,32 @@ def coverage_gaps(rows: Sequence[ProbeScore]) -> list[str]:
     return gaps
 
 
+def validation_summary(rows: Sequence[ProbeScore], manifest_sha256: str) -> dict:
+    """Score-blinde Bereitschaftspruefung vor dem einmaligen Holdout-Lauf."""
+    cells: dict[str, int] = {}
+    for split in SPLITS:
+        for truth in TRUTHS:
+            for channel in CHANNELS:
+                key = f"{split}:{truth}:{channel}"
+                cells[key] = sum(
+                    1
+                    for row in rows
+                    if row.split == split and row.truth == truth and row.channel == channel
+                )
+    gaps = coverage_gaps(rows)
+    return {
+        "schema_version": 1,
+        "manifest_sha256": manifest_sha256,
+        "rows": len(rows),
+        "independent_groups": len({row.group_id for row in rows}),
+        "cells": cells,
+        "coverage_gaps": gaps,
+        "ready_for_calibration": not gaps,
+        "scores_evaluated": False,
+        "holdout_evaluated": False,
+    }
+
+
 def paired_group_changes(
     holdout_rows: Sequence[ProbeScore], selected: Candidate, baseline: Candidate = BASELINE
 ) -> tuple[set[str], set[str]]:
@@ -358,12 +403,32 @@ def validate_active_config(config: ActiveConfig, real_run: bool = False) -> None
         raise ValidationError("Config-Evidence muss SHA-256 der sanitisierten aktiven Boot-/Readback-Zeile sein")
 
 
+def checked_manifest_sha256(path: Path, expected_sha256: str) -> tuple[Path, str]:
+    path = _outside_repo(path, "Manifest")
+    expected = expected_sha256.strip().lower()
+    if not EVIDENCE_SHA256.fullmatch(expected):
+        raise ValidationError("--expected-manifest-sha256 muss ein SHA-256-Hexwert sein")
+    if not path.is_file():
+        raise ValidationError(f"Manifest fehlt: {path}")
+    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    if actual != expected:
+        raise ValidationError(
+            "Manifest-SHA-256 weicht von der Vorregistrierung ab; Holdout bleibt unangetastet"
+        )
+    return path, actual
+
+
 def _evaluation_dict(result: Evaluation) -> dict:
     return {
         "candidate": asdict(result.candidate),
         "safe": result.safe,
         "counts": asdict(result.counts),
         "by_truth_channel": {key: asdict(value) for key, value in sorted(result.by_truth_channel.items())},
+        "by_channel": {key: asdict(value) for key, value in sorted(result.by_channel.items())},
+        "by_quality": {key: asdict(value) for key, value in sorted(result.by_quality.items())},
+        "by_duration_bucket": {
+            key: asdict(value) for key, value in sorted(result.by_duration_bucket.items())
+        },
         "cross_probe_ids": sorted(result.cross_probe_ids),
         "guest_bind_probe_ids": sorted(result.guest_bind_probe_ids),
     }
@@ -375,13 +440,11 @@ def calibrate(
     validate_active_config(active_config)
     train = [row for row in rows if row.split == "train"]
     holdout = [row for row in rows if row.split == "holdout"]
-    selected, train_evaluations = select_on_train(train)
-    baseline_holdout = evaluate(holdout, BASELINE)
     gaps = coverage_gaps(rows)
     reasons = [f"Datenzelle fehlt: {gap}" for gap in gaps]
 
     report: dict = {
-        "schema_version": 1,
+        "schema_version": 2,
         "manifest_sha256": manifest_sha256,
         "active_config": asdict(active_config),
         "baseline": asdict(BASELINE),
@@ -390,9 +453,10 @@ def calibrate(
         "holdout_rows": len(holdout),
         "independent_groups": len({row.group_id for row in rows}),
         "coverage_gaps": gaps,
-        "train_candidates": [_evaluation_dict(result) for result in train_evaluations],
+        "train_candidates": [],
         "selected": None,
-        "baseline_holdout": _evaluation_dict(baseline_holdout),
+        "baseline_holdout": None,
+        "holdout_evaluated": False,
         "ready_for_owner_gate": False,
         "reasons": reasons,
         "claim_limits": [
@@ -402,11 +466,31 @@ def calibrate(
         ],
     }
 
+    # Ein lueckenhaftes Manifest darf weder Score-Optimierung noch den einmaligen
+    # Holdout verbrauchen. Zuerst werden fehlende Truth-/Kanalzellen ergaenzt.
+    if gaps:
+        return report
+
+    selected, train_evaluations = select_on_train(train)
+    report["train_candidates"] = [_evaluation_dict(result) for result in train_evaluations]
     if selected is None:
         reasons.append("Kein Kandidat ist auf train ohne Cross-/Guest-Bindung")
         return report
 
+    report["selected"] = {
+        "candidate": asdict(selected),
+        "holdout": None,
+        "gain_groups": [],
+        "loss_groups": [],
+    }
+    if selected == BASELINE:
+        reasons.append("Train-Auswahl ergibt nur die heutige Baseline; Holdout bleibt ungeoeffnet")
+        return report
+
+    baseline_holdout = evaluate(holdout, BASELINE)
     selected_holdout = evaluate(holdout, selected)
+    report["holdout_evaluated"] = True
+    report["baseline_holdout"] = _evaluation_dict(baseline_holdout)
     gain_groups, loss_groups = paired_group_changes(holdout, selected)
     report["selected"] = {
         "candidate": asdict(selected),
@@ -415,8 +499,6 @@ def calibrate(
         "loss_groups": sorted(loss_groups),
     }
 
-    if selected == BASELINE:
-        reasons.append("Train-Auswahl ergibt nur die heutige Baseline; kein neuer Betriebspunkt")
     if not selected_holdout.safe:
         reasons.append("Finaler Holdout enthaelt Cross- oder Guest-Bindung")
     if selected_holdout.counts.correct_bind <= baseline_holdout.counts.correct_bind:
@@ -428,6 +510,22 @@ def calibrate(
 
     report["ready_for_owner_gate"] = not reasons
     return report
+
+
+def _append_slice_table(lines: list[str], title: str, slices: dict) -> None:
+    lines += [
+        "",
+        f"### Diagnose nach {title}",
+        "",
+        "| Slice | korrekt/genuine | Genuine→Guest | Cross-Bind | Guest-Bind | Guest→Guest |",
+        "|---|---:|---:|---:|---:|---:|",
+    ]
+    for key, counts in sorted(slices.items()):
+        lines.append(
+            f"| `{key}` | {counts['correct_bind']}/{counts['genuine']} "
+            f"| {counts['genuine_reject']} | {counts['cross_bind']} "
+            f"| {counts['guest_bind']} | {counts['guest_reject']}/{counts['guest']} |"
+        )
 
 
 def render_markdown(report: dict) -> str:
@@ -458,16 +556,21 @@ def render_markdown(report: dict) -> str:
         )
 
     lines += ["", "## Einmaliger Holdout", ""]
-    baseline = report["baseline_holdout"]
-    bc = baseline["counts"]
-    lines.append(
-        f"Baseline tau=0.45/delta=0.10: korrekt {bc['correct_bind']}/{bc['genuine']}, "
-        f"Cross-Bind {bc['cross_bind']}, Guest-Bind {bc['guest_bind']}."
-    )
-    selected = report["selected"]
-    if selected is None:
-        lines.append("Kein train-sicherer Kandidat; Holdout wurde nicht zur Kandidatenwahl benutzt.")
+    if not report["holdout_evaluated"]:
+        lines.append(
+            "**NICHT AUSGEWERTET.** Erst vollstaendige Datenabdeckung und ein "
+            "train-sicherer Kandidat duerfen den Holdout oeffnen."
+        )
+        selected = None
     else:
+        baseline = report["baseline_holdout"]
+        bc = baseline["counts"]
+        lines.append(
+            f"Baseline tau=0.45/delta=0.10: korrekt {bc['correct_bind']}/{bc['genuine']}, "
+            f"Cross-Bind {bc['cross_bind']}, Guest-Bind {bc['guest_bind']}."
+        )
+        selected = report["selected"]
+    if selected is not None:
         candidate = selected["candidate"]
         counts = selected["holdout"]["counts"]
         lines.append(
@@ -485,6 +588,9 @@ def render_markdown(report: dict) -> str:
                 f"Nur Orientierung: 0/{safety_n} beobachtete Safety-Fehler ergibt unter optimistischer "
                 f"IID-Annahme eine einseitige 95%-Obergrenze von {100.0 * bound:.1f} %, nicht 0 %."
             )
+        _append_slice_table(lines, "Kanal", selected["holdout"]["by_channel"])
+        _append_slice_table(lines, "Qualitaet", selected["holdout"]["by_quality"])
+        _append_slice_table(lines, "Dauer", selected["holdout"]["by_duration_bucket"])
 
     lines += ["", "## Blocker / Stop-Gruende", ""]
     if report["reasons"]:
@@ -571,6 +677,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--active-tau", type=float)
     parser.add_argument("--active-delta", type=float)
     parser.add_argument("--config-evidence-sha256")
+    parser.add_argument(
+        "--expected-manifest-sha256",
+        help="Vorregistrierter SHA-256 des unveraenderlichen Score-Manifests",
+    )
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Nur score-blinde Datenabdeckung pruefen; kein Holdout/Report",
+    )
     parser.add_argument("--selftest", action="store_true", help="Synthetischer, sidecar-freier Contract-Test")
     args = parser.parse_args(argv)
 
@@ -579,16 +694,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             if any(value is not None for value in (
                 args.input, args.out_dir, args.active_aggregation, args.active_tau,
                 args.active_delta, args.config_evidence_sha256,
+                args.expected_manifest_sha256,
             )):
                 parser.error("--selftest darf nicht mit Real-Daten-/Config-Argumenten kombiniert werden")
+            if args.validate_only:
+                parser.error("--selftest darf nicht mit --validate-only kombiniert werden")
             return selftest()
         if args.input is None:
             parser.error("--input ist erforderlich (oder --selftest)")
-        if None in (args.active_aggregation, args.active_tau, args.active_delta, args.config_evidence_sha256):
+        if None in (
+            args.active_aggregation,
+            args.active_tau,
+            args.active_delta,
+            args.config_evidence_sha256,
+            args.expected_manifest_sha256,
+        ):
             parser.error(
                 "Real-Lauf braucht --active-aggregation, --active-tau, --active-delta und "
-                "--config-evidence-sha256"
+                "--config-evidence-sha256 sowie --expected-manifest-sha256"
             )
+        if args.validate_only and args.out_dir is not None:
+            parser.error("--validate-only erzeugt keinen Report und akzeptiert kein --out-dir")
         active_config = ActiveConfig(
             aggregation=args.active_aggregation,
             tau=args.active_tau,
@@ -596,9 +722,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             evidence_sha256=args.config_evidence_sha256.lower(),
         )
         validate_active_config(active_config, real_run=True)
-        rows = load_manifest(args.input)
-        manifest_path = args.input.expanduser().resolve()
-        manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        manifest_path, manifest_sha256 = checked_manifest_sha256(
+            args.input, args.expected_manifest_sha256
+        )
+        rows = load_manifest(manifest_path)
+        if args.validate_only:
+            summary = validation_summary(rows, manifest_sha256)
+            print(json.dumps(summary, indent=2, sort_keys=True))
+            return 0
         report = calibrate(rows, active_config=active_config, manifest_sha256=manifest_sha256)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         out_dir = args.out_dir or REPORT_ROOT / stamp

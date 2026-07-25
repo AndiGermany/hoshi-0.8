@@ -1,5 +1,6 @@
 package de.hoshi.adapters.memory
 
+import de.hoshi.core.dto.Language
 import de.hoshi.core.pipeline.EntityContextPort
 import de.hoshi.core.pipeline.EntityMemoryWriter
 import org.slf4j.LoggerFactory
@@ -63,15 +64,23 @@ class EntityMemoryAdapter(
     }
 
     // ── RECALL (EntityContextPort, lesend) ───────────────────────────────────
-    override fun contextBlock(speakerId: String): String? {
+    /**
+     * **[language] rahmt, sie übersetzt nicht** (Sprach-Naht-Scheibe 2026-07-25):
+     * Kopf und Handlungs-Anweisung kommen aus [MemoryBlockTexts] und folgen der
+     * Turn-Sprache — der Block geht WÖRTLICH in den System-Prompt, ein deutscher
+     * Rahmen zieht die Antwort selbst bei englischer Persona nach Deutsch. Die
+     * Fakt-Zeilen dazwischen (`- hund: Bello`) sind NUTZERDATEN und bleiben
+     * unangetastet in der Sprache, in der sie gesagt wurden.
+     */
+    override fun contextBlock(speakerId: String, language: Language): String? {
         if (isGuest(speakerId)) return null
         val facts = synchronized(lock) { loadFacts(speakerId) }
         if (facts.isEmpty()) return null
         val lines = facts.entries.joinToString("\n") { (k, v) -> "- $k: $v" }
         return buildString {
-            append("[Gedächtnis — was du über den aktuellen Sprecher aus früheren Gesprächen weißt:\n")
+            append(MemoryBlockTexts.entityHead(language))
             append(lines)
-            append("\nWenn er nach einer dieser Angaben fragt, antworte damit.]")
+            append(MemoryBlockTexts.entityTail(language))
         }
     }
 

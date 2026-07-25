@@ -23,7 +23,7 @@ import reactor.core.publisher.Mono
  *    unreachable ist). `status` ist `"ok"`/`"loading"`/`"unreachable"` — roh aus
  *    der Probe, s. [BrainHealthProbe].
  *  - PUT /api/v1/settings/brain → Body {id}. Unbekannte/leere id (nicht in
- *    [BrainModelCatalog]) ⇒ 422 (unknown-model — HART auf die Zwei-Modell-
+ *    [BrainModelCatalog]) ⇒ 422 (unknown-model — HART auf die Drei-Modell-
  *    Whitelist, 16-GB-Wand); ist der Sidecar nicht erreichbar ODER kennt
  *    `/switch-model` noch nicht (404, wird PARALLEL gebaut) ⇒ 502
  *    (switch-unavailable) mit dem ehrlichen Hinweis „Brain-Sidecar kann noch

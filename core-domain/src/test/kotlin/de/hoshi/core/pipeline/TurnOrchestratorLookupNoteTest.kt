@@ -85,7 +85,7 @@ class TurnOrchestratorLookupNoteTest {
             ),
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
-                entityMemory = { null },
+                entityMemory = { _, _ -> null },
                 // Leeres Grounding ⇒ FACT_SHORT ohne Deckung ⇒ der Deflect-Zweig feuert.
                 grounding = GroundingPort.EMPTY,
                 episodicMemory = null,
@@ -221,7 +221,7 @@ class TurnOrchestratorLookupNoteTest {
             ),
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
-                entityMemory = { null },
+                entityMemory = { _, _ -> null },
                 grounding = GroundingPort.EMPTY,
                 episodicMemory = null,
             ),

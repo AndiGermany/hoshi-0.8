@@ -11,11 +11,32 @@ import java.util.concurrent.ConcurrentHashMap
  * „… soll ich kurz nachschauen?" gefragt — [query]/[language] sind die
  * ORIGINAL-Frage und -Sprache dieses Angebots. Sagt der Folge-Turn „ja"
  * ([AffirmationRecognizer]), wird mit GENAU dieser Frage eskaliert (nie mit „ja").
+ *
+ * **ZWEI klar getrennte Sorten** (Andi-Vorfall 2026-07-25, „Take a look online" ⇒
+ * Rückfrage ⇒ Kontext weg) — dieselbe Store-Wahrheit, derselbe TTL-/One-shot-
+ * Vertrag, aber semantisch verschieden; [awaitsTopic] hält sie auseinander:
+ *
+ *  1. **`awaitsTopic = false` (Default, die BESTEHENDE Sorte):** das THEMA ist
+ *     bekannt ([query] trägt die Original-Frage), es fehlt die ZUSTIMMUNG. Der
+ *     Folge-Turn löst mit einem „ja" ein — eskaliert wird [query].
+ *  2. **`awaitsTopic = true` (neu, Naht C4 [TurnOrchestrator.lookupIntentTurn]):**
+ *     die ZUSTIMMUNG ist längst da (der Nutzer hat ja selbst „schau online nach"
+ *     gesagt), es fehlt das THEMA — Hoshi hat „was genau soll ich nachschauen?"
+ *     zurückgefragt. Hier ist die NÄCHSTE Nutzer-Nachricht SELBST das Thema; ein
+ *     bloßes „ja" löst NICHTS ein. [query] trägt in dieser Sorte die themenlose
+ *     Bitte selbst — **nie als Eskalations-Query** (die wäre sinnlos), sondern
+ *     nur als Herkunfts-Beleg (der Orchestrator liest daraus, ob die Bitte ein
+ *     Recherche-Imperativ war, s. [ResearchIntentRecognizer]).
+ *
+ * Die Trennung ist strukturell, nicht nur dokumentiert: jeder Einlöse-Pfad prüft
+ * das Flag, bevor er [query] anfasst — so kann eine „ja"-Zustimmung nie eine
+ * Themen-Rückfrage einlösen und eine Themen-Nachricht nie ein Angebot.
  */
 data class PendingLookup(
     val query: String,
     val language: Language,
     val ts: Instant = Instant.now(),
+    val awaitsTopic: Boolean = false,
 )
 
 /**
@@ -89,7 +110,13 @@ class InMemoryPendingLookupStore(
         if (key.isBlank() || pending.query.isBlank()) return
         // Opportunistische Hygiene: abgelaufene Angebote anderer Schlüssel räumen.
         byKey.entries.removeIf { expired(it.value) }
-        byKey[key] = pending
+        // DER STORE IST DIE ZEIT-AUTORITÄT: der Default-Stempel von [PendingLookup]
+        // kommt aus `Instant.now()`, die Verfallsprüfung misst aber gegen [clock].
+        // Wer beides mischt, hat eine TTL, die nur zufällig stimmt (Befund 25.07:
+        // ein Test mit injizierter Uhr wurde in dem Moment dauerhaft rot, in dem die
+        // Wanduhr seinen fixen Zeitpunkt überholte). In Prod sind beide Uhren
+        // dieselbe — hier wird die Gleichheit erzwungen statt vorausgesetzt.
+        byKey[key] = pending.copy(ts = clock.instant())
     }
 
     override fun consume(key: String): PendingLookup? {

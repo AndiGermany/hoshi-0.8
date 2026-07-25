@@ -60,16 +60,29 @@ describe('resolveSoraTheme — Mapping je Tagesfenster', () => {
     expect(resolveSoraTheme(atLocalTime(21, 59))).toBe('kasumi');
   });
 
-  it('22:00–05:59 (über Mitternacht) → Yoru', () => {
+  it('22:00–01:59 (über Mitternacht) → Yoru', () => {
     expect(resolveSoraTheme(atLocalTime(SORA_YORU_START_HOUR, 0))).toBe('yoru');
     expect(resolveSoraTheme(atLocalTime(23, 59))).toBe('yoru');
     expect(resolveSoraTheme(atLocalTime(0, 0))).toBe('yoru');
-    expect(resolveSoraTheme(atLocalTime(5, 59))).toBe('yoru');
+    expect(resolveSoraTheme(atLocalTime(1, 59))).toBe('yoru');
   });
 
-  it('Nagareboshi ist NICHT Teil der Rotation (Marken-Theme, bewusst ausgenommen)', () => {
-    expect(SORA_ROTATION).toEqual(['asa', 'aoi', 'kasumi', 'yoru']);
-    expect(SORA_ROTATION).not.toContain('nagareboshi');
+  // Seit 0.8.2: Suisei ist der Codename, damit ist die Sternschnuppe als Theme frei
+  // und bekommt die tiefste Nacht. Wer um drei Uhr morgens redet, bekommt sie.
+  it('02:00–05:59 → Nagareboshi (die tiefste Nacht)', () => {
+    expect(resolveSoraTheme(atLocalTime(2, 0))).toBe('nagareboshi');
+    expect(resolveSoraTheme(atLocalTime(3, 33))).toBe('nagareboshi');
+    expect(resolveSoraTheme(atLocalTime(5, 59))).toBe('nagareboshi');
+  });
+
+  it('06:00 löst Nagareboshi ab — die Nacht endet punktgenau', () => {
+    expect(resolveSoraTheme(atLocalTime(6, 0))).toBe('asa');
+  });
+
+  it('Yoake und Natsu no Hi bleiben NICHT Teil der Rotation (manuelle Looks)', () => {
+    expect(SORA_ROTATION).toEqual(['nagareboshi', 'asa', 'aoi', 'kasumi', 'yoru']);
+    expect(SORA_ROTATION).not.toContain('yoake');
+    expect(SORA_ROTATION).not.toContain('natsunohi');
   });
 });
 
@@ -114,7 +127,14 @@ describe('Persistenz — Sora wird wie jedes andere Theme gespeichert', () => {
   it('bestehende manuelle Themes bleiben unberührt (byte-gleiche Wahl)', () => {
     // 'yoru' bewusst ausgenommen: das ist die vorbestehende Einmal-Aoi-Migration
     // (settings.test.ts), keine Sora-Sache — hier geht es nur um NEUE Themes.
-    for (const theme of ['aoi', 'asa', 'kasumi', 'nagareboshi'] as const) {
+    for (const theme of [
+      'aoi',
+      'asa',
+      'natsunohi',
+      'kasumi',
+      'nagareboshi',
+      'yoake',
+    ] as const) {
       vi.stubGlobal('localStorage', memoryStorage());
       saveSettings({ ...DEFAULT_SETTINGS, theme });
       expect(loadSettings().theme).toBe(theme);
@@ -146,6 +166,14 @@ describe('useResolvedTheme — Auflösung + Grenzwechsel-Timer', () => {
     root = createRoot(container);
     await act(async () => root!.render(<Host theme="kasumi" />));
     expect(container.querySelector('[data-testid="resolved"]')?.textContent).toBe('kasumi');
+  });
+
+  it('Yoake bleibt manuell gewählt und wird nicht zeitabhängig aufgelöst', async () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => root!.render(<Host theme="yoake" />));
+    expect(container.querySelector('[data-testid="resolved"]')?.textContent).toBe('yoake');
   });
 
   it('sora löst beim Laden korrekt zur aktuellen (gefakten) Uhrzeit auf', async () => {

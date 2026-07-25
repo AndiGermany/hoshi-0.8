@@ -31,6 +31,20 @@
       "pinned_revision": "deb1db712068b1c9f83fb1c97f08c1204b9459a1"
     },
     {
+      "id": "brain-12b",
+      "type": "hf",
+      "hf_repo": "mlx-community/gemma-4-12B-it-4bit",
+      "role": "brain-alt",
+      "required": false,
+      "license": "gemma",
+      "note": "Test-Brain auf Andis Wunsch (2026-07-25): das DICHTE 12B, kein E-Modell — ein E12B existiert nicht, die E-Reihe endet bei E4B. 6,8 GB in 4-bit gegen eine 16-GB-Wand: es laeuft, aber die Reserve fuer KV-Cache, Whisper-Spitzen und macOS ist duenn — bei Speicherdruck ist das der erste Verdaechtige. ACHTUNG Gross-B in der Repo-Id (HF ist case-sensitiv, ein kleines b laedt nichts). Die QAT-Variante wurde verworfen: 11 GB sprengen die Wand.",
+      "expected_files": [
+        "config.json",
+        "*.safetensors"
+      ],
+      "pinned_revision": "73bcf09092aa277861d5a191b989b666f7f32e8f"
+    },
+    {
       "id": "stt-whisper",
       "type": "hf",
       "hf_repo": "mlx-community/whisper-large-v3-turbo",

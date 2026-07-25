@@ -101,7 +101,7 @@ class ChatStreamDiaryGroundingTest {
             ),
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
-                entityMemory = { null },
+                entityMemory = { _, _ -> null },
                 grounding = GroundingPort.fixed(groundBlock),
                 episodicMemory = null,
             ),

@@ -94,7 +94,7 @@ class ChatStreamSpeakerDisplayNameTest {
             ),
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
-                entityMemory = { null },
+                entityMemory = { _, _ -> null },
                 grounding = GroundingPort.EMPTY,
                 episodicMemory = null,
             ),

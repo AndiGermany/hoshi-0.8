@@ -65,7 +65,17 @@ set +e
 # ── Konstanten ────────────────────────────────────────────────────────────────
 LABEL="io.hoshi.0.8.backend"
 PORT=8090
-JAR="$REPO_ROOT/web-inbound/build/libs/web-inbound-0.8.0.jar"
+# 🚨 Jar-Name AUS der Version ableiten, nicht raten (Vorfall 2026-07-25).
+# Hier stand bis 0.8.1 ein hart verdrahtetes `web-inbound-0.8.0.jar`. Das ging gut,
+# solange die Version nie stieg — an dem Tag, an dem sie zweimal stieg (0.8.1-rc1,
+# dann 0.8.2), deployte das Skript STILL das Jar vom 21. Juli weiter: Deploy grün,
+# Health 200, ein Test-Turn funktionierte (weil der ALTE Code das auch konnte) —
+# und keine einzige neue Zeile war auf dem Server. Genau die Sorte Lüge, gegen die
+# der Rest dieses Repos anschreibt. Jetzt: Name folgt gradle.properties, und die
+# Existenz wird nach dem Build hart geprüft (assert_fresh_jar).
+JAR_VERSION="$(grep -E '^version=' "$REPO_ROOT/gradle.properties" | head -1 | cut -d= -f2 | tr -d ' \r')"
+[ -n "$JAR_VERSION" ] || { echo "FATAL: keine version= in gradle.properties" >&2; exit 2; }
+JAR="$REPO_ROOT/web-inbound/build/libs/web-inbound-${JAR_VERSION}.jar"
 TEMPLATE="$REPO_ROOT/tools/launchd/${LABEL}.plist.template"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 PLIST="$LAUNCH_AGENTS_DIR/${LABEL}.plist"
@@ -514,9 +524,40 @@ assert_no_placeholders() {
 # Runtime-Switch (Andi-Befund 2026-07-20: vorher war dies die EINZIGE Soll-Quelle,
 # ein bewusster Runtime-Wechsel meldete darum fälschlich „Drift").
 resolve_brain_expected() {
+    # 1) DIE WIRKLICHKEIT FRAGEN (Andi 25.07: „es soll dem Modell folgen").
+    # Bis 0.8.2 stand hier nur die Literal-Tabelle unten — wer das Modell auf dem Mac
+    # wechselte, ohne es in der App umzuschalten, bekam danach dauerhaft eine
+    # Drift-Warnung für einen Zustand, den er selbst gewollt hatte.
+    #
+    # WARUM NICHT einfach die Prüfung abschaffen: eine Erwartung, die blind dem folgt,
+    # was gerade läuft, kann NIE Drift melden — dann ist sie wertlos. Der Kompromiss:
+    # beim DEPLOY wird die Erwartung aus der Wirklichkeit gelesen, danach steht sie fest.
+    # Ein bewusster Wechsel wird also übernommen; ändert sich das Modell SPÄTER ungefragt
+    # (Absturz, falscher Neustart, halber Switch), meldet die Pille weiterhin ehrlich.
+    local live=""
+    if [ -n "${MAC_IP:-}" ]; then
+        live="$(curl -s --max-time 3 "http://${MAC_IP}:8041/health" 2>/dev/null \
+            | python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin)
+    print(d.get("model","") if d.get("loaded") else "")
+except Exception:
+    print("")' 2>/dev/null)"
+    fi
+    if [ -n "$live" ]; then printf '%s' "$live"; return 0; fi
+
+    # 2) Fallback, wenn der Brain nicht antwortet (schläft, wird gerade neu geladen):
+    # die bisherige Kurznamen-Tabelle. Lieber eine geratene Erwartung als gar keine —
+    # die Drift-Prüfung ist ein contains() auf der Modell-ID, ein Kurzname trägt also auch.
+    # Die Kurznamen hier MÜSSEN zu `stack-lib.sh resolve_brain_model` passen —
+    # dort steht dieselbe Tabelle für den Start des Sidecars. Wer eine Zeile nur
+    # hier oder nur dort pflegt, baut sich eine Drift-Warnung für einen Zustand,
+    # den er selbst gewollt hat (Befund 25.07: eine dritte Quelle behauptete tagelang
+    # ein Modell, das gar nicht mehr lief).
     case "${HOSHI_BRAIN_MODEL:-e4b}" in
         e2b|E2B) printf 'gemma-4-e2b-it-4bit' ;;
         e4b|E4B) printf 'gemma-4-e4b-it-4bit' ;;
+        12b|12B) printf 'gemma-4-12B-it-4bit' ;;
         *)       printf '%s' "${HOSHI_BRAIN_MODEL:-}" ;;
     esac
 }
@@ -729,7 +770,26 @@ remote_deploy() {
         tail -25 "$build_log"
         return 1
     fi
-    [ -f "$JAR" ] || { fail "Erwartetes Jar fehlt: ${JAR#$REPO_ROOT/}"; return 1; }
+    [ -f "$JAR" ] || {
+        fail "Erwartetes Jar fehlt: ${JAR#$REPO_ROOT/}"
+        log "Version aus gradle.properties: $JAR_VERSION — gebaut wurde offenbar etwas anderes."
+        ls -1 "$REPO_ROOT/web-inbound/build/libs/"*.jar 2>/dev/null | sed 's#.*/#  vorhanden: #'
+        return 1
+    }
+    # 🚨 Frische-Riegel (Vorfall 2026-07-25): ein Jar mit passendem NAMEN beweist nicht,
+    # dass es DIESEN Build enthält. Ist irgendeine Quelle jünger als das Jar, wurde nicht
+    # gebaut, was wir gleich ausliefern — dann abbrechen statt einen gruenen Deploy zu
+    # melden, der alten Code auf den Server legt.
+    local newer_src
+    newer_src="$(find "$REPO_ROOT"/core-domain/src/main "$REPO_ROOT"/capability-kernel/src/main \
+        "$REPO_ROOT"/adapters-*/src/main "$REPO_ROOT"/web-inbound/src/main \
+        -name "*.kt" -newer "$JAR" -print -quit 2>/dev/null)"
+    if [ -n "$newer_src" ]; then
+        fail "Jar ist AELTER als der Quellcode — der Build hat nicht gegriffen."
+        log "juenger als das Jar: ${newer_src#$REPO_ROOT/}"
+        return 1
+    fi
+    ok "Jar frisch: web-inbound-${JAR_VERSION}.jar ($(du -h "$JAR" | cut -f1))"
     ok "Artefakt: ${JAR#$REPO_ROOT/} ($(du -h "$JAR" | awk '{print $1}'))"
 
     # (3) Token + Mac-IP auflösen (Werte NIE geloggt) — für secrets.env + Unit.

@@ -22,21 +22,33 @@ import kotlin.random.Random
  * Orchestrator.
  *
  * **Sprachpaket-Kern (0.8, Andi-Auftrag 2026-07-20):** die Phrasen-Pools leben
- * jetzt im `de.hoshi.core.pipeline.lang`-Paket (EIN [de.hoshi.core.pipeline.lang.LanguagePack]
+ * im `de.hoshi.core.pipeline.lang`-Paket (EIN [de.hoshi.core.pipeline.lang.LanguagePack]
  * pro Sprache) — dieser Formatter liest sie nur noch, er besitzt sie nicht mehr.
- * ZWEI Kategorien, bewusst UNTERSCHIEDLICH sprach-gebunden:
- *  - **Smart-Home-/Timer-Reflexe** (lightOn/lightOff/.../climate/unsupported/…):
- *    bleiben IMMER Deutsch ([LangDe.SMART_HOME_ACKS]), unabhängig vom übergebenen
- *    [Language] — Andi-Vorgabe „Reflexe NICHT anfassen". Der `language`-Parameter
- *    bleibt in der Signatur (Zukunfts-/API-Stabilität), wird hier aber bewusst
- *    ignoriert.
- *  - **Konversations-Schicht** (Cloud-Consent + Abstain-Angebot): folgt der
- *    aktiven Sprache über [LanguagePackRegistry.forLanguage] — DE bleibt
- *    byte-identisch (default [Language.DEFAULT]), EN/ES/FR/IT docken hier an.
+ *
+ * **Multilingual von A-Z (Andi 2026-07-25):** „Smart-Home-Bestätigungen -> sowas
+ * soll natürlich auch auf englisch, auch beim wetter und was wir sonst fest
+ * verdrahtet haben. es soll multilingual werden. von A-Z". Damit ist die frühere
+ * Ausnahme AUFGEHOBEN: es gibt keine Textklasse mehr, die den `language`-Parameter
+ * ignoriert. **JEDE** Methode hier zieht ihren Pool über
+ * [LanguagePackRegistry.forLanguage] — Konversations-Schicht wie Smart-Home-Acks.
+ * DE bleibt dabei byte-identisch (default [Language.DEFAULT] ⇒ [LangDe]).
+ *
+ * **Nutzerdaten werden NIE übersetzt:** `room` kommt als HA-Raumname herein und
+ * wird nur in den `{room}`-Slot gesetzt (+ Erst-Buchstabe groß, wie eh und je) —
+ * „Wohnzimmer" bleibt „Wohnzimmer", auch in „The light in Wohnzimmer is on."
  */
 class ResponseFormatter {
 
-    private val smartHome = LangDe.SMART_HOME_ACKS
+    /** Die Ack-Pools der aktiven Sprache — EIN Zugriffspunkt, keine Feld-Bindung an DE mehr. */
+    private fun acks(language: Language) = LanguagePackRegistry.forLanguage(language).smartHomeAcks
+
+    /**
+     * Anti-Repeat-Slot-Key **pro Sprache**: die Ringe von „light_on_room" auf
+     * Deutsch und auf Englisch dürfen sich nicht gegenseitig Indizes wegnehmen
+     * (unterschiedliche Pools, unterschiedliche Größen). Für einen Ein-Sprach-
+     * Betrieb — also den DE-Bestand — ändert das nichts.
+     */
+    private fun slot(name: String, language: Language) = "$name:${language.code}"
 
     /**
      * Anti-Repeat-Tiefe: die letzten N Indizes werden bei der Auswahl
@@ -46,72 +58,95 @@ class ResponseFormatter {
     private val recentIndices = ConcurrentHashMap<String, ArrayDeque<Int>>()
 
     fun lightOn(room: String?, language: Language = Language.DEFAULT): String =
-        if (room != null) format("light_on_room", smartHome.lightOnRoom, room = room) else "Licht ist an."
+        if (room != null) format("light_on_room", acks(language).lightOnRoom, language, room = room)
+        else pick(slot("light_on_no_room", language), acks(language).lightOnNoRoom)
 
     fun lightOff(room: String?, language: Language = Language.DEFAULT): String =
-        if (room != null) format("light_off_room", smartHome.lightOffRoom, room = room) else "Licht ist aus."
+        if (room != null) format("light_off_room", acks(language).lightOffRoom, language, room = room)
+        else pick(slot("light_off_no_room", language), acks(language).lightOffNoRoom)
 
     fun lightDim(room: String?, value: Int?, language: Language = Language.DEFAULT): String = when {
-        value != null && room != null -> format("light_dim_room", smartHome.lightDimRoom, room = room, value = value.toString())
-        value != null                 -> format("light_dim_no_room", smartHome.lightDimNoRoom, value = value.toString())
-        else                          -> "Ist gedimmt."
+        value != null && room != null ->
+            format("light_dim_room", acks(language).lightDimRoom, language, room = room, value = value.toString())
+        value != null ->
+            format("light_dim_no_room", acks(language).lightDimNoRoom, language, value = value.toString())
+        else -> pick(slot("light_dim_no_value", language), acks(language).lightDimNoValue)
     }
 
-    fun scene(language: Language = Language.DEFAULT): String = pick("scene", smartHome.scene)
-    fun coverOpen(language: Language = Language.DEFAULT): String = pick("cover_open", smartHome.coverOpen)
-    fun coverClose(language: Language = Language.DEFAULT): String = pick("cover_close", smartHome.coverClose)
-    fun unknown(language: Language = Language.DEFAULT): String = pick("unknown", smartHome.unknown)
+    fun scene(language: Language = Language.DEFAULT): String =
+        pick(slot("scene", language), acks(language).scene)
+    fun coverOpen(language: Language = Language.DEFAULT): String =
+        pick(slot("cover_open", language), acks(language).coverOpen)
+    fun coverClose(language: Language = Language.DEFAULT): String =
+        pick(slot("cover_close", language), acks(language).coverClose)
+    fun unknown(language: Language = Language.DEFAULT): String =
+        pick(slot("unknown", language), acks(language).unknown)
 
     fun climate(room: String?, value: Int?, language: Language = Language.DEFAULT): String = when {
-        value != null && room != null -> format("climate_room", smartHome.climateRoom, room = room, value = value.toString())
-        value != null                 -> "Auf $value Grad."
-        else                          -> "Ist eingestellt."
+        value != null && room != null ->
+            format("climate_room", acks(language).climateRoom, language, room = room, value = value.toString())
+        value != null ->
+            format("climate_value_no_room", acks(language).climateValueNoRoom, language, value = value.toString())
+        else -> pick(slot("climate_no_value", language), acks(language).climateNoValue)
     }
 
+    /** Farbwechsel — [colorName] ist erkannte Nutzer-/Geräte-Eingabe und wird NICHT übersetzt. */
     fun lightColor(colorName: String?, language: Language = Language.DEFAULT): String =
-        if (colorName != null) "Farbe ist $colorName." else "Farbe ist geändert."
+        if (colorName != null) {
+            fill(pick(slot("light_color_named", language), acks(language).lightColorNamed), null, null, colorName)
+        } else {
+            pick(slot("light_color_unnamed", language), acks(language).lightColorUnnamed)
+        }
 
     // ── NoEffect-Ehrlichkeit ──────────────────────────────────────────────────
 
     /** „War schon dunkel." — Licht-AUS lief ins Leere (war schon aus). */
     fun lightOffNoEffect(room: String?, language: Language = Language.DEFAULT): String =
-        if (room != null) format("light_off_noeffect_room", smartHome.lightOffNoEffectRoom, room = room)
-        else pick("light_off_noeffect_no_room", smartHome.lightOffNoEffectNoRoom)
+        if (room != null) format("light_off_noeffect_room", acks(language).lightOffNoEffectRoom, language, room = room)
+        else pick(slot("light_off_noeffect_no_room", language), acks(language).lightOffNoEffectNoRoom)
 
     /** „War schon hell." — Licht-AN lief ins Leere (war schon an). */
     fun lightOnNoEffect(room: String?, language: Language = Language.DEFAULT): String =
-        if (room != null) format("light_on_noeffect_room", smartHome.lightOnNoEffectRoom, room = room)
-        else pick("light_on_noeffect_no_room", smartHome.lightOnNoEffectNoRoom)
+        if (room != null) format("light_on_noeffect_room", acks(language).lightOnNoEffectRoom, language, room = room)
+        else pick(slot("light_on_noeffect_no_room", language), acks(language).lightOnNoEffectNoRoom)
 
     /** „Steht schon ungefähr auf X%." — LIGHT_DIM war schon (±5%) auf dem Zielwert. */
     fun lightDimNoEffect(room: String?, value: Int?, language: Language = Language.DEFAULT): String = when {
-        value != null && room != null ->
-            format("light_dim_noeffect_room", smartHome.lightDimNoEffectRoom, room = room, value = value.toString())
-        value != null ->
-            format("light_dim_noeffect_no_room", smartHome.lightDimNoEffectNoRoom, value = value.toString())
-        else -> pick("generic_noeffect", smartHome.genericNoEffect)
+        value != null && room != null -> format(
+            "light_dim_noeffect_room", acks(language).lightDimNoEffectRoom, language,
+            room = room, value = value.toString(),
+        )
+        value != null -> format(
+            "light_dim_noeffect_no_room", acks(language).lightDimNoEffectNoRoom, language,
+            value = value.toString(),
+        )
+        else -> pick(slot("generic_noeffect", language), acks(language).genericNoEffect)
     }
 
     /** „War schon offen." — Rollladen war schon im Zielzustand. */
     fun coverOpenNoEffect(language: Language = Language.DEFAULT): String =
-        pick("cover_open_noeffect", smartHome.coverOpenNoEffect)
+        pick(slot("cover_open_noeffect", language), acks(language).coverOpenNoEffect)
 
     /** „War schon zu." — Rollladen war schon im Zielzustand. */
     fun coverCloseNoEffect(language: Language = Language.DEFAULT): String =
-        pick("cover_close_noeffect", smartHome.coverCloseNoEffect)
+        pick(slot("cover_close_noeffect", language), acks(language).coverCloseNoEffect)
 
     /** „Steht schon auf {value} Grad." — Thermostat war schon auf Zielwert. */
     fun climateNoEffect(room: String?, value: Int?, language: Language = Language.DEFAULT): String = when {
-        value != null && room != null ->
-            format("climate_noeffect_room", smartHome.climateNoEffectRoom, room = room, value = value.toString())
-        value != null ->
-            format("climate_noeffect_no_room", smartHome.climateNoEffectNoRoom, value = value.toString())
-        else -> pick("generic_noeffect", smartHome.genericNoEffect)
+        value != null && room != null -> format(
+            "climate_noeffect_room", acks(language).climateNoEffectRoom, language,
+            room = room, value = value.toString(),
+        )
+        value != null -> format(
+            "climate_noeffect_no_room", acks(language).climateNoEffectNoRoom, language,
+            value = value.toString(),
+        )
+        else -> pick(slot("generic_noeffect", language), acks(language).genericNoEffect)
     }
 
     /** Generischer NoEffect-Fallback (Szene / UNKNOWN / kein Slot). */
     fun genericNoEffect(language: Language = Language.DEFAULT): String =
-        pick("generic_noeffect", smartHome.genericNoEffect)
+        pick(slot("generic_noeffect", language), acks(language).genericNoEffect)
 
     /**
      * Dispatch-Einstieg für die NoEffect-Quittung: bildet die Action auf die
@@ -149,19 +184,22 @@ class ResponseFormatter {
         offline: Int,
         language: Language = Language.DEFAULT,
     ): String {
-        if (room.isNullOrBlank()) return pick("partial_offline_no_room", smartHome.partialOfflineNoRoom)
+        val pack = acks(language)
+        if (room.isNullOrBlank()) {
+            return pick(slot("partial_offline_no_room", language), pack.partialOfflineNoRoom)
+        }
         val many = offline > 1
-        val (slot, pool) = when (action) {
+        val (slotName, pool) = when (action) {
             SmartHomeAction.LIGHT_OFF ->
-                if (many) "light_off_partial_many" to smartHome.lightOffPartialOfflineMany
-                else "light_off_partial_one" to smartHome.lightOffPartialOfflineOne
+                if (many) "light_off_partial_many" to pack.lightOffPartialOfflineMany
+                else "light_off_partial_one" to pack.lightOffPartialOfflineOne
             else ->
-                if (many) "light_on_partial_many" to smartHome.lightOnPartialOfflineMany
-                else "light_on_partial_one" to smartHome.lightOnPartialOfflineOne
+                if (many) "light_on_partial_many" to pack.lightOnPartialOfflineMany
+                else "light_on_partial_one" to pack.lightOnPartialOfflineOne
         }
         // applied==1: Zahl-Anker raus — die warmen „der Rest"-Varianten tragen jeden Count.
         val effective = if (applied == 1) pool.dropLast(1) else pool
-        return pick(slot, effective)
+        return pick(slot(slotName, language), effective)
             .replace("{room}", room.replaceFirstChar { it.uppercase() })
             .replace("{applied}", applied.toString())
             .replace("{offline}", offline.toString())
@@ -175,13 +213,13 @@ class ResponseFormatter {
     fun unsupported(action: SmartHomeAction, language: Language = Language.DEFAULT): String = when (action) {
         SmartHomeAction.COVER_OPEN,
         SmartHomeAction.COVER_CLOSE ->
-            pick("unsupported_cover", smartHome.unsupportedCover)
+            pick(slot("unsupported_cover", language), acks(language).unsupportedCover)
         SmartHomeAction.CLIMATE_SET ->
-            pick("unsupported_climate", smartHome.unsupportedClimate)
+            pick(slot("unsupported_climate", language), acks(language).unsupportedClimate)
         SmartHomeAction.SCENE_ACTIVATE ->
-            pick("unsupported_scene", smartHome.unsupportedScene)
+            pick(slot("unsupported_scene", language), acks(language).unsupportedScene)
         else ->
-            pick("unsupported_generic", smartHome.unsupportedGeneric)
+            pick(slot("unsupported_generic", language), acks(language).unsupportedGeneric)
     }
 
     // ── Konversations-Schicht: folgt der aktiven Sprache ─────────────────────
@@ -201,16 +239,28 @@ class ResponseFormatter {
     fun abstainLookupOffer(language: Language = Language.DEFAULT): String =
         pick("abstain_lookup_offer", LanguagePackRegistry.forLanguage(language).abstainLookupOffer)
 
-    private fun format(slot: String, pool: List<String>, room: String? = null, value: String? = null): String {
-        val raw = pick(slot, pool)
+    private fun format(
+        slotName: String,
+        pool: List<String>,
+        language: Language,
+        room: String? = null,
+        value: String? = null,
+    ): String {
+        val raw = pick(slot(slotName, language), pool)
         return fill(raw, room, value)
     }
 
-    /** Setzt {room}/{value} ein — identisch für Live-Auswahl und Prerender. */
-    private fun fill(template: String, room: String?, value: String?): String {
+    /**
+     * Setzt {room}/{value}/{color} ein — identisch für Live-Auswahl und Prerender.
+     *
+     * [room] ist **Nutzerdatum** (HA-Raumname): es wird nur eingesetzt und im
+     * ersten Buchstaben groß geschrieben, NIE übersetzt — in JEDER Sprache.
+     */
+    private fun fill(template: String, room: String?, value: String?, color: String? = null): String {
         var out = template
         if (room != null) out = out.replace("{room}", room.replaceFirstChar { it.uppercase() })
         if (value != null) out = out.replace("{value}", value)
+        if (color != null) out = out.replace("{color}", color)
         return out
     }
 
@@ -219,28 +269,36 @@ class ResponseFormatter {
      * `lightOn/lightOff/.../climate` je zurückgeben können — über alle [ROOMS] und
      * (für Dim/Climate) alle [PRERENDER_VALUES]. Genau diese Texte landen im
      * AudioBank-Prerender. Single Source of Truth.
+     *
+     * Nimmt seit 2026-07-25 die [language] entgegen (Default [Language.DEFAULT] ⇒
+     * DE, byte-identisch zum Bestand): eine AudioBank wird immer für GENAU EINE
+     * Stimme/Sprache vorgerendert, darum eine Sprache pro Aufruf statt aller auf
+     * einmal.
      */
-    fun prerenderAcks(): List<String> {
+    fun prerenderAcks(language: Language = Language.DEFAULT): List<String> {
         val out = LinkedHashSet<String>()
+        val pack = acks(language)
 
         for (r in ROOMS) {
-            smartHome.lightOnRoom.forEach { out += fill(it, r, null) }
-            smartHome.lightOffRoom.forEach { out += fill(it, r, null) }
+            pack.lightOnRoom.forEach { out += fill(it, r, null) }
+            pack.lightOffRoom.forEach { out += fill(it, r, null) }
             for (v in PRERENDER_VALUES) {
-                smartHome.lightDimRoom.forEach { out += fill(it, r, v.toString()) }
-                smartHome.climateRoom.forEach { out += fill(it, r, v.toString()) }
+                pack.lightDimRoom.forEach { out += fill(it, r, v.toString()) }
+                pack.climateRoom.forEach { out += fill(it, r, v.toString()) }
             }
         }
         for (v in PRERENDER_VALUES) {
-            smartHome.lightDimNoRoom.forEach { out += fill(it, null, v.toString()) }
+            pack.lightDimNoRoom.forEach { out += fill(it, null, v.toString()) }
         }
-        out += smartHome.scene
-        out += smartHome.coverOpen
-        out += smartHome.coverClose
-        out += smartHome.unknown
-        out += listOf(
-            "Licht ist an.", "Licht ist aus.", "Ist gedimmt.", "Ist eingestellt.",
-        )
+        out += pack.scene
+        out += pack.coverOpen
+        out += pack.coverClose
+        out += pack.unknown
+        // Die vier „kein Slot"-Fixtexte (früher hier inline, jetzt im Katalog).
+        out += pack.lightOnNoRoom
+        out += pack.lightOffNoRoom
+        out += pack.lightDimNoValue
+        out += pack.climateNoValue
         return out.toList()
     }
 

@@ -178,7 +178,7 @@ export const de: UiStrings = {
     enrolledNote: 'Angelernt — Hoshi erkennt dich jetzt.',
     loadError: 'Sprecher-Liste grad nicht lesbar.',
     dialogTitle: 'Deine Stimme anlernen',
-    dialogIntro: 'Sprich drei kurze Sätze, einen nach dem anderen — ganz natürlich, so wie du redest. Nach dem dritten Satz ist dein Profil komplett.',
+    dialogIntro: 'Sprich drei kurze Sätze, einen nach dem anderen — ganz natürlich, so wie du redest. Dein Profil braucht drei solche Sitzungen an verschiedenen Tagen, dann ist es komplett.',
     nameLabel: 'Dein Name',
     nameHint: 'So nennt Hoshi dich. Nur deine eigene Stimme — der Name steht später in der Liste.',
     nameInvalid: 'Bitte nur Buchstaben, Ziffern, _ oder − (1–64 Zeichen).',
@@ -198,6 +198,28 @@ export const de: UiStrings = {
     insecure: 'Mikro-Aufnahme braucht eine sichere Verbindung (https). Öffne die Seite über https und versuch es erneut.',
     noMic: 'Kein Mikrofon verfügbar. Schließ eines an und öffne die Seite über https.',
     genericFail: 'Anlernen hat nicht geklappt. Es wurde nichts gespeichert — bitte erneut versuchen.',
+    loading: 'lädt…',
+    // Gruppe 1 (Index 0–2) ist BYTE-GLEICH zum alten `ENROLL_SENTENCES` (Sitzung 1). Gruppe 2
+    // (3–5) und Gruppe 3 (6–8) sind neu: derselbe warme, alltagsnahe Ton, keine Zungenbrecher,
+    // keine Zahlen/Abkürzungen — für Sitzung 2 und 3 an einem jeweils ANDEREN Tag.
+    sentences: [
+      'Hallo Hoshi, ich bin’s — ich möchte, dass du meine Stimme ab jetzt sicher wiedererkennst.',
+      'Heute war ein ganz normaler Tag, und ich erzähle dir gerade in aller Ruhe ein bisschen davon.',
+      'Wenn später etwas Wichtiges ansteht, dann sag mir bitte rechtzeitig und freundlich Bescheid.',
+      'Ich mag es, wenn es abends ruhig wird und die Wohnung langsam zur Ruhe kommt.',
+      'Am Wochenende koche ich gern etwas Neues und lasse mir dabei richtig viel Zeit.',
+      'Wenn Freunde vorbeikommen, freue ich mich immer über ein gutes Gespräch bei Tee.',
+      'Manchmal höre ich einfach nur Musik und lasse dabei meine Gedanken schweifen.',
+      'Ein Spaziergang an der frischen Luft tut mir eigentlich immer richtig gut.',
+      'Am liebsten erzähle ich abends in Ruhe, wie mein Tag eigentlich war.',
+    ],
+    sessionLabel: (session: number) => `Sitzung ${session} von 3`,
+    sessionDoneHint: (session: number) =>
+      `Sitzung ${session} von 3 fertig — die nächste bitte an einem ANDEREN TAG, mit anderen Sätzen und wenn möglich einem anderen Mikro.`,
+    sessionIncompleteNote:
+      'Sitzung abgebrochen — die bisherigen Sätze bleiben erhalten, die Sitzung war unvollständig.',
+    statusInProgress: 'in Arbeit',
+    statusComplete: 'vollständig',
   },
 
   nightMode: {
@@ -239,6 +261,7 @@ export const de: UiStrings = {
     failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
     betaSuffix: ' (Beta)',
     uiNotice: 'UI-Texte und Gespräch folgen dieser Auswahl — Smart-Home-Befehle bleiben vorerst Deutsch.',
+    loading: 'lädt…',
   },
 
   skills: {
@@ -251,6 +274,8 @@ export const de: UiStrings = {
       LISTS: { label: 'Listen', reason: 'Andi-Gabel offen' },
       MUSIC: { label: 'Musik', reason: 'Track startet' },
     },
+    loadFailed: 'Skills laden fehlgeschlagen.',
+    toggleFailed: 'Umschalten fehlgeschlagen.',
   },
 
   firedToast: {
@@ -344,5 +369,212 @@ export const de: UiStrings = {
     listening: (elapsed) => `hört zu… ${elapsed}`,
     listeningTapLabel: 'Nochmal tippen zum Senden — oder Esc zum Verwerfen',
     speakingTapLabel: 'Tippen bricht Hoshis Antwort ab',
+  },
+
+  settings: {
+    categories: {
+      darstellung: 'Darstellung',
+      'sprache-stimme': 'Sprache & Stimme',
+      persoenlichkeit: 'Persönlichkeit',
+      'modell-leistung': 'Modell & Leistung',
+      faehigkeiten: 'Fähigkeiten',
+      'gedaechtnis-privatsphaere': 'Gedächtnis & Privatsphäre',
+      'standort-integrationen': 'Standort & Integrationen',
+    },
+    categoryNavAria: 'Einstellungs-Kategorien',
+    themeLabel: 'Farbthema',
+    themeGroupAria: 'Farbthema',
+    themes: {
+      aoi: { label: 'Aoi', hint: 'Morgenblau auf Tinte (青) — der Standard' },
+      yoru: { label: 'Yoru', hint: 'Warmes Laternenlicht (夜)' },
+      asa: { label: 'Asa', hint: 'Heller Tag auf Washi-Papier (朝)' },
+      natsunohi: {
+        label: 'Natsu no Hi',
+        hint: 'Sommertag in Ramune-Blau und warmem Washi (夏の日)',
+      },
+      kasumi: { label: 'Kasumi', hint: 'Kühle Nebel-Nacht in Jade (霞)' },
+      nagareboshi: {
+        label: 'Nagareboshi',
+        hint: 'Stille Neumond-Nacht, dunkler Samt (流れ星)',
+      },
+      yoake: {
+        label: 'Yoake',
+        hint: 'Morgendämmerung zwischen Indigo und Koralle (夜明け)',
+      },
+      sora: {
+        // Der Zusatz „(automatisch — folgt dem Tag)" ist in die Gruppen-
+        // Überschrift gewandert (themeGroups.automatik) — er stand sonst zweimal
+        // untereinander. Der Hinweis nennt jetzt alle FÜNF Stationen: seit 0.8.2
+        // ist Nagareboshi Teil der Rotation (die tiefste Nacht, 02–06 Uhr).
+        label: 'Sora',
+        hint: 'Nagareboshi → Asa → Aoi → Kasumi → Yoru, nach Uhrzeit dieses Geräts',
+      },
+    },
+    themeGroups: {
+      automatik: {
+        title: 'Folgt dem Tag',
+        note: 'Keine Farbe, sondern eine Regel: Hoshi wechselt das Thema mit der Uhrzeit dieses Geräts.',
+      },
+      tageszeiten: {
+        title: 'Tageszeiten',
+        note: 'Diese fünf wechseln normalerweise von selbst. Wählst du eines, bleibt es stehen.',
+      },
+      stimmung: {
+        title: 'Eigene Stimmung',
+        note: 'Bilder statt Tageszeiten — diese beiden folgen der Uhr bewusst nicht.',
+      },
+    },
+    themeGlosses: {
+      aoi: 'Blau',
+      yoru: 'Nacht',
+      asa: 'Morgen',
+      natsunohi: 'Sommertag',
+      kasumi: 'Dunst',
+      nagareboshi: 'Sternschnuppe',
+      yoake: 'Morgengrauen',
+      sora: 'Himmel',
+    },
+    themeGlossSuffix: (gloss) => ` · ${gloss}`,
+    themeSoraNow: (themeName) => `folgt dem Tag · jetzt ${themeName}`,
+    themeArcSeparator: ' › ',
+    themeArcAria: 'Tagesbogen von Sora',
+    themePinnedNote: (themeName) => `${themeName} steht gerade fest — die Automatik pausiert.`,
+    themeOptionAria: (groupTitle, themeName) => `${groupTitle}: ${themeName}`,
+    languageLabel: 'Sprache',
+    languages: {
+      auto: 'Automatisch (Deutsch / Englisch)',
+      de: 'Deutsch',
+      en: 'English',
+    },
+    languageHint: 'Steuert die Chat-Sprache und die Spracherkennung (STT).',
+    languageAutoHint: 'Automatisch erkennt pro Nachricht Deutsch oder Englisch und antwortet passend.',
+    personaLabel: 'Persönlichkeit',
+    personas: {
+      Standard: {
+        label: 'Standard',
+        description: 'Warm, locker, kumpelhaft — Hoshis Grundton.',
+        sample: "Morgen wird's mild, so um die 18 Grad — abends könnte ein kleiner Schauer kommen.",
+      },
+      Kumpel: {
+        label: 'Kumpel',
+        description: 'Flapsig und spielfreudig: duzt, witzelt, viel Energie.',
+        sample: 'Morgen? Locker 18 Grad, bisschen Regen dabei — Jacke einpacken, fertig!',
+      },
+      Knapp: {
+        label: 'Knapp',
+        description: 'Wortkarg und sachlich: nur das Nötige, kein Geplänkel.',
+        sample: 'Morgen: 18 Grad, leichter Regen.',
+      },
+      Ruhig: {
+        label: 'Ruhig',
+        description: 'Sanft und entschleunigt: leise, gelassen, gedämpft.',
+        sample: 'Morgen wird es mild, um die 18 Grad — gegen Abend zieht wohl etwas Regen auf.',
+      },
+    },
+    personaSample: (sample) => `So klinge ich: „${sample}“`,
+    escalationLabel: 'Wecker-Eskalation',
+    escalationUnit: 'Sekunden',
+    escalationHint: (seconds) =>
+      `Ein Wecker bimmelt erst am Gerät, wo du ihn gestellt hast — nach ${seconds} Sekunden auf allen. So weckt dich dein Wecker zuerst leise dort, wo du bist, und wird erst laut überall, wenn niemand reagiert.`,
+    skillsTitle: 'Skills',
+    privacyTitle: 'Privatsphäre',
+    privacyIntro:
+      'Ehrlicher Ist-Stand, direkt vom Server gelesen — das Schloss bleibt auf der Box, die Wolke geht online.',
+    privacyLoading: 'lädt…',
+    privacyVoiceLine: (engine) => `Stimme (TTS): ${engine}`,
+    privacyVoiceCloud: 'Antworttext geht für die Sprachausgabe zu OpenAI.',
+    privacyVoiceLocal: 'läuft lokal — kein Text verlässt die Box.',
+    privacySanitizeOn: 'Cloud-Maskierung: aktiv',
+    privacySanitizeOff: 'Cloud-Maskierung: aus',
+    privacySanitizeOnDetail:
+      'Vor jedem Cloud-Call maskiert: Tokens, URLs, IP-Adressen, UUIDs, Smart-Home-IDs. Namen und normaler Inhalt bleiben.',
+    privacySanitizeOffDetail:
+      'Der Antworttext geht unmaskiert in die Cloud. Aktiviert maskiert Hoshi Tokens, URLs, IP-Adressen, UUIDs und Smart-Home-IDs — Namen bleiben.',
+    privacyMemoryLine: 'Gedächtnis (Fakten über dich)',
+    privacyEpisodicLine: 'Episoden-Gedächtnis (frühere Gespräche)',
+    privacyDiaryLine: 'Nutzungs-Diary (Technik-Protokoll)',
+    privacyTargetLabels: {
+      memory: 'Gedächtnis',
+      episodic: 'Episoden-Gedächtnis',
+      diary: 'Nutzungs-Diary',
+    },
+    privacyDeleteAria: (label) => `${label} löschen`,
+    privacyLocalFile: (detail) => `lokale Datei · ${detail}`,
+    privacyStoreEmpty: 'noch nichts gespeichert',
+    privacyStoreUnreadable: 'Anzahl grad nicht lesbar',
+    privacyStoreEntries: (entries) => `${entries} Einträge`,
+    privacyStoreDisabled: (count) => `${count} — Aufzeichnung ist aus, alte Einträge liegen noch da`,
+    privacyDiaryDetail: (days) =>
+      `${days === 1 ? '1 Tages-Datei' : `${days} Tages-Dateien`} · enthält keine Gesprächs-Inhalte, nur Timing/Kategorie`,
+    privacyDeleted: (deleted, target) => {
+      const [one, many] = (
+        {
+          memory: ['Eintrag', 'Einträge'],
+          episodic: ['Eintrag', 'Einträge'],
+          diary: ['Tages-Datei', 'Tages-Dateien'],
+        } as const
+      )[target];
+      return `Gelöscht: ${deleted} ${deleted === 1 ? one : many}.`;
+    },
+  },
+
+  scheduled: {
+    kindWord: {
+      TIMER: { one: 'Timer', many: 'Timer' },
+      ALARM: { one: 'Wecker', many: 'Wecker' },
+      REMINDER: { one: 'Erinnerung', many: 'Erinnerungen' },
+    },
+    remainingUnderMinute: 'unter 1 min',
+    remainingMinutes: (minutes) => `${minutes} min`,
+    remainingHours: (hours) => `${hours} h`,
+    remainingHoursMinutes: (hours, minutes) => `${hours} h ${minutes} min`,
+    lineOne: (word, remaining) => `${word} · noch ${remaining}`,
+    lineMany: (count, word, remaining) => `${count} ${word} · nächster in ${remaining}`,
+    atClock: (clock) => `um ${clock}`,
+    inRemaining: (remaining) => `noch ${remaining}`,
+    panelAria: 'Aktive Timer und Wecker',
+    collapse: 'Zuklappen',
+    expand: 'Aufklappen — verwalten',
+    fallbackSummary: 'Aktive Timer & Wecker',
+    empty: 'nichts aktiv',
+    deleteAria: (word, label) => `${word}${label ? ` „${label}"` : ''} löschen`,
+    deleteTitle: 'Löschen',
+    deleteAll: 'alle löschen',
+  },
+
+  ops: {
+    toneWarn: 'Ops · Achtung',
+    toneCritical: 'Ops · kritisch',
+    ramCritical: 'RAM kritisch',
+    ramWarn: 'RAM-Druck',
+    title: (overall, level) => `Ops: Gesamt ${overall} · RAM ${level}`,
+    titleDetail: (detail) => ` — ${detail}`,
+    voiceCloud: 'Stimme kommt gerade aus der Cloud (OpenAI)',
+    voiceLocal: (engine) => `Stimme (${engine}): läuft lokal — verlässt das Gerät nicht.`,
+    allLocal:
+      'Alles lokal — deine Stimme verlässt das Gerät nicht. Online-Recherche nur nach deiner Freigabe.',
+  },
+
+  apiErrors: {
+    unauthorized: '401 — Token fehlt oder ist ungültig (Auth-Wand). Setze VITE_TOKEN.',
+    unsupportedAudioType: '415 — Backend lehnt den Audio-Content-Type ab (/api/v1/voice).',
+    httpStatus: (status) => `Backend antwortete HTTP ${status}`,
+  },
+
+  speakerChip: {
+    guest: 'Gast',
+    guestTitle: 'Nicht sicher erkannt — lieber Gast als die falsche Person.',
+    recognized: (name) => `Erkannt als ${name}`,
+    recognizedWithConfidence: (name, percent) => `Erkannt als ${name} · Stimm-Ähnlichkeit ${percent}`,
+    percent: (value) => `${value} %`,
+  },
+
+  stageSparkline: {
+    ms: (ms) => `${ms} ms`,
+    outlierSuffix: ' (Ausreißer)',
+    errorSuffix: ' · Fehler',
+    ariaHead: (label, count) => `${label} heute: ${count} Messwert${count === 1 ? '' : 'e'}`,
+    ariaMedian: (ms) => `Median ${ms} ms`,
+    ariaP95: (ms) => `p95 ${ms} ms`,
   },
 };

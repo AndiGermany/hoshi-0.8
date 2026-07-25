@@ -2,6 +2,8 @@ import { API_BASE, SPEAKER_ID, TOKEN } from './config';
 import { SseDecoder, parseChatEvent } from './sse';
 import { getDeviceId } from './device';
 import { loadSettings } from '../hooks/useSettings';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 import type { ChatEvent, ChatMessage, Language } from './types';
 
 export interface StreamChatOptions {
@@ -121,11 +123,16 @@ export async function streamChat(text: string, opts: StreamChatOptions): Promise
     signal: opts.signal,
   });
 
+  // Fehlertexte folgen der aktiven UI-Sprache: sie landen WÖRTLICH als Chat-Blase
+  // im Gespräch (ChatView rendert `error.message`) — vorher stand dort auch für
+  // englische Nutzer ein deutscher Satz. Kein React-Hook hier: der Sprach-Store
+  // ist ein Modul-Singleton und synchron lesbar.
+  const t = resolveUiStrings(getActiveUiLanguage()).apiErrors;
   if (res.status === 401) {
-    throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand). Setze VITE_TOKEN.');
+    throw new Error(t.unauthorized);
   }
   if (!res.ok || !res.body) {
-    throw new Error(`Backend antwortete HTTP ${res.status}`);
+    throw new Error(t.httpStatus(res.status));
   }
 
   const reader = res.body.getReader();

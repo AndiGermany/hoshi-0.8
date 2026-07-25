@@ -22,7 +22,7 @@ class HoshiApplication
  */
 private const val HOSHI_BANNER = """
    ╭───────────────────────────────────────────────────────────────╮
-   │   ★  H O S H I  0.8  —  Nagareboshi  ★                        │
+   │   ★  H O S H I  0.8.2  —  Suisei  ★                           │
    │   ────────────────────────────────────                        │
    │   warm. lokal. wach.                                          │
    │                                                               │

@@ -66,7 +66,7 @@ class TurnOrchestratorWorkingSessionTest {
         val persona = PersonaService()
         val base = TurnPromptAssembler(
             persona = persona,
-            entityMemory = { null },
+            entityMemory = { _, _ -> null },
             grounding = GroundingPort.EMPTY,
             episodicMemory = null,
         )

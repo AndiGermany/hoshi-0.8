@@ -2,6 +2,8 @@ import { API_BASE, TOKEN } from './config';
 import { SseDecoder, parseChatEvent } from './sse';
 import { getDeviceId } from './device';
 import { loadSettings } from '../hooks/useSettings';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 import type { ChatEvent, Language } from './types';
 
 export interface StreamVoiceOptions {
@@ -88,14 +90,17 @@ export async function streamVoice(audio: Blob, opts: StreamVoiceOptions): Promis
     signal: opts.signal,
   });
 
+  // Fehlertexte folgen der aktiven UI-Sprache (s. api/chat.ts): sie landen
+  // WÖRTLICH als Chat-Blase im Gespräch, sind also besonders sichtbar.
+  const t = resolveUiStrings(getActiveUiLanguage()).apiErrors;
   if (res.status === 401) {
-    throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand). Setze VITE_TOKEN.');
+    throw new Error(t.unauthorized);
   }
   if (res.status === 415) {
-    throw new Error('415 — Backend lehnt den Audio-Content-Type ab (/api/v1/voice).');
+    throw new Error(t.unsupportedAudioType);
   }
   if (!res.ok || !res.body) {
-    throw new Error(`Backend antwortete HTTP ${res.status}`);
+    throw new Error(t.httpStatus(res.status));
   }
 
   const reader = res.body.getReader();

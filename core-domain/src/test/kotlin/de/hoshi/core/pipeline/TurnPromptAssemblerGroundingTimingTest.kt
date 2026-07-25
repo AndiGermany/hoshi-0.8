@@ -34,7 +34,7 @@ class TurnPromptAssemblerGroundingTimingTest {
         wikiGroundingEnabled: Boolean = true,
     ) = TurnPromptAssembler(
         persona = PersonaService(),
-        entityMemory = { null },
+        entityMemory = { _, _ -> null },
         grounding = object : GroundingPort {
             override fun groundingBlock(query: String, category: RouteCategory, language: Language) =
                 if (groundBlock.isEmpty()) Mono.empty<String>() else Mono.just(groundBlock)

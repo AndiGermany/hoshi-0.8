@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.ChatRequest
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteDecision
 import de.hoshi.core.dto.RouteProvider
@@ -25,7 +26,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
     /** Zählender Entity-Fake: hält die zuletzt angefragte speakerId fest. */
     private class RecordingEntity(private val block: String? = "[Gedächtnis: privat]") : EntityContextPort {
         var lastSpeakerId: String? = null
-        override fun contextBlock(speakerId: String): String? {
+        override fun contextBlock(speakerId: String, language: Language): String? {
             lastSpeakerId = speakerId
             return block
         }
@@ -34,7 +35,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
     /** Zählender Episodic-Fake: hält die zuletzt angefragte speakerId fest. */
     private class RecordingEpisodic(private val block: String = "EPISODIC") : EpisodicRecallPort {
         var lastSpeakerId: String? = null
-        override fun recallBlock(speakerId: String, text: String): Mono<String> {
+        override fun recallBlock(speakerId: String, text: String, language: Language): Mono<String> {
             lastSpeakerId = speakerId
             return Mono.just(block)
         }
@@ -102,7 +103,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val episodic = RecordingEpisodic()
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
-            entityMemory = { null },
+            entityMemory = { _, _ -> null },
             grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = false,
@@ -118,7 +119,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val episodic = RecordingEpisodic()
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
-            entityMemory = { null },
+            entityMemory = { _, _ -> null },
             grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = true,
@@ -135,7 +136,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val episodic = RecordingEpisodic()
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
-            entityMemory = { null },
+            entityMemory = { _, _ -> null },
             grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = true,
@@ -152,7 +153,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val episodic = RecordingEpisodic()
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
-            entityMemory = { null },
+            entityMemory = { _, _ -> null },
             grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = true,
@@ -169,7 +170,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val episodic = RecordingEpisodic()
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
-            entityMemory = { null },
+            entityMemory = { _, _ -> null },
             grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = false,

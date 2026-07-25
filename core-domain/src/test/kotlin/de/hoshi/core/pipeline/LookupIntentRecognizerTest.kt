@@ -59,6 +59,92 @@ class LookupIntentRecognizerTest {
         ).forEach { assertFalse(LookupIntentRecognizer.matches(it), "sollte NICHT matchen: »$it«") }
     }
 
+    // ── LookupIntentRecognizer — POSITIV, EN (Andi-Vorfall 2026-07-25) ───────────
+    @Test
+    fun `englische Nachschlag-Bitten triggern genauso wie deutsche`() {
+        listOf(
+            "Take a look online for a recept of pizza.", // Andis Satz WÖRTLICH
+            "Take a look online.",
+            "Can you look that up?",
+            "look it up",
+            "search the web for pizza recipes",
+            "Browse the internet for news.",
+            "google it",
+            "Can you google the opening hours?",
+            "find out online when GTA 6 is released",
+            "check online whether it rains tomorrow",
+        ).forEach { assertTrue(LookupIntentRecognizer.matches(it), "sollte matchen: »$it«") }
+    }
+
+    // ── LookupIntentRecognizer — NEGATIV, EN-Fehlalarm-Wand ──────────────────────
+    //    „look"/„check"/„search" sind häufige Alltagswörter: OHNE Netz-Marker
+    //    dürfen sie NIE eine Nachschlag-Bitte sein (dieselbe Regel wie DE „schau").
+    @Test
+    fun `englische Alltagssaetze ohne Netz-Marker triggern NIE`() {
+        listOf(
+            "I'll check the oven.",
+            "look at this picture",
+            "Look, that's funny!",
+            "Can you check if the door is locked?",
+            "I'm searching for my keys.",
+            "Take a look at the kitchen light.",
+            "What is Google?",
+            "Google is a big company.",
+            "Was macht Google online?", // Aussage ÜBER die Firma, trotz Scope-Wort
+            "How does the internet work?",
+            "I find the internet fascinating.", // „find" allein ist bewusst KEIN Verb
+        ).forEach { assertFalse(LookupIntentRecognizer.matches(it), "sollte NICHT matchen: »$it«") }
+    }
+
+    // ── extractInlineQuery — POSITIV, EN (Andi-Vorfall 2026-07-25) ───────────────
+    //    Der Kern von Bug 1b: das EN-Intent-Präfix („Take a look online for a")
+    //    wurde nie abgestreift, weil der Scanner schon am ersten Token „Take"
+    //    abbrach — die im Satz stehende Frage ging verloren.
+    @Test
+    fun `englisches Intent-Praefix wird abgestreift, das Thema bleibt`() {
+        assertEquals(
+            "recept of pizza",
+            LookupIntentRecognizer.extractInlineQuery("Take a look online for a recept of pizza."),
+            "Andis Satz woertlich (inkl. seines Tippfehlers) — das Thema steht im Satz",
+        )
+        assertEquals(
+            "pizza recipe",
+            LookupIntentRecognizer.extractInlineQuery("Take a look online for a pizza recipe"),
+        )
+        assertEquals(
+            "the opening hours of the museum",
+            LookupIntentRecognizer.extractInlineQuery("Can you look online for the opening hours of the museum"),
+            "Praefix mit Modal + Subjekt (»can you«) wird mit abgestreift",
+        )
+        assertEquals(
+            "the tallest building in the world",
+            LookupIntentRecognizer.extractInlineQuery("search the web for the tallest building in the world"),
+            "»the web« (Artikel VOR Scope-Wort) gehoert zum Praefix, das zweite »the« zur Query",
+        )
+        assertEquals(
+            "when GTA 6 is released",
+            LookupIntentRecognizer.extractInlineQuery("find out online when GTA 6 is released"),
+            "zweiwortiges »find out«",
+        )
+    }
+
+    // ── extractInlineQuery — NEGATIV, EN: reine Bitte ohne Thema ⇒ null ──────────
+    @Test
+    fun `englische Bitte ohne Thema liefert extractInlineQuery null`() {
+        listOf(
+            "Take a look online.", // der Vorfall-Einstieg ohne Thema
+            "look it up online",
+            "Can you look that up?",
+            "search the web please",
+            "check it out online",
+        ).forEach {
+            assertNull(
+                LookupIntentRecognizer.extractInlineQuery(it),
+                "reine Bitte ohne Sachinhalt darf keinen Inline-Rest liefern: »$it«",
+            )
+        }
+    }
+
     // ── extractInlineQuery — POSITIV (Andi-Fix 2026-07-20, Live-Repro) ───────────
     @Test
     fun `traegt die Bitte selbst eine Frage, wird der Rest nach dem Intent-Praefix extrahiert`() {
@@ -272,5 +358,33 @@ class LookupIntentRecognizerTest {
             "vielleicht",
             "Wie hoch ist der Eiffelturm?",
         ).forEach { assertFalse(ConsentRecognizer.matches(it), "sollte NICHT matchen: »$it«") }
+    }
+
+    // ── TopicAnswerRecognizer — POSITIV (Andi-Vorfall 2026-07-25) ────────────────
+    //    Antwort auf „was genau soll ich nachschauen?" — (fast) alles ist ein Thema.
+    @Test
+    fun `eine Sach-Antwort auf die Themen-Rueckfrage ist ein Thema`() {
+        listOf(
+            "A Recept of Pizza", // Andis Folge-Nachricht WÖRTLICH
+            "ein Pizzarezept",
+            "Pizza",
+            "wann GTA 6 erscheint",
+            "the tallest building in the world",
+            "No Mans Sky release date", // beginnt mit „No" — trotzdem ein Thema
+            "nichts über 5 Euro", // beginnt mit „nichts" — trotzdem ein Thema
+        ).forEach { assertTrue(TopicAnswerRecognizer.isTopic(it), "sollte ein Thema sein: »$it«") }
+    }
+
+    // ── TopicAnswerRecognizer — NEGATIV: Zustimmung + Abwinken ───────────────────
+    @Test
+    fun `Zustimmung und Abwinken sind KEIN Thema - die Rueckfrage verfaellt still`() {
+        listOf(
+            "", "   ",
+            "ja", "ok", "okay", "yes", "sure", "jo", // Zustimmung ohne Sachinhalt
+            "egal", "Egal.", "egal, mach das Licht an", // Abwinken (auch als Präfix)
+            "vergiss es", "schon gut", "nein", "nee", "nichts",
+            "never mind", "Never mind!", "nevermind", "forget it", "no thanks",
+            "no", "nope", "nothing",
+        ).forEach { assertFalse(TopicAnswerRecognizer.isTopic(it), "sollte KEIN Thema sein: »$it«") }
     }
 }

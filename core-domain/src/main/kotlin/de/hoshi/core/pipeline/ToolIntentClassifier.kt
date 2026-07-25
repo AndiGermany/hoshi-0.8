@@ -120,7 +120,21 @@ class DeterministicToolIntentClassifier(
         listEnabled = listEnabled,
     )
 
-    override fun classify(text: String, language: Language): ToolCall? {
+    /**
+     * **Die EINE Stelle, an der die Turn-Sprache auf den Tat-Wunsch gestempelt
+     * wird** (Andi 2026-07-25, „multilingual von A-Z"). Der Klassifikations-Körper
+     * hat ein Dutzend `return ToolCall(...)`-Ausgänge — statt jeden einzeln zu
+     * markieren (und beim nächsten Zweig zu vergessen), setzt dieser Wrapper
+     * [ToolCall.language] genau einmal, für ALLE Ausgänge.
+     *
+     * Von dort reist die Sprache über `capability.check(call)` bis in die Absage
+     * des `CapabilityKernel` und über `tools.execute(call)` bis in die Quittung
+     * des `HaToolPort` — ohne globalen Zustand.
+     */
+    override fun classify(text: String, language: Language): ToolCall? =
+        classifyInternal(text, language)?.copy(language = language)
+
+    private fun classifyInternal(text: String, language: Language): ToolCall? {
         if (text.isBlank()) return null
         val raw = text.lowercase()
         // Apostrophe normalisieren, damit "don't" → "dont" als ein Token greift.
@@ -130,6 +144,14 @@ class DeterministicToolIntentClassifier(
 
         // (0) Negation ⇒ KEIN Befehl. Token-basiert (kein Substring-Fehlfeuer wie "klein").
         if (tokens.any { it in NEGATION || it.startsWith("kein") }) return null
+
+        // (0a) Übertragene Wendungen ⇒ KEIN Befehl („turn on the charm", „a bright
+        //      idea"). Das englische Gegenstück zu den deutschen Idiom-Blockern des
+        //      Routers: ein Schalt-/Licht-Wort kommt vor, gemeint ist aber keine Tat.
+        //      Ohne diesen Riegel landete „turn on the charm" in der Raum-Rückfrage
+        //      („Which room do you mean…?"). Nur eindeutige MEHRWORT-Phrasen ⇒ blockiert
+        //      nie einen echten Befehl; DE-neutral (keine deutsche Phrase trifft).
+        if (IntentClassifier.KeywordsEn.isFigurative(normalized)) return null
 
         // (0b) Timer-Fastpath (NUR bei HOSHI_TIMER_ENABLED). VOR den Geräte-Zweigen,
         //      damit ein expliziter Timer-/Wecker-/Erinnerungs-Befehl gewinnt. OFF
@@ -339,18 +361,27 @@ class DeterministicToolIntentClassifier(
      * Raten von entity_ids mehr: der Kernel grantet area_id gegen areaScope=["*"].
      * [rooms] ist die pro-Turn aus [areaCatalog] gebaute Alias-Tabelle ([roomIndex]).
      */
-    private fun areaOf(tokens: List<String>, rooms: Map<String, String>): String {
-        for (t in tokens) rooms[t]?.let { return it }
-        return "wohnzimmer"
-    }
+    private fun areaOf(tokens: List<String>, rooms: Map<String, String>): String =
+        roomOrNull(tokens, rooms) ?: "wohnzimmer"
 
     /**
      * Wie [areaOf], aber OHNE Default: erstes genanntes Raum-Wort ⇒ echte `area_id`,
      * sonst `null`. Für den Lese-Pfad: kein genannter Raum ⇒ kein Target ⇒ das
      * Haus-Aggregat (statt fälschlich „Wohnzimmer" zu raten).
+     *
+     * **Mehrwort-Aliase (`living room`):** an JEDER Position wird zuerst das Token-PAAR
+     * geprüft, dann das Einzel-Token — so gewinnt der zuerst GESAGTE Raum, egal ob er
+     * ein- oder zweiwortig ist. Ein englischer Satz nennt so denselben realen Raum wie
+     * der deutsche; der Raumname selbst wird dabei nie übersetzt, nur zugeordnet
+     * (der Rückgabewert ist immer die echte HA-`area_id`). Byte-neutral für Deutsch:
+     * die Paar-Schlüssel enthalten ein Leerzeichen und können in einem deutschen Satz
+     * nicht treffen.
      */
     private fun roomOrNull(tokens: List<String>, rooms: Map<String, String>): String? {
-        for (t in tokens) rooms[t]?.let { return it }
+        for (i in tokens.indices) {
+            if (i + 1 < tokens.size) rooms["${tokens[i]} ${tokens[i + 1]}"]?.let { return it }
+            rooms[tokens[i]]?.let { return it }
+        }
         return null
     }
 

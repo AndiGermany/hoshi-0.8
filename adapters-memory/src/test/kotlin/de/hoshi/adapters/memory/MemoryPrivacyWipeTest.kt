@@ -1,5 +1,6 @@
 package de.hoshi.adapters.memory
 
+import de.hoshi.core.dto.Language
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -44,11 +45,11 @@ class MemoryPrivacyWipeTest {
             // Externer Wipe über die Zweit-Connection (exakt der PrivacyController-Pfad).
             assertEquals(1, EntityMemoryAdapter.deleteAllFacts(db.toString()))
             assertEquals(0, EntityMemoryAdapter.countFacts(db.toString()))
-            assertNull(adapter.contextBlock("andi"), "nach Wipe kein Gedächtnis-Block mehr")
+            assertNull(adapter.contextBlock("andi", Language.DE), "nach Wipe kein Gedächtnis-Block mehr")
 
             // Überleben bewiesen: dieselbe Instanz speichert + recallt weiter.
             adapter.remember("andi", "Meine Katze heißt Mia", "ok")
-            val block = adapter.contextBlock("andi")
+            val block = adapter.contextBlock("andi", Language.DE)
             assertNotNull(block, "Adapter muss nach dem Wipe weiter funktionieren")
             assertTrue(block!!.contains("Mia"))
         }
@@ -76,12 +77,12 @@ class MemoryPrivacyWipeTest {
 
             assertEquals(1, EpisodicMemoryAdapter.deleteAllTurns(db.toString()))
             assertEquals(0, EpisodicMemoryAdapter.countTurns(db.toString()))
-            assertEquals("", adapter.recallNow("andi", "Sternschnuppen"), "nach Wipe kein Recall mehr")
+            assertEquals("", adapter.recallNow("andi", "Sternschnuppen", Language.DE), "nach Wipe kein Recall mehr")
 
             // Überleben bewiesen: derselbe Text darf wieder rein (Dedupe-Zeile ist weg).
             adapter.record("andi", "Ich mag Sternschnuppen über dem Balkon")
             assertEquals(1, EpisodicMemoryAdapter.countTurns(db.toString()))
-            assertTrue(adapter.recallNow("andi", "Sternschnuppen").contains("Sternschnuppen"))
+            assertTrue(adapter.recallNow("andi", "Sternschnuppen", Language.DE).contains("Sternschnuppen"))
         }
     }
 }

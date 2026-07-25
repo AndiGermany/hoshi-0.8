@@ -5,6 +5,158 @@ Alle nennenswerten Änderungen an Hoshi. Format lose an
 noch keine erste stabile Version, Einträge sind daher grob nach Thema statt
 nach Release sortiert.
 
+## 0.8.2 — Suisei ☄ (2026-07-25)
+
+Neuer Codename: **Suisei** (彗星, der Komet). Nagareboshi — die Sternschnuppe — war der kurze helle
+Streifen. Ein Komet hat eine Bahn und kommt wieder. Das passt zu dem, was diese Runde tut:
+aus einem Aufblitzen wird etwas, das bleibt. *(Nagareboshi lebt als Farbthema weiter — und bekommt
+in dieser Runde endlich die Uhrzeit, in die es gehört.)*
+
+### Sprache
+
+- **Hoshi spricht fünf Sprachen — überall, nicht nur an der Oberfläche.** Rund 770 Sätze im Backend
+  wurden übersetzt: Smart-Home-Bestätigungen, die Ehrlichkeits-Sätze („das weiß ich nicht sicher"),
+  Fehler- und Wartemeldungen, und die Wissens-Blöcke, die intern an das Sprachmodell gehen.
+  Gerade Letztere waren der eigentliche Hebel: sie zogen die Antwort zurück ins Deutsche, obwohl
+  alles andere schon englisch war. Dazu 119 Stellen im Frontend — die englische Oberfläche ist von
+  rund einem Viertel Restdeutsch auf unter 5 % gefallen, die Einstellungen sind vollständig.
+- **Zeit- und Datumsangaben folgen der Sprache** (`7:05 PM` statt `19:05`). Eine Nebenwirkung davon
+  ist gleich mitbehoben: das „PM" hing an der großen Übersichts-Uhr in derselben Riesengröße wie die
+  Ziffern. Jetzt steht der Tagesabschnitt als leise Fußnote daneben — ermittelt über die
+  Sprach-Formatierung statt über eine AM/PM-Regel, damit es auch für Sprachen stimmt, die ihn
+  voranstellen.
+- **Eine einheitliche Regel, wenn eine Sprache fehlt.** Vorher bekam ein spanischer Nutzer je nach
+  Programmpfad mal Englisch, mal Deutsch. Jetzt: alles außer Deutsch fällt auf Englisch zurück.
+- **Nutzerdaten werden nie übersetzt** — Raumnamen aus dem Smart Home bleiben, wie sie sind. Das ist
+  jetzt getestet (11 Ausgabewege × 4 Räume × 5 Sprachen), nicht nur vorgenommen.
+- **Ehrlich, und das ist die wichtigste Zeile dieses Abschnitts: Hoshi *antwortet* in fünf Sprachen,
+  aber er *versteht* noch nicht in fünf.** Übersetzt wurden die Antworten. Die Erkenner — die Stellen,
+  die zuhören, ob jemand Licht schalten, einen Timer stellen oder online nachsehen lassen will — sind
+  in großen Teilen weiterhin deutsch. Wer auf Spanisch stellt, bekommt spanische Antworten, muss die
+  Befehle aber weiter auf Deutsch oder Englisch sagen. Hoshi sagt das selbst: im Sprach-Panel steht
+  der Hinweis, und alles außer Deutsch trägt dort ein „Beta". Daran wird gearbeitet.
+- **Ebenfalls ehrlich:** Spanisch, Französisch und Italienisch sind echte Übersetzungen und keine
+  Platzhalter, aber sie sind **nicht muttersprachlich gegengelesen**. Für diese drei Sprachen gibt es
+  außerdem keine Piper-Stimme — sie werden vom macOS-`say`-Sidecar gesprochen.
+- **Übersetzt war nur die Antwort — jetzt auch das Verstehen.** Der peinlichste Befund dieser Runde:
+  rund 770 Sätze lagen in fünf Sprachen vor, aber die *Erkenner* — die Stellen, die den gesagten Satz
+  überhaupt einordnen — prüften weiter gegen deutsche Wortlisten. „How do I bake a cake?" verfehlte
+  den vorgesehenen Weg, „play some music" und „turn off the radio" wurden nicht als Radio-Befehl
+  erkannt, „note for the workshop" landete in keinem Briefkasten, „rate my day" wurde nicht als
+  Tagesnote gespeichert. Gefunden hat das niemand beim Lesen des Codes, sondern der Hausherr in zehn
+  Minuten Benutzen. Alle vier Stellen sprechen jetzt fünf Sprachen — mit einer bewussten
+  Zurückhaltung: wo ein kurzes fremdes Wort im Deutschen etwas anderes heißt, wurde es weggelassen
+  (spanisch nur `cómo` mit Akzent, nie die Präposition `como`; kein mehrdeutiges „prepare"). Ein
+  Erkenner, der bei normaler Rede zuschnappt, ist schlimmer als einer, der eine Wendung nicht kennt.
+
+### Farbe
+
+- **Zwei neue Farbwelten, beide von Codex entworfen.** *Yoake* (夜明け, „Tagesanbruch") ist der
+  Augenblick vor Sonnenaufgang: tiefer Indigo-Pflaumen-Raum, ein leiser Korall-Horizont — dunkel
+  genug für lange Gespräche, ohne ein weiteres Schwarz zu sein. *Natsu no Hi* (夏の日, „Sommertag")
+  ist das Gegenstück: helles, warmes Washi-Papier statt neutralem Weiß, Ramune-Blau als Akzent, sehr
+  wenig Zinnober. Die Kontraste wurden gemessen statt behauptet. Beide sind **manuell wählbar und
+  bleiben bewusst außerhalb der automatischen Tagesrotation** — sie sollen eine Entscheidung sein,
+  keine Überraschung.
+- **Nagareboshi bekommt die tiefste Nacht.** Bisher war die Sternschnuppe vom automatischen
+  Sora-Tageswechsel ausgenommen, weil sie Hoshis Signatur-Theme war. Seit Suisei diese Rolle trägt,
+  ist sie frei — und übernimmt das Fenster, in das sie gehört: **02:00–05:59**. Wer um drei Uhr
+  morgens mit Hoshi redet, bekommt sie. Yoru endet dafür jetzt um 01:59.
+- **Alle Themes bekommen eine Atmosphäre-Ebene:** sehr schwache Radialverläufe im Seitenraum, die dem
+  jeweiligen Thema einen Raum geben. Bewusst nur dort — Karten, Statusfarben und Textflächen bleiben
+  auf den bisherigen Tokens, damit Kontrast und Lesbarkeit unangetastet sind.
+
+### Verstehen
+
+- **Hoshi erkennt jetzt, wann jemand spielt.** Auf „Stell dir vor, eine Kuh — wie zieht sie ihre Hose
+  an?" antwortete er bisher sachlich, korrigierte im nächsten Zug „Pfoten" zu „Beinen" und ließ den
+  Faden fallen. Die Ursache war nicht das Gedächtnis, sondern das Register: die Frage wurde als
+  Wissensfrage eingestuft und durch die volle Erdungs-Maschinerie geschickt, die genau dafür gebaut
+  ist, vorsichtig zu sein. Jetzt gibt es einen eigenen Spiel-Modus. **Der ist absichtlich eng
+  gebaut:** es öffnen ihn nur ausdrückliche Marker („stell dir vor", „was wäre wenn", „imagine",
+  „what if") oder ein enges Absurditäts-Paar aus Tier und Menschen-Gegenstand — kein Sentiment, keine
+  Heuristik. Eine echte Wissensfrage als Spiel misszuverstehen würde Ehrlichkeit kosten; ein
+  verpasster Spaß kostet nur Charme. Über einer *Handlung* greift der Modus nie: Smart-Home-Befehle
+  werden nicht umgebogen.
+- **Der Chip „Wissen gedeckt" lügt nicht mehr.** Bei derselben Kuh-Frage stand er über einer frei
+  erfundenen Antwort, weil die Prüfung nur „Textblock nicht leer" sah. Er kommt jetzt aus der
+  tatsächlichen Deckung; ist der Block leer, steht er nicht da.
+- **Englische Bitten um eine Online-Suche werden verstanden.** „Take a look online for a pizza
+  recipe" landete bisher in einer Rückfrage, weil die Verbliste rein deutsch war. Jetzt gibt es
+  englische Netz-Marker und Nachschau-Verben — die häufigen Wörter „look"/„check" allerdings nur
+  zusammen mit einem Netz-Marker, sonst wäre jeder Blick in den Ofen eine Websuche.
+- **Und die Rückfrage merkt sich, dass sie gefragt hat.** „Was genau soll ich nachschauen?" war eine
+  Sackgasse: die Antwort darauf fiel ins Leere. Jetzt wird die Frage gemerkt, und das nachgereichte
+  Thema löst sie ein. Mit Bremsen: nur für die unmittelbar nächste Nachricht, ein Abwinken („egal",
+  „never mind") verwirft still, ein Befehl gewinnt gegen die offene Frage, und eine zweite themenlose
+  Bitte merkt sich nichts mehr — keine Endlosschleife.
+
+### Sicherheit & Betrieb
+
+- **Das Sprecher-Erkennungs-Gate ist versiegelt — und die Erkennung bleibt aus.** Der Kalibrator
+  konnte bisher Holdout-Ergebnisse auf einem Datensatz erzeugen, der noch gar nicht gate-fähig war;
+  der einmalige Holdout wäre verbrannt worden, bevor er etwas beweisen kann. Jetzt verlangt der
+  Echt-Lauf einen vorregistrierten Manifest-Hash und bricht vorher ab, und eine fehlende Truth- oder
+  Kanal-Zelle endet ehrlich als „nicht ausgewertet" statt als Ergebnis. **Das ist Messanlage, kein
+  Freischalten:** die Sprecher-Erkennung ist seit 0.8.0 abgeschaltet, weil das erste lokale Gate
+  keinen tragfähigen Betriebspunkt gefunden hat, und sie bleibt es.
+- **Das Deploy lieferte seit dem Versionswechsel still das alte Programm aus.** Der Jar-Name war fest
+  auf `0.8.0` verdrahtet. Das fiel lange nicht auf, weil die Version nie stieg — als sie zweimal
+  stieg, kopierte das Skript weiter den Stand vom 21. Juli auf den Server. Der Deploy meldete grün,
+  die Gesundheitsprüfung kam mit 200, ein Test-Turn sprach sauber: alles richtig, nur eben vom alten
+  Programm. Aufgefallen ist es an einem Zufall — der Start-Banner sagte nach der Umbenennung weiter
+  „Nagareboshi". Zwei Riegel: der Jar-Name wird jetzt aus der Versionsdatei abgeleitet statt geraten,
+  und ist irgendeine Quelldatei jünger als das gebaute Programm, bricht der Deploy ab. Ein passender
+  Name beweist nicht, dass der richtige Build drinsteckt.
+- **Die Modell-Erwartung folgt der Wirklichkeit statt einer Tabelle.** Wer bewusst auf ein anderes
+  Sprachmodell wechselte, bekam danach dauerhaft eine Abweichungs-Warnung für einen Zustand, den er
+  selbst gewollt hatte. Die Erwartung wird jetzt beim Deploy aus dem laufenden Modell gelesen und
+  steht danach fest — ein gewollter Wechsel wird übernommen, ein *späterer* ungefragter (Absturz,
+  halber Wechsel) wird weiterhin gemeldet. Schläft das Modell gerade, gilt die alte Tabelle als
+  Notnagel; eine geratene Erwartung ist besser als gar keine.
+
+- **Stimmen anlernen geht jetzt über drei Sitzungen an drei Tagen.** Die Auswertung der ersten
+  Anlern-Runde zeigte, dass die beiden Profile im Haushalt einander ähnlicher waren als jede Person
+  sich selbst — gemessen an der laufenden Anlage: Eigen-Werte 0,52 und 0,41 bei einer
+  Kreuz-Ähnlichkeit von 0,71. Die Ursache lag nicht in den Stimmen, sondern in der Aufnahme: drei
+  Sätze am Stück, ein Raum, ein Mikrofon, dieselben Sätze. Gelernt wurde das Wohnzimmer, nicht der
+  Mensch. Der Anlern-Dialog führt jetzt durch drei getrennte Sitzungen mit je drei **verschiedenen**
+  Sätzen (neun in fünf Sprachen) und legt sie an, statt sie zu ersetzen. Zwei Fallen wurden dabei
+  entschärft, die den ganzen Ablauf unbrauchbar gemacht hätten: die zweite Sitzung hätte die erste
+  überschrieben, und ein Abbruch in Sitzung drei hätte die beiden fertigen Tage mitgerissen.
+- **Und diesmal lässt sich messen, statt hinterher zu raten.** Die Diagnose nennt für jede einzelne
+  Aufnahme, wie gut sie zu den übrigen desselben Profils passt — eine verkorkste Aufnahme zeigt damit
+  auf sich selbst, statt im Mittelwert zu verschwinden. Dazu die höchste Fremd-Ähnlichkeit je
+  Profilpaar (genau die Zahl, an der der Befund hing), die Herkunft jeder Aufnahme (Sitzung, Gerät,
+  Zeitpunkt) sowie Dauer und Pegel. Zu kurze oder praktisch stumme Aufnahmen werden abgelehnt, statt
+  das Profil zu vergiften — aber bewusst feige: lässt sich die Aufnahme nicht auswerten, wird sie
+  durchgelassen. Ein zweifelnder Prüfer darf niemanden blockieren.
+- **Eine Frist, die nur zufällig stimmte.** Das kurze Gedächtnis für „soll ich kurz nachschauen?"
+  maß seinen Ablauf gegen die eine Uhr, stempelte den Eintrag aber mit einer anderen. Im Betrieb war
+  das dieselbe Uhr, deshalb war nie etwas kaputt — die Frist war nur nicht überprüfbar. Aufgefallen
+  ist es, weil ein Test in genau der Sekunde dauerhaft rot wurde, in der die reale Zeit den in ihm
+  festgeschriebenen Zeitpunkt überholte. Jetzt stempelt der Speicher selbst; die gleichartige Stelle
+  für Orts-Rückfragen wurde mitgezogen.
+
+### Bekannte Grenzen dieser Version
+
+- **ES/FR/IT sind nicht muttersprachlich gegengelesen** und haben keine Piper-Stimme. Die neu
+  hinzugekommenen Erkenner-Wendungen dieser drei Sprachen sind strukturell nachgebaut, nicht
+  idiomatisch gegengeprüft.
+- Die **Oberfläche lässt sich nur auf Deutsch oder Englisch stellen**, obwohl fünf Sprachpakete
+  vorliegen: Spanisch, Französisch und Italienisch sind über „Hoshi spricht" erreichbar, stehen aber
+  nicht als eigene Bedien-Sprache zur Wahl.
+- Das **dichte Gemma-4-12B steht zur Wahl, lädt aber noch nicht**: die eingefrorene mlx-lm-Version
+  kennt seine Architektur nicht (`gemma4_unified`). Weil der Sidecar wegen der 16-GB-Grenze das alte
+  Modell *vor* dem Laden entlädt, kostet ein Versuch das laufende Sprachmodell, bis
+  `bin/hoshi heal` es zurückholt — beides steht so im Auswahl-Label. Der Eintrag bleibt sichtbar,
+  weil er nach dem geplanten mlx-lm-Upgrade sofort trägt.
+- Die **Sprecher-Erkennung ist abgeschaltet**; Anlernen und Profile bleiben, das Erkennen nicht.
+- Der **sanfte Neustart** (bis zu 20 Sekunden für laufende Gespräche) ist konfiguriert und plausibel,
+  aber weiterhin **nicht an einem echten laufenden Gespräch bewiesen**.
+- Im Frontend bleiben Reste: der Sprecher-Anlern-Flow, Mikrofon-/Audio-Fehlermeldungen und rund 33
+  meist verschluckte Fehlerwürfe sind noch deutsch.
+
 ## 0.8.1-rc1 — Nagareboshi (Release Candidate)
 
 Post-Submission-Aufräumrunde: integrierte Review-Pakete + Betriebs-Härtung + die erste Schicht

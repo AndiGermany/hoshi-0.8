@@ -4,25 +4,30 @@ import de.hoshi.core.dto.Language
 
 /**
  * **Sprachpaket-Kern** (Andi-Auftrag 2026-07-20: „Hoshi versteht/denkt/spricht
- * wählbar in DE/EN/ES/FR/IT — Konversations-Schicht; Smart-Home-Reflexe bleiben
- * bewusst DE"). EIN [LanguagePack] pro Sprache bündelt GENAU die Konversations-
- * Phrasen-Pools, die heute schon per-Turn `language`-bewusst sind (die
- * Cloud-Consent-/Abstain-Kette aus [de.hoshi.core.pipeline.ResponseFormatter]) +
- * die Intent-Muster-Notizen + die Prompt-Sprachanweisung + den Smart-Home-Hinweis
- * + den TTS-`say`-Stimm-Hinweis.
+ * wählbar in DE/EN/ES/FR/IT"; erweitert 2026-07-25: „Smart-Home-Bestätigungen ->
+ * sowas soll natürlich auch auf englisch … es soll multilingual werden. von A-Z").
+ * EIN [LanguagePack] pro Sprache bündelt ALLE fest verdrahteten, gesprochenen
+ * Texte: die Konversations-Phrasen-Pools (Cloud-Consent-/Abstain-Kette aus
+ * [de.hoshi.core.pipeline.ResponseFormatter]), die **Smart-Home-Bestätigungen**
+ * ([SmartHomeAckPack]), die **Quittungen des realen HA-Executors**
+ * ([HaExecutorPack]) und die **gesprochene Tat-Verweigerung des Trust-Kernels**
+ * ([CapabilityDenyPack]) + die Intent-Muster-Notizen + die Prompt-Sprachanweisung
+ * + den Smart-Home-Hinweis + den TTS-`say`-Stimm-Hinweis.
  *
  * **Byte-neutral für DE:** [de.hoshi.core.pipeline.lang.LangDe] trägt EXAKT die
- * bisherigen ResponseFormatter-Pool-Inhalte, nur hierher VERSCHOBEN (kein Zeichen
- * geändert) — die bestehenden Formatter-/Orchestrator-Tests sind der Beweis.
+ * bisherigen Bestands-Inhalte (ResponseFormatter-Pools, HaToolPort-Literale,
+ * CapabilityKernel-Refusals), nur hierher VERSCHOBEN (kein Zeichen geändert) —
+ * die bestehenden Formatter-/HaToolPort-/Kernel-Tests sind der Beweis.
  *
  * **Ein-Datei-Regel für Übersetzer-Pods:** jede Sprache lebt in GENAU einer Datei
  * ([LangDe]/[LangEn]/[LangEs]/[LangFr]/[LangIt]) — ein Folge-Pod, der z.B. echtes
  * Spanisch nachliefert, fasst NUR `LangEs.kt` an.
  *
- * **Smart-Home-/Timer-Reflexe bleiben AUSSERHALB dieses Packs** (s.
- * [SmartHomeAckPack]): sie werden NICHT übersetzt (Andi-Vorgabe) — jede
- * Konversationssprache außer Deutsch bekommt stattdessen [smartHomeNotice] als
- * ehrlichen Hinweistext für die Sprach-Sektion des Frontends.
+ * **Nutzerdaten werden NIE übersetzt** (eiserne Projekt-Regel): Raum-/Area-Namen
+ * kommen aus Home Assistant und reisen als `{room}`-Slot unverändert durch JEDEN
+ * Satz — „Wohnzimmer" bleibt „Wohnzimmer", auch im englischen/spanischen Satz.
+ * Deshalb sind alle raumbezogenen Sätze hier Templates mit Platzhaltern, nie
+ * vorgefertigte Vollsätze mit eingebautem Raumnamen.
  */
 data class LanguagePack(
     /** Die Sprache, die dieses Pack bedient — Single Source of Truth, kein zweites Tag. */
@@ -37,6 +42,65 @@ data class LanguagePack(
     /** Naht D (Hörbarkeit): das Angebot NACH einem ehrlichen Brain-Abstain. */
     val abstainLookupOffer: List<String>,
 
+    // ── Ehrlichkeit: was Hoshi sagt, wenn er NICHT weiterweiß ─────────────────
+    // (Quelle: [de.hoshi.core.pipeline.HonestyGate] — die ehrlichste und heikelste
+    //  Textklasse des Produkts. Haltung, KEIN Defekt: nie „ich kann nicht", nie
+    //  Engine-Sprech, immer ein Angebot/eine Rückfrage. Eine Übersetzung, die wie
+    //  eine Fehlermeldung klingt, ist eine FALSCHE Übersetzung.)
+
+    /** Explizite „schau online nach"-Bitte bei Cloud-AUS: bietet sofort das eigene Wissen an. */
+    val honestyOnlineRequestRefusals: List<String>,
+
+    /** Weak-Domain (Rezept/How-To): ehrlich „da führ ich dich in die Irre" statt geraten. */
+    val honestyRecipeRefusals: List<String>,
+
+    /** Existenz-Claim mit Zahl-Entity („gibt es einen 11-Euro-Schein?"): zweifelnd statt erfunden-bestätigend. */
+    val honestyExistenceRefusals: List<String>,
+
+    /** Unbekannter Eigenname („Wer ist Neelix?"): warm, neugierig, fragend — eine Repair-Einladung. */
+    val honestyNamedEntityRefusals: List<String>,
+
+    /**
+     * Wissens-Bridge tot: NICHT „gibt's nicht", sondern ehrlich „komm grad nicht an
+     * mein Wissen". Muss in JEDER Sprache auf ERREICHBARKEIT zielen (nicht auf
+     * Nicht-Existenz) — sonst lügt Hoshi einen Infrastruktur-Fehler zu einer
+     * Tatsachen-Behauptung um.
+     */
+    val honestyBridgeDownRefusals: List<String>,
+
+    // ── Never-Silent-Ränder: der Turn hakt, der Rand macht dicht ──────────────
+
+    /**
+     * Die letzte warme Phrase des Never-Silent-Vertrags
+     * ([de.hoshi.core.pipeline.TurnOrchestrator]): leere Eingabe / Fehler VOR jedem
+     * Text. Sie fällt genau dann, wenn ohnehin schon etwas schiefging — darum ohne
+     * Schuldzuweisung und mit einer Einladung, es gleich nochmal zu sagen.
+     */
+    val warmFallback: String,
+
+    /** Audio-Cap-Abbruch am `/ws/audio`-Rand (zu viele Bytes am Stück). */
+    val audioCapTooLong: String,
+
+    /** Dauer-Deckel des Session-Guards am `/ws/audio`-Rand (Aufnahme ohne Ende-Signal). */
+    val audioNoEndSignal: String,
+
+    /** Über-Kapazität am Brain-Admission-Gate — kein Defekt, sondern „gleich wieder da". */
+    val admissionBusy: String,
+
+    // ── Deterministische Quittungen der brain-freien Fastpaths ────────────────
+
+    /** Tagesnote neu — `{score}` ([SCORE_PLACEHOLDER]) wird durch die Note 1–5 ersetzt. */
+    val dailyNoteRecorded: String,
+
+    /** Tagesnote am selben Tag überschrieben (ehrliches „Aktualisiert"), s. [dailyNoteRecorded]. */
+    val dailyNoteUpdated: String,
+
+    /** Werkstatt-Notiz im Briefkasten abgelegt (statisch, kein Überschreib-Echo). */
+    val workshopNoteRecorded: String,
+
+    /** Probe-Selbsttest („Hoshi, Probe."): die Kette Ohren→Draht→Stimme steht. */
+    val probeReceipt: String,
+
     /** Dokumentarische Notizen der Lookup-/Consent-/Research-Muster (s. KDoc dort). */
     val intentPatterns: IntentPatternNotes,
 
@@ -45,8 +109,13 @@ data class LanguagePack(
 
     /**
      * Ehrlicher Hinweistext für die Sprach-Sektion des Frontends, WENN diese
-     * Sprache aktiv ist UND es nicht Deutsch ist — Smart-Home-/Timer-Reflexe
-     * sprechen (noch) nur Deutsch. `null` für [LangDe] (kein Hinweis nötig).
+     * Sprache aktiv ist UND es nicht Deutsch ist. `null` für [LangDe].
+     *
+     * **Inhalt seit 2026-07-25 gedreht:** die Smart-Home-BESTÄTIGUNGEN sprechen
+     * jetzt die gewählte Sprache ([SmartHomeAckPack]/[HaExecutorPack]). Was noch
+     * NICHT mehrsprachig ist, ist das VERSTEHEN: der
+     * [de.hoshi.core.pipeline.ToolIntentClassifier] erkennt Befehle weiterhin nur
+     * auf Deutsch und Englisch. Genau das — und nur das — sagt der Hinweis jetzt.
      */
     val smartHomeNotice: String?,
 
@@ -73,6 +142,22 @@ data class LanguagePack(
      * Französisch/Italienisch mit einer erfundenen Stimmen-ID vortäuschen).
      */
     val piperVoiceHint: String?,
+
+    // ── Smart-Home: die gesprochenen Bestätigungen (Andi 2026-07-25) ──────────
+    // „Smart-Home-Bestätigungen -> sowas soll natürlich auch auf englisch […]
+    //  es soll multilingual werden. von A-Z". Die frühere Ausnahme („Reflexe
+    //  bleiben DE") ist damit AUFGEHOBEN — alle drei Packs folgen ab jetzt der
+    //  aktiven Sprache. Nutzerdaten (HA-Raumnamen) bleiben davon unberührt:
+    //  sie reisen als `{room}`-Slot unübersetzt durch den Satz.
+
+    /** Die warmen Ack-Pools des [de.hoshi.core.pipeline.ResponseFormatter]. */
+    val smartHomeAcks: SmartHomeAckPack,
+
+    /** Die Quittungen des realen HA-Executors (`de.hoshi.adapters.ha.HaToolPort`). */
+    val haExecutor: HaExecutorPack,
+
+    /** Die gesprochene Tat-Verweigerung des Trust-Kernels (`de.hoshi.kernel.CapabilityKernel`). */
+    val capabilityDeny: CapabilityDenyPack,
 )
 
 /**
@@ -101,11 +186,23 @@ data class IntentPatternNotes(
 )
 
 /**
- * Die Smart-Home-/Timer-Reflex-Ack-Pools — verschoben (nicht verändert) aus
- * [de.hoshi.core.pipeline.ResponseFormatter]. Lebt bewusst AUSSERHALB von
- * [LanguagePack]: diese Pools sprechen IMMER Deutsch, unabhängig von der aktiven
- * Konversationssprache (Andi-Vorgabe „Smart-Home-Reflexe NICHT anfassen") — nur
- * [LangDe] instanziiert sie, [ResponseFormatter] referenziert sie direkt.
+ * Die **Smart-Home-Bestätigungs-Pools** des [de.hoshi.core.pipeline.ResponseFormatter]
+ * — je Sprache EINE Instanz, gezogen über [LanguagePack.smartHomeAcks].
+ *
+ * **Bis 2026-07-25 eine bewusste Ausnahme, jetzt aufgehoben:** diese Pools waren
+ * absichtlich immer deutsch und der `language`-Parameter wurde ignoriert. Andis
+ * Ansage („Smart-Home-Bestätigungen … es soll multilingual werden. von A-Z") hebt
+ * die Ausnahme auf — [LangEn]/[LangEs]/[LangFr]/[LangIt] tragen jetzt eigene,
+ * idiomatisch übersetzte Pools. [LangDe] bleibt WORT-FÜR-WORT wie zuvor.
+ *
+ * **Platzhalter** (vom Formatter gefüllt, NIE übersetzt):
+ *  - `{room}` — der HA-Raumname (Nutzerdaten! „Wohnzimmer" bleibt „Wohnzimmer").
+ *  - `{value}` — Prozent bzw. Grad.
+ *  - `{applied}` / `{offline}` — Lampen-Zähler der PartialOffline-Quittung.
+ *  - `{color}` — der erkannte Farbname.
+ *
+ * **Gesprochen, nicht gelesen:** kurz, warm, zustands-eindeutig. Eine Übersetzung,
+ * die wie eine Statusmeldung klingt, ist eine falsche Übersetzung.
  */
 data class SmartHomeAckPack(
     val lightOnRoom: List<String>,
@@ -137,6 +234,136 @@ data class SmartHomeAckPack(
     val unsupportedClimate: List<String>,
     val unsupportedScene: List<String>,
     val unsupportedGeneric: List<String>,
+
+    // ── Die „kein Slot"-Varianten (vorher INLINE im ResponseFormatter) ────────
+    // Bewusst EIN-elementige Pools: das waren feste Literale, keine Variations-
+    // Pools — der Anti-Repeat-Ring gibt bei Pool-Größe 1 unverändert pool[0]
+    // zurück, der DE-Pfad bleibt damit byte-identisch.
+
+    /** Licht AN ohne Raum-Slot — DE: „Licht ist an." */
+    val lightOnNoRoom: List<String>,
+
+    /** Licht AUS ohne Raum-Slot — DE: „Licht ist aus." */
+    val lightOffNoRoom: List<String>,
+
+    /** Gedimmt ohne Wert — DE: „Ist gedimmt." */
+    val lightDimNoValue: List<String>,
+
+    /** Klima mit Wert, ohne Raum — DE: „Auf {value} Grad." */
+    val climateValueNoRoom: List<String>,
+
+    /** Klima ohne Wert — DE: „Ist eingestellt." */
+    val climateNoValue: List<String>,
+
+    /** Farbwechsel mit erkanntem Farbnamen — DE: „Farbe ist {color}." */
+    val lightColorNamed: List<String>,
+
+    /** Farbwechsel ohne Farbnamen — DE: „Farbe ist geändert." */
+    val lightColorUnnamed: List<String>,
+)
+
+/**
+ * Die **Quittungen des realen HA-Executors** (`de.hoshi.adapters.ha.HaToolPort`) —
+ * je Sprache EINE Instanz, gezogen über [LanguagePack.haExecutor].
+ *
+ * Das ist die Textklasse, die im Alltag WIRKLICH aus dem Lautsprecher kommt: der
+ * Readback-Pfad des agentischen HA-Adapters formt hieraus seine Sätze. Anders als
+ * [SmartHomeAckPack] sind das EINZEL-Strings, keine Variations-Pools — sie sagen
+ * einen konkreten, gemessenen Zustand und dürfen nicht „variieren".
+ *
+ * **Honesty-Charter in Textform:** kein Satz darf einen Effekt behaupten, den der
+ * Readback nicht belegt hat. Wer übersetzt, übersetzt genau diese Abstufung mit
+ * („geschickt" ≠ „getan" ≠ „war schon so").
+ *
+ * Platzhalter: `{room}` (HA-Raumname — Nutzerdaten, NIE übersetzen), `{value}`
+ * (Grad), `{count}` (Anzahl nicht erreichbarer Lampen).
+ */
+data class HaExecutorPack(
+    /** Kein HA-Token ⇒ ehrlich NICHTS getan (Schreib-Pfad). */
+    val noToken: String,
+
+    /** Kein HA-Token ⇒ ehrlich kein Temperatur-Wert (Lese-Pfad). */
+    val noTokenTemperature: String,
+
+    /** Area OHNE climate-Entity — ehrlich VOR jedem Service-Call. `{room}` = Area-Label. */
+    val noThermostatInArea: String,
+
+    /** turn_off verifiziert (an=0). `{room}` = Area-Slug. */
+    val lightOffArea: String,
+
+    /** turn_off, aber es brennt noch etwas. `{room}` = Area-Slug. */
+    val lightSomeStillOn: String,
+
+    /** Offline-Zusatz MIT Zähler — wird an [lightNothingNewOn]/[lightNoneWentOn] angehängt. */
+    val offlineHintCount: String,
+
+    /** Offline-Zusatz OHNE Zähler (vage) — dito angehängt. */
+    val offlineHintVague: String,
+
+    /** Die Area hat gar keine Lampen. `{room}` = Area-Slug. */
+    val noLightsInArea: String,
+
+    /** turn_on verifiziert (echtes Delta oder an≥1). `{room}` = Area-Slug. */
+    val lightOnArea: String,
+
+    /** Alle erreichbaren brannten schon — ehrlich „schon an" statt Fake-Erfolg. */
+    val lightAlreadyOnArea: String,
+
+    /** Es brannte schon Licht, NEU ging aber nichts an (Satzanfang, Offline-Zusatz folgt). */
+    val lightNothingNewOn: String,
+
+    /** Angekommen, aber kein Licht ging an (Satzanfang, Offline-Zusatz folgt). */
+    val lightNoneWentOn: String,
+
+    /** Soll-Wert bestätigt. `{room}` = Area-Label, `{value}` = Grad. */
+    val climateSetArea: String,
+
+    /** Soll-Wert (noch) nicht bestätigt — ehrlich statt Rateglück. */
+    val climateNotYet: String,
+
+    /** HTTP-200 ohne lesbaren Zustand, MIT Area. `{room}` = Area-Slug. */
+    val sentToArea: String,
+
+    /** HTTP-200 ohne lesbaren Zustand, ohne Area. */
+    val sentToHome: String,
+
+    /** Service-Call fehlgeschlagen (Non-2xx/Timeout/Netz) — warm statt kalt. */
+    val failed: String,
+
+    /** Read lieferte keinen (numerischen) Wert. */
+    val noValue: String,
+
+    /** Ist-Temperatur einer Area. `{room}` = Area-Label, `{value}` = Grad. */
+    val temperatureInArea: String,
+
+    /** Ist-Temperatur als Haus-Durchschnitt. `{value}` = Grad. */
+    val temperatureHouseAverage: String,
+
+    /** Temperatur-Read fehlgeschlagen — warm statt kalt. */
+    val temperatureUnavailable: String,
+
+    /**
+     * Dezimal-Trennzeichen für gesprochene Grad-Werte („21,5" vs. „21.5").
+     * Sprachsache, keine Formatierungs-Laune: DE/ES/FR/IT sprechen Komma,
+     * EN spricht Punkt.
+     */
+    val decimalSeparator: String,
+)
+
+/**
+ * Die **gesprochene Tat-Verweigerung des Trust-Kernels** (`de.hoshi.kernel.CapabilityKernel`)
+ * — je Sprache EINE Instanz, gezogen über [LanguagePack.capabilityDeny].
+ *
+ * Ein Deny ist KEIN Fehler, sondern eine Haltung: Hoshi sagt Nein, ohne kalt zu
+ * wirken. Wer übersetzt, übersetzt die Wärme mit — „permission denied" wäre eine
+ * falsche Übersetzung, auch wenn es dasselbe bedeutet.
+ */
+data class CapabilityDenyPack(
+    /** Warme Absage-Varianten (Anti-Monotonie per `random()` im Kernel). */
+    val refusals: List<String>,
+
+    /** Struktureller Defekt (Slash-Injection in domain/service) — kurz und sachlich. */
+    val invalid: String,
 )
 
 /**
@@ -151,6 +378,29 @@ data class SmartHomeAckPack(
  * für ES/FR/IT NEU (vorher gar nicht kompilierbar).
  */
 fun <T> Language.deOr(de: T, en: T): T = if (this == Language.DE) de else en
+
+/** Der Platzhalter für die Tages-Note 1–5 in [LanguagePack.dailyNoteRecorded]/[LanguagePack.dailyNoteUpdated]. */
+const val SCORE_PLACEHOLDER = "{score}"
+
+/**
+ * **Die BOOLEAN-Form derselben EINEN Fallback-Regel** wie [deOr] — für die
+ * Bausteine, die ihre zwei Textvarianten INLINE im String-Template wählen und
+ * dafür bisher jeder für sich `val en = language == Language.EN` schrieben
+ * (Timer/Date/List/Radio/Calc/EscalationMode/AreaClarify).
+ *
+ * **Warum das eine Korrektur ist, keine Kosmetik:** `language == Language.EN`
+ * bedeutete für ES/FR/IT DEUTSCH, während [deOr] für dieselben Sprachen ENGLISCH
+ * liefert. Ein Spanier bekam also je nach Codepfad mal Englisch (Deflect,
+ * Consent, Fehler-Fallbacks), mal Deutsch (Timer-Quittung, Datum, Einkaufsliste)
+ * — zwei widersprüchliche Regeln in EINEM Produkt. Es gibt jetzt genau EINE:
+ * **nur [Language.DE] bekommt Deutsch, jede andere Sprache Englisch** (ein
+ * Spanier versteht eher Englisch als Deutsch, und derselbe Zwischenfallback gilt
+ * ohnehin schon für Deflect/Consent/Prompt).
+ *
+ * DE und EN bleiben dabei byte-identisch — nur ES/FR/IT wechseln von Deutsch auf
+ * Englisch.
+ */
+val Language.fallsBackToEnglish: Boolean get() = deOr(de = false, en = true)
 
 /**
  * Registry: EIN Ort, an dem jede [Language] auf ihr [LanguagePack] zeigt —

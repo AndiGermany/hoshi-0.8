@@ -51,9 +51,12 @@ class PassthroughRefinerStubAdapter : RouteRefiner {
     override fun refine(text: String, fallback: RouteDecision): Mono<RouteDecision> = Mono.just(fallback)
 }
 
-/** [EntityContextPort]-Stub: kein Gedächtnis-Block (Memory-Infra kommt in M4). */
+/**
+ * [EntityContextPort]-Stub: kein Gedächtnis-Block (Memory-Infra kommt in M4).
+ * [language] ist gegenstandslos — ein fehlender Block hat keine Sprache.
+ */
 class EntityContextStubAdapter : EntityContextPort {
-    override fun contextBlock(speakerId: String): String? = null
+    override fun contextBlock(speakerId: String, language: Language): String? = null
 }
 
 /**
@@ -69,9 +72,10 @@ class GroundingStubAdapter : GroundingPort {
  * [EpisodicRecallPort]-Stub: kein Gesprächskontext-Recall (`""`). Verhaltens-
  * neutraler Default, solange `HOSHI_EPISODIC_ENABLED=false` — identisch zum
  * bisherigen `episodicMemory = null`: der Assembler schichtet keinen Episodic-Block.
+ * [language] ist gegenstandslos — ein leerer Block hat keine Sprache.
  */
 class EpisodicRecallStubAdapter : EpisodicRecallPort {
-    override fun recallBlock(speakerId: String, text: String): Mono<String> = Mono.just("")
+    override fun recallBlock(speakerId: String, text: String, language: Language): Mono<String> = Mono.just("")
 }
 
 /** [ExistenceClaimSignal]-Stub: konservativ — nie matched (probt sonst die Bridge, M4). */

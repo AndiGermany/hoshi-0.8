@@ -1,5 +1,8 @@
 package de.hoshi.core.pipeline
 
+import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.LangDe
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import de.hoshi.core.port.WorkshopNote
 import de.hoshi.core.port.WorkshopNotePort
 import java.time.Clock
@@ -33,10 +36,18 @@ import java.time.Clock
  * unverändert in den normalen Turn (byte-neutral).
  *
  * Die Quittung ist bewusst STATISCH (kein Überschreib-Echo wie bei der
- * Tagesnote — ein Briefkasten hat nichts zu vergleichen) und NUR deutsch
- * (Andis Werkstatt-Vokabel). Der **einzige `now()`-Punkt** ist der injizierte
- * [Clock] (Tagesnote-Muster): er stempelt [WorkshopNote.ts]; Tests setzen
- * `Clock.fixed` ⇒ voll deterministisch.
+ * Tagesnote — ein Briefkasten hat nichts zu vergleichen) und kommt seit
+ * 2026-07-25 in der TURN-SPRACHE aus dem [de.hoshi.core.pipeline.lang.LanguagePack]
+ * (Andi: „Multilingualität von A-Z"). Der **einzige `now()`-Punkt** ist der
+ * injizierte [Clock] (Tagesnote-Muster): er stempelt [WorkshopNote.ts]; Tests
+ * setzen `Clock.fixed` ⇒ voll deterministisch.
+ *
+ * **TRIGGER-Phrasen seit 2026-07-25 (Nachtrag) EN/ES/FR/IT:** was hier zuerst
+ * „bewusst nur deutsch" hieß (Andis Werkstatt-Vokabel), war die Lücke, die Andi
+ * beim Testen fand — die ANTWORTEN waren übersetzt, das VERSTEHEN nicht. Die
+ * neuen Muster sind bewusst SCHLANKER als die deutschen (keine „bitte"-Toleranz
+ * nachgebaut, s. [PATTERNS]-KDoc) — lieber eine Wendung weniger als ein
+ * Erkenner, der bei normaler Rede zuschnappt.
  *
  * [DISABLED] (`enabled = false`, NONE-Port) ist der nie-antwortende Default:
  * ohne `HOSHI_WORKSHOP_NOTE_ENABLED` liefert [handle] immer `null`, der Zweig
@@ -56,11 +67,11 @@ class WorkshopNoteFastpath(
      * Nicht-Treffer (keine Notiz, Flag-OFF, leer) ⇒ `null` (⇒ normaler Turn).
      * [speakerId] fließt nur in die JSONL-Zeile (`null` = unbekannt).
      */
-    fun handle(text: String, speakerId: String?): String? {
+    fun handle(text: String, speakerId: String?, language: Language = Language.DEFAULT): String? {
         if (!enabled || text.isBlank()) return null
         val note = match(text) ?: return null
         store.record(WorkshopNote(ts = clock.instant(), speakerId = speakerId, text = note))
-        return RECEIPT
+        return LanguagePackRegistry.forLanguage(language).workshopNoteRecorded
     }
 
     /**
@@ -83,17 +94,29 @@ class WorkshopNoteFastpath(
         /** Nie-antwortender Default (Flag-OFF): der Zweig ist tot ⇒ byte-neutral. */
         val DISABLED = WorkshopNoteFastpath(WorkshopNotePort.NONE, enabled = false)
 
-        /** Deterministische, warme Quittung — exakt gepinnt in den Tests. */
-        internal const val RECEIPT = "Notiert für die Werkstatt. Danke dir!"
+        /**
+         * Deterministische, warme Quittung auf DEUTSCH — exakt gepinnt in den Tests.
+         * Seit der Mehrsprachigkeit nur noch der DE-Zeiger auf die EINE Quelle
+         * ([LangDe]) — der byte-identische Beweis, dass der de-Pfad nicht wackelt.
+         */
+        internal val RECEIPT: String = LangDe.PACK.workshopNoteRecorded
 
         // Die Muster laufen gegen den ORIGINAL-Text (nur IGNORE_CASE, kein
         // Umlaut-Normalisieren nötig — beide Trigger-Wörter sind Umlaut-frei).
         // Gruppe 1 = roher Notiz-Rest (in [match] nur getrimmt, sonst verbatim).
         //
-        // Struktur je Muster: optionales führendes „bitte" ⇒ Trigger-Phrase ⇒
+        // Struktur je DE-Muster: optionales führendes „bitte" ⇒ Trigger-Phrase ⇒
         // optionales anhängendes „bitte" (Füllwort-Toleranz, Live-Miss-Lehre
         // der Tagesnote) ⇒ Trenner (Komma/Doppelpunkt/Gedankenstrich/Space,
         // beliebig oft) ⇒ Notiz-Rest bis Zeilenende.
+        //
+        // Die EN/ES/FR/IT-Muster (Andi-Befund 2026-07-25) teilen sich die
+        // Trenner-/Rest-Struktur, verzichten aber bewusst auf die „bitte"-
+        // Toleranz (kleinerer, sicherer Zuschnitt statt vier Sprachen lang
+        // erratener Höflichkeitsfloskeln) — s. RESULT-Zeile des Auftrags.
+        // FR/IT: der Apostroph in „l'atelier"/„l'officina" fängt beide
+        // Anführungszeichen-Varianten (gerade ' und kurvig ’, wie
+        // [RadioFastpath.normalize]).
         private val PATTERNS = listOf(
             // „Notiz an die Werkstatt: Timer-Antwort zu lang" / „Bitte Notiz an die
             // Werkstatt: …" / „Notiz an die Werkstatt, bitte: …" / „… bitte, …"
@@ -107,6 +130,15 @@ class WorkshopNoteFastpath(
                 "(?:bitte[,\\s]+)?werkstatt[\\s-]notiz(?:[,\\s]*bitte)?[,:\\s\\-–—]*(.*)$",
                 RegexOption.IGNORE_CASE,
             ),
+            // EN: „note to the workshop: …" / „workshop note: …" / „workshop-note: …"
+            Regex("note to the workshop[,:\\s\\-–—]*(.*)$", RegexOption.IGNORE_CASE),
+            Regex("workshop[\\s-]note[,:\\s\\-–—]*(.*)$", RegexOption.IGNORE_CASE),
+            // ES: „nota para el taller: …"
+            Regex("nota para el taller[,:\\s\\-–—]*(.*)$", RegexOption.IGNORE_CASE),
+            // FR: „note pour l'atelier : …"
+            Regex("note pour l['’]atelier[,:\\s\\-–—]*(.*)$", RegexOption.IGNORE_CASE),
+            // IT: „nota per l'officina: …"
+            Regex("nota per l['’]officina[,:\\s\\-–—]*(.*)$", RegexOption.IGNORE_CASE),
         )
     }
 }

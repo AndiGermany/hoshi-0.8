@@ -162,4 +162,57 @@ class WorkshopNoteFastpathTest {
         assertNull(WorkshopNoteFastpath.DISABLED.handle("Notiz an die Werkstatt: Timer-Antwort zu lang", "andi"))
         assertNull(WorkshopNoteFastpath.DISABLED.handle("Werkstatt-Notiz: Kaffee ist alle", "andi"))
     }
+
+    // ── EN/ES/FR/IT-Trigger (Andi-Befund 2026-07-25) ─────────────────────────
+
+    @Test
+    fun `EN note to the workshop matcht`() {
+        val port = RecordingPort()
+        fastpath(port).handle("Note to the workshop: the drill is broken", "andi")
+        assertEquals("the drill is broken", port.notes.single().text)
+    }
+
+    @Test
+    fun `EN workshop note Kompositum matcht`() {
+        val port = RecordingPort()
+        fastpath(port).handle("Workshop note: coffee machine needs descaling", "andi")
+        assertEquals("coffee machine needs descaling", port.notes.single().text)
+    }
+
+    @Test
+    fun `ES nota para el taller matcht`() {
+        val port = RecordingPort()
+        fastpath(port).handle("Nota para el taller: el taladro está roto", "andi")
+        assertEquals("el taladro está roto", port.notes.single().text)
+    }
+
+    @Test
+    fun `FR note pour l atelier matcht (gerades und kurvives Apostroph)`() {
+        val port1 = RecordingPort()
+        fastpath(port1).handle("Note pour l'atelier : la perceuse est cassée", "andi")
+        assertEquals("la perceuse est cassée", port1.notes.single().text)
+
+        val port2 = RecordingPort()
+        fastpath(port2).handle("Note pour l’atelier : la perceuse est cassée", "andi")
+        assertEquals("la perceuse est cassée", port2.notes.single().text)
+    }
+
+    @Test
+    fun `IT nota per l officina matcht`() {
+        val port = RecordingPort()
+        fastpath(port).handle("Nota per l'officina: il trapano è rotto", "andi")
+        assertEquals("il trapano è rotto", port.notes.single().text)
+    }
+
+    @Test
+    fun `Gegen-Beispiele in EN ES FR IT matchen nicht`() {
+        val port = RecordingPort()
+        val fp = fastpath(port)
+        assertNull(fp.handle("How is the workshop doing these days?", "andi"), "kein Trigger-Wort")
+        assertNull(fp.handle("Note to the workshop", "andi"), "kein Text nach der Trigger-Phrase")
+        assertNull(fp.handle("¿Cómo va el taller?", "andi"), "kein Trigger-Wort")
+        assertNull(fp.handle("Comment va l'atelier ?", "andi"), "kein Trigger-Wort")
+        assertNull(fp.handle("Come va l'officina oggi?", "andi"), "kein Trigger-Wort")
+        assertEquals(0, port.notes.size, "Gegen-Beispiel darf NIE speichern")
+    }
 }

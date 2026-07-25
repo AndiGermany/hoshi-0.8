@@ -4,12 +4,14 @@ import com.sun.net.httpserver.HttpServer
 import de.hoshi.adapters.knowledge.WeatherGroundingProvider
 import de.hoshi.adapters.knowledge.WeatherLocation
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.http.ResponseEntity
 import java.net.InetSocketAddress
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
@@ -60,10 +62,15 @@ class WeatherTodayControllerTest {
         }
     }
 
+    /** Nie gespeicherter Sprach-Store (Pfad existiert nicht) ⇒ [Language.DEFAULT] (DE) — der Bestands-Fall. */
+    private fun freshLanguageStore(): JsonFileLanguageStore =
+        JsonFileLanguageStore(Files.createTempDirectory("weather-lang-test").resolve("language.json"))
+
     private fun controller(
         baseUrl: String,
         weatherEnabled: Boolean = true,
         store: JsonFileWeatherLocationStore? = null,
+        languageStore: JsonFileLanguageStore = freshLanguageStore(),
     ) = WeatherTodayController(
         reader = WeatherTodayReader(
             WeatherGroundingProvider(
@@ -74,6 +81,7 @@ class WeatherTodayControllerTest {
             ),
         ),
         weatherEnabled = weatherEnabled,
+        languageStore = languageStore,
     )
 
     private fun get(c: WeatherTodayController): ResponseEntity<Any> =
@@ -136,4 +144,89 @@ class WeatherTodayControllerTest {
             assertEquals(502, res.statusCode.value())
             assertEquals("weather-no-data", (res.body as SettingsError).error)
         }
+
+    // ── Bug-Fix 2026-07-25 (vault/tracks/prep/PREP-i18n-backend-restklassen.md):
+    // die Wetter-Kachel zeigte im englischen Modus IMMER deutschen Text
+    // („17–31° · bedeckt"), weil `codeText` hart auf Language.DE stand. Jetzt
+    // folgt `codeText` der AKTIVEN UI-Sprache ([JsonFileLanguageStore]) — je
+    // Sprache mindestens eine Stichprobe, plus der unbekannte-Code-Fall. ───────
+
+    @Test
+    fun `codeText folgt der aktiven UI-Sprache (EN) - nicht mehr hart Deutsch`(@TempDir dir: Path) =
+        withOpenMeteo(forecastJson) { url, _ ->
+            val languageStore = JsonFileLanguageStore(dir.resolve("language.json")).also { it.setLanguageCode("en") }
+            val body = get(controller(url, languageStore = languageStore)).body as WeatherGroundingProvider.TodayForecast
+
+            assertEquals("light rain", body.codeText, "Code 61 in EN")
+            assertFalse(body.codeText.contains("Regen"), "kein deutsches Wort mehr in der EN-Kachel")
+        }
+
+    @Test
+    fun `codeText deckt auch ES, FR und IT ab - je eine Stichprobe`(@TempDir dir: Path) =
+        withOpenMeteo(forecastJson) { url, _ ->
+            val es = JsonFileLanguageStore(dir.resolve("es.json")).also { it.setLanguageCode("es") }
+            val fr = JsonFileLanguageStore(dir.resolve("fr.json")).also { it.setLanguageCode("fr") }
+            val it = JsonFileLanguageStore(dir.resolve("it.json")).also { it.setLanguageCode("it") }
+
+            assertEquals(
+                "lluvia ligera",
+                (get(controller(url, languageStore = es)).body as WeatherGroundingProvider.TodayForecast).codeText,
+            )
+            assertEquals(
+                "pluie légère",
+                (get(controller(url, languageStore = fr)).body as WeatherGroundingProvider.TodayForecast).codeText,
+            )
+            assertEquals(
+                "pioggia leggera",
+                (get(controller(url, languageStore = it)).body as WeatherGroundingProvider.TodayForecast).codeText,
+            )
+        }
+
+    @Test
+    fun `ohne gesetzte UI-Sprache bleibt codeText Deutsch - byte-neutraler Default`(@TempDir dir: Path) =
+        withOpenMeteo(forecastJson) { url, _ ->
+            // Store existiert, aber es wurde nie eine Sprache gesetzt (languageCode() == null)
+            // ⇒ dieselbe Kaskade wie TtsSettingsController: Language.DEFAULT (DE).
+            val neverSet = JsonFileLanguageStore(dir.resolve("never-set.json"))
+            val body = get(controller(url, languageStore = neverSet)).body as WeatherGroundingProvider.TodayForecast
+
+            assertEquals("leichter Regen", body.codeText, "kein gespeicherter Wert ⇒ Default bleibt Deutsch")
+        }
+
+    @Test
+    fun `unbekannter WMO-Code liefert in jeder Sprache einen Fallback-Text - nie roh oder leer`(@TempDir dir: Path) {
+        // WMO kennt keinen Code 17 — der bestehende Katalog fängt das mit dem
+        // "wechselhaft"/"changeable"/… Fallback ab, statt der Kachel eine rohe
+        // Zahl oder gar nichts zu zeigen.
+        val unknownCodeJson = """
+            {
+              "latitude": 52.52,
+              "longitude": 13.41,
+              "current": { "temperature_2m": 14.2, "weathercode": 17 },
+              "daily": {
+                "time": ["2026-07-05"],
+                "temperature_2m_max": [19.4],
+                "temperature_2m_min": [11.3],
+                "precipitation_sum": [3.4],
+                "weathercode": [17]
+              }
+            }
+        """.trimIndent()
+        withOpenMeteo(unknownCodeJson) { url, _ ->
+            val expectedByLanguage = mapOf(
+                "de" to "wechselhaft",
+                "en" to "changeable",
+                "es" to "variable",
+                "fr" to "changeant",
+                "it" to "variabile",
+            )
+            expectedByLanguage.forEach { (code, expected) ->
+                val store = JsonFileLanguageStore(dir.resolve("$code.json")).also { it.setLanguageCode(code) }
+                val body = get(controller(url, languageStore = store)).body as WeatherGroundingProvider.TodayForecast
+                assertEquals(expected, body.codeText, "unbekannter Code 17, Sprache $code")
+                assertFalse(body.codeText.isBlank(), "nie leer gesprochen ($code)")
+                assertFalse(body.codeText.contains("17"), "nie der rohe WMO-Code ($code): ${body.codeText}")
+            }
+        }
+    }
 }

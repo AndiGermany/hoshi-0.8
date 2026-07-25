@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from 'react';
 import {
-  KIND_WORD,
   scheduledItemPrimary,
   scheduledLine,
   type ScheduledItem,
   type ScheduledKind,
 } from '../hooks/useScheduledItems';
+import { useUiStrings } from '../i18n';
 import { AlarmGlyph, BellGlyph, ClockGlyph } from './icons';
 
 /** Kind-ehrliches SVG-Glyph je Zeile (Uhr/Wecker/Glocke — muted, kein Emoji). */
@@ -49,27 +49,29 @@ export function ScheduledPanel({
   onDelete: (id: string) => void;
   onDeleteAll?: () => void;
 }) {
+  const ui = useUiStrings();
+  const t = ui.scheduled;
   const [open, setOpen] = useState(false);
 
   // Leer UND eingeklappt → NICHTS rendern (kein Lärm, Konvention wie ScheduledLine).
   if (items.length === 0 && !open) return null;
 
-  const summary = scheduledLine(items, nowMs);
+  const summary = scheduledLine(items, nowMs, t);
 
   return (
-    <section className="sched" aria-label="Aktive Timer und Wecker">
+    <section className="sched" aria-label={t.panelAria}>
       <button
         type="button"
         className="sched__toggle"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        title={open ? 'Zuklappen' : 'Aufklappen — verwalten'}
+        title={open ? t.collapse : t.expand}
       >
         <span className="sched__toggleft">
           <span className="sched__icon" aria-hidden="true">
             <ClockGlyph />
           </span>{' '}
-          {summary ?? 'Aktive Timer & Wecker'}
+          {summary ?? t.fallbackSummary}
         </span>
         <span className="sched__chevron" aria-hidden="true">
           {open ? '▾' : '▸'}
@@ -80,7 +82,7 @@ export function ScheduledPanel({
         <div className="sched__body">
           {items.length === 0 ? (
             <p className="sched__empty" role="status">
-              nichts aktiv
+              {t.empty}
             </p>
           ) : (
             <ul className="sched__list">
@@ -89,18 +91,18 @@ export function ScheduledPanel({
                   <span className="sched__icon" aria-hidden="true">
                     {KIND_GLYPH[item.kind]}
                   </span>
-                  <span className="sched__time">{scheduledItemPrimary(item, nowMs)}</span>
+                  <span className="sched__time">
+                    {scheduledItemPrimary(item, nowMs, t, ui.locale)}
+                  </span>
                   <span className="sched__label">
-                    {item.label ?? KIND_WORD[item.kind].one}
+                    {item.label ?? t.kindWord[item.kind].one}
                   </span>
                   <button
                     type="button"
                     className="sched__del"
                     onClick={() => onDelete(item.id)}
-                    aria-label={`${KIND_WORD[item.kind].one}${
-                      item.label ? ` „${item.label}"` : ''
-                    } löschen`}
-                    title="Löschen"
+                    aria-label={t.deleteAria(t.kindWord[item.kind].one, item.label)}
+                    title={t.deleteTitle}
                   >
                     ✕
                   </button>
@@ -111,7 +113,7 @@ export function ScheduledPanel({
 
           {items.length > 1 && onDeleteAll && (
             <button type="button" className="sched__delall" onClick={onDeleteAll}>
-              alle löschen
+              {t.deleteAll}
             </button>
           )}
         </div>

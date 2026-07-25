@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE, TOKEN } from '../api/config';
+import { de } from '../i18n/de';
+import type { ScheduledStrings } from '../i18n/types';
 
 /**
  * Sichtbarkeits-Naht der Wecker-Lane (Cowork-Befund: laufende Timer/Wecker waren
@@ -46,12 +48,21 @@ export interface ScheduledItem {
 
 const KINDS: readonly ScheduledKind[] = ['TIMER', 'ALARM', 'REMINDER'];
 
-/** Kind-ehrliche Wörter für die Zeile: TIMER→„Timer", ALARM→„Wecker". */
-export const KIND_WORD: Record<ScheduledKind, { one: string; many: string }> = {
-  TIMER: { one: 'Timer', many: 'Timer' },
-  ALARM: { one: 'Wecker', many: 'Wecker' },
-  REMINDER: { one: 'Erinnerung', many: 'Erinnerungen' },
-};
+/**
+ * Kind-ehrliche Wörter für die Zeile: TIMER→„Timer", ALARM→„Wecker". Seit dem
+ * Langschwanz-Sweep 25.07 eine Referenz auf den `de`-Katalog (byte-gleich zum
+ * bisherigen Hardcode) — gerendert wird `useUiStrings().scheduled.kindWord`.
+ */
+export const KIND_WORD: Record<ScheduledKind, { one: string; many: string }> =
+  de.scheduled.kindWord;
+
+/**
+ * Ehrliche Texte der Timer-/Wecker-Zeile (auch von Tests referenziert) — jetzt
+ * eine Referenz auf den `de`-Katalog. Die pur-Helfer unten nehmen den aktiven
+ * Katalog als OPTIONALEN Parameter entgegen (Default: DE), damit Bestandsaufrufe
+ * byte-identisch bleiben; die Komponenten reichen `useUiStrings().scheduled` durch.
+ */
+export const SCHEDULED_TEXTS: ScheduledStrings = de.scheduled;
 
 /**
  * Validiert die Wire-Antwort. Kein Array / Müll-Einträge / fehlende id →
@@ -159,13 +170,13 @@ export function sameSchedule(current: ScheduledItem[], next: ScheduledItem[]): b
 }
 
 /** Restdauer human: `unter 1 min`, `44 min`, `1 h`, `1 h 12 min` (aufgerundet). */
-export function fmtRemaining(ms: number): string {
-  if (ms < 60_000) return 'unter 1 min';
+export function fmtRemaining(ms: number, t: ScheduledStrings = SCHEDULED_TEXTS): string {
+  if (ms < 60_000) return t.remainingUnderMinute;
   const totalMin = Math.ceil(ms / 60_000);
-  if (totalMin < 60) return `${totalMin} min`;
+  if (totalMin < 60) return t.remainingMinutes(totalMin);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+  return m === 0 ? t.remainingHours(h) : t.remainingHoursMinutes(h, m);
 }
 
 /**
@@ -175,19 +186,56 @@ export function fmtRemaining(ms: number): string {
  *  - mehrere → `2 Timer · nächster in 12 min` (gemischte Kinds → `Timer/Wecker`).
  * Countdown clientseitig aus `dueAtEpochMs` gegen `nowMs` (Minuten-Tick des Hooks).
  */
-export function scheduledLine(items: ScheduledItem[], nowMs: number): string | null {
+export function scheduledLine(
+  items: ScheduledItem[],
+  nowMs: number,
+  t: ScheduledStrings = SCHEDULED_TEXTS,
+): string | null {
   if (items.length === 0) return null;
   const next = items.reduce((a, b) => (b.dueAtEpochMs < a.dueAtEpochMs ? b : a));
-  const remaining = fmtRemaining(next.dueAtEpochMs - nowMs);
-  if (items.length === 1) return `${KIND_WORD[next.kind].one} · noch ${remaining}`;
+  const remaining = fmtRemaining(next.dueAtEpochMs - nowMs, t);
+  if (items.length === 1) return t.lineOne(t.kindWord[next.kind].one, remaining);
   const kinds = KINDS.filter((k) => items.some((i) => i.kind === k));
-  const word = kinds.length === 1 ? KIND_WORD[kinds[0]].many : kinds.map((k) => KIND_WORD[k].one).join('/');
-  return `${items.length} ${word} · nächster in ${remaining}`;
+  const word =
+    kinds.length === 1 ? t.kindWord[kinds[0]].many : kinds.map((k) => t.kindWord[k].one).join('/');
+  return t.lineMany(items.length, word, remaining);
 }
 
-/** Fälligkeit als lokale Uhrzeit „HH:MM" (de-DE, 24h) — für Wecker. */
-export function dueClock(dueAtEpochMs: number): string {
-  return new Date(dueAtEpochMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+/**
+ * Fälligkeit als lokale Uhrzeit „HH:MM" (24h) — für Wecker. Das Zahlenformat
+ * folgt seit dem Langschwanz-Sweep 25.07 der AKTIVEN UI-Sprache (`t.locale`)
+ * statt hart „de-DE"; der Default bleibt de-DE (byte-gleiches Bestandsverhalten).
+ */
+export function dueClock(dueAtEpochMs: number, locale: string = de.locale): string {
+  return new Date(dueAtEpochMs).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Dieselbe Uhrzeit, aber in ihre Teile zerlegt: die Ziffern und — falls die Sprache
+ * eine 12-Stunden-Uhr benutzt — der Tagesabschnitt („PM", „p.m.", „µµ" …) separat.
+ *
+ * Warum: auf der Übersicht ist die Uhr das Gesicht (`clamp(56px, 12vw, 124px)`). Seit
+ * die Formate der Sprache folgen, hing das „PM" in derselben Riesengröße an den Ziffern
+ * und sprang einen an (Andi-Befund 25.07). Der Tagesabschnitt darf leiser sein.
+ *
+ * Bewusst über [Intl.DateTimeFormat.formatToParts] statt über eine AM/PM-Regex: nur so
+ * stimmt es auch für Sprachen, die den Abschnitt anders schreiben oder VORANSTELLEN —
+ * und für 24-Stunden-Sprachen (Deutsch) kommt einfach `period: null` zurück, die Uhr
+ * bleibt dort byte-identisch zu vorher.
+ */
+export function clockParts(
+  dueAtEpochMs: number,
+  locale: string = de.locale,
+): { time: string; period: string | null } {
+  const parts = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' })
+    .formatToParts(new Date(dueAtEpochMs));
+  const period = parts.find((p) => p.type === 'dayPeriod')?.value ?? null;
+  const time = parts
+    .filter((p) => p.type !== 'dayPeriod')
+    .map((p) => p.value)
+    .join('')
+    .trim();
+  return { time, period };
 }
 
 /**
@@ -197,9 +245,14 @@ export function dueClock(dueAtEpochMs: number): string {
  *  - TIMER/REMINDER → „noch 12 min" (Restdauer, aufgerundet, nie negativ).
  * Rein aus `dueAtEpochMs` gegen `nowMs` gerechnet (Minuten-Tick des Hooks).
  */
-export function scheduledItemPrimary(item: ScheduledItem, nowMs: number): string {
-  if (item.kind === 'ALARM') return `um ${dueClock(item.dueAtEpochMs)}`;
-  return `noch ${fmtRemaining(Math.max(0, item.dueAtEpochMs - nowMs))}`;
+export function scheduledItemPrimary(
+  item: ScheduledItem,
+  nowMs: number,
+  t: ScheduledStrings = SCHEDULED_TEXTS,
+  locale: string = de.locale,
+): string {
+  if (item.kind === 'ALARM') return t.atClock(dueClock(item.dueAtEpochMs, locale));
+  return t.inRemaining(fmtRemaining(Math.max(0, item.dueAtEpochMs - nowMs), t));
 }
 
 export interface ScheduledItemsState {

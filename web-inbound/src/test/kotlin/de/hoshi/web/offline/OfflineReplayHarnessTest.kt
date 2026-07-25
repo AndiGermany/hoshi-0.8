@@ -148,7 +148,7 @@ class OfflineReplayHarnessTest {
 
     private fun assembler(persona: PersonaService, grounding: GroundingPort) = TurnPromptAssembler(
         persona = persona,
-        entityMemory = EntityContextPort { null },
+        entityMemory = EntityContextPort { _, _ -> null },
         grounding = grounding,
         episodicMemory = null,
     )

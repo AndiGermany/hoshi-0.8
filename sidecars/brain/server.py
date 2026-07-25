@@ -77,14 +77,21 @@ _GEN_LOCK = threading.Lock()
 # alle Folge-Requests starven). Dieser separate Lock serialisiert nur den Vocab-Bau.
 _TE_BUILD_LOCK = threading.Lock()
 
-# ── POST /switch-model: e2b↔e4b-Wechsel im selben Prozess (State) ───────────
+# ── POST /switch-model: Wechsel im selben Prozess (State) ───────────────────
 # 16-GB-Wand (T136-Kommentare oben) + models.json-Pins (Repo-Root, s.
-# _MODELS_JSON_PATH): NIE ein drittes/beliebiges HF-Repo laden, NIE e2b+e4b
-# gleichzeitig resident. Nur die zwei explizit gepinnten Gemma-4-4bit-Varianten
-# sind ueberhaupt schaltbar — alles andere ist ein 422, kein Rate-Limit-Problem.
+# _MODELS_JSON_PATH): NIE ein beliebiges HF-Repo laden, NIE zwei Modelle
+# gleichzeitig resident. Nur explizit gepinnte Gemma-4-4bit-Varianten sind
+# ueberhaupt schaltbar — alles andere ist ein 422, kein Rate-Limit-Problem.
+#
+# 12B (Andi-Test-Auftrag 2026-07-25): das DICHTE 12B, kein E-Modell — ein E12B
+# gibt es nicht, die E-Reihe endet bei E4B. Gross-B in der Repo-Id, HF ist
+# case-sensitiv. 6,8 GB gegen 16 GB heisst: es laedt, aber die Reserve fuer
+# KV-Cache und Whisper-Spitzen ist duenn. Der Guard bleibt streng — genau
+# deshalb steht es hier als DRITTE erlaubte Zeile und nicht als offene Tuer.
 ALLOWED_SWITCH_MODELS = {
     "mlx-community/gemma-4-e2b-it-4bit",
     "mlx-community/gemma-4-e4b-it-4bit",
+    "mlx-community/gemma-4-12B-it-4bit",
 }
 # Serialisiert NUR die kurze Check-und-Setz-Entscheidung eines /switch-model-Aufrufs
 # (Whitelist/Already-active/Cache/Pin/Disk) — NICHT den langen Download/Swap selbst

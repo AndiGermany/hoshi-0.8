@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.fallsBackToEnglish
 import de.hoshi.core.port.RadioCallOutcome
 import de.hoshi.core.port.RadioPort
 
@@ -21,9 +22,11 @@ import de.hoshi.core.port.RadioPort
  * netzfreie [matches] und legt [handle] dann auf `boundedElastic` (P0
  * Event-Loop-Muster wie `toolReadTurn`/`honesty.assess`).
  *
- * KONSERVATIV (false-positive-avers): NUR die kuratierten DE-Muster —
- * beiläufiges „Radio" in Plauderei triggert nichts. Die Antworten sind kurz
- * und warm (Lara-Ton, kein Slop):
+ * KONSERVATIV (false-positive-avers): NUR die kuratierten DE/EN/ES/FR/IT-Muster
+ * (Andi-Befund 2026-07-25: die Antworten waren längst mehrsprachig, die
+ * ERKENNUNG selbst blieb deutsch — s. [PLAY_PREFIX_EN] ff.) — beiläufiges
+ * „Radio" in Plauderei triggert in keiner der fünf Sprachen etwas. Die
+ * Antworten sind kurz und warm (Lara-Ton, kein Slop):
  *  - Treffer, VERIFIZIERT ([RadioCallOutcome.VERIFIED]): „<Station> läuft —
  *    auf dem Receiver." (play) / „Radio ist aus." (stop) — der [RadioPort]
  *    hat den echten `media_player`-State gelesen (oder der Readback selbst
@@ -82,7 +85,7 @@ class RadioFastpath(
     // ── Vollzug ──────────────────────────────────────────────────────────────
 
     private fun handlePlay(name: String, language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         // Ehrlich VOR dem Suchen: ohne Abspielziel wäre jeder Treffer ein leeres Versprechen.
         if (target.isBlank()) {
             return if (en) "I can't play radio yet — no playback target is set up."
@@ -113,7 +116,7 @@ class RadioFastpath(
     }
 
     private fun handleStop(language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         if (target.isBlank()) {
             return if (en) "There's no radio target set up — nothing to stop."
             else "Da ist noch kein Radio-Ziel eingerichtet — nichts zu stoppen."
@@ -139,12 +142,14 @@ class RadioFastpath(
     /**
      * Extrahiert den Stationsnamen aus dem normalisierten Text — nur für die
      * kuratierten Muster „spiel(e) [mal] [das] radio <name>" / „spiel(e) [mal]
-     * <name> [im] radio"; sonst `null`. Stop-Wörter als „Name" (z.B. „spiel
-     * radio aus") sind kein Play-Wunsch.
+     * <name> [im] radio" und ihre EN/ES/FR/IT-Pendants ([PLAY_PREFIXES]/
+     * [PLAY_SUFFIXES], Andi-Befund 2026-07-25); sonst `null`. Stop-Wörter als
+     * „Name" (z.B. „spiel radio aus") sind kein Play-Wunsch. DE zuerst in
+     * beiden Listen ⇒ unveränderte Priorität/Verhalten für deutsche Sätze.
      */
     private fun extractStationName(norm: String): String? {
-        val name = PLAY_PREFIX.find(norm)?.groupValues?.get(1)
-            ?: PLAY_SUFFIX.find(norm)?.groupValues?.get(1)
+        val name = PLAY_PREFIXES.firstNotNullOfOrNull { it.find(norm)?.groupValues?.get(1) }
+            ?: PLAY_SUFFIXES.firstNotNullOfOrNull { it.find(norm)?.groupValues?.get(1) }
         return name?.trim()?.takeIf { it.isNotEmpty() && it !in STOP_WORDS }
     }
 
@@ -166,17 +171,69 @@ class RadioFastpath(
         /** „spiel(e) [mal] <name> [im] radio" — Name vor dem Radio-Wort. */
         private val PLAY_SUFFIX = Regex("^spiele? (?:mal )?(.+?) (?:im )?radio$")
 
+        // EN/ES/FR/IT-Pendants (Andi-Befund 2026-07-25: die Quittungen waren
+        // längst mehrsprachig, die ERKENNUNG selbst blieb deutsch). „radio" ist
+        // in allen fünf Sprachen dasselbe Wort — variabel ist nur das Verb/der
+        // Artikel davor. [normalize] entfernt Akzente ersatzlos (kein `é`→`e`,
+        // sondern `é`→` `) — die Muster unten sind deshalb bewusst akzentfrei
+        // geschrieben, sonst könnten sie den normalisierten Text NIE treffen.
+        //
+        // „play "/„pon"/„mets"/„metti" sind eindeutige Radio-Bedienverben — kein
+        // Konflikt mit Alltagssprache in der geforderten Wortfolge mit „radio".
+
+        /** EN: „play [the] radio <name>". */
+        private val PLAY_PREFIX_EN = Regex("^play (?:the )?radio (.+)$")
+
+        /** ES: „pon/reproduce [la] radio <name>". */
+        private val PLAY_PREFIX_ES = Regex("^(?:pon|reproduce) (?:la )?radio (.+)$")
+
+        /** FR: „mets/joue [la] radio <name>" (kein „à" — [normalize] entfernt es ersatzlos). */
+        private val PLAY_PREFIX_FR = Regex("^(?:mets|joue) (?:la )?radio (.+)$")
+
+        /** IT: „metti/riproduci [la] radio <name>". */
+        private val PLAY_PREFIX_IT = Regex("^(?:metti|riproduci) (?:la )?radio (.+)$")
+
+        /** DE zuerst ⇒ unveränderte Priorität/Verhalten für deutsche Sätze. */
+        private val PLAY_PREFIXES = listOf(PLAY_PREFIX, PLAY_PREFIX_EN, PLAY_PREFIX_ES, PLAY_PREFIX_FR, PLAY_PREFIX_IT)
+
+        /** EN: „play <name> [on] [the] radio". */
+        private val PLAY_SUFFIX_EN = Regex("^play (.+?) (?:on (?:the )?)?radio$")
+
+        /** ES: „pon/reproduce <name> [en] [la] radio". */
+        private val PLAY_SUFFIX_ES = Regex("^(?:pon|reproduce) (.+?) (?:en (?:la )?)?radio$")
+
+        /** FR: „mets/joue <name> [la] radio" (kein „à la" — [normalize] entfernt „à" ersatzlos). */
+        private val PLAY_SUFFIX_FR = Regex("^(?:mets|joue) (.+?) (?:la )?radio$")
+
+        /** IT: „metti/riproduci <name> [alla] radio". */
+        private val PLAY_SUFFIX_IT = Regex("^(?:metti|riproduci) (.+?) (?:alla )?radio$")
+
+        /** DE zuerst ⇒ unveränderte Priorität/Verhalten für deutsche Sätze. */
+        private val PLAY_SUFFIXES = listOf(PLAY_SUFFIX, PLAY_SUFFIX_EN, PLAY_SUFFIX_ES, PLAY_SUFFIX_FR, PLAY_SUFFIX_IT)
+
         /**
          * Kuratierte Stop-Phrasen, EXAKT gegen den normalisierten Text geprüft
-         * (konservativ: „im Radio lief gestern…" triggert nichts).
+         * (konservativ: „im Radio lief gestern…" triggert nichts). EN/ES/FR/IT
+         * bewusst akzentfrei formuliert (s. [PLAY_PREFIX_EN]-Block) UND ohne
+         * Präpositionen, die in ihrer Sprache eine Doppelbedeutung tragen (ES
+         * „para" ist auch „für" — „para la radio" bliebe darum absichtlich
+         * draußen, s. RESULT-Zeile).
          */
         private val STOP_PHRASES = setOf(
             "radio aus", "radio stopp", "radio stop",
             "stopp das radio", "stop das radio",
             "mach das radio aus", "schalt das radio aus",
+            // EN
+            "radio off", "stop radio", "stop the radio", "turn off the radio", "turn the radio off",
+            // ES
+            "apaga la radio", "radio apagada",
+            // FR
+            "coupe la radio",
+            // IT
+            "spegni la radio", "ferma la radio",
         )
 
         /** Wörter, die als extrahierter „Name" keinen Play-Wunsch ergeben. */
-        private val STOP_WORDS = setOf("aus", "an", "stopp", "stop", "ein")
+        private val STOP_WORDS = setOf("aus", "an", "stopp", "stop", "ein", "off", "on")
     }
 }

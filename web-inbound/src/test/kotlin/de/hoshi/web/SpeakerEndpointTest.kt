@@ -16,6 +16,8 @@ import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.reactive.server.WebTestClient
 import org.springframework.web.reactive.function.BodyInserters
 import java.net.InetSocketAddress
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.file.Files
 
 /**
@@ -60,6 +62,60 @@ class SpeakerEndpointTest(
             }).contentType(MediaType.parseMediaType("audio/wav"))
         }.build(),
     )
+
+    /**
+     * Baut ein valides PCM16-Mono-WAV: [seconds] Dauer bei [sampleRate] Hz, ein 440-Hz-Ton mit
+     * Spitzenamplitude [amplitude] (0..32767; 0 == digitale Stille). Fuer die Qualitaets-Riegel-
+     * Tests (Auftrag C): Dauer und RMS steuerbar, ohne den echten CAM++-Sidecar zu brauchen
+     * (der Fake-Sidecar ignoriert den Audio-Inhalt ohnehin, s. `fakeSidecar` unten).
+     */
+    private fun wav(seconds: Double, sampleRate: Int = 16_000, amplitude: Int = 8_000): ByteArray {
+        val frameCount = (seconds * sampleRate).toInt()
+        val dataSize = frameCount * 2
+        val buf = ByteBuffer.allocate(44 + dataSize).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put("RIFF".toByteArray(Charsets.US_ASCII))
+        buf.putInt(36 + dataSize)
+        buf.put("WAVE".toByteArray(Charsets.US_ASCII))
+        buf.put("fmt ".toByteArray(Charsets.US_ASCII))
+        buf.putInt(16)
+        buf.putShort(1) // PCM
+        buf.putShort(1) // mono
+        buf.putInt(sampleRate)
+        buf.putInt(sampleRate * 2)
+        buf.putShort(2)
+        buf.putShort(16) // bits per sample
+        buf.put("data".toByteArray(Charsets.US_ASCII))
+        buf.putInt(dataSize)
+        for (i in 0 until frameCount) {
+            val v = if (amplitude == 0) 0 else (amplitude * kotlin.math.sin(2.0 * Math.PI * 440.0 * i / sampleRate)).toInt()
+            buf.putShort(v.toShort())
+        }
+        return buf.array()
+    }
+
+    /**
+     * WAV-Header mit 8-bit-Samples — [SpeakerController.analyzeWav] unterstuetzt NUR PCM16
+     * ⇒ `null` ("unbekannt"). Beweist die Sicherung aus Auftrag C: ein Parser-Zweifel (erkanntes
+     * RIFF/WAVE, aber unerwartetes Sub-Format) blockiert das Enroll NICHT.
+     */
+    private fun wav8Bit(frameCount: Int = 2_000): ByteArray {
+        val buf = ByteBuffer.allocate(44 + frameCount).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put("RIFF".toByteArray(Charsets.US_ASCII))
+        buf.putInt(36 + frameCount)
+        buf.put("WAVE".toByteArray(Charsets.US_ASCII))
+        buf.put("fmt ".toByteArray(Charsets.US_ASCII))
+        buf.putInt(16)
+        buf.putShort(1)
+        buf.putShort(1)
+        buf.putInt(8_000)
+        buf.putInt(8_000)
+        buf.putShort(1)
+        buf.putShort(8) // 8-bit ⇒ von analyzeWav nicht unterstuetzt
+        buf.put("data".toByteArray(Charsets.US_ASCII))
+        buf.putInt(frameCount)
+        repeat(frameCount) { buf.put(200.toByte()) }
+        return buf.array()
+    }
 
     // ── Auth-Wand (automatisch, kein Controller-Code) ────────────────────────
 
@@ -234,6 +290,151 @@ class SpeakerEndpointTest(
             .body(multipart(ByteArray(2000)))
             .exchange()
             .expectStatus().isBadRequest
+    }
+
+    // ── Herkunft je Aufnahme (Auftrag B, 25.07): session/device ──────────────
+
+    @Test
+    fun `enroll mit session und device - werden persistiert und erscheinen in diagnostics`() {
+        client.post().uri("/api/v1/speakers/enroll?name=andi&session=2&device=mac-mini")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(wav(2.0)))
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.name").isEqualTo("andi")
+            .jsonPath("$.durationSeconds").isNumber
+            .jsonPath("$.rms").isNumber
+
+        client.get().uri("/api/v1/speakers/diagnostics")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.profiles[0].sampleOrigins.length()").isEqualTo(1)
+            .jsonPath("$.profiles[0].sampleOrigins[0].session").isEqualTo(2)
+            .jsonPath("$.profiles[0].sampleOrigins[0].device").isEqualTo("mac-mini")
+            .jsonPath("$.profiles[0].sampleOrigins[0].recordedAt").isNumber
+            .jsonPath("$.profiles[0].sampleOrigins[0].durationSeconds").isNumber
+            .jsonPath("$.profiles[0].sampleOrigins[0].rms").isNumber
+            // 1 Sample ⇒ nichts zu leaven, aber die Fremd-Bestwerte-Map existiert (hier leer: nur 1 Profil).
+            .jsonPath("$.profiles[0].leaveOneOutSimilarity").isArray
+            .jsonPath("$.profiles[0].leaveOneOutSimilarity.length()").isEqualTo(0)
+            .jsonPath("$.profiles[0].bestForeignSimilarity").exists()
+    }
+
+    @Test
+    fun `enroll ohne session und device - beide null, nicht erfunden`() {
+        client.post().uri("/api/v1/speakers/enroll?name=andi")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(ByteArray(2000)))
+            .exchange()
+            .expectStatus().isOk
+
+        client.get().uri("/api/v1/speakers/diagnostics")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.profiles[0].sampleOrigins[0].session").isEqualTo(null as Any?)
+            .jsonPath("$.profiles[0].sampleOrigins[0].device").isEqualTo(null as Any?)
+    }
+
+    @Test
+    fun `session ausserhalb 1 bis 3 - 400`() {
+        client.post().uri("/api/v1/speakers/enroll?name=andi&session=5")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(ByteArray(2000)))
+            .exchange()
+            .expectStatus().isBadRequest
+
+        client.get().uri("/api/v1/speakers")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isOk
+            .expectBody().json("[]")
+    }
+
+    @Test
+    fun `device mit unerlaubten Zeichen - 400`() {
+        client.post().uri("/api/v1/speakers/enroll?name=andi&device=bad.name")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(ByteArray(2000)))
+            .exchange()
+            .expectStatus().isBadRequest
+
+        client.get().uri("/api/v1/speakers")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isOk
+            .expectBody().json("[]")
+    }
+
+    // ── Qualitaets-Riegel (Auftrag C, 25.07): Dauer + Stille ──────────────────
+
+    @Test
+    fun `Aufnahme kuerzer als 1 Sekunde - 422, nichts gespeichert`() {
+        client.post().uri("/api/v1/speakers/enroll?name=andi")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(wav(0.4)))
+            .exchange()
+            .expectStatus().isEqualTo(422)
+
+        client.get().uri("/api/v1/speakers")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isOk
+            .expectBody().json("[]")
+    }
+
+    @Test
+    fun `Aufnahme fast stumm - 422, nichts gespeichert`() {
+        client.post().uri("/api/v1/speakers/enroll?name=andi")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(wav(2.0, amplitude = 20))) // RMS ≈ 0.00043, weit unter dem Boden
+            .exchange()
+            .expectStatus().isEqualTo(422)
+
+        client.get().uri("/api/v1/speakers")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isOk
+            .expectBody().json("[]")
+    }
+
+    @Test
+    fun `ausreichend lange und hoerbare Aufnahme - 200, Dauer und RMS im Enroll-Response`() {
+        client.post().uri("/api/v1/speakers/enroll?name=andi")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(wav(2.0)))
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.durationSeconds").isNumber
+            .jsonPath("$.rms").isNumber
+    }
+
+    @Test
+    fun `WAV mit unbekanntem Sample-Format blockiert NICHT - Parser-Zweifel geht durch wie bisher`() {
+        // 8-bit-PCM: analyzeWav() unterstuetzt nur 16-bit ⇒ liefert null ("unbekannt") ⇒
+        // KEIN Qualitaets-Riegel greift, das Enroll geht durch wie vor Auftrag C.
+        client.post().uri("/api/v1/speakers/enroll?name=andi")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(wav8Bit()))
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.name").isEqualTo("andi")
+            .jsonPath("$.durationSeconds").isEqualTo(null as Any?)
+            .jsonPath("$.rms").isEqualTo(null as Any?)
     }
 
     // ── Fehlerpfade (ehrliche 4xx, kein stilles Speichern) ───────────────────

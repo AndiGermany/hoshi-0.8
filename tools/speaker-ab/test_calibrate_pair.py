@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -13,6 +14,7 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).with_name("calibrate_pair.py")
@@ -25,6 +27,25 @@ SPEC.loader.exec_module(cal)
 
 def calibrate(rows):
     return cal.calibrate(rows, cal.SELFTEST_CONFIG)
+
+
+def write_fixture_manifest(path: Path) -> str:
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=cal.FIELDS, delimiter="\t")
+        writer.writeheader()
+        for row in cal._fixture_rows():
+            writer.writerow({
+                "probe_id": row.probe_id,
+                "group_id": row.group_id,
+                "split": row.split,
+                "truth": row.truth,
+                "channel": row.channel,
+                "duration_s": row.duration_s,
+                "quality": row.quality,
+                "score_best_a": row.score_a,
+                "score_best_b": row.score_b,
+            })
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 class SpeakerPairDecisionTest(unittest.TestCase):
@@ -60,6 +81,17 @@ class SpeakerPairDecisionTest(unittest.TestCase):
         second, _ = cal.select_on_train(train)
         self.assertNotEqual(holdout, hostile_holdout)
         self.assertEqual(first, second)
+
+    def test_evaluation_has_channel_quality_and_duration_slices(self) -> None:
+        rows = [
+            replace(cal._fixture_rows()[0], duration_s=1.2, quality="short"),
+            replace(cal._fixture_rows()[1], duration_s=3.0, quality="tv"),
+            replace(cal._fixture_rows()[2], duration_s=5.0, quality="clean"),
+        ]
+        result = cal.evaluate(rows, cal.BASELINE)
+        self.assertEqual({"browser", "satellite"}, set(result.by_channel))
+        self.assertEqual({"short", "tv", "clean"}, set(result.by_quality))
+        self.assertEqual({"lt_2s", "2_to_4s", "gt_4s"}, set(result.by_duration_bucket))
 
 
 class ManifestValidationTest(unittest.TestCase):
@@ -161,9 +193,14 @@ class CalibrationGateTest(unittest.TestCase):
     def test_complete_fixture_reaches_owner_gate(self) -> None:
         report = calibrate(cal._fixture_rows())
         self.assertTrue(report["ready_for_owner_gate"])
+        self.assertTrue(report["holdout_evaluated"])
+        self.assertEqual(2, report["schema_version"])
         self.assertEqual({"tau": 0.55, "delta": 0.05}, report["selected"]["candidate"])
         self.assertGreaterEqual(len(report["selected"]["gain_groups"]), 2)
         self.assertEqual([], report["selected"]["loss_groups"])
+        self.assertIn("browser", report["selected"]["holdout"]["by_channel"])
+        self.assertIn("clean", report["selected"]["holdout"]["by_quality"])
+        self.assertIn("2_to_4s", report["selected"]["holdout"]["by_duration_bucket"])
 
     def test_missing_guest_or_channel_prevents_ready(self) -> None:
         rows = [
@@ -173,12 +210,46 @@ class CalibrationGateTest(unittest.TestCase):
         report = calibrate(rows)
         self.assertFalse(report["ready_for_owner_gate"])
         self.assertIn("holdout:guest:satellite", report["coverage_gaps"])
+        self.assertFalse(report["holdout_evaluated"])
+        self.assertIsNone(report["baseline_holdout"])
+        self.assertEqual([], report["train_candidates"])
+        self.assertIn("NICHT AUSGEWERTET", cal.render_markdown(report))
 
     def test_empty_train_has_no_selected_candidate(self) -> None:
         rows = [replace(row, split="holdout") for row in cal._fixture_rows() if row.split == "holdout"]
         report = calibrate(rows)
         self.assertIsNone(report["selected"])
         self.assertFalse(report["ready_for_owner_gate"])
+        self.assertFalse(report["holdout_evaluated"])
+
+    def test_no_train_safe_candidate_does_not_open_holdout(self) -> None:
+        rows = [
+            replace(row, score_a=0.90, score_b=0.10)
+            if row.split == "train" and row.truth == "guest" else row
+            for row in cal._fixture_rows()
+        ]
+        report = calibrate(rows)
+        self.assertIsNone(report["selected"])
+        self.assertFalse(report["holdout_evaluated"])
+        self.assertIsNone(report["baseline_holdout"])
+        self.assertTrue(report["train_candidates"])
+
+    def test_baseline_only_train_result_does_not_open_holdout(self) -> None:
+        rows = []
+        for row in cal._fixture_rows():
+            if row.split == "train":
+                if row.truth == "a":
+                    row = replace(row, score_a=0.49, score_b=0.37)
+                elif row.truth == "b":
+                    row = replace(row, score_a=0.37, score_b=0.49)
+                else:
+                    row = replace(row, score_a=0.48, score_b=0.41)
+            rows.append(row)
+        report = calibrate(rows)
+        self.assertEqual({"tau": 0.45, "delta": 0.10}, report["selected"]["candidate"])
+        self.assertFalse(report["holdout_evaluated"])
+        self.assertIsNone(report["baseline_holdout"])
+        self.assertTrue(any("Holdout bleibt ungeoeffnet" in reason for reason in report["reasons"]))
 
     def test_any_holdout_cross_bind_prevents_ready(self) -> None:
         rows = cal._fixture_rows()
@@ -236,21 +307,7 @@ class CalibrationGateTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="speaker-pair-cli-") as tmp:
             root = Path(tmp)
             manifest = root / "scores.tsv"
-            with manifest.open("w", newline="", encoding="utf-8") as fh:
-                writer = csv.DictWriter(fh, fieldnames=cal.FIELDS, delimiter="\t")
-                writer.writeheader()
-                for row in cal._fixture_rows():
-                    writer.writerow({
-                        "probe_id": row.probe_id,
-                        "group_id": row.group_id,
-                        "split": row.split,
-                        "truth": row.truth,
-                        "channel": row.channel,
-                        "duration_s": row.duration_s,
-                        "quality": row.quality,
-                        "score_best_a": row.score_a,
-                        "score_best_b": row.score_b,
-                    })
+            expected_sha256 = write_fixture_manifest(manifest)
             out_dir = root / "out"
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
@@ -261,6 +318,7 @@ class CalibrationGateTest(unittest.TestCase):
                     "--active-tau", "0.45",
                     "--active-delta", "0.10",
                     "--config-evidence-sha256", "a" * 64,
+                    "--expected-manifest-sha256", expected_sha256,
                 ])
             self.assertEqual(0, exit_code)
             payload = json.loads((out_dir / "calibration-report.json").read_text(encoding="utf-8"))
@@ -269,6 +327,50 @@ class CalibrationGateTest(unittest.TestCase):
             self.assertEqual("a" * 64, payload["active_config"]["evidence_sha256"])
             self.assertEqual(0o700, stat.S_IMODE(out_dir.stat().st_mode))
             self.assertEqual(0o600, stat.S_IMODE((out_dir / "report.md").stat().st_mode))
+
+    def test_manifest_hash_mismatch_stops_before_report(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="speaker-pair-hash-") as tmp:
+            root = Path(tmp)
+            manifest = root / "scores.tsv"
+            write_fixture_manifest(manifest)
+            out_dir = root / "must-not-exist"
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                exit_code = cal.main([
+                    "--input", str(manifest),
+                    "--out-dir", str(out_dir),
+                    "--active-aggregation", "best-sample",
+                    "--active-tau", "0.45",
+                    "--active-delta", "0.10",
+                    "--config-evidence-sha256", "a" * 64,
+                    "--expected-manifest-sha256", "b" * 64,
+                ])
+            self.assertEqual(2, exit_code)
+            self.assertFalse(out_dir.exists())
+            self.assertIn("Vorregistrierung", stderr.getvalue())
+
+    def test_validate_only_is_score_blind_and_creates_no_report(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="speaker-pair-validate-") as tmp:
+            manifest = Path(tmp) / "scores.tsv"
+            expected_sha256 = write_fixture_manifest(manifest)
+            stdout = io.StringIO()
+            with mock.patch.object(
+                cal, "calibrate", side_effect=AssertionError("scores must not be evaluated")
+            ), contextlib.redirect_stdout(stdout):
+                exit_code = cal.main([
+                    "--input", str(manifest),
+                    "--validate-only",
+                    "--active-aggregation", "best-sample",
+                    "--active-tau", "0.45",
+                    "--active-delta", "0.10",
+                    "--config-evidence-sha256", "a" * 64,
+                    "--expected-manifest-sha256", expected_sha256,
+                ])
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(0, exit_code)
+            self.assertTrue(payload["ready_for_calibration"])
+            self.assertFalse(payload["scores_evaluated"])
+            self.assertFalse(payload["holdout_evaluated"])
 
     def test_active_config_mismatch_is_release_blocker(self) -> None:
         mismatches = (

@@ -1,5 +1,8 @@
 import type { CSSProperties } from 'react';
 import type { RecognizedSpeaker } from '../api/types';
+import { de } from '../i18n/de';
+import { useUiStrings } from '../i18n';
+import type { SpeakerChipStrings } from '../i18n/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  „Wer sprach"-Chip (Stimm-ERKENNUNG S3) — der dezente Beleg am Sprach-Turn,
@@ -11,11 +14,15 @@ import type { RecognizedSpeaker } from '../api/types';
 //  bindet das Backend gar keinen Namen (recognizedSpeaker=null/isGuest) → hier Gast.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Sichtbarer Text für einen nicht (sicher) erkannten Sprecher. */
-export const GUEST_LABEL = 'Gast';
+/**
+ * Sichtbarer Text für einen nicht (sicher) erkannten Sprecher — jetzt eine
+ * Referenz auf den `de`-Katalog (byte-gleich zum bisherigen Hardcode,
+ * Langschwanz-Sweep 25.07). Gerendert wird `useUiStrings().speakerChip.guest`.
+ */
+export const GUEST_LABEL = de.speakerChip.guest;
 
 /** Tooltip am Gast-Chip — macht die Vera-Regel für neugierige Mäuse lesbar. */
-export const GUEST_TITLE = 'Nicht sicher erkannt — lieber Gast als die falsche Person.';
+export const GUEST_TITLE = de.speakerChip.guestTitle;
 
 /**
  * Deterministischer, dezenter Farbton (0..359) aus dem Namen. Gleicher Name ⇒
@@ -35,9 +42,9 @@ export function isGuestSpeaker(s: RecognizedSpeaker): boolean {
 }
 
 /** Konfidenz als runde Prozentzahl fürs Tooltip (0..1 → „97 %"); leer bei Unsinn. */
-function confidencePct(confidence: number): string | null {
+function confidencePct(confidence: number, t: SpeakerChipStrings = de.speakerChip): string | null {
   if (!Number.isFinite(confidence) || confidence <= 0) return null;
-  return `${Math.round(Math.min(1, confidence) * 100)} %`;
+  return t.percent(Math.round(Math.min(1, confidence) * 100));
 }
 
 export interface SpeakerChipProps {
@@ -51,18 +58,19 @@ export interface SpeakerChipProps {
  * präsentational → auch via renderToStaticMarkup prüfbar.
  */
 export function SpeakerChip({ speaker }: SpeakerChipProps) {
+  const t = useUiStrings().speakerChip;
   if (isGuestSpeaker(speaker)) {
     return (
-      <span className="msg__speaker is-guest" title={GUEST_TITLE}>
-        {GUEST_LABEL}
+      <span className="msg__speaker is-guest" title={t.guestTitle}>
+        {t.guest}
       </span>
     );
   }
   const name = speaker.name as string; // isGuestSpeaker schließt null aus
-  const pct = confidencePct(speaker.confidence);
+  const pct = confidencePct(speaker.confidence, t);
   // „Ähnlichkeit“ statt „sicher“: der Wert ist rohe Cosine-Stimm-Ähnlichkeit, keine
   // kalibrierte Wahrscheinlichkeit — „% sicher“ würde Konfidenz als Gewissheit verkaufen.
-  const title = pct ? `Erkannt als ${name} · Stimm-Ähnlichkeit ${pct}` : `Erkannt als ${name}`;
+  const title = pct ? t.recognizedWithConfidence(name, pct) : t.recognized(name);
   // Nur den Ton als Custom-Prop setzen (Idiom wie VoiceStar `--lvl`); die
   // oklch-Rezeptur lebt in der CSS, damit Helligkeit/Sättigung AA-fest bleiben.
   const style = { '--spk-hue': speakerHue(name) } as CSSProperties;

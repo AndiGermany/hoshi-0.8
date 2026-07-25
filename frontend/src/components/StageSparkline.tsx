@@ -25,6 +25,10 @@
  * getrennt — testbar ohne DOM/Renderer.
  */
 
+import { de } from '../i18n/de';
+import { useUiStrings } from '../i18n';
+import type { StageSparklineStrings } from '../i18n/types';
+
 /** Ein Punkt der Tages-Serie: ms=null ist eine EHRLICHE Lücke (nicht gemessen). */
 export interface StageSparklinePoint {
   ms: number | null;
@@ -91,14 +95,15 @@ export function isP95Elevated(p50: number | null, p95: number | null): boolean {
   return p50 !== null && p95 !== null && p50 > 0 && p95 > 3 * p50;
 }
 
-function fmtTooltipTime(iso: string): string {
+/**
+ * Uhrzeit im Tooltip — folgt seit dem Langschwanz-Sweep 25.07 der AKTIVEN
+ * UI-Sprache (`t.locale`) statt hart „de-DE"; Default bleibt de-DE.
+ */
+function fmtTooltipTime(iso: string, locale: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-}
-
-/** ms-Wert gerundet, nie erfunden ("1234 ms"). */
-function fmtTooltipMs(ms: number): string {
-  return `${Math.round(ms)} ms`;
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 /**
@@ -111,6 +116,8 @@ export function computeSparklineLayout(
   p95: number | null,
   width = 200,
   height = 40,
+  t: StageSparklineStrings = de.stageSparkline,
+  locale: string = de.locale,
 ): StageSparklineLayout {
   const cap = sparklineCap(p95 ?? 0);
   const n = points.length;
@@ -121,11 +128,11 @@ export function computeSparklineLayout(
     const x = n > 1 ? (i / (n - 1)) * width : width / 2;
     const y = mapValueToY(p.ms, cap, height);
     const outlier = p.ms > cap;
-    const time = fmtTooltipTime(p.ts);
-    const bits = [time, fmtTooltipMs(p.ms)].filter(Boolean);
+    const time = fmtTooltipTime(p.ts, locale);
+    const bits = [time, t.ms(Math.round(p.ms))].filter(Boolean);
     let tooltip = bits.join(' · ');
-    if (outlier) tooltip += ' (Ausreißer)';
-    if (p.error) tooltip += ' · Fehler';
+    if (outlier) tooltip += t.outlierSuffix;
+    if (p.error) tooltip += t.errorSuffix;
     plotted.push({ index: i, x, y, ms: p.ms, outlier, error: p.error === true, tooltip });
   });
 
@@ -174,13 +181,14 @@ export interface StageSparklineProps {
  * dem Fall ohnehin die bestehende „keine Daten"-Kachel.
  */
 export function StageSparkline({ label, points, p50, p95, width = 200, height = 40 }: StageSparklineProps) {
-  const layout = computeSparklineLayout(points, p50, p95, width, height);
+  const { stageSparkline: t, locale } = useUiStrings();
+  const layout = computeSparklineLayout(points, p50, p95, width, height, t, locale);
   if (layout.plotted.length === 0) return null;
 
   const n = layout.plotted.length;
-  const parts = [`${label} heute: ${n} Messwert${n === 1 ? '' : 'e'}`];
-  if (p50 !== null) parts.push(`Median ${Math.round(p50)} ms`);
-  if (p95 !== null) parts.push(`p95 ${Math.round(p95)} ms`);
+  const parts = [t.ariaHead(label, n)];
+  if (p50 !== null) parts.push(t.ariaMedian(Math.round(p50)));
+  if (p95 !== null) parts.push(t.ariaP95(Math.round(p95)));
   const ariaLabel = parts.join(', ');
 
   return (

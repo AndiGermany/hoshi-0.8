@@ -653,6 +653,14 @@ def write_report_md(path: Path, results: List[ProbeResult], profiles: List[Profi
                  f"FRR-Proxy hier sind Test-Gate-Anekdoten-Ersatz, KEINE belastbare ROC/EER-Messung — "
                  f"erst mit deutlich mehr Proben je Kanal/Sprecher (Größenordnung Dutzende bis "
                  f"Hunderte pro Zelle) tragen die Prozentzahlen ein echtes Konfidenzintervall.")
+    if len(profiles) == 1:
+        lines.append("")
+        lines.append("> **Ein-Profil-Grenze:** Ohne zweites enrolltes Profil gibt es keinen "
+                     "Runner-up; die Margin-Regel ist in diesem Lauf daher inaktiv. "
+                     "Enrollment-Impostor-Proben dieses einen Profils prüfen ausschließlich, "
+                     "ob fremde Enrollment-Samples oberhalb der absoluten Schwelle liegen. "
+                     "Sie beweisen weder Zwei-Profil-Cross-Binding noch das Verhalten der "
+                     "Margin-Regel.")
     if errored:
         lines.append("")
         lines.append(f"Fehlerhafte Proben ({len(errored)}, aus Auswertung ausgeschlossen):")

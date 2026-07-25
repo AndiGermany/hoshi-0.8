@@ -75,7 +75,7 @@ class TurnPromptAssemblerWeatherLanguageTest {
     private fun assemblerFor(weather: WeatherGroundingProvider): TurnPromptAssembler =
         TurnPromptAssembler(
             persona = PersonaService(),
-            entityMemory = EntityContextPort { null },
+            entityMemory = EntityContextPort { _, _ -> null },
             grounding = CompositeGroundingPort(weather = weather, wiki = GroundingPort.EMPTY),
             episodicMemory = null,
         )

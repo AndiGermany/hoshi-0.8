@@ -92,7 +92,7 @@ class TurnOrchestratorVoiceSettingsTest {
 
     private fun assembler(persona: PersonaService) = TurnPromptAssembler(
         persona = persona,
-        entityMemory = { null },
+        entityMemory = { _, _ -> null },
         grounding = GroundingPort.EMPTY,
         episodicMemory = null,
     )

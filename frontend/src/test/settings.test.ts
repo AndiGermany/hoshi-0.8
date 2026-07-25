@@ -126,6 +126,28 @@ describe('useSettings — Persistenz + Defaults', () => {
     expect(THEMES.map((t) => t.id)).toContain('nagareboshi');
   });
 
+  it('Yoake (夜明け) ist auswählbar, persistiert und als Morgendämmerung beschrieben', () => {
+    vi.stubGlobal('localStorage', memoryStorage());
+    saveSettings({ theme: 'yoake', language: 'de', persona: 'Standard', voice: 'coral' });
+    expect(loadSettings().theme).toBe('yoake');
+    expect(THEMES.find((t) => t.id === 'yoake')).toEqual({
+      id: 'yoake',
+      label: 'Yoake',
+      hint: 'Morgendämmerung zwischen Indigo und Koralle (夜明け)',
+    });
+  });
+
+  it('Natsu no Hi (夏の日) ist auswählbar, persistiert und als Sommertag beschrieben', () => {
+    vi.stubGlobal('localStorage', memoryStorage());
+    saveSettings({ theme: 'natsunohi', language: 'de', persona: 'Standard', voice: 'coral' });
+    expect(loadSettings().theme).toBe('natsunohi');
+    expect(THEMES.find((t) => t.id === 'natsunohi')).toEqual({
+      id: 'natsunohi',
+      label: 'Natsu no Hi',
+      hint: 'Sommertag in Ramune-Blau und warmem Washi (夏の日)',
+    });
+  });
+
   it('ignoriert ungültiges Theme/Sprache/Stimme und kaputtes JSON → Defaults', () => {
     const store = memoryStorage();
     vi.stubGlobal('localStorage', store);

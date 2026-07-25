@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.fallsBackToEnglish
 import de.hoshi.core.port.ListEntry
 import de.hoshi.core.port.ListPort
 import de.hoshi.core.port.addWithDedupe
@@ -68,7 +69,7 @@ class ListFastpath(
     }
 
     private fun receiptForAdd(entry: ListEntry, language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         val label = display(entry)
         return if (en) "Got it, $label is on the list now." else "Alles klar, $label steht jetzt drauf."
     }
@@ -78,7 +79,7 @@ class ListFastpath(
      * Nachtwächter-Prinzip wie [TimerFastpath.handleQuery]).
      */
     private fun handleRead(language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         val items = store.items(ListPort.DEFAULT_LIST_ID)
         if (items.isEmpty()) return if (en) "The list is empty." else "Die Liste ist leer."
         val enumeration = items.joinToString(", ") { display(it) }
@@ -92,7 +93,7 @@ class ListFastpath(
      * [TimerFastpath.notFoundPhrase]).
      */
     private fun handleRemove(call: ToolCall, language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         val all = call.data[ListIntent.ALL] as? Boolean ?: false
         if (all) {
             val n = store.clear(ListPort.DEFAULT_LIST_ID)

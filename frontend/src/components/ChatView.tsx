@@ -136,7 +136,7 @@ export function WaveTap({ onTap, children }: { onTap: () => void; children: Reac
  * `dueAtEpochMs` gegen `nowMs` (Minuten-Tick des Hooks).
  */
 export function ScheduledLine({ items, nowMs }: { items: ScheduledItem[]; nowMs: number }) {
-  const line = scheduledLine(items, nowMs);
+  const line = scheduledLine(items, nowMs, useUiStrings().scheduled);
   if (!line) return null;
   return (
     <p className="chat__scheduled" role="status">

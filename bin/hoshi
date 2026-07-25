@@ -38,7 +38,7 @@ fi
 
 usage() {
     cat <<EOF
-${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (0.8 / Nagareboshi)
+${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (0.8.2 / Suisei)
 
   ${C_CYAN}verify${C_RESET}       grüner Gate: Deploy-Render + TTS-Fresh-HOME +
                ./gradlew build (ArchUnit/Unit) + LIVE-Brain-Smoke (:8041)

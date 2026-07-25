@@ -3,6 +3,7 @@
 
 import math
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from run_ab import (  # noqa: E402
     evaluate,
     score_profile,
     select_scoring_profiles,
+    write_report_md,
 )
 
 
@@ -36,6 +38,40 @@ class TopTwoMeanScoringTest(unittest.TestCase):
         score = score_profile([1.0, 0.0], profile, "top-two-mean")
 
         self.assertAlmostEqual(0.8, score, places=12)
+
+    def test_one_profile_report_states_that_margin_is_inactive(self):
+        profile = Profile(
+            name="profil-a",
+            embedding=unit(0.8),
+            samples=[unit(0.8), unit(0.7)],
+        )
+        probe = Probe(
+            wav_path=Path("/private/tmp/opaque.wav"),
+            truth_speaker="profil-b",
+            channel="browser",
+            quality="enrollment-sanity",
+            embedding=unit(0.75),
+        )
+        results = evaluate([probe], [profile], thresholds=[0.45], margin=0.10)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "report.md"
+            write_report_md(
+                report_path,
+                results,
+                [profile],
+                [0.45],
+                0.10,
+                Path("/private/tmp/store.json"),
+                "http://127.0.0.1:9002",
+                "test",
+            )
+            report = report_path.read_text(encoding="utf-8")
+
+        self.assertIn("Ein-Profil-Grenze", report)
+        self.assertIn("keinen Runner-up", report)
+        self.assertIn("Margin-Regel ist in diesem Lauf daher inaktiv", report)
+        self.assertIn("weder Zwei-Profil-Cross-Binding", report)
 
     def test_single_sample_is_identical_to_best_sample(self):
         profile = Profile(name="profil-a", embedding=unit(0.77), samples=[unit(0.77)])

@@ -5,7 +5,7 @@
    tatsächlich verwendet. Die OKLCH-Werte sind sinngemäß aus den 0.5-Themen
    (smarthome-assistant-ui/src/styles/tokens.css) übernommen.
 
-   Fünf Themen:
+   Acht wählbare Themen:
      • Aoi (青)    — Morgenblau auf Tinte, der DEFAULT seit Andis Design-Adopt
                      (Cowork-Spec 2026-07-02 §1: „übernehmen wir die Farbe und
                      das Design"). Ein gespeichertes Theme gewinnt weiterhin —
@@ -18,12 +18,38 @@
      • Nagareboshi (流れ星) — stille Neumond-Nacht, dunkler Samt mit warmem
                      Unterton; der 0.x-Codename als Thema. Gold bleibt der
                      Stimme/CTA-Akzent, hier matt gedimmt.
+     • Yoake (夜明け) — der Augenblick vor Sonnenaufgang: Indigo wird am Horizont
+                     korallenwarm. Eigenständiges manuelles Thema, nicht Teil
+                     der Sora-Rotation.
+     • Natsu no Hi (夏の日) — ein heller Sommertag: warmes Washi, Ramune-Blau
+                     und ein kleiner Zinnoberpunkt. Eigenständiges manuelles
+                     Thema, nicht Teil der Sora-Rotation.
+     • Sora — zeitgesteuerte Auswahl aus Asa, Aoi, Kasumi und Yoru.
 
    Spezifität: `:root[data-theme='…']` = (0,2,0) schlägt index.css `:root` = (0,1,0)
    unabhängig von der Import-Reihenfolge — daher robust, egal wo themes.css lädt.
+
+   ZWEITER SELEKTOR `[data-theme='…']` (ohne :root) je Token-Block: damit trägt
+   AUCH ein verschachteltes Element die Token seines Themas, wenn es `data-theme`
+   selbst setzt — genau das macht die echte Farbvorschau im Theme-Picker
+   (.settings__swatch, s. unten): sie zeigt `--bg-surface`/`--accent`/`--text-1`
+   des jeweiligen Themas statt einer zweiten, driftenden Farbliste. Am <html>
+   ändert der Zusatz nichts (dort gewinnt weiterhin der :root-Selektor mit (0,2,0)).
+   WER EIN NEUES THEMA ANLEGT, schreibt beide Selektoren — dann erscheint es ohne
+   weiteres Zutun mit den richtigen Farben im Picker (Test: themegroups.test.tsx).
    reduced-motion: die globale Regel in index.css stellt alle Transitions hier mit
    ruhig, es ist kein eigenes Gate nötig.
    ──────────────────────────────────────────────────────────────────────────── */
+
+/* Yoru nutzt weiterhin exakt die Basistoken aus index.css. Nur die neue,
+   zurückhaltende Laternen-Atmosphäre liegt als Theme-Token hier. */
+:root[data-theme='yoru'],
+[data-theme='yoru'] {
+  --theme-atmosphere:
+    radial-gradient(ellipse at 82% 108%, oklch(0.8 0.13 45 / 0.075), transparent 38%),
+    radial-gradient(ellipse at 12% -12%, oklch(0.36 0.025 67 / 0.12), transparent 40%),
+    var(--bg-base);
+}
 
 /* ════════════════ AOI (青) — Morgenblau auf Tinte (Default) ════════════════
    Farbwerte EXAKT aus der Cowork-Spec §1 (2026-07-02, von Andi abgenommen):
@@ -34,7 +60,13 @@
    elevated/error): --text-2 und --bg-elevated/--bg-subtle sind dokumentierte
    Zwischenstufen in derselben Blaufamilie, --error ist ein ruhiges Korall-Rot
    im Aoi-Ton. Alles andere ist 1:1 Spec. */
-:root[data-theme='aoi'] {
+:root[data-theme='aoi'],
+[data-theme='aoi'] {
+  --theme-atmosphere:
+    radial-gradient(ellipse at 86% -10%, rgb(94 160 242 / 0.1), transparent 38%),
+    radial-gradient(ellipse at 5% 112%, rgb(47 91 145 / 0.075), transparent 42%),
+    var(--bg-base);
+
   --bg-base: #0c1017; /* Spec: bg */
   --bg-surface: #141a26; /* Spec: surface */
   --bg-elevated: #1a2333; /* abgeleitet: eine Stufe über surface (Spec hat kein elevated) */
@@ -69,8 +101,76 @@
   color-scheme: dark;
 }
 
+/* ════════════════ YOAKE (夜明け) — Indigo wird zu Koralle ════════════════
+   Kein „Dark Theme mit anderer Accent-Farbe", sondern ein eingefrorener
+   Übergang: oben bleibt die kühle Nacht, unten kündigt sich warmes Morgenlicht
+   an. Der Korall-Akzent trägt Stimme und Aktionen; Lavendel hält sekundäre Texte
+   im Nachthimmel. Die Fläche bleibt ruhig genug für lange Dialoge. */
+:root[data-theme='yoake'],
+[data-theme='yoake'] {
+  --theme-atmosphere:
+    radial-gradient(ellipse at 78% 108%, rgb(255 148 125 / 0.15), transparent 42%),
+    radial-gradient(ellipse at 12% -8%, rgb(139 111 210 / 0.11), transparent 38%),
+    var(--bg-base);
+
+  --bg-base: #100d1d;
+  --bg-surface: #191427;
+  --bg-elevated: #241b34;
+  --bg-subtle: #302440;
+  --bg-hairline: #453452;
+  --bg-hairline-dashed: #594269;
+
+  --text-1: #fbf3ec;
+  --text-2: #dbcbd5;
+  --text-3: #aa94aa;
+  --text-4: #8d7a95; /* 4,57:1 auf surface — leise, aber auch klein noch AA-lesbar */
+
+  --accent: #ff947d;
+  --accent-soft: rgb(255 148 125 / 0.22);
+  --accent-faint: rgb(255 148 125 / 0.11);
+  --accent-glow: rgb(255 148 125 / 0.42);
+  --accent-ink: #25101a;
+
+  --success: #7fd0ad;
+  --success-soft: rgb(127 208 173 / 0.16);
+  --warn: #ffc47b;
+  --warn-soft: rgb(255 196 123 / 0.17);
+  --error: #ff7685;
+  --error-soft: rgb(255 118 133 / 0.16);
+
+  --bg-user: #2a2038;
+
+  color-scheme: dark;
+}
+
+:root[data-theme='yoake'] .nav {
+  background: linear-gradient(90deg, rgb(25 20 39 / 0.98), rgb(36 27 52 / 0.94));
+  box-shadow: 0 1px 0 rgb(255 148 125 / 0.06);
+}
+
+/* Der Sprachstern ist der erste Lichtpunkt: Koralle im Kern, ein Rest
+   Lavendel an der Nachtseite. Form und Bewegung bleiben unverändert. */
+:root[data-theme='yoake'] .vc-orb__core {
+  background: linear-gradient(145deg, #ffd0bd, var(--accent) 58%, #ad8de2);
+}
+
+:root[data-theme='yoake'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 56% 60%,
+    var(--accent-glow) 0%,
+    rgb(173 141 226 / 0.16) 38%,
+    transparent 72%
+  );
+}
+
 /* ════════════════ ASA (朝) — Zen-Washi-Tag (hell) ════════════════ */
-:root[data-theme='asa'] {
+:root[data-theme='asa'],
+[data-theme='asa'] {
+  --theme-atmosphere:
+    radial-gradient(ellipse at 86% -10%, oklch(0.84 0.09 65 / 0.14), transparent 40%),
+    radial-gradient(ellipse at 4% 110%, oklch(0.76 0.055 220 / 0.1), transparent 43%),
+    var(--bg-base);
+
   --bg-base: oklch(0.95 0.018 83); /* warmes Washi-Creme */
   --bg-surface: oklch(0.975 0.014 83);
   --bg-elevated: oklch(0.99 0.008 84);
@@ -102,8 +202,77 @@
   color-scheme: light;
 }
 
+/* ════════════════ NATSU NO HI (夏の日) — Licht, Wasser, warmes Washi ════════════════
+   Kein Strand- oder Neon-Theme: das Bild ist ein stiller japanischer Sommertag.
+   Warmes Papier fängt das Sonnenlicht, Ramune-Blau kühlt die Interaktion, ein
+   kleiner Zinnober-Anteil erinnert an Furin-/Uchiwa-Farbe. Der Verlauf bleibt
+   auf der Seitenfläche; Inhalte stehen weiterhin auf ruhigen, hellen Karten. */
+:root[data-theme='natsunohi'],
+[data-theme='natsunohi'] {
+  --theme-atmosphere:
+    radial-gradient(ellipse at 88% -8%, rgb(244 185 91 / 0.2), transparent 38%),
+    radial-gradient(ellipse at -4% 22%, rgb(93 190 210 / 0.17), transparent 43%),
+    radial-gradient(ellipse at 74% 112%, rgb(126 196 164 / 0.12), transparent 40%),
+    var(--bg-base);
+
+  --bg-base: #f4f1df;
+  --bg-surface: #fffdf3;
+  --bg-elevated: #fffef9;
+  --bg-subtle: #e8eee2;
+  --bg-hairline: #c9d3c7;
+  --bg-hairline-dashed: #b8c6bd;
+
+  --text-1: #183344;
+  --text-2: #344f5d;
+  --text-3: #566d75;
+  --text-4: #5f7076; /* 4,55:1 selbst auf der dunkleren Washi-Grundfläche */
+
+  --accent: #126f83;
+  --accent-soft: rgb(18 111 131 / 0.18);
+  --accent-faint: rgb(18 111 131 / 0.085);
+  --accent-glow: rgb(62 170 191 / 0.3);
+  --accent-ink: #fffef9;
+
+  --success: #367653;
+  --success-soft: rgb(54 118 83 / 0.14);
+  --warn: #966015;
+  --warn-soft: rgb(150 96 21 / 0.14);
+  --error: #b3483e;
+  --error-soft: rgb(179 72 62 / 0.14);
+
+  --bg-user: #e2ece4;
+
+  color-scheme: light;
+}
+
+:root[data-theme='natsunohi'] .nav {
+  background: rgb(255 253 243 / 0.9);
+  box-shadow: 0 1px 0 rgb(18 111 131 / 0.06);
+  backdrop-filter: blur(12px);
+}
+
+/* Wie Sonnenlicht auf einer Ramune-Flasche: kühl im Kern, warm nur am Rand. */
+:root[data-theme='natsunohi'] .vc-orb__core {
+  background: linear-gradient(145deg, #e9f7ee, #65bed0 46%, var(--accent) 74%, #df7862);
+}
+
+:root[data-theme='natsunohi'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 52% 58%,
+    var(--accent-glow) 0%,
+    rgb(244 185 91 / 0.13) 44%,
+    transparent 72%
+  );
+}
+
 /* ════════════════ KASUMI (霞) — Nebel-Jade-Nacht (kühl) ════════════════ */
-:root[data-theme='kasumi'] {
+:root[data-theme='kasumi'],
+[data-theme='kasumi'] {
+  --theme-atmosphere:
+    radial-gradient(ellipse at 85% -10%, oklch(0.63 0.09 190 / 0.1), transparent 38%),
+    radial-gradient(ellipse at 4% 112%, oklch(0.8 0.13 45 / 0.055), transparent 40%),
+    var(--bg-base);
+
   --bg-base: oklch(0.135 0.04 190); /* tiefster Nebel-Jade */
   --bg-surface: oklch(0.17 0.042 191);
   --bg-elevated: oklch(0.205 0.043 192);
@@ -143,7 +312,13 @@
    Tiefe statt Sprünge), Hairlines kaum sichtbar, Text warmes Elfenbein statt
    grellem Weiß. Gold bleibt die Stimme, hier bewusst matt gedimmt. KEINE eigenen
    Animationen — das Thema ist Farbe; die Stille (das Dunkel) trägt. */
-:root[data-theme='nagareboshi'] {
+:root[data-theme='nagareboshi'],
+[data-theme='nagareboshi'] {
+  --theme-atmosphere:
+    radial-gradient(ellipse at 82% -12%, oklch(0.48 0.055 330 / 0.085), transparent 38%),
+    radial-gradient(ellipse at 10% 112%, oklch(0.68 0.075 52 / 0.045), transparent 36%),
+    var(--bg-base);
+
   --bg-base: oklch(0.105 0.008 330); /* dunkler Samt mit warmem Unterton */
   --bg-surface: oklch(0.13 0.008 330);
   --bg-elevated: oklch(0.16 0.009 331);
@@ -174,6 +349,14 @@
   --bg-user: oklch(0.17 0.009 331); /* sanft gehobene Du-Blase, Samt statt Kante */
 
   color-scheme: dark;
+}
+
+/* Der Charakter aller manuellen Themes erscheint als leiser Raum um die
+   Inhalte. Karten bleiben auf ihren Flächentoken; dadurch verändert der
+   Verlauf weder Statusfarben noch Textkontrast. Sora setzt am <html> ohnehin
+   das jeweils aufgelöste konkrete Theme. */
+:root[data-theme] body {
+  background: var(--theme-atmosphere, var(--bg-base));
 }
 
 /* ════════════════ Zahnrad in der Top-Nav ════════════════
@@ -395,11 +578,46 @@
   color: var(--text-3);
 }
 
-/* Theme-Auswahl: Karten mit Vorschau-Swatch (jeweils bg + Akzent des Themas). */
-.settings__themes {
-  display: grid;
-  gap: 10px;
+/* ── Theme-Auswahl: DREI GRUPPEN statt einer 8er-Liste ──────────────────────
+   (Andi 25.07: „übersichtlicher"). Die Gruppen tragen den Rhythmus, die Karten
+   bleiben die Karten von vorher — ein Aufräumen, kein Redesign. */
+.settings__themegroups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
+.settings__themegroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings__themegrouptitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.settings__themegroupnote {
+  margin: -2px 0 2px;
+}
+/* Der Tagesbogen unter Sora: reine Vorschau, nicht klickbar, leise. */
+.settings__themearc {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-4);
+  overflow-wrap: anywhere;
+}
+.settings__themearcstep.is-now {
+  color: var(--text-2);
+  font-weight: 600;
+}
+/* „X steht gerade fest — die Automatik pausiert." */
+.settings__themepinned {
+  margin: 0;
+}
+
 .settings__theme {
   display: grid;
   grid-template-columns: 56px 1fr;
@@ -428,46 +646,50 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* ECHTE Farbvorschau statt einer zweiten Farbliste: die Kachel setzt `data-theme`
+   SELBST (SettingsPanel/ThemeSection), greift damit den Token-Block ihres Themas
+   ab (die `[data-theme='…']`-Selektoren ganz oben) und zeigt drei Flächen —
+   Fläche (--bg-surface auf --bg-base), Akzent (--accent), Textton (--text-1).
+   Künftige Themen wachsen automatisch mit: sie brauchen keine Zeile hier. */
 .settings__swatch {
   grid-row: 1 / span 2;
   align-self: center;
+  display: grid;
+  grid-template-columns: 1fr 14px 8px;
+  align-items: stretch;
+  gap: 4px;
   width: 56px;
   height: 40px;
+  padding: 5px;
   border-radius: 8px;
   border: 1px solid var(--bg-hairline);
+  background: var(--bg-base);
 }
-/* Vorschau-Farben fest (zeigen das jeweilige Thema, unabhängig vom aktiven). */
-.settings__swatch--aoi {
-  background: linear-gradient(135deg, #141a26 55%, #5ea0f2);
+.settings__swatchbg {
+  border-radius: 4px;
+  background: var(--bg-surface);
 }
-.settings__swatch--yoru {
-  background: linear-gradient(135deg, oklch(0.155 0.006 64) 55%, oklch(0.8 0.13 45));
+.settings__swatchaccent {
+  border-radius: 4px;
+  background: var(--accent);
 }
-.settings__swatch--asa {
-  background: linear-gradient(135deg, oklch(0.95 0.018 83) 55%, oklch(0.52 0.17 42));
-}
-.settings__swatch--kasumi {
-  background: linear-gradient(135deg, oklch(0.17 0.042 191) 55%, oklch(0.8 0.13 45));
-}
-.settings__swatch--nagareboshi {
-  /* Ruhig wie das Thema: Samt-Fläche, das matte Gold nur als leiser Schimmer. */
-  background: linear-gradient(135deg, oklch(0.13 0.008 330) 62%, oklch(0.55 0.07 52));
-}
-.settings__swatch--sora {
-  /* Zeigt die Rotation selbst statt einer Einzelfarbe: Asa → Aoi → Kasumi → Yoru
-     als vier Streifen, in exakt dieser Tages-Reihenfolge. */
-  background: linear-gradient(
-    90deg,
-    oklch(0.95 0.018 83) 0% 25%,
-    #5ea0f2 25% 50%,
-    oklch(0.8 0.13 45) 50% 75%,
-    oklch(0.155 0.006 64) 75% 100%
-  );
+.settings__swatchtext {
+  border-radius: 4px;
+  background: var(--text-1);
 }
 .settings__themename {
   align-self: end;
   font-size: 14px;
   font-weight: 600;
+}
+/* Beiwort: „Nagareboshi · Sternschnuppe" — schön bleibt schön, aber niemand
+   muss raten. Leiser als der Name, in derselben Zeile. */
+.settings__themegloss {
+  font-weight: 400;
+  color: var(--text-3);
+}
+.settings__theme.is-active .settings__themegloss {
+  color: var(--text-2);
 }
 .settings__themehint {
   align-self: start;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Language } from '../api/types';
+import { de } from '../i18n/de';
 
 /**
  * Globale, persistente UI-Einstellungen für die Hoshi-0.8-Shell:
@@ -14,7 +15,7 @@ import type { Language } from '../api/types';
  */
 
 /**
- * Die fünf wählbaren Farbthemen. Aoi (青) = der Default seit Andis Design-Adopt
+ * Die acht wählbaren Farbthemen. Aoi (青) = der Default seit Andis Design-Adopt
  * (Cowork-Spec 2026-07-02: „übernehmen wir die Farbe und das Design"). Die
  * bisherigen Themen bleiben wählbar; ein in localStorage gespeichertes Theme
  * wird NICHT überschrieben — nur der Fallback ist jetzt Aoi.
@@ -24,7 +25,15 @@ import type { Language } from '../api/types';
  * in eins der vier Rotations-Themes auf (siehe {@link resolveSoraTheme}). Wird wie
  * jedes andere Theme gespeichert; bestehende manuelle Wahlen bleiben unberührt.
  */
-export type Theme = 'aoi' | 'yoru' | 'asa' | 'kasumi' | 'nagareboshi' | 'sora';
+export type Theme =
+  | 'aoi'
+  | 'yoru'
+  | 'asa'
+  | 'kasumi'
+  | 'nagareboshi'
+  | 'yoake'
+  | 'natsunohi'
+  | 'sora';
 
 /**
  * Persona-Wahl: vier feste Persönlichkeiten. Die IDs sind exakt die Label-Strings,
@@ -40,30 +49,43 @@ export interface Settings {
   voice: string;
 }
 
-/** Theme-Katalog fürs Panel (Name + kurzer Charakter-Hinweis, aus den 0.5-Themen). */
-export const THEMES: { id: Theme; label: string; hint: string }[] = [
-  { id: 'aoi', label: 'Aoi', hint: 'Morgenblau auf Tinte (青) — der Standard' },
-  { id: 'yoru', label: 'Yoru', hint: 'Warmes Laternenlicht (夜)' },
-  { id: 'asa', label: 'Asa', hint: 'Heller Tag auf Washi-Papier (朝)' },
-  { id: 'kasumi', label: 'Kasumi', hint: 'Kühle Nebel-Nacht in Jade (霞)' },
-  { id: 'nagareboshi', label: 'Nagareboshi', hint: 'Stille Neumond-Nacht, dunkler Samt (流れ星)' },
-  {
-    id: 'sora',
-    label: 'Sora (automatisch — folgt dem Tag)',
-    hint: 'Asa → Aoi → Kasumi → Yoru, nach Uhrzeit dieses Geräts',
-  },
+/** Die acht wählbaren Themen in Panel-Reihenfolge (Aoi zuerst = Default). */
+export const THEME_IDS: readonly Theme[] = [
+  'aoi',
+  'yoru',
+  'asa',
+  'natsunohi',
+  'kasumi',
+  'nagareboshi',
+  'yoake',
+  'sora',
 ];
+
+/**
+ * Theme-Katalog fürs Panel (Name + kurzer Charakter-Hinweis, aus den 0.5-Themen).
+ * Name/Hinweis stehen seit dem Langschwanz-Sweep 25.07 im Text-Katalog
+ * (`i18n/*.ts`, `settings.themes`) — hier steht nur noch die REIHENFOLGE der Ids.
+ * Diese Konstante bleibt der DE-Blick darauf (byte-gleich zum bisherigen Stand,
+ * von Bestandstests referenziert); gerendert wird `useUiStrings().settings.themes`.
+ */
+export const THEMES: { id: Theme; label: string; hint: string }[] = THEME_IDS.map((id) => ({
+  id,
+  ...de.settings.themes[id],
+}));
+
+/** Die drei wählbaren Chat-/STT-Sprachen in Panel-Reihenfolge. */
+export const LANGUAGE_IDS: readonly Language[] = ['auto', 'de', 'en'];
 
 /**
  * Die wählbaren Sprachen. 'de'/'en' spiegeln das Backend-Enum Language (DE/EN);
  * 'auto' ist die bilinguale Auto-Erkennung — das FE schickt sie als
  * `languagePolicy=AUTO` mit konkretem `language=DE`-Fallback (api/chat.ts).
+ * Die Anzeigenamen kommen aus dem Text-Katalog (`settings.languages`).
  */
-export const LANGUAGES: { id: Language; label: string }[] = [
-  { id: 'auto', label: 'Automatisch (Deutsch / Englisch)' },
-  { id: 'de', label: 'Deutsch' },
-  { id: 'en', label: 'English' },
-];
+export const LANGUAGES: { id: Language; label: string }[] = LANGUAGE_IDS.map((id) => ({
+  id,
+  label: de.settings.languages[id],
+}));
 
 /**
  * Persona-Katalog fürs Panel (Label + kurze Charakter-Beschreibung). `id` ist der
@@ -75,32 +97,10 @@ export const LANGUAGES: { id: Language; label: string }[] = [
  * echten Backend-Prompts kalibriert (PersonaService.kt: toneLineDe + Few-Shots),
  * nicht erfunden. Kein Markdown; erscheint kursiv unter der Beschreibung.
  */
-export const PERSONAS: { id: Persona; label: string; description: string; sample: string }[] = [
-  {
-    id: 'Standard',
-    label: 'Standard',
-    description: 'Warm, locker, kumpelhaft — Hoshis Grundton.',
-    sample: "Morgen wird's mild, so um die 18 Grad — abends könnte ein kleiner Schauer kommen.",
-  },
-  {
-    id: 'Kumpel',
-    label: 'Kumpel',
-    description: 'Flapsig und spielfreudig: duzt, witzelt, viel Energie.',
-    sample: 'Morgen? Locker 18 Grad, bisschen Regen dabei — Jacke einpacken, fertig!',
-  },
-  {
-    id: 'Knapp',
-    label: 'Knapp',
-    description: 'Wortkarg und sachlich: nur das Nötige, kein Geplänkel.',
-    sample: 'Morgen: 18 Grad, leichter Regen.',
-  },
-  {
-    id: 'Ruhig',
-    label: 'Ruhig',
-    description: 'Sanft und entschleunigt: leise, gelassen, gedämpft.',
-    sample: 'Morgen wird es mild, um die 18 Grad — gegen Abend zieht wohl etwas Regen auf.',
-  },
-];
+export const PERSONA_IDS: readonly Persona[] = ['Standard', 'Kumpel', 'Knapp', 'Ruhig'];
+
+export const PERSONAS: { id: Persona; label: string; description: string; sample: string }[] =
+  PERSONA_IDS.map((id) => ({ id, ...de.settings.personas[id] }));
 
 /**
  * Die 13 wählbaren OpenAI-Stimmen (gpt-4o-mini-tts) — deckungsgleich mit der
@@ -141,9 +141,9 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const SETTINGS_STORAGE_KEY = 'hoshi.settings';
 
-const VALID_THEMES: readonly Theme[] = ['aoi', 'yoru', 'asa', 'kasumi', 'nagareboshi', 'sora'];
-const VALID_LANGS: readonly Language[] = ['auto', 'de', 'en'];
-const VALID_PERSONAS: readonly Persona[] = ['Standard', 'Kumpel', 'Knapp', 'Ruhig'];
+const VALID_THEMES: readonly Theme[] = THEME_IDS;
+const VALID_LANGS: readonly Language[] = LANGUAGE_IDS;
+const VALID_PERSONAS: readonly Persona[] = PERSONA_IDS;
 
 /** Defensiver Zugriff auf localStorage (node/SSR/privater Modus kennen es nicht). */
 function safeStorage(): Storage | null {
@@ -279,13 +279,23 @@ export function useEscalationSeconds(): UseEscalationSecondsResult {
 //  Sora (Arbeitsname) — automatischer Theme-Wechsel nach Tageszeit
 //
 //  Rein zeit-basiert auf der GERÄTE-Uhr (lokale Zeit) — kein Netz, kein Geo.
-//  Nagareboshi bleibt bewusst außen vor: es ist Hoshis Marken-/Signature-Theme,
-//  keine der vier „normalen" Tageszeiten. Die Grenzen sind grobe Fenster, keine
-//  echten Sonnenauf-/-untergangszeiten — Ausbaustufe: über die Wetter-/Geo-Naht
-//  (die App kennt bereits einen Standort für den Wetterblock) ließen sich echte
-//  Sonnenzeiten ziehen. Bewusst NICHT Teil dieser Scheibe (Arbeitsauftrag 19.07).
+//  Yoake bleibt bewusst außen vor: ein eigenständiger manueller Look statt einer
+//  der „normalen" Tageszeiten.
+//
+//  Nagareboshi war bis 0.8.2 ebenfalls ausgenommen — es war Hoshis Signature-Theme.
+//  Seit Suisei diese Rolle trägt, ist die Sternschnuppe frei und bekommt genau das
+//  Fenster, in das sie gehört: 02:00–05:59, die tiefste Nacht. Wer um drei Uhr
+//  morgens mit Hoshi redet, bekommt sie — kein Gag, keine Überraschung, die stört,
+//  sondern ein Look, den man FINDET, wenn man zu einer Zeit da ist, zu der man
+//  Sternschnuppen sieht. Suisei ist die Bahn, Nagareboshi der Moment.
+//  Die Grenzen sind
+//  grobe Fenster, keine echten Sonnenauf-/-untergangszeiten — Ausbaustufe: über
+//  die Wetter-/Geo-Naht (die App kennt bereits einen Standort für den Wetterblock)
+//  ließen sich echte Sonnenzeiten ziehen. Bewusst NICHT Teil dieser Scheibe.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** 02:00 — Nagareboshi („Sternschnuppe") beginnt, bis 05:59: die tiefste Nacht. */
+export const SORA_NAGAREBOSHI_START_HOUR = 2;
 /** 06:00 — Asa („Morgen") beginnt. */
 export const SORA_ASA_START_HOUR = 6;
 /** 10:00 — Aoi („Tag") beginnt. */
@@ -295,18 +305,61 @@ export const SORA_KASUMI_START_HOUR = 18;
 /** 22:00 — Yoru („Nacht") beginnt, bis 06:00 (Fenster wickelt über Mitternacht). */
 export const SORA_YORU_START_HOUR = 22;
 
-/** Die vier Rotations-Themes von Sora, in Tages-Reihenfolge (Doku + Tests). */
-export const SORA_ROTATION: readonly Exclude<Theme, 'sora' | 'nagareboshi'>[] = [
-  'asa',
-  'aoi',
-  'kasumi',
-  'yoru',
+/** Die fünf Rotations-Themes von Sora, in Tages-Reihenfolge (Doku + Tests). */
+export type SoraTheme = 'nagareboshi' | 'asa' | 'aoi' | 'kasumi' | 'yoru';
+export const SORA_ROTATION: readonly SoraTheme[] = ['nagareboshi', 'asa', 'aoi', 'kasumi', 'yoru'];
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Theme-GRUPPEN (Andi 25.07: „Überlege dir ein Konzept, wie man die Auswahl der
+//  Themen übersichtlicher machen kann. Das sind jetzt schon einige.")
+//
+//  Das Problem war nie die Menge, sondern die UNGLEICHARTIGKEIT: sechs
+//  Farbwelten, eine Automatik (sora) und nagareboshi, das seit 0.8.2 beides ist
+//  — wählbar UND Teil der Tagesrotation. Drei Gruppen statt einer Liste:
+//
+//    1. 'automatik'   — nur Sora. Keine Farbe, sondern eine REGEL.
+//    2. 'tageszeiten' — die fünf Rotations-Themes in TAGESREIHENFOLGE
+//                       ({@link SORA_ROTATION}), nicht alphabetisch: wer eins
+//                       fest wählt, pinnt damit einen Schritt der Automatik.
+//    3. 'stimmung'    — Yoake + Natsu no Hi. Bilder, keine Tageszeiten; sie
+//                       hängen bewusst NICHT an der Uhr.
+//
+//  Die IDs selbst sind PERSISTIERT (localStorage, {@link SETTINGS_STORAGE_KEY})
+//  und bleiben unangetastet — hier wird ausschließlich die ANZEIGE gruppiert.
+//  {@link THEME_IDS}/{@link THEMES} bleiben ebenfalls, wie sie sind (Reihenfolge
+//  + Katalog-Blick der Bestandstests); die Gruppen sind eine zweite Sicht auf
+//  dieselbe Menge, kein Ersatz — `themegroups.test.tsx` hält beide deckungsgleich.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ThemeGroupId = 'automatik' | 'tageszeiten' | 'stimmung';
+
+/** Die drei Gruppen in Anzeige-Reihenfolge (Automatik zuerst, ganz oben). */
+export const THEME_GROUP_IDS: readonly ThemeGroupId[] = ['automatik', 'tageszeiten', 'stimmung'];
+
+export interface ThemeGroup {
+  id: ThemeGroupId;
+  /** Die Themen dieser Gruppe, in der Reihenfolge, in der sie erscheinen sollen. */
+  themes: readonly Theme[];
+}
+
+/**
+ * Die Gruppierung des Farbthema-Pickers. Zusammen decken die drei Gruppen
+ * exakt {@link THEME_IDS} ab (jede Id genau einmal) — geprüft im Test, damit ein
+ * künftiges neuntes Theme nicht still aus dem Panel fällt.
+ */
+export const THEME_GROUPS: readonly ThemeGroup[] = [
+  { id: 'automatik', themes: ['sora'] },
+  // Tages-Reihenfolge, NICHT alphabetisch: der Bogen der Automatik ist die
+  // Ordnung, die man beim Wählen im Kopf hat (tiefe Nacht → Morgen → … → Nacht).
+  { id: 'tageszeiten', themes: SORA_ROTATION },
+  { id: 'stimmung', themes: ['yoake', 'natsunohi'] },
 ];
 
 /** Bildet eine lokale Uhrzeit auf das Sora-Theme dieses Tagesfensters ab. */
-export function resolveSoraTheme(date: Date): Exclude<Theme, 'sora' | 'nagareboshi'> {
+export function resolveSoraTheme(date: Date): SoraTheme {
   const h = date.getHours();
-  if (h < SORA_ASA_START_HOUR) return 'yoru'; // 00:00–05:59 — noch die Nacht davor
+  if (h < SORA_NAGAREBOSHI_START_HOUR) return 'yoru'; // 00:00–01:59 — noch die Nacht davor
+  if (h < SORA_ASA_START_HOUR) return 'nagareboshi'; // 02:00–05:59 — die tiefste Nacht
   if (h < SORA_AOI_START_HOUR) return 'asa'; // 06:00–09:59
   if (h < SORA_KASUMI_START_HOUR) return 'aoi'; // 10:00–17:59
   if (h < SORA_YORU_START_HOUR) return 'kasumi'; // 18:00–21:59

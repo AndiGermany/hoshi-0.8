@@ -1,6 +1,7 @@
 package de.hoshi.core.tools
 
 import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.fallsBackToEnglish
 import de.hoshi.core.port.AreaInfo
 
 /**
@@ -45,7 +46,7 @@ object AreaClarifyIntent {
      */
     fun phrase(areas: List<AreaInfo>, language: Language): String {
         val names = areas.map { it.label }.filter { it.isNotBlank() }.take(MAX_ROOMS_NAMED)
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         if (names.isEmpty()) {
             return if (en) "Which room do you mean?" else "Welchen Raum meinst du?"
         }

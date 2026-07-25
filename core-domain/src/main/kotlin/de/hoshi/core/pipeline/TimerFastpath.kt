@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.fallsBackToEnglish
 import de.hoshi.core.port.RingingItem
 import de.hoshi.core.port.RingingItemPort
 import de.hoshi.core.port.ScheduledItem
@@ -131,7 +132,7 @@ class TimerFastpath(
         val items = store.query()
             .filter { !alarmOnly || it.kind == ScheduledKind.ALARM }
             .sortedBy { it.dueAtEpochMs }
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         if (items.isEmpty()) {
             return if (alarmOnly) {
                 if (en) "No alarm is set right now." else "Gerade ist kein Wecker gestellt."
@@ -168,7 +169,7 @@ class TimerFastpath(
         language: Language,
         ringing: List<RingingItem> = emptyList(),
     ): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         val list = listPhrase(items, nowMs, language, ringing)
         return if (en) "I can't find a $name timer — currently running: $list."
         else "Einen $name-Timer finde ich nicht — gerade laufen: $list."
@@ -187,7 +188,7 @@ class TimerFastpath(
         language: Language,
         ringing: List<RingingItem> = emptyList(),
     ): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         val scheduledPart = items.map { item ->
             val rest = humanDuration(remainingSeconds(item, nowMs), language)
             val name = item.label ?: kindNoun(item.kind, language)
@@ -207,7 +208,7 @@ class TimerFastpath(
      * klingelt der Wecker?" eine Uhrzeit-Frage ist. Ein Label (Erinnerung) wird genannt.
      */
     private fun remainingPhrase(item: ScheduledItem, nowMs: Long, language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         val rest = humanDuration(remainingSeconds(item, nowMs), language)
         if (item.kind == ScheduledKind.ALARM) {
             val due = ZonedDateTime.ofInstant(Instant.ofEpochMilli(item.dueAtEpochMs), clock.zone)
@@ -247,7 +248,7 @@ class TimerFastpath(
      * Ohne erkennbaren Namen bleibt das heutige Verhalten byte-gleich.
      */
     private fun handleCancel(call: ToolCall, language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         val scheduled = store.query()
         val ringing = ringingPort.ringing()
         if (scheduled.isEmpty() && ringing.isEmpty()) {
@@ -339,7 +340,7 @@ class TimerFastpath(
         language: Language,
         rolledToTomorrow: Boolean = false,
     ): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         // „morgen"/„tomorrow" nur bei Wall-Clock-Zeiten, die auf den nächsten Tag rollen
         // (nie bei Dauern) — sonst weiß der Nutzer nicht, dass „22:57" erst morgen weckt.
         val dayDe = if (rolledToTomorrow && !isDuration) "morgen " else ""
@@ -371,7 +372,7 @@ class TimerFastpath(
 
     /** Menschlich lesbare Dauer (DE+EN): „eine Stunde und 5 Minuten" / „one hour and 5 minutes". */
     private fun humanDuration(seconds: Long, language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         val h = seconds / 3600
         val m = (seconds % 3600) / 60
         val s = seconds % 60
@@ -389,7 +390,7 @@ class TimerFastpath(
     }
 
     private fun kindNoun(kind: ScheduledKind, language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         return when (kind) {
             ScheduledKind.TIMER -> if (en) "timer" else "Timer"
             ScheduledKind.ALARM -> if (en) "alarm" else "Wecker"

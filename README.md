@@ -23,11 +23,16 @@
 
 ## Hoshi — Deutsch
 
-> Ein privater, deutscher, **lokal-first** Voice-Assistent, dem man vertrauen kann.
+> Ein privater, deutschsprachig gewachsener, **lokal-first** Voice-Assistent, dem man vertrauen kann.
 > Läuft auf einem einzelnen Apple-Silicon-Mac (16 GB). Keine Cloud-Pflicht, keine projektseitige Telemetrie,
 > deine Stimme bleibt bei dir.
 
-**Status:** 0.8 „Nagareboshi" — aktiv in Entwicklung, Richtung 1.0.
+**Status:** 0.8.2 „Suisei" (彗星, der Komet) — aktiv in Entwicklung, Richtung 1.0.
+Der Vorgänger-Codename *Nagareboshi* (流れ星, die Sternschnuppe) war der kurze helle Streifen; ein
+Komet hat eine Bahn und kommt wieder. Nagareboshi lebt als Farbthema weiter.
+Diese Runde brachte: fünf Sprachen bis in die Antworten hinein, zwei neue Farbwelten und einen
+Spiel-Modus, der ein Gedankenexperiment nicht mehr wie eine Wissensfrage behandelt. Der ehrliche
+Stand mitsamt offenen Kanten steht im [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Was Hoshi kann
 
@@ -52,8 +57,18 @@
 - **Ein Tagebuch aus Messwerten, nie aus Inhalten.** Das Nutzungs-Diary speichert Zeitpunkt,
   Kategorie und Latenzen — keine Gesprächsinhalte. Der Aktivität-Tab zeigt p50/p95 je
   Pipeline-Stufe und die Zerlegung jedes Turns.
-- **Fünf Farbwelten.** Aoi · Yoru · Asa · Kasumi · Nagareboshi — über gemeinsame Design-Tokens gesteuert,
-  `prefers-reduced-motion` wird respektiert.
+- **Spricht fünf Sprachen — antwortet, versteht aber noch nicht in allen fünf.** Oberfläche und
+  Antworten gibt es in Deutsch, Englisch, Spanisch, Französisch und Italienisch: rund 770 Sätze im
+  Backend (Smart-Home-Bestätigungen, Ehrlichkeits-Sätze, Fehlermeldungen und die Wissens-Blöcke, die
+  intern ans Sprachmodell gehen) plus 119 Stellen im Frontend; Zeit- und Datumsformate folgen der
+  Sprache. **Ehrliche Grenze:** die *Erkenner* — was Hoshi als Befehl versteht — sind in großen Teilen
+  noch deutsch. Wer auf Spanisch stellt, bekommt spanische Antworten, sagt Befehle aber weiter auf
+  Deutsch oder Englisch. Das steht auch im Produkt (Hinweis im Sprach-Panel, „Beta" an allem außer
+  Deutsch), und daran wird gearbeitet. ES/FR/IT sind zudem nicht muttersprachlich gegengelesen.
+- **Acht Farbwelten.** Aoi (青, Blau) · Yoru (夜, Nacht) · Asa (朝, Morgen) · Natsu no Hi (夏の日,
+  Sommertag) · Kasumi (霞, Dunst) · Nagareboshi (流れ星, Sternschnuppe) · Yoake (夜明け, Tagesanbruch) ·
+  Sora (空, Himmel — folgt automatisch der Uhrzeit; Nagareboshi ist dort die tiefste Nacht,
+  02:00–05:59). Über gemeinsame Design-Tokens gesteuert, `prefers-reduced-motion` wird respektiert.
 
 ### Was Hoshi besonders macht
 
@@ -102,17 +117,28 @@ und spricht über einen authentifizierten `/ws/audio`-Vertrag mit den Satelliten
 
 ### Roadmap (ehrlich)
 
-**0.9:** Wake-Word-Kalibrierung und robustere deutsche Trainingsdaten (der erste lokale
-microWakeWord-Pfad läuft bereits experimentell) · Wecker klingeln am
-Ursprungs-Satelliten · Setup & Übergabe (`hoshi setup`, SETUP.md, KI-lesbares Onboarding) ·
-Multi-Room mit Wake-Arbitrierung · Metriken-Sparklines. **Bekannte Kanten:** siehe
-„Ehrlichkeit zuerst" unten.
+**0.9:** Die Erkenner mehrsprachig nachziehen (Hoshi antwortet in fünf Sprachen, versteht Befehle
+aber noch überwiegend deutsch) · Wake-Word-Kalibrierung und robustere deutsche Trainingsdaten (der
+erste lokale microWakeWord-Pfad läuft bereits experimentell) · Wecker klingeln am
+Ursprungs-Satelliten · geführtes Setup (`SETUP.md` gibt es; ein `hoshi setup`-Kommando noch nicht) ·
+Multi-Room mit Wake-Arbitrierung · Metriken-Sparklines.
+
+**Bekannte Kanten, ungeschönt:**
+
+- Die **Erkenner sind teilweise noch deutsch** — die größte offene Kante der Mehrsprachigkeit.
+- **ES/FR/IT sind nicht muttersprachlich gegengelesen** und haben keine Piper-Stimme (sie werden vom
+  macOS-`say`-Sidecar gesprochen).
+- Die **Sprecher-Erkennung ist abgeschaltet**, weil das lokale Sicherheits-Gate keinen tragfähigen
+  Betriebspunkt gefunden hat. Anlernen und Profile bleiben, das Erkennen nicht.
+- Der **sanfte Neustart** (20 s für laufende Gespräche) ist konfiguriert und plausibel, aber nicht an
+  einem echten laufenden Gespräch bewiesen.
+- Hoshi ist auf **genau einer Maschine** gehärtet — siehe „Ehrlichkeit zuerst" unten.
 
 ---
 
 ## Hoshi — English
 
-> A private, German-speaking, **local-first** voice assistant you can trust.
+> A private, German-first, **local-first** voice assistant you can trust.
 > Runs on a single Apple Silicon Mac (16 GB). No cloud requirement, no project telemetry —
 > your voice stays home.
 
@@ -128,7 +154,12 @@ Multi-Room mit Wake-Arbitrierung · Metriken-Sparklines. **Bekannte Kanten:** si
   </sub>
 </p>
 
-**Status:** 0.8 "Nagareboshi" — under active development, heading toward 1.0.
+**Status:** 0.8.2 "Suisei" (彗星, the comet) — under active development, heading toward 1.0.
+The previous codename *Nagareboshi* (流れ星, the shooting star) was the brief bright streak; a comet
+has an orbit and comes back. Nagareboshi lives on as a colour theme.
+This round brought five languages all the way into the answers, two new colour worlds, and a playful
+mode that stops treating a thought experiment like a factual question. The honest state, open edges
+included, is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ### What Hoshi does
 
@@ -151,8 +182,18 @@ Multi-Room mit Wake-Arbitrierung · Metriken-Sparklines. **Bekannte Kanten:** si
 - **A diary of measurements, never of content.** The usage diary stores timestamps, categories
   and latencies — no conversation content. The activity tab shows p50/p95 per pipeline stage and
   a per-turn breakdown.
-- **Five color worlds.** Aoi · Yoru · Asa · Kasumi · Nagareboshi — driven by shared design tokens,
-  `prefers-reduced-motion` respected.
+- **Speaks five languages — but does not yet *understand* in all five.** Interface and replies come
+  in German, English, Spanish, French and Italian: roughly 770 backend sentences (smart-home
+  confirmations, the honesty phrases, error messages, and the knowledge blocks that go to the language
+  model internally) plus 119 frontend strings; time and date formats follow the language.
+  **Honest limit:** the *recognizers* — what Hoshi understands as a command — are still largely
+  German. Switch to Spanish and you get Spanish answers, but you still phrase commands in German or
+  English. The product says so itself (a notice in the language panel, and everything but German is
+  labelled beta), and it is being worked on. ES/FR/IT have also not been reviewed by native speakers.
+- **Eight color worlds.** Aoi (青, blue) · Yoru (夜, night) · Asa (朝, morning) · Natsu no Hi (夏の日,
+  summer day) · Kasumi (霞, haze) · Nagareboshi (流れ星, shooting star) · Yoake (夜明け, daybreak) ·
+  Sora (空, sky — follows the clock automatically; Nagareboshi holds the deepest night there,
+  02:00–05:59). Driven by shared design tokens, `prefers-reduced-motion` respected.
 
 ### What makes it different
 
@@ -172,6 +213,19 @@ Multi-Room mit Wake-Arbitrierung · Metriken-Sparklines. **Bekannte Kanten:** si
    being built — human and AI as one team, making something that lasts. (Project foundations
    live LLM-readable in [`vault/`](vault/00-INDEX.md); the private workshop behind them
    belongs to the house.)
+
+### Known edges (honest)
+
+- The **recognizers are still largely German** — Hoshi answers in five languages but understands
+  commands mostly in German or English. This is the biggest open edge of the multilingual work.
+- **ES/FR/IT have not been reviewed by native speakers** and have no Piper voice; they are spoken by
+  the macOS `say` sidecar.
+- **Speaker recognition is switched off** because the local safety gate found no viable operating
+  point. Enrollment and profiles remain; recognizing does not.
+- **Graceful shutdown** (20 s for in-flight conversations) is configured and plausible, but has not
+  been proven against a real running turn.
+- Hoshi is hardened on **exactly one machine** — expect edges when adapting it (see the German
+  "Ehrlichkeit zuerst" section).
 
 ### Architecture & build (at a glance)
 

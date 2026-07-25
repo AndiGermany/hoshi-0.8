@@ -104,13 +104,13 @@ class RuntimeSettingsBootTest(@Autowired val client: WebTestClient) {
     // ── Brain (LLM) ──────────────────────────────────────────────────────────
 
     @Test
-    fun `GET brain - Whitelist mit genau zwei Modellen, ehrlicher Live-Status`() {
+    fun `GET brain - Whitelist mit genau drei Modellen, ehrlicher Live-Status`() {
         client.get().uri("/api/v1/settings/brain")
             .header(bearer().first, bearer().second)
             .exchange()
             .expectStatus().isOk
             .expectBody()
-            .jsonPath("$.modelle.length()").isEqualTo(2)
+            .jsonPath("$.modelle.length()").isEqualTo(3)
             .jsonPath("$.status").isNotEmpty
     }
 
@@ -118,7 +118,10 @@ class RuntimeSettingsBootTest(@Autowired val client: WebTestClient) {
     fun `PUT brain unbekannt - 422`() {
         client.put().uri("/api/v1/settings/brain")
             .header(bearer().first, bearer().second)
-            .bodyValue(mapOf("id" to "12b"))
+            // "e12b" gibt es nicht und wird es nie geben — die E-Reihe endet bei E4B.
+            // (Bis zum 25.07 stand hier "12b"; seit das dichte 12B schaltbar ist,
+            //  wäre das kein Beispiel für eine unbekannte Id mehr.)
+            .bodyValue(mapOf("id" to "e12b"))
             .exchange()
             .expectStatus().isEqualTo(422)
             .expectBody()

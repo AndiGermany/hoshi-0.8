@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SkillLockedError, fetchSkills, setSkill } from '../api/skills';
 import type { Skill } from '../api/types';
+import { useUiStrings } from '../i18n';
 
 /**
  * Server-State-Hook über die Skills (S2.3). Quelle der Wahrheit ist der Server
@@ -35,6 +36,12 @@ export function useSkills(): UseSkillsResult {
   // Aktuelle Liste ohne Re-Render-Abhängigkeit lesen (toggle bleibt stabil).
   const skillsRef = useRef<Skill[]>(skills);
   skillsRef.current = skills;
+  // Fallback-Fehltexte in der AKTIVEN UI-Sprache (Langschwanz-Sweep 25.07:
+  // vorher hartkodiert Deutsch). Über eine Ref gelesen, damit `toggle` seine
+  // leere Dep-Liste behält und trotzdem nie einen veralteten Katalog sieht.
+  const texts = useUiStrings().skills;
+  const textsRef = useRef(texts);
+  textsRef.current = texts;
 
   useEffect(() => {
     aliveRef.current = true;
@@ -49,7 +56,7 @@ export function useSkills(): UseSkillsResult {
         }
       } catch (e) {
         if (aliveRef.current) {
-          setError(e instanceof Error ? e.message : 'Skills laden fehlgeschlagen.');
+          setError(e instanceof Error ? e.message : textsRef.current.loadFailed);
         }
       } finally {
         if (aliveRef.current) setLoading(false);
@@ -85,7 +92,7 @@ export function useSkills(): UseSkillsResult {
             ),
           );
         } else {
-          setError(e instanceof Error ? e.message : 'Umschalten fehlgeschlagen.');
+          setError(e instanceof Error ? e.message : textsRef.current.toggleFailed);
         }
       } finally {
         if (aliveRef.current) setBusyId(null);

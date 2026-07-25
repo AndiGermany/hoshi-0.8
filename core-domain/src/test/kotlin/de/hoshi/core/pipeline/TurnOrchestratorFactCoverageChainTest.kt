@@ -100,7 +100,7 @@ class TurnOrchestratorFactCoverageChainTest {
             ),
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
-                entityMemory = { null },
+                entityMemory = { _, _ -> null },
                 grounding = object : GroundingPort {
                     override fun groundingBlock(query: String, category: RouteCategory, language: Language) =
                         Mono.just(groundBlock)

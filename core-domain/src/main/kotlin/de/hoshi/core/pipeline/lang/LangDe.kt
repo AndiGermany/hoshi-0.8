@@ -13,7 +13,15 @@ import de.hoshi.core.dto.Language
  */
 object LangDe {
 
-    val PACK = LanguagePack(
+    /**
+     * `by lazy`, damit die Deklarations-Reihenfolge im Objekt egal ist: [PACK]
+     * referenziert [SMART_HOME_ACKS]/[HA_EXECUTOR]/[CAPABILITY_DENY], die weiter
+     * unten stehen. Eager wären die beim PACK-Bau noch `null` (Objekt-Properties
+     * initialisieren in Deklarations-Reihenfolge) — `lazy` baut das Pack erst beim
+     * ersten Zugriff, also garantiert nach allen Feldern.
+     */
+    val PACK: LanguagePack by lazy {
+        LanguagePack(
         language = Language.DE,
         cloudConsentAsk = listOf(
             "Hmm, das müsste ich kurz online nachschauen — soll ich?",
@@ -45,6 +53,47 @@ object LangDe {
             " — Willst du, dass ich das online nachschaue?",
             " — Soll ich das für dich online checken?",
         ),
+        // ── Ehrlichkeits-Sätze: WORT-FÜR-WORT aus [de.hoshi.core.pipeline.HonestyGate]
+        //    verschoben (nicht verändert) — der de-Pfad bleibt byte-identisch, die
+        //    bestehenden HonestyGate-Tests sind der Beweis.
+        honestyOnlineRequestRefusals = listOf(
+            "Ins offene Netz geh ich bewusst nicht — ich bleib bei dir. Aber in meinem eigenen Wissen schau ich gern nach: was genau suchst du?",
+            "Da raus ins Internet will ich gar nicht — dafür hab ich 'nen ganzen Wissensspeicher hier. Soll ich da für dich nachsehen?",
+            "Online unterwegs bin ich absichtlich nicht. Was ich aber hab, ist mein eigenes Wissen — sag mir, wonach, dann schau ich nach.",
+            "Das Internet lass ich bewusst zu — aber ich hab ne Menge selbst gespeichert. Lass mich da für dich nachschlagen, okay?",
+            "Nach draußen geh ich nicht, das ist Absicht. In meinem eigenen Wissen werd ich aber gern für dich fündig — was brauchst du?",
+        ),
+        honestyRecipeRefusals = listOf(
+            "Kochen ist nicht meine Stärke — da führ ich dich in die Irre.",
+            "Beim Rezept würd ich raten, und das wär dir keine Hilfe.",
+        ),
+        honestyExistenceRefusals = listOf(
+            "Halt — da bin ich nicht sicher, ob's das wirklich gibt. Ich würd dir lieber nichts erfinden.",
+            "Gute Frage — bei sowas verlass ich mich ungern auf mein Bauchgefühl. Lieber sag ich's ehrlich: weiß ich nicht.",
+            "Ehrlich? Da bin ich raus. Sowas würd ich gerne nachschauen statt raten.",
+        ),
+        honestyNamedEntityRefusals = listOf(
+            "Hmm, der Name sagt mir gerade nichts. Klingt nach jemandem aus einer bestimmten Szene — wer genau ist das?",
+            "Sag mir mehr — Musik, Film, Geschichte, Sport? Bei dem Namen tappe ich grade im Dunkeln.",
+            "Ich kenn den Namen nicht — magst du mir was dazu sagen?",
+            "Ehrlich, da hab ich nichts zu — woher kennst du den Namen?",
+        ),
+        honestyBridgeDownRefusals = listOf(
+            "Ich komm gerade nicht an meinen Wissensspeicher — das kann ich dir verlässlich erst gleich sagen. Magst du's in einem Moment nochmal fragen?",
+            "Hm, mein Nachschlagewerk ist im Moment nicht erreichbar. Ich will dir nichts raten — frag mich gleich nochmal, dann schau ich richtig nach.",
+            "Da häng ich grad — mein Wissensspeicher antwortet nicht. Gib mir einen Moment, dann kann ich's dir ehrlich sagen.",
+        ),
+        // ── Never-Silent-Ränder + Fastpath-Quittungen: ebenfalls WORT-FÜR-WORT aus
+        //    TurnOrchestrator / AudioWebSocketHandler / BrainAdmissionGate /
+        //    DailyNote-/WorkshopNote-/ProbeFastpath verschoben.
+        warmFallback = "Hab dich gehört, aber bei mir hakt's grad kurz. Sag's gleich nochmal?",
+        audioCapTooLong = "Das war mir zu lang am Stück — sag es bitte etwas kürzer, dann krieg ich's zuverlässig mit.",
+        audioNoEndSignal = "Die Aufnahme lief mir zu lange ohne Ende-Signal — magst du es nochmal etwas kürzer versuchen?",
+        admissionBusy = "Ich bin gerade an einer anderen Anfrage dran — gib mir einen kurzen Moment und frag gleich nochmal.",
+        dailyNoteRecorded = "Notiert: heute eine $SCORE_PLACEHOLDER. Danke dir!",
+        dailyNoteUpdated = "Aktualisiert: heute eine $SCORE_PLACEHOLDER. Danke dir!",
+        workshopNoteRecorded = "Notiert für die Werkstatt. Danke dir!",
+        probeReceipt = "Ich hör dich klar und deutlich — Ohren, Draht und Stimme stehen.",
         intentPatterns = IntentPatternNotes(
             lookupVerbs = listOf(
                 "schau", "guck", "sieh", "schlag", "schläg", "nachschau",
@@ -64,12 +113,21 @@ object LangDe {
         smartHomeNotice = null,
         sayVoiceHint = null,
         piperVoiceHint = null,
-    )
+        smartHomeAcks = SMART_HOME_ACKS,
+        haExecutor = HA_EXECUTOR,
+        capabilityDeny = CAPABILITY_DENY,
+        )
+    }
 
     /**
-     * Die Smart-Home-/Timer-Reflex-Ack-Pools — WORT-FÜR-WORT aus dem bisherigen
-     * [de.hoshi.core.pipeline.ResponseFormatter] verschoben. Bleiben IMMER Deutsch
-     * (Andi-Vorgabe), unabhängig von der aktiven Konversationssprache.
+     * Die Smart-Home-Bestätigungs-Pools — WORT-FÜR-WORT aus dem bisherigen
+     * [de.hoshi.core.pipeline.ResponseFormatter] verschoben, seither um kein Byte
+     * verändert. Seit 2026-07-25 sind sie NICHT mehr die einzige Wahrheit für alle
+     * Sprachen (s. [LangEn]/[LangEs]/[LangFr]/[LangIt]), sondern das deutsche
+     * Exemplar unter vielen — hier hängt der Byte-Identitäts-Beweis dran.
+     *
+     * Steht bewusst VOR [PACK]: Objekt-Properties initialisieren in
+     * Deklarations-Reihenfolge, und [PACK] referenziert diesen Wert.
      */
     val SMART_HOME_ACKS = SmartHomeAckPack(
         lightOnRoom = listOf(
@@ -205,5 +263,67 @@ object LangDe {
             "Sowas hab ich in deinem Zuhause nicht gefunden.",
             "Das Gerät kenne ich hier gar nicht.",
         ),
+        // Die „kein Slot"-Varianten: standen bis 2026-07-25 als nackte Literale IM
+        // ResponseFormatter (`else -> "Licht ist an."`). Ein-elementig ⇒ der
+        // Anti-Repeat-Ring gibt unverändert genau diesen String zurück.
+        lightOnNoRoom = listOf("Licht ist an."),
+        lightOffNoRoom = listOf("Licht ist aus."),
+        lightDimNoValue = listOf("Ist gedimmt."),
+        climateValueNoRoom = listOf("Auf {value} Grad."),
+        climateNoValue = listOf("Ist eingestellt."),
+        lightColorNamed = listOf("Farbe ist {color}."),
+        lightColorUnnamed = listOf("Farbe ist geändert."),
+    )
+
+    /**
+     * Die Quittungen des realen HA-Executors — WORT-FÜR-WORT aus
+     * `de.hoshi.adapters.ha.HaToolPort` verschoben (2026-07-25), kein Zeichen
+     * geändert. Die bestehenden `HaToolPortTest`-Erwartungen sind der Beweis.
+     *
+     * Achtung beim Lesen: `{room}` ist NICHT überall dasselbe. Der Licht-Readback
+     * setzt den rohen HA-Area-**Slug** ein (`kueche`), Klima/Temperatur setzen das
+     * sprechbare **Label** ein (`Küche`) — genau so war es vorher auch, und genau
+     * so bleibt es (beides Nutzerdaten, beides unübersetzt).
+     */
+    val HA_EXECUTOR = HaExecutorPack(
+        noToken = "Ganz ehrlich: ich hab gerade kein HA-Token konfiguriert, also hab ich nichts geschaltet.",
+        noTokenTemperature =
+            "Ganz ehrlich: ich hab gerade kein HA-Token konfiguriert, also komm ich nicht an die Temperatur ran.",
+        noThermostatInArea = "Im {room} kenne ich kein Thermostat.",
+        lightOffArea = "Licht im {room} ist aus.",
+        lightSomeStillOn = "Ein paar Lampen im {room} sind noch an — die haben evtl. nicht reagiert.",
+        offlineHintCount = " — {count} Lampen sind gerade nicht erreichbar (evtl. am Schalter aus).",
+        offlineHintVague = " — vielleicht sind die Lampen offline.",
+        noLightsInArea = "Im {room} hab ich gar keine Lampen gefunden.",
+        lightOnArea = "Licht im {room} ist an.",
+        lightAlreadyOnArea = "Im {room} ist das Licht schon an.",
+        lightNothingNewOn = "Im {room} brennt zwar schon Licht, aber neu angegangen ist nichts",
+        lightNoneWentOn = "Ich hab's an Home Assistant geschickt, aber im {room} ging kein Licht an",
+        climateSetArea = "Heizung im {room} auf {value} Grad.",
+        climateNotYet = "Hab's geschickt, die Heizung hat noch nicht reagiert.",
+        sentToArea = "Ist erledigt — ich hab's an die Geräte im {room} geschickt.",
+        sentToHome = "Ist erledigt — ich hab's an Home Assistant geschickt.",
+        failed = "Hat nicht geklappt — Home Assistant hat gerade nicht reagiert.",
+        noValue = "Dafür hab ich gerade keinen Wert.",
+        temperatureInArea = "Im {room} sind es gerade {value} Grad.",
+        temperatureHouseAverage = "Im Haus sind es gerade durchschnittlich {value} Grad.",
+        temperatureUnavailable = "Ich komm gerade nicht an die Temperatur ran — versuch's gleich nochmal.",
+        decimalSeparator = ",",
+    )
+
+    /**
+     * Die gesprochene Tat-Verweigerung des Trust-Kernels — WORT-FÜR-WORT aus
+     * `de.hoshi.kernel.CapabilityKernel` verschoben (2026-07-25).
+     * [CapabilityDenyPack.invalid] ist byte-gleich zu `CapabilityKernel.PHRASE_INVALID`
+     * (die Konstante bleibt als DE-Anker + Test-Referenz bestehen).
+     */
+    val CAPABILITY_DENY = CapabilityDenyPack(
+        refusals = listOf(
+            "Das mach ich gerade lieber nicht — dafür hab ich keine Freigabe.",
+            "Da halt ich mich zurück: das schalte ich nicht einfach so.",
+            "Lieber nicht — sowas lass ich bewusst, solange es nicht freigegeben ist.",
+            "Das fass ich nicht an. Wenn das wirklich gewollt ist, müssen wir's erst freischalten.",
+        ),
+        invalid = "Ungültiger domain oder service",
     )
 }

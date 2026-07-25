@@ -67,7 +67,7 @@ describe('TopNav — 星-Marke leise links im Brand (Render-Vertrag)', () => {
     expect(header).not.toContain('✦'); // (das ✦ im Crew-Overlay ist ein anderes)
     expect(html).not.toContain('nav__star');
     expect(header).toContain('Hoshi');
-    expect(header).toContain('0.8 · Nagareboshi');
+    expect(header).toContain('0.8.2 · Suisei');
   });
 });
 

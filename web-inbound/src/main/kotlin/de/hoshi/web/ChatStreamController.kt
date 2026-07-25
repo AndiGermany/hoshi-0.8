@@ -155,7 +155,7 @@ class ChatStreamController(
         val resolvedSpeaker = speakerDisplayNameResolver.resolve(request.speakerContext)
         val resolved = request.copy(language = effective, persona = effectivePersona, speakerContext = resolvedSpeaker)
         // Brain-Turn durchs globale Admission-Gate (OFF ⇒ Passthrough ⇒ byte-neutral).
-        val gated = admissionGate.gate { orchestrator.handle(resolved) }
+        val gated = admissionGate.gate(effective) { orchestrator.handle(resolved) }
         // D7: Slop-Filter VOR Memory-Store + TTS (Slop wird weder gespeichert noch gesprochen).
         val deslopped = slopKill.transform(gated)
         val turn = rememberAfter(resolved, deslopped)

@@ -5,6 +5,8 @@ import {
   type OpsSidecar,
   type SidecarStatus,
 } from '../hooks/useOpsStatus';
+import { useUiStrings } from '../i18n';
+import type { OpsStrings } from '../i18n/types';
 import { CloudGlyph, LockGlyph, WarnGlyph } from './icons';
 
 /**
@@ -46,17 +48,16 @@ function toneOf(s: OpsStatus): Tone {
   return 'ok';
 }
 
-/** Nur Warn-/Fehlerzustände tragen Text — OK bleibt der stille Punkt. */
-const TONE_LABEL: Record<Exclude<Tone, 'ok'>, string> = {
-  warn: 'Ops · Achtung',
-  critical: 'Ops · kritisch',
-};
-
-/** Andis Kernwunsch: RAM-Druck explizit benennen, sobald er da ist. */
-function headline(s: OpsStatus, tone: Exclude<Tone, 'ok'>): string {
-  if (s.memory.level === 'CRITICAL') return 'RAM kritisch';
-  if (s.memory.level === 'WARN') return 'RAM-Druck';
-  return TONE_LABEL[tone];
+/**
+ * Andis Kernwunsch: RAM-Druck explizit benennen, sobald er da ist. Nur Warn-/
+ * Fehlerzustände tragen Text — OK bleibt der stille Punkt. Die Wörter kommen
+ * seit dem Langschwanz-Sweep 25.07 aus dem Katalog der AKTIVEN UI-Sprache
+ * (vorher hartkodiert Deutsch, auch in der englischen Kopfzeile).
+ */
+function headline(s: OpsStatus, tone: Exclude<Tone, 'ok'>, t: OpsStrings): string {
+  if (s.memory.level === 'CRITICAL') return t.ramCritical;
+  if (s.memory.level === 'WARN') return t.ramWarn;
+  return tone === 'critical' ? t.toneCritical : t.toneWarn;
 }
 
 const SC_CLASS: Record<SidecarStatus, string> = {
@@ -79,6 +80,7 @@ export function OpsStatusPill({
   /** Initialzustand des Klick-Panels (unkontrolliert) — primär für Tests. */
   defaultExpanded?: boolean;
 }) {
+  const t = useUiStrings().ops;
   const [open, setOpen] = useState(defaultExpanded);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -104,8 +106,8 @@ export function OpsStatusPill({
   if (!status) return null;
 
   const title =
-    `Ops: Gesamt ${status.overall} · RAM ${status.memory.level}` +
-    (status.memory.detail ? ` — ${status.memory.detail}` : '');
+    t.title(status.overall, status.memory.level) +
+    (status.memory.detail ? t.titleDetail(status.memory.detail) : '');
 
   return (
     <div
@@ -147,7 +149,7 @@ export function OpsStatusPill({
           <span className="ops__icon" aria-hidden="true">
             <WarnGlyph />
           </span>
-          {headline(status, tone)}
+          {headline(status, tone, t)}
         </button>
       )}
 
@@ -157,7 +159,7 @@ export function OpsStatusPill({
             Settings-Sektion, b4844d0). */}
         {status.voice?.cloud === true && (
           <p className="ops__cloud">
-            <CloudGlyph /> Stimme kommt gerade aus der Cloud (OpenAI)
+            <CloudGlyph /> {t.voiceCloud}
           </p>
         )}
         {/* Gegenzeile bei lokaler Engine (say/piper/voxtral): ehrlich sichtbar statt
@@ -165,7 +167,7 @@ export function OpsStatusPill({
             einem Wechsel auf eine lokale Engine fälschlich stehen). */}
         {status.voice && status.voice.cloud === false && (
           <p className="ops__voicelocal">
-            <LockGlyph /> Stimme ({status.voice.engine}): läuft lokal — verlässt das Gerät nicht.
+            <LockGlyph /> {t.voiceLocal(status.voice.engine)}
           </p>
         )}
 
@@ -174,8 +176,7 @@ export function OpsStatusPill({
             Voraussetzung ⇒ einfach nichts (neutral, kein Alarm-Pendant). */}
         {status.allLocal && (
           <p className="ops__lock">
-            <LockGlyph /> Alles lokal — deine Stimme verlässt das Gerät nicht. Online-Recherche nur
-            nach deiner Freigabe.
+            <LockGlyph /> {t.allLocal}
           </p>
         )}
 

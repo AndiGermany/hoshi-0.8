@@ -11,8 +11,29 @@ import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 
 /**
+ * Herkunft + Qualitaet EINES Roh-Samples (additiv, Diagnose-Auftrag 25.07: „diesmal MESSEN
+ * statt hinterher raten"). Jedes Feld ist einzeln optional und wird NIE erfunden — fehlt ein
+ * Wert (Alt-Datei vor diesem Feld, Client hat `session`/`device` nicht mitgeschickt, WAV-Parsen
+ * ist fehlgeschlagen), bleibt er `null`. [recordedAtEpochMs] ist der Zeitpunkt DIESES Samples
+ * (anders als [SpeakerProfile.enrolledAtEpochMs], der bei jedem Sample auf „jetzt" vorrueckt).
+ */
+data class SpeakerSampleMeta(
+    val recordedAtEpochMs: Long?,
+    val session: Int?,
+    val device: String?,
+    val durationSeconds: Double?,
+    val rms: Double?,
+) {
+    companion object {
+        /** Alt-Sample ohne jede Herkunfts-/Qualitaets-Angabe — nie geraten, nur `null`. */
+        val UNKNOWN = SpeakerSampleMeta(null, null, null, null, null)
+    }
+}
+
+/**
  * Ein Sprecher-Profil: Name + Profil-Embedding (512-d) + Anlege-Zeitpunkt + die ROH-Samples,
- * aus denen das Profil entstand (Multi-Sample-Enroll).
+ * aus denen das Profil entstand (Multi-Sample-Enroll) + je Sample seine [SpeakerSampleMeta]
+ * (IMMER gleich lang wie [samples], 1:1 nach Index — vom Store garantiert).
  *
  * [embedding] ist bei EINEM Sample exakt dieses Sample (Alt-Verhalten, byte-genau), ab
  * ZWEI Samples das L2-renormalisierte Mittel aller Samples — Ein-Satz-Embeddings streuen
@@ -23,6 +44,7 @@ data class SpeakerProfile(
     val embedding: FloatArray,
     val enrolledAtEpochMs: Long,
     val samples: List<FloatArray> = listOf(embedding),
+    val sampleMeta: List<SpeakerSampleMeta> = samples.map { SpeakerSampleMeta.UNKNOWN },
 )
 
 /**
@@ -44,10 +66,14 @@ data class SpeakerSummary(val name: String, val enrolledAt: Long, val samples: I
  *  - Ein LESE-Fehler beim Start wirft NIE: fehlende/kaputte Datei ⇒ leer starten + WARN.
  *
  * Datei-Format: JSON-Objekt
- * `{"profiles":[{"name","enrolledAtEpochMs","embedding":[…512…],"samples":[[…],[…]]}]}`.
+ * `{"profiles":[{"name","enrolledAtEpochMs","embedding":[…512…],"samples":[[…],[…]],
+ * "sampleMeta":[{"recordedAtEpochMs","session","device","durationSeconds","rms"},…]}]}`.
  * `samples` ist ADDITIV (Multi-Sample-Enroll): Alt-Dateien ohne das Feld laden als
  * 1-Sample-Profil (`samples == [embedding]`) — Migration passiert implizit beim naechsten
- * [appendSample]. Legacy-tolerant: ein nacktes Array laedt ebenfalls als Profile. Einzelne
+ * [appendSample]. `sampleMeta` ist GENAUSO additiv (Diagnose-Auftrag 25.07): Alt-Dateien ohne
+ * das Feld — GENAU die heutige Live-Datei, zwei Profile a drei Samples, 50 KB — laden mit
+ * [SpeakerSampleMeta.UNKNOWN] je Sample (nie geraten, nur `null`-Felder), IMMER so lang wie
+ * `samples`. Legacy-tolerant: ein nacktes Array laedt ebenfalls als Profile. Einzelne
  * unbrauchbare Eintraege werden mit WARN uebersprungen, der Rest laedt.
  *
  * **Log-Disziplin (Tom):** weder Name+Vektor noch der Vektor selbst landen je in einer Log-Zeile.
@@ -75,15 +101,27 @@ class SpeakerProfileStore(
      * desselben Namens ERSETZT damit auch eine bestehende Multi-Sample-Historie (heutiges
      * Verhalten: Sample 1 = frischer Start). Weitere Samples kommen via [appendSample].
      *
+     * [session]/[device]/[durationSeconds]/[rms] beschreiben NUR dieses eine Sample (Diagnose-
+     * Auftrag 25.07) — alle optional, `null` wird nie erfunden.
+     *
      * @throws IOException wenn die Persistenz fehlschlaegt (Cache dann NICHT veraendert).
      */
     @Synchronized
-    fun upsert(name: String, embedding: FloatArray, nowMs: Long = System.currentTimeMillis()): SpeakerProfile {
+    fun upsert(
+        name: String,
+        embedding: FloatArray,
+        nowMs: Long = System.currentTimeMillis(),
+        session: Int? = null,
+        device: String? = null,
+        durationSeconds: Double? = null,
+        rms: Double? = null,
+    ): SpeakerProfile {
         val profile = SpeakerProfile(
             name = name,
             embedding = embedding.copyOf(),
             enrolledAtEpochMs = nowMs,
             samples = listOf(embedding.copyOf()),
+            sampleMeta = listOf(SpeakerSampleMeta(nowMs, session, device, durationSeconds, rms)),
         )
         val desired = HashMap(profiles)
         desired[name] = profile
@@ -103,22 +141,36 @@ class SpeakerProfileStore(
      * vollstaendiger haelt, als es ist). Alt-Profile (1 Sample, vor Multi-Sample enrolled)
      * sind dabei voll gueltig: ihr Embedding zaehlt als Sample 1.
      *
+     * [session]/[device]/[durationSeconds]/[rms] beschreiben NUR das NEU angehaengte Sample;
+     * die Meta-Daten der bestehenden Samples bleiben unangetastet (Alt-Samples ohne Angabe
+     * bleiben `null` — nie erfunden).
+     *
      * @throws IllegalArgumentException wenn die Sample-Dimension nicht zum Profil passt
      *   (Cache + Platte unveraendert — kein stilles Verrechnen dimensionsfremder Vektoren).
      * @throws IOException wenn die Persistenz fehlschlaegt (Cache dann NICHT veraendert).
      */
     @Synchronized
-    fun appendSample(name: String, embedding: FloatArray, nowMs: Long = System.currentTimeMillis()): SpeakerProfile? {
+    fun appendSample(
+        name: String,
+        embedding: FloatArray,
+        nowMs: Long = System.currentTimeMillis(),
+        session: Int? = null,
+        device: String? = null,
+        durationSeconds: Double? = null,
+        rms: Double? = null,
+    ): SpeakerProfile? {
         val existing = profiles[name] ?: return null
         require(embedding.size == existing.embedding.size) {
             "Sample-Dimension ${embedding.size} passt nicht zum Profil (${existing.embedding.size})"
         }
         val samples = existing.samples.map { it.copyOf() } + embedding.copyOf()
+        val sampleMeta = existing.sampleMeta + SpeakerSampleMeta(nowMs, session, device, durationSeconds, rms)
         val profile = SpeakerProfile(
             name = name,
             embedding = renormalizedMean(samples),
             enrolledAtEpochMs = nowMs,
             samples = samples,
+            sampleMeta = sampleMeta,
         )
         val desired = HashMap(profiles)
         desired[name] = profile
@@ -214,11 +266,13 @@ class SpeakerProfileStore(
         }
         val emb = FloatArray(embNode.size())
         for (i in 0 until embNode.size()) emb[i] = embNode.get(i).floatValue()
+        val samples = readSamples(node.get("samples"), emb)
         profiles[name] = SpeakerProfile(
             name = name,
             embedding = emb,
             enrolledAtEpochMs = enrolledAt,
-            samples = readSamples(node.get("samples"), emb),
+            samples = samples,
+            sampleMeta = readSampleMeta(node.get("sampleMeta"), samples.size),
         )
     }
 
@@ -247,6 +301,31 @@ class SpeakerProfileStore(
     }
 
     /**
+     * `sampleMeta`-Feld eines Eintrags lesen — ADDITIV wie `samples` (Diagnose-Auftrag 25.07):
+     * fehlend (Alt-Datei, GENAU die heutige Live-Datei) oder unbrauchbar ⇒ [count]x
+     * [SpeakerSampleMeta.UNKNOWN] (nie geraten). Das Ergebnis ist IMMER genau [count] lang
+     * (1:1 zu `samples` nach Index) — fehlende/kaputte Eintraege werden einzeln durch
+     * [SpeakerSampleMeta.UNKNOWN] ersetzt statt die ganze Liste zu verwerfen.
+     */
+    private fun readSampleMeta(node: JsonNode?, count: Int): List<SpeakerSampleMeta> {
+        if (node == null || !node.isArray) return List(count) { SpeakerSampleMeta.UNKNOWN }
+        return List(count) { i ->
+            val m = node.get(i)
+            if (m == null || !m.isObject) {
+                SpeakerSampleMeta.UNKNOWN
+            } else {
+                SpeakerSampleMeta(
+                    recordedAtEpochMs = m.get("recordedAtEpochMs")?.takeIf { it.canConvertToLong() }?.longValue(),
+                    session = m.get("session")?.takeIf { it.canConvertToInt() }?.intValue(),
+                    device = m.get("device")?.takeIf { it.isTextual }?.textValue(),
+                    durationSeconds = m.get("durationSeconds")?.takeIf { it.isNumber }?.doubleValue(),
+                    rms = m.get("rms")?.takeIf { it.isNumber }?.doubleValue(),
+                )
+            }
+        }
+    }
+
+    /**
      * Schreibt ALLE Profile als `{"profiles":[…]}`: Temp-File im Zielverzeichnis + atomarer Rename.
      * Ein SCHREIB-Fehler ist NICHT schluckbar — er WIRFT, damit die Mutation den Cache nicht
      * faelschlich committet. Aufgeraeumt wird best-effort; der urspruengliche Fehler fliegt weiter.
@@ -264,6 +343,17 @@ class SpeakerProfileStore(
             // Roh-Samples IMMER mitschreiben (auch bei n=1): appendSample rechnet das Mittel
             // daraus neu; Alt-Leser ignorieren das Zusatzfeld (additiv).
             entry["samples"] = p.samples.map { it.toList() }
+            // sampleMeta 1:1 zu samples (Diagnose-Auftrag 25.07) — `null`-Felder bleiben explizit
+            // null (nie erfunden), Alt-Leser (vor diesem Feld) ignorieren es additiv.
+            entry["sampleMeta"] = p.sampleMeta.map { m ->
+                linkedMapOf<String, Any?>(
+                    "recordedAtEpochMs" to m.recordedAtEpochMs,
+                    "session" to m.session,
+                    "device" to m.device,
+                    "durationSeconds" to m.durationSeconds,
+                    "rms" to m.rms,
+                )
+            }
             entry
         }
         val tmp = Files.createTempFile(dir, ".speaker-profiles", ".tmp")

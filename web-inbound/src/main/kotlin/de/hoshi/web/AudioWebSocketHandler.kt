@@ -9,6 +9,8 @@ import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.Persona
 import de.hoshi.core.dto.SpeakerContext
 import de.hoshi.core.pipeline.TtsStage
+import de.hoshi.core.pipeline.lang.LangDe
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import de.hoshi.core.port.DeviceDownlinkPort
 import de.hoshi.core.port.TurnTracePort
 import de.hoshi.kernel.PerimeterPort
@@ -233,6 +235,16 @@ class AudioWebSocketHandler(
     private val turnIds = ConcurrentHashMap<String, String>()
     private val speakers = ConcurrentHashMap<String, SpeakerContext>()
     private val languages = ConcurrentHashMap<String, Language>()
+
+    /**
+     * Die Sprache DIESER Session (eine Wahrheit statt sechsmal
+     * `languages[sessionId] ?: Language.DEFAULT`) — auch die Rand-Absagen am
+     * Audio-Cap/Session-Guard sprechen sie (Andi 2026-07-25: „Multilingualität von
+     * A-Z"; ein englischer Satellit darf beim Abbruch nicht deutsch werden).
+     */
+    private fun sessionLanguage(sessionId: String): Language =
+        languages[sessionId] ?: Language.DEFAULT
+
     // Optional im `start`-Frame gewählte Persona je Session (S-B). Fehlt das Feld, steht hier
     // NICHTS ⇒ die Resolver-Naht ([resolvePersona]) fällt auf den Server-Store zurück. Bewusst
     // per-Session (Muster [speakers]/[languages]) — kein globaler Persona-Holder, der bei
@@ -399,7 +411,9 @@ class AudioWebSocketHandler(
                 maxAudioBytesPerTurn, sessionId,
             )
             sinks[sessionId]?.let { sink ->
-                sink.tryEmitNext(withTurnId(sessionId, T.llmError(ChatEvent.Stage.STT, AUDIO_CAP_MESSAGE)))
+                sink.tryEmitNext(
+                    withTurnId(sessionId, T.llmError(ChatEvent.Stage.STT, audioCapMessage(sessionLanguage(sessionId)))),
+                )
                 sink.tryEmitNext(withTurnId(sessionId, T.llmDone(false)))
             }
             // Diary-Ehrlichkeit: der Cap-Abbruch ist Betriebs-Wahrheit — GENAU EINE
@@ -502,7 +516,7 @@ class AudioWebSocketHandler(
         val sink = sinks[sessionId] ?: return
         val audio = buffers[sessionId]?.toByteArray() ?: ByteArray(0)
         buffers[sessionId]?.reset()
-        val lang = languages[sessionId] ?: Language.DEFAULT
+        val lang = sessionLanguage(sessionId)
 
         sink.tryEmitNext(T.transcribingStarted())
 
@@ -778,7 +792,9 @@ class AudioWebSocketHandler(
                 buffers[sessionId]?.reset() // akkumulierte Bytes sofort freigeben
                 log.warn("[audio-ws] Session-Guard: Aufnahme über Dauer-Deckel für {} — Turn abgebrochen", sessionId)
                 sinks[sessionId]?.let { sink ->
-                    sink.tryEmitNext(withTurnId(sessionId, T.llmError(ChatEvent.Stage.STT, SESSION_TOO_LONG_MESSAGE)))
+                    sink.tryEmitNext(
+                        withTurnId(sessionId, T.llmError(ChatEvent.Stage.STT, sessionTooLongMessage(sessionLanguage(sessionId)))),
+                    )
                     sink.tryEmitNext(withTurnId(sessionId, T.llmDone(false)))
                 }
                 // Diary-Ehrlichkeit: auch der Dauer-Deckel-Abbruch bekommt GENAU EINE
@@ -872,12 +888,28 @@ class AudioWebSocketHandler(
          */
         const val MAX_HISTORY_MESSAGES = 24
 
-        /** Warme, ehrliche Absage beim Audio-Cap-Abbruch (stage=STT, never-silent). */
-        const val AUDIO_CAP_MESSAGE =
-            "Das war mir zu lang am Stück — sag es bitte etwas kürzer, dann krieg ich's zuverlässig mit."
+        /**
+         * Warme, ehrliche Absage beim Audio-Cap-Abbruch (stage=STT, never-silent) auf
+         * DEUTSCH — exakt gepinnt in den Bestands-Tests. Seit der Mehrsprachigkeit
+         * (2026-07-25) nur noch der DE-Zeiger auf die EINE Quelle ([LangDe]): der
+         * byte-identische Beweis, dass der de-Pfad nicht wackelt. Laufzeit-Auswahl
+         * über [audioCapMessage].
+         */
+        val AUDIO_CAP_MESSAGE: String = LangDe.PACK.audioCapTooLong
 
-        /** Warme, ehrliche Absage beim Dauer-Deckel des Session-Guards (Zeit-Achse, never-silent). */
-        const val SESSION_TOO_LONG_MESSAGE =
-            "Die Aufnahme lief mir zu lange ohne Ende-Signal — magst du es nochmal etwas kürzer versuchen?"
+        /** Warme, ehrliche Absage beim Dauer-Deckel des Session-Guards (Zeit-Achse, never-silent), DE — s. [AUDIO_CAP_MESSAGE]. */
+        val SESSION_TOO_LONG_MESSAGE: String = LangDe.PACK.audioNoEndSignal
+
+        /**
+         * Die Cap-Absage in der SESSION-Sprache. Ein Satellit, der auf Englisch
+         * spricht, darf am Rand nicht plötzlich deutsch abgewiesen werden — auch
+         * (gerade) dann nicht, wenn ohnehin schon etwas schiefging.
+         */
+        fun audioCapMessage(language: Language): String =
+            LanguagePackRegistry.forLanguage(language).audioCapTooLong
+
+        /** Die Dauer-Deckel-Absage in der SESSION-Sprache, s. [audioCapMessage]. */
+        fun sessionTooLongMessage(language: Language): String =
+            LanguagePackRegistry.forLanguage(language).audioNoEndSignal
     }
 }

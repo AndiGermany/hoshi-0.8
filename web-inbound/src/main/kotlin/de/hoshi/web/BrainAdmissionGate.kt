@@ -1,6 +1,9 @@
 package de.hoshi.web
 
 import de.hoshi.core.dto.ChatEvent
+import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.LangDe
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import org.slf4j.LoggerFactory
 import reactor.core.publisher.Flux
 import java.util.concurrent.Semaphore
@@ -37,7 +40,13 @@ import java.util.concurrent.atomic.AtomicInteger
 class BrainAdmissionGate(
     private val enabled: Boolean,
     maxConcurrent: Int,
-    private val rejectPhrase: String = DEFAULT_REJECT_PHRASE,
+    /**
+     * **Explizite** Betreiber-Absage (`HOSHI_BRAIN_ADMISSION_REJECT_PHRASE`) — wenn
+     * gesetzt, gewinnt sie in JEDER Sprache (eine bewusste Betreiber-Wahl übersetzt
+     * niemand weg). `null` (Default) ⇒ die Absage kommt sprach-bewusst aus dem
+     * [de.hoshi.core.pipeline.lang.LanguagePack] der Turn-Sprache, s. [gate].
+     */
+    private val rejectPhrase: String? = null,
     /**
      * Zeitquelle der Admission-Wartezeit-Messung (Perf-Diary
      * [ChatEvent.StageTimings.admissionWaitMs]) — injizierbar für deterministische
@@ -72,7 +81,15 @@ class BrainAdmissionGate(
      * tryAcquire); frei ⇒ Turn laufen lassen + bei Terminierung freigeben; belegt ⇒
      * warme Absage ([rejection]), KEIN Aufstau.
      */
-    fun gate(source: () -> Flux<ChatEvent>): Flux<ChatEvent> {
+    fun gate(source: () -> Flux<ChatEvent>): Flux<ChatEvent> = gate(Language.DEFAULT, source)
+
+    /**
+     * Wie [gate], aber mit der TURN-SPRACHE: die warme Absage bei Über-Kapazität
+     * spricht sie (Andi 2026-07-25: „Multilingualität von A-Z"). Bewusst eine
+     * Überladung statt eines Default-Arguments — so bleibt `gate { … }` mit
+     * nachgestelltem Lambda an JEDEM Bestands-Aufrufer unverändert gültig.
+     */
+    fun gate(language: Language, source: () -> Flux<ChatEvent>): Flux<ChatEvent> {
         if (!enabled) return source()
         return Flux.defer {
             // Perf-Diary: Gate-Eintritt → Permit. tryAcquire ist non-blocking, der
@@ -85,7 +102,7 @@ class BrainAdmissionGate(
                     "[brain-admission] über Kapazität ({} Permits belegt) — Turn sauber abgelehnt (never-silent)",
                     permits,
                 )
-                return@defer rejection()
+                return@defer rejection(language)
             }
             val admissionWaitMs = (nanoTime() - t0) / 1_000_000
             // Genau-einmal-Freigabe auf JEDEM terminalen Signal (complete/error/cancel).
@@ -121,18 +138,29 @@ class BrainAdmissionGate(
      * Orchestrators, damit die Wire-/Audio-Schicht sie wie einen normalen kurzen Turn
      * behandelt (TextDelta wird gesprochen).
      */
-    private fun rejection(): Flux<ChatEvent> = Flux.just(
+    private fun rejection(language: Language): Flux<ChatEvent> = Flux.just(
         ChatEvent.Start(provider = PROVIDER, category = CATEGORY, model = "policy"),
-        ChatEvent.TextDelta(rejectPhrase, provider = PROVIDER),
+        ChatEvent.TextDelta(rejectPhraseFor(language), provider = PROVIDER),
         ChatEvent.Done(provider = PROVIDER),
     )
+
+    /**
+     * Die gesprochene Absage: explizite Betreiber-Phrase, sonst die des Sprachpakets
+     * der Turn-Sprache. Für [Language.DE] ohne Override byte-identisch zu
+     * [DEFAULT_REJECT_PHRASE].
+     */
+    private fun rejectPhraseFor(language: Language): String =
+        rejectPhrase ?: LanguagePackRegistry.forLanguage(language).admissionBusy
 
     companion object {
         const val PROVIDER = "LOCAL"
         const val CATEGORY = "ADMISSION"
 
-        /** Ehrliche Default-Absage bei Über-Kapazität (DE, Hoshis Default-Sprache). */
-        const val DEFAULT_REJECT_PHRASE =
-            "Ich bin gerade an einer anderen Anfrage dran — gib mir einen kurzen Moment und frag gleich nochmal."
+        /**
+         * Ehrliche Default-Absage bei Über-Kapazität auf DEUTSCH. Seit der
+         * Mehrsprachigkeit (2026-07-25) nur noch der DE-Zeiger auf die EINE Quelle
+         * ([LangDe]) — der byte-identische Beweis, dass der de-Pfad nicht wackelt.
+         */
+        val DEFAULT_REJECT_PHRASE: String = LangDe.PACK.admissionBusy
     }
 }

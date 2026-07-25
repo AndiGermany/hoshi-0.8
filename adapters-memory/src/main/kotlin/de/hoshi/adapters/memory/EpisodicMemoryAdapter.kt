@@ -1,6 +1,7 @@
 package de.hoshi.adapters.memory
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import de.hoshi.core.dto.Language
 import de.hoshi.core.pipeline.EpisodicRecallPort
 import de.hoshi.core.port.EpisodicWriter
 import org.slf4j.LoggerFactory
@@ -107,9 +108,9 @@ class EpisodicMemoryAdapter(
      * Block (Gast, leere Frage, zu wenig Ähnliches). Memory ist additiv: ein Fehler
      * kippt den Turn NIE, er wird zu `""` herunter-degradiert.
      */
-    override fun recallBlock(speakerId: String, text: String): Mono<String> {
+    override fun recallBlock(speakerId: String, text: String, language: Language): Mono<String> {
         if (EntityMemoryAdapter.isGuest(speakerId) || text.isBlank()) return Mono.just("")
-        return Mono.fromCallable { recallNow(speakerId, text) }
+        return Mono.fromCallable { recallNow(speakerId, text, language) }
             .subscribeOn(Schedulers.boundedElastic())
             .onErrorResume { e ->
                 log.warn("[episodic-memory] recall fehlgeschlagen ({}) — überspringe", e.message)
@@ -117,8 +118,15 @@ class EpisodicMemoryAdapter(
             }
     }
 
-    /** Synchroner Recall-Kern (Embed + Cosine-Scan). `internal` für deterministische Tests. */
-    internal fun recallNow(speakerId: String, query: String): String {
+    /**
+     * Synchroner Recall-Kern (Embed + Cosine-Scan). `internal` für deterministische Tests.
+     *
+     * **[language] rahmt, sie übersetzt nicht** (Sprach-Naht-Scheibe 2026-07-25): die
+     * Klammer „[Früher gesagt: …]" kommt aus [MemoryBlockTexts] und folgt der
+     * Turn-Sprache; [Entry.text] ist der WÖRTLICHE frühere Nutzer-Satz und geht
+     * unangetastet durch — ihn zu übersetzen wäre eine Fälschung des Gedächtnisses.
+     */
+    internal fun recallNow(speakerId: String, query: String, language: Language): String {
         val qv = embedder.embed(query)
         if (qv.isEmpty()) return ""
         val entries = synchronized(lock) { loadEntries(speakerId) }
@@ -135,7 +143,7 @@ class EpisodicMemoryAdapter(
             speakerId, hits.size, "%.3f".format(hits.first().second),
         )
         val joined = hits.joinToString("; ") { it.first.text.trim() }
-        return "[Früher gesagt: $joined]"
+        return MemoryBlockTexts.episodicRecall(language, joined)
     }
 
     // ── STORE (EpisodicWriter, schreibend) ───────────────────────────────────

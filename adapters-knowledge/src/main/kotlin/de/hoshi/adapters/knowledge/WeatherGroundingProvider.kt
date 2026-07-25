@@ -130,7 +130,9 @@ class WeatherGroundingProvider(
      * Sprache kommt jetzt ausschließlich pro Turn herein und kann deshalb weder
      * still verloren gehen noch von einer Adapter-Konfiguration überstimmt
      * werden. (Die Anzeigesprache von [todayForecast]/`GET /api/v1/weather/today`
-     * ist eine ANDERE Frage und bleibt bewusst unberührt — s.
+     * ist eine ANDERE Frage — bis 2026-07-25 bewusst unberührt gelassen, seitdem
+     * ebenfalls geschlossen: [todayForecast] nimmt jetzt ein eigenes
+     * `displayLanguage`-Argument, s. dessen KDoc und
      * `vault/tracks/prep/PREP-i18n-backend-restklassen.md`.)
      */
     override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> {
@@ -236,8 +238,18 @@ class WeatherGroundingProvider(
      * Error-Mono) und „keine heutigen Daten" (kaputtes/leeres JSON) ist ein
      * LEERES Mono; der Controller macht daraus einen ehrlichen HTTP-Fehler
      * statt Fake-Werten.
+     *
+     * **[displayLanguage] (Fix 2026-07-25, PREP-i18n-backend-restklassen.md):**
+     * bis heute war dies hart `Language.DE`, UNABHÄNGIG von der UI-Sprache — im
+     * englischen Modus zeigte die Wetter-Kachel „17–31° · bedeckt" (deutscher
+     * Zustandstext in einer englischen Kachel). Der Aufrufer ([WeatherTodayReader]
+     * via [de.hoshi.web.WeatherTodayController]) liest jetzt die AKTIVE
+     * Anzeigesprache aus dem [de.hoshi.web.JsonFileLanguageStore] (dasselbe Muster
+     * wie `TtsSettingsController.activeLanguage`/`TtsRuntimeConfig`) und reicht sie
+     * hier durch. Default bleibt [Language.DE] — byte-neutral für jeden Aufrufer,
+     * der (wie die Bestands-Tests) keine Sprache übergibt.
      */
-    fun todayForecast(): Mono<TodayForecast> =
+    fun todayForecast(displayLanguage: Language = Language.DE): Mono<TodayForecast> =
         Mono.fromSupplier { configuredLocation() }
             .flatMap { location ->
                 fetchDailyJson(location).flatMap { body ->
@@ -250,12 +262,7 @@ class WeatherGroundingProvider(
                                 label = location.label,
                                 todayMin = today.tMin,
                                 todayMax = today.tMax,
-                                // Bewusst Language.DE (NICHT die Turn-Sprache): dies ist der
-                                // Lese-Pfad der ANZEIGESPRACHE (`GET /api/v1/weather/today`,
-                                // Wetter-Kachel), eine andere Frage als die Turn-Sprache von
-                                // [buildBlock] — siehe KDoc von [groundingBlock] und
-                                // PREP-i18n-backend-restklassen.md. Nicht Teil dieser Scheibe.
-                                codeText = weatherCodeText(today.code, Language.DE),
+                                codeText = weatherCodeText(today.code, displayLanguage),
                                 precipMm = today.precipMm,
                             ),
                         )

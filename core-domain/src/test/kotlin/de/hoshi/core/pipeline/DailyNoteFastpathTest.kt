@@ -126,4 +126,48 @@ class DailyNoteFastpathTest {
         assertNull(DailyNoteFastpath.DISABLED.handle("Tagesnote 4", "chat"))
         assertNull(DailyNoteFastpath.DISABLED.handle("heute war ein 4er Tag", "voice"))
     }
+
+    // ── EN/ES/FR/IT-Trigger (Andi-Befund 2026-07-25) ─────────────────────────
+
+    @Test
+    fun `EN daily note matcht`() {
+        val port = RecordingPort()
+        fastpath(port).handle("Daily note: 3, too slow", "chat")
+        assertEquals(3, port.notes.single().score)
+        assertEquals("too slow", port.notes.single().grund)
+    }
+
+    @Test
+    fun `ES nota diaria matcht`() {
+        val port = RecordingPort()
+        fastpath(port).handle("Nota diaria 4", "chat")
+        assertEquals(4, port.notes.single().score)
+    }
+
+    @Test
+    fun `FR note du jour matcht`() {
+        val port = RecordingPort()
+        fastpath(port).handle("Note du jour : 2, journée difficile", "chat")
+        assertEquals(2, port.notes.single().score)
+        assertEquals("journée difficile", port.notes.single().grund)
+    }
+
+    @Test
+    fun `IT nota del giorno matcht`() {
+        val port = RecordingPort()
+        fastpath(port).handle("Nota del giorno è 5", "chat")
+        assertEquals(5, port.notes.single().score)
+    }
+
+    @Test
+    fun `Gegen-Beispiele in EN ES FR IT matchen nicht`() {
+        val port = RecordingPort()
+        val fp = fastpath(port)
+        assertNull(fp.handle("Take a note: buy milk on the way home", "chat"), "bloßes note ist kein Trigger")
+        assertNull(fp.handle("What was my daily note?", "chat"), "Frage, keine Zahl direkt am Trigger")
+        assertNull(fp.handle("Hoy fue un buen día.", "chat"), "kein Trigger-Wort")
+        assertNull(fp.handle("Quelle note as-tu eu à l'examen ?", "chat"), "Schulnote-Frage, kein Tagesnote-Trigger")
+        assertNull(fp.handle("Che bella giornata oggi!", "chat"), "kein Trigger-Wort")
+        assertEquals(0, port.notes.size, "Gegen-Beispiel darf NIE speichern")
+    }
 }

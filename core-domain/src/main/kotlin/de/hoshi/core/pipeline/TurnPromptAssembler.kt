@@ -14,10 +14,19 @@ import reactor.core.publisher.Mono
  * Entity-Memory-Naht: liefert den (optionalen) Gedächtnis-Kontext-Block für einen
  * Sprecher. Die Memory-Infra (Embeddings/Store) existiert noch nicht in 0.8 →
  * schmaler Port, damit die Assembly-Policy ohne Infra testbar bleibt.
+ *
+ * **Turn-Sprache ist PFLICHT-Parameter (Sprach-Naht-Scheibe 2026-07-25, Muster
+ * [GroundingPort]):** der Block geht WÖRTLICH in den System-Prompt und trägt neben
+ * den (nie übersetzten) Fakt-Zeilen einen RAHMEN samt Handlungs-Anweisung — ein
+ * deutscher Rahmen zieht die Antwort selbst bei englischer Persona nach Deutsch.
+ * Kein Default-Wert: wer den Port implementiert, MUSS die Sprache annehmen (und
+ * darf sie sichtbar ignorieren, wenn sein Block sprachneutral ist) — ein
+ * Default-Argument hätte genau die stillen Sprach-Verluste erlaubt, die den
+ * [GroundingPort] eine Runde gekostet haben.
  */
 fun interface EntityContextPort {
     /** `null` = kein Block. */
-    fun contextBlock(speakerId: String): String?
+    fun contextBlock(speakerId: String, language: Language): String?
 }
 
 /**
@@ -98,9 +107,13 @@ interface GroundingPort {
  * **Schlüssel-Konsistenz:** gekeyt nach [speakerId] (NICHT chatId) — Store
  * ([de.hoshi.core.port.EpisodicWriter]) UND Recall müssen denselben Schlüssel
  * treffen, konsistent mit dem Entity-Gedächtnis + der Multi-User-Vision.
+ *
+ * **Turn-Sprache ist PFLICHT-Parameter** — dieselbe Begründung wie beim
+ * [EntityContextPort]: der Recall-Block („[Früher gesagt: …]") rahmt WÖRTLICHE
+ * frühere Nutzer-Texte; der RAHMEN folgt der Turn-Sprache, der Inhalt nie.
  */
 fun interface EpisodicRecallPort {
-    fun recallBlock(speakerId: String, text: String): Mono<String>
+    fun recallBlock(speakerId: String, text: String, language: Language): Mono<String>
 }
 
 /**
@@ -227,7 +240,9 @@ class TurnPromptAssembler(
         // SpeakerTrust entscheidet Claim-vs-Gast anhand des Scores (siehe SpeakerTrust-KDoc).
         val trustedSpeakerId =
             SpeakerTrust.resolve(speaker, speakerTrustEnforced, speakerTrustThreshold)?.speakerId ?: speaker.speakerId
-        val entityCtx = entityMemory.contextBlock(trustedSpeakerId)
+        // Turn-Sprache durchreichen (Sprach-Naht 2026-07-25): der Gedächtnis-RAHMEN
+        // folgt der Sprache des Turns, die gespeicherten Fakten selbst nie.
+        val entityCtx = entityMemory.contextBlock(trustedSpeakerId, language)
         val withEntity = if (entityCtx != null) "$baseSystemPrompt\n\n$entityCtx" else baseSystemPrompt
         // Ambient-Wärme-Hinweis ans ENDE (flag-gated): OFF ⇒ NONE ⇒ null ⇒ byte-neutral.
         val ambientHint = ambient.warmthHint(language)
@@ -300,7 +315,8 @@ class TurnPromptAssembler(
             SpeakerTrust.resolve(ctx.speaker, speakerTrustEnforced, speakerTrustThreshold)?.speakerId ?: "unknown"
         val episodicMono: Mono<String> =
             if (decision.provider == RouteProvider.LOCAL) {
-                episodicMemory?.recallBlock(episodicSpeaker, ctx.text) ?: Mono.just("")
+                // Turn-Sprache durchreichen (Sprach-Naht 2026-07-25) — s. EntityContextPort.
+                episodicMemory?.recallBlock(episodicSpeaker, ctx.text, ctx.language) ?: Mono.just("")
             } else {
                 Mono.just("")
             }

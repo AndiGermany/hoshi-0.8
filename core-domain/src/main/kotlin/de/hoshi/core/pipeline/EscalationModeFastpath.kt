@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.fallsBackToEnglish
 
 /**
  * **EscalationModeFastpath** — die Extended-Think-Stufe per SPRACHE/CHAT
@@ -72,7 +73,7 @@ class EscalationModeFastpath(
 
     /** Deterministische, warme Quittung MIT Stufen-Echo (DE+EN) — exakt gepinnt in den Tests. */
     private fun receipt(mode: EscalationMode, language: Language): String {
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         return when (mode) {
             EscalationMode.ERST_FRAGEN ->
                 if (en) "Okay — from now on I'll ask you first before I look anything up online."
@@ -88,7 +89,7 @@ class EscalationModeFastpath(
 
     /** Ehrliche Fehler-Antwort: der Persist ist NICHT bewiesen ⇒ keine Fake-Bestätigung. */
     private fun failure(language: Language): String =
-        if (language == Language.EN) {
+        if (language.fallsBackToEnglish) {
             "I tried to switch that, but saving failed — the setting stays unchanged."
         } else {
             "Das wollte ich gerade umstellen, aber das Speichern hat nicht geklappt — die Stufe bleibt unverändert."

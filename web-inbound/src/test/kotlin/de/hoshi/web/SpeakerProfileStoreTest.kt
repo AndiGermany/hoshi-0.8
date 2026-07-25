@@ -265,4 +265,87 @@ class SpeakerProfileStoreTest {
         assertTrue(store.list().isEmpty(), "Persist-Fehler ⇒ Cache unveraendert (leer)")
         assertNull(store.get("a"), "nie committed ⇒ nichts abrufbar")
     }
+
+    // ── Diagnose-Auftrag 25.07: sampleMeta additiv, Rueckwaertskompatibilitaet Pflicht ───────
+
+    @Test
+    fun `Alt-Datei OHNE sampleMeta-Feld laedt unveraendert - GENAU die heutige Live-Form`(@TempDir dir: Path) {
+        // Exakte Live-Datei-Form (vereinfachte Dimension, sonst 1:1): zwei Profile, je 3 Samples,
+        // KEIN sampleMeta-Feld (das Feld gab es vor diesem Auftrag nicht).
+        val file = dir.resolve("speaker-profiles.json")
+        Files.writeString(
+            file,
+            """{
+              "profiles": [
+                {"name":"andi","enrolledAtEpochMs":1000,"embedding":[0.1,0.2],
+                 "samples":[[0.1,0.2],[0.15,0.25],[0.05,0.15]]},
+                {"name":"partnerin","enrolledAtEpochMs":2000,"embedding":[0.8,0.6],
+                 "samples":[[0.8,0.6],[0.75,0.65],[0.85,0.55]]}
+              ]
+            }""",
+        )
+
+        val store = SpeakerProfileStore(file)
+
+        assertEquals(listOf("andi", "partnerin"), store.list().map { it.name }, "beide Profile laden")
+        val andi = store.get("andi")!!
+        assertEquals(3, andi.samples.size, "alle 3 Roh-Samples ueberleben")
+        assertEquals(3, andi.sampleMeta.size, "sampleMeta IMMER 1:1 zu samples — auch ohne Feld in der Datei")
+        andi.sampleMeta.forEach { m ->
+            assertNull(m.recordedAtEpochMs, "kein Feld in der Datei ⇒ null, NIE erfunden")
+            assertNull(m.session)
+            assertNull(m.device)
+            assertNull(m.durationSeconds)
+            assertNull(m.rms)
+        }
+        val partnerin = store.get("partnerin")!!
+        assertEquals(3, partnerin.samples.size)
+        assertEquals(3, partnerin.sampleMeta.size)
+
+        // Store bleibt voll funktionsfaehig: ein neues Sample laesst sich anhaengen, NUR das
+        // neue traegt echte Herkunft — die drei Alt-Samples bleiben UNKNOWN.
+        val extended = store.appendSample("andi", vec(0.2f, 0.3f), nowMs = 9_000, session = 2, device = "mac")!!
+        assertEquals(4, extended.sampleMeta.size)
+        assertEquals(9_000, extended.sampleMeta.last().recordedAtEpochMs)
+        assertEquals(2, extended.sampleMeta.last().session)
+        assertEquals("mac", extended.sampleMeta.last().device)
+        extended.sampleMeta.dropLast(1).forEach { assertNull(it.session, "Alt-Samples bleiben unangetastet UNKNOWN") }
+    }
+
+    @Test
+    fun `sampleMeta ueberlebt den Neustart - session device Dauer RMS byte-genau`(@TempDir dir: Path) {
+        val file = dir.resolve("speaker-profiles.json")
+        val store = SpeakerProfileStore(file)
+        store.upsert("andi", vec(1f, 0f), nowMs = 1_000, session = 1, device = "browser", durationSeconds = 2.5, rms = 0.08)
+        store.appendSample("andi", vec(0f, 1f), nowMs = 2_000, session = 2, device = "voice-pe", durationSeconds = 3.1, rms = 0.15)
+
+        val reloaded = SpeakerProfileStore(file) // „Backend-Neustart"
+        val p = reloaded.get("andi")!!
+        assertEquals(2, p.sampleMeta.size)
+        assertEquals(1_000, p.sampleMeta[0].recordedAtEpochMs)
+        assertEquals(1, p.sampleMeta[0].session)
+        assertEquals("browser", p.sampleMeta[0].device)
+        assertEquals(2.5, p.sampleMeta[0].durationSeconds)
+        assertEquals(0.08, p.sampleMeta[0].rms)
+        assertEquals(2_000, p.sampleMeta[1].recordedAtEpochMs)
+        assertEquals(2, p.sampleMeta[1].session)
+        assertEquals("voice-pe", p.sampleMeta[1].device)
+        assertEquals(3.1, p.sampleMeta[1].durationSeconds)
+        assertEquals(0.15, p.sampleMeta[1].rms)
+    }
+
+    @Test
+    fun `upsert und appendSample ohne session device Dauer RMS - bleibt null, nicht erfunden`(@TempDir dir: Path) {
+        val store = store(dir)
+        val p1 = store.upsert("andi", vec(1f, 0f))
+        assertNull(p1.sampleMeta.single().session)
+        assertNull(p1.sampleMeta.single().device)
+        assertNull(p1.sampleMeta.single().durationSeconds)
+        assertNull(p1.sampleMeta.single().rms)
+
+        val p2 = store.appendSample("andi", vec(0f, 1f))!!
+        assertEquals(2, p2.sampleMeta.size)
+        assertNull(p2.sampleMeta[1].session)
+        assertNull(p2.sampleMeta[1].device)
+    }
 }

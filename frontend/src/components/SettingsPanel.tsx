@@ -5,13 +5,17 @@ import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import type { Language, Skill } from '../api/types';
 import {
   type Persona,
+  type SoraTheme,
   type Theme,
+  type ThemeGroupId,
   DEFAULT_ESCALATION_SECONDS,
   ESCALATION_MAX_SECONDS,
   ESCALATION_MIN_SECONDS,
   LANGUAGES,
   PERSONAS,
-  THEMES,
+  SORA_ROTATION,
+  THEME_GROUPS,
+  useResolvedTheme,
 } from '../hooks/useSettings';
 import { useSkills } from '../hooks/useSkills';
 import { fetchVoiceSample } from '../api/ttsSample';
@@ -56,7 +60,7 @@ import {
 } from '../api/brainSettings';
 import { de } from '../i18n/de';
 import { useActiveUiLanguage, useUiStrings } from '../i18n';
-import type { BrainModelStrings, FutureSkillId } from '../i18n/types';
+import type { BrainModelStrings, FutureSkillId, SettingsPanelStrings } from '../i18n/types';
 import { CloudGlyph, LockGlyph, PlayGlyph, WarnGlyph } from './icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -85,19 +89,32 @@ export type SettingsCategoryId =
   | 'gedaechtnis-privatsphaere'
   | 'standort-integrationen';
 
-export const SETTINGS_CATEGORIES: { id: SettingsCategoryId; label: string }[] = [
-  { id: 'darstellung', label: 'Darstellung' },
-  { id: 'sprache-stimme', label: 'Sprache & Stimme' },
-  { id: 'persoenlichkeit', label: 'Persönlichkeit' },
-  // Neu (Andi-Auftrag): das Backlog-Feld „Modell & Leistung" aus der IA
-  // (vault/tracks/DESIGN-settings-ia-2026-06-30.md) war bisher ABSICHTLICH
-  // leer (kein Reiter ohne echten Inhalt) — jetzt gefüllt mit dem Brain-
-  // Modell-Umschalter (GET/PUT /api/v1/settings/brain).
-  { id: 'modell-leistung', label: 'Modell & Leistung' },
-  { id: 'faehigkeiten', label: 'Fähigkeiten' },
-  { id: 'gedaechtnis-privatsphaere', label: 'Gedächtnis & Privatsphäre' },
-  { id: 'standort-integrationen', label: 'Standort & Integrationen' },
+/**
+ * Die Reiter in ihrer dokumentierten REIHENFOLGE. 'modell-leistung' ist neu
+ * (Andi-Auftrag): das Backlog-Feld „Modell & Leistung" aus der IA
+ * (vault/tracks/DESIGN-settings-ia-2026-06-30.md) war bisher ABSICHTLICH leer
+ * (kein Reiter ohne echten Inhalt) — jetzt gefüllt mit dem Brain-Modell-
+ * Umschalter (GET/PUT /api/v1/settings/brain).
+ */
+export const SETTINGS_CATEGORY_IDS: readonly SettingsCategoryId[] = [
+  'darstellung',
+  'sprache-stimme',
+  'persoenlichkeit',
+  'modell-leistung',
+  'faehigkeiten',
+  'gedaechtnis-privatsphaere',
+  'standort-integrationen',
 ];
+
+/**
+ * Reihenfolge + DEUTSCHE Labels der Reiter. Die Labels waren bis 25.07 eine
+ * hartkodierte Modul-Konstante und standen darum IMMER deutsch da, egal welche
+ * UI-Sprache aktiv war; jetzt sind sie eine Referenz auf den `de`-Katalog
+ * (byte-gleich zum bisherigen Stand, von Bestandstests referenziert) — gerendert
+ * wird `useUiStrings().settings.categories`, s. {@link SettingsCategoryNav}.
+ */
+export const SETTINGS_CATEGORIES: { id: SettingsCategoryId; label: string }[] =
+  SETTINGS_CATEGORY_IDS.map((id) => ({ id, label: de.settings.categories[id] }));
 
 export const settingsTabId = (id: SettingsCategoryId): string => `settings-tab-${id}`;
 export const settingsPanelId = (id: SettingsCategoryId): string => `settings-panel-${id}`;
@@ -141,6 +158,7 @@ export function SettingsCategoryNav({
   active: SettingsCategoryId;
   onSelect: (id: SettingsCategoryId) => void;
 }) {
+  const t = useUiStrings().settings;
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     const idx = SETTINGS_CATEGORIES.findIndex((c) => c.id === active);
     let nextIdx: number | null = null;
@@ -160,7 +178,7 @@ export function SettingsCategoryNav({
     <div
       className="settings__catnav"
       role="tablist"
-      aria-label="Einstellungs-Kategorien"
+      aria-label={t.categoryNavAria}
       onKeyDown={onKeyDown}
     >
       {SETTINGS_CATEGORIES.map((c) => {
@@ -177,7 +195,7 @@ export function SettingsCategoryNav({
             className={`settings__cattab ${isActive ? 'is-active' : ''}`}
             onClick={() => onSelect(c.id)}
           >
-            {c.label}
+            {t.categories[c.id]}
           </button>
         );
       })}
@@ -389,27 +407,8 @@ export function SettingsPanel({
 
         {/* ═══ Darstellung ═══════════════════════════════════════════════ */}
         <SettingsCategoryPanel id="darstellung" active={activeCategory}>
-          {/* ── Farbthema ───────────────────────────────────────────────── */}
-          <section className="settings__group">
-            <h3 className="settings__label">Farbthema</h3>
-            <div className="settings__themes" role="radiogroup" aria-label="Farbthema">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={theme === t.id}
-                  className={`settings__theme ${theme === t.id ? 'is-active' : ''}`}
-                  onClick={() => onTheme(t.id)}
-                  title={t.hint}
-                >
-                  <span className={`settings__swatch settings__swatch--${t.id}`} aria-hidden="true" />
-                  <span className="settings__themename">{t.label}</span>
-                  <span className="settings__themehint">{t.hint}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+          {/* ── Farbthema: drei Gruppen statt einer 8er-Liste ───────────── */}
+          <ThemeSection theme={theme} onTheme={onTheme} />
         </SettingsCategoryPanel>
 
         {/* ═══ Sprache & Stimme ══════════════════════════════════════════ */}
@@ -417,7 +416,7 @@ export function SettingsPanel({
           {/* ── Sprache (Chat + STT) ────────────────────────────────────── */}
           <section className="settings__group">
             <label className="settings__label" htmlFor="settings-language">
-              Sprache
+              {t.settings.languageLabel}
             </label>
             <select
               id="settings-language"
@@ -427,14 +426,12 @@ export function SettingsPanel({
             >
               {LANGUAGES.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.label}
+                  {t.settings.languages[l.id]}
                 </option>
               ))}
             </select>
-            <p className="settings__hint">Steuert die Chat-Sprache und die Spracherkennung (STT).</p>
-            <p className="settings__hint">
-              Automatisch erkennt pro Nachricht Deutsch oder Englisch und antwortet passend.
-            </p>
+            <p className="settings__hint">{t.settings.languageHint}</p>
+            <p className="settings__hint">{t.settings.languageAutoHint}</p>
           </section>
 
           {/* ── Server-Sprach-Standard (Sprachpaket-Kern, Andi-Auftrag 2026-07-20):
@@ -460,7 +457,7 @@ export function SettingsPanel({
         <SettingsCategoryPanel id="persoenlichkeit" active={activeCategory}>
           <section className="settings__group">
             <label className="settings__label" htmlFor="settings-persona">
-              Persönlichkeit
+              {t.settings.personaLabel}
             </label>
             <select
               id="settings-persona"
@@ -470,18 +467,16 @@ export function SettingsPanel({
             >
               {PERSONAS.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.label}
+                  {t.settings.personas[p.id].label}
                 </option>
               ))}
             </select>
             {/* Live-Hint: zeigt die Beschreibung der aktuell gewählten Persönlichkeit. */}
-            <p className="settings__hint">
-              {PERSONAS.find((p) => p.id === persona)?.description}
-            </p>
+            <p className="settings__hint">{t.settings.personas[persona].description}</p>
             {/* Self-demonstrating (Sara): Text-Hörprobe — ein Beispielsatz im echten
                 Ton der Auswahl (kalibriert an PersonaService.toneLineDe + Few-Shots). */}
             <p className="settings__sample">
-              So klinge ich: „{PERSONAS.find((p) => p.id === persona)?.sample}“
+              {t.settings.personaSample(t.settings.personas[persona].sample)}
             </p>
           </section>
         </SettingsCategoryPanel>
@@ -545,6 +540,128 @@ export function SettingsPanel({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Farbthema — drei Gruppen statt einer Liste (Andi 25.07: „Überlege dir ein
+//  Konzept, wie man die Auswahl der Themen übersichtlicher machen kann. Das sind
+//  jetzt schon einige.")
+//
+//  Nicht die Menge war das Problem, sondern die Ungleichartigkeit: sechs
+//  Farbwelten, eine Automatik (Sora) und Nagareboshi, das seit 0.8.2 BEIDES ist.
+//  Die Gruppen ({@link THEME_GROUPS}) machen die Unterschiede sichtbar:
+//    „Folgt dem Tag" (die Regel) · „Tageszeiten" (der Bogen) · „Eigene Stimmung".
+//
+//  Zwei Kleinigkeiten mit großer Wirkung:
+//   • ECHTE Farbvorschau: die Kachel setzt `data-theme` SELBST, die drei Flächen
+//     lesen `--bg-surface`/`--accent`/`--text-1` — die Werte kommen also aus den
+//     echten Theme-Tokens (styles/themes.css), nicht aus einer zweiten,
+//     driftenden Farbliste im Picker. Sora zeigt das GERADE aufgelöste Theme.
+//   • Beiwort: „Nagareboshi · Sternschnuppe" — schön bleibt schön, aber niemand
+//     muss raten (Katalog: `settings.themeGlosses`, alle fünf Sprachen).
+//
+//  A11y: EINE Radiogroup über alle acht Karten (es ist EINE exklusive Wahl); die
+//  Gruppen sind Überschriften darin, jede Karte trägt „Gruppe: Name" als
+//  aria-label. Tastatur unverändert — native Buttons, Tab/Enter/Space.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** DOM-Id der Gruppen-Überschrift (stabil, damit Tests/Anker sie greifen können). */
+export const themeGroupHeadingId = (id: ThemeGroupId): string => `settings-themegroup-${id}`;
+
+export function ThemeSection({
+  theme,
+  onTheme,
+}: {
+  theme: Theme;
+  onTheme: (theme: Theme) => void;
+}) {
+  const t = useUiStrings().settings;
+  // Was Sora GERADE zeigen würde — bewusst unabhängig davon, ob Sora gewählt
+  // ist: die Zeile „folgt dem Tag · jetzt Kasumi" erklärt die Regel, BEVOR man
+  // sie wählt. `useResolvedTheme` hält dabei genau einen Timer auf die nächste
+  // Fenstergrenze (kein Polling) — s. useSettings.
+  const soraNow: Theme = useResolvedTheme('sora');
+  const pinned = (SORA_ROTATION as readonly Theme[]).includes(theme);
+
+  return (
+    <section className="settings__group">
+      <h3 className="settings__label">{t.themeLabel}</h3>
+      <div className="settings__themegroups" role="radiogroup" aria-label={t.themeGroupAria}>
+        {THEME_GROUPS.map((group) => {
+          const g = t.themeGroups[group.id];
+          return (
+            <div key={group.id} className={`settings__themegroup settings__themegroup--${group.id}`}>
+              <h4 className="settings__themegrouptitle" id={themeGroupHeadingId(group.id)}>
+                {g.title}
+              </h4>
+              <p className="settings__hint settings__themegroupnote">{g.note}</p>
+
+              {group.themes.map((id) => {
+                const entry = t.themes[id];
+                const isActive = theme === id;
+                // Sora ist keine Farbe: seine Vorschau UND seine Zeile zeigen,
+                // was die Regel gerade ergibt.
+                const previewTheme = id === 'sora' ? soraNow : id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={isActive}
+                    aria-label={t.themeOptionAria(g.title, entry.label)}
+                    className={`settings__theme ${isActive ? 'is-active' : ''}`}
+                    onClick={() => onTheme(id)}
+                    title={entry.hint}
+                  >
+                    {/* Echte Farbvorschau: das Element trägt `data-theme` selbst,
+                        die Flächen lesen die Token dieses Themas (themes.css). */}
+                    <span className="settings__swatch" data-theme={previewTheme} aria-hidden="true">
+                      <span className="settings__swatchbg" />
+                      <span className="settings__swatchaccent" />
+                      <span className="settings__swatchtext" />
+                    </span>
+                    <span className="settings__themename">
+                      {entry.label}
+                      <span className="settings__themegloss">
+                        {t.themeGlossSuffix(t.themeGlosses[id])}
+                      </span>
+                    </span>
+                    <span className="settings__themehint">
+                      {id === 'sora' ? t.themeSoraNow(t.themes[soraNow].label) : entry.hint}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* Der Tagesbogen als reine VORSCHAU (nicht klickbar): man sieht auf
+                  einen Blick, was Sora tut — und nebenbei, dass die Sternschnuppe
+                  in der tiefsten Nacht kommt. */}
+              {group.id === 'automatik' && (
+                <p className="settings__themearc" aria-label={t.themeArcAria}>
+                  {SORA_ROTATION.map((id: SoraTheme, i) => (
+                    <span
+                      key={id}
+                      className={`settings__themearcstep ${id === soraNow ? 'is-now' : ''}`}
+                    >
+                      {i > 0 ? t.themeArcSeparator : ''}
+                      {t.themes[id].label}
+                    </span>
+                  ))}
+                </p>
+              )}
+
+              {/* Leise: wer eine Tageszeit fest wählt, pausiert die Automatik. */}
+              {group.id === 'tageszeiten' && pinned && (
+                <p className="settings__hint settings__themepinned">
+                  {t.themePinnedNote(t.themes[theme].label)}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /**
  * Die leise ehrliche Zeile, wenn die Hörprobe scheitert (503/Netz/Audio-Decode)
  * — jetzt eine Referenz auf den `de`-Katalog (byte-gleich zum bisherigen Stand,
@@ -568,10 +685,11 @@ export function EscalationSection({
   seconds: number;
   onSeconds?: (seconds: number) => void;
 }) {
+  const t = useUiStrings().settings;
   return (
     <section className="settings__group">
       <label className="settings__label" htmlFor="settings-escalation">
-        Wecker-Eskalation
+        {t.escalationLabel}
       </label>
       <div className="settings__escrow">
         <input
@@ -585,13 +703,9 @@ export function EscalationSection({
           disabled={!onSeconds}
           onChange={(e) => onSeconds?.(Number(e.target.value))}
         />
-        <span className="settings__escunit">Sekunden</span>
+        <span className="settings__escunit">{t.escalationUnit}</span>
       </div>
-      <p className="settings__hint">
-        Ein Wecker bimmelt erst am Gerät, wo du ihn gestellt hast — nach {seconds} Sekunden auf
-        allen. So weckt dich dein Wecker zuerst leise dort, wo du bist, und wird erst laut überall,
-        wenn niemand reagiert.
-      </p>
+      <p className="settings__hint">{t.escalationHint(seconds)}</p>
     </section>
   );
 }
@@ -1579,11 +1693,12 @@ interface SkillsSectionProps {
  */
 export function SkillsSection({ skills, loading, error, busyId, onToggle }: SkillsSectionProps) {
   const uiLang = useActiveUiLanguage();
-  const t = useUiStrings().skills;
+  const ui = useUiStrings();
+  const t = ui.skills;
   const lang: 'de' | 'en' = uiLang === 'en' ? 'en' : 'de';
   return (
     <section className="settings__group">
-      <h3 className="settings__label">Skills</h3>
+      <h3 className="settings__label">{ui.settings.skillsTitle}</h3>
       <p className="settings__hint">{t.hint}</p>
       {loading && skills.length === 0 && <p className="settings__hint">{t.loading}</p>}
       {error && (
@@ -1657,12 +1772,10 @@ export const PRIVACY_TEXTS = de.privacy;
 /** Wie lange der scharfe Zweitklick-Zustand hält, bevor er sich selbst entschärft. */
 const PRIVACY_ARM_TIMEOUT_MS = 5000;
 
-/** Einheit je Datenart für die Erfolgs-Notiz („Gelöscht: N …"). */
-const PRIVACY_UNITS: Record<PrivacyTarget, [string, string]> = {
-  memory: ['Eintrag', 'Einträge'],
-  episodic: ['Eintrag', 'Einträge'],
-  diary: ['Tages-Datei', 'Tages-Dateien'],
-};
+// Die Einheiten je Datenart („Eintrag"/„Einträge"/„Tages-Datei"…) stehen jetzt
+// samt Satzbau im Katalog (`settings.privacyDeleted`) — vorher war die ganze
+// Erfolgs-Notiz eine deutsche Modul-Konstante + ein deutsches Template und stand
+// so auch in der englischen Oberfläche (Langschwanz-Sweep 25.07).
 
 /**
  * Container der Privatsphäre-Gruppe: lädt die Summary EINMAL beim Mount (Idiom
@@ -1726,10 +1839,9 @@ export function PrivacySection() {
       try {
         const res = await deletePrivacyData(target);
         if (!aliveRef.current) return;
-        const [one, many] = PRIVACY_UNITS[target];
         setNotes((n) => ({
           ...n,
-          [target]: `Gelöscht: ${res.deleted} ${res.deleted === 1 ? one : many}.`,
+          [target]: t.settings.privacyDeleted(res.deleted, target),
         }));
         // Server-Wahrheit nachladen (Counts/exists), best-effort.
         try {
@@ -1774,10 +1886,11 @@ export interface PrivacySectionViewProps {
 }
 
 /** Eine Store-Zeile ehrlich in Worte gefasst (nie eine erfundene Zahl). */
-function storeDetail(info: PrivacySummary['memory']): string {
-  if (!info.exists) return 'noch nichts gespeichert';
-  const count = info.entries === null ? 'Anzahl grad nicht lesbar' : `${info.entries} Einträge`;
-  return info.enabled ? count : `${count} — Aufzeichnung ist aus, alte Einträge liegen noch da`;
+function storeDetail(info: PrivacySummary['memory'], t: SettingsPanelStrings): string {
+  if (!info.exists) return t.privacyStoreEmpty;
+  const count =
+    info.entries === null ? t.privacyStoreUnreadable : t.privacyStoreEntries(info.entries);
+  return info.enabled ? count : t.privacyStoreDisabled(count);
 }
 
 /**
@@ -1804,7 +1917,8 @@ export function PrivacySectionView({
 }: PrivacySectionViewProps) {
   const t = useUiStrings();
   const PRIVACY_TEXTS = t.privacy;
-  const deleteButton = (target: PrivacyTarget, label: string) => {
+  const s = t.settings;
+  const deleteButton = (target: PrivacyTarget) => {
     const isArmed = armed === target;
     const isBusy = busy === target;
     return (
@@ -1812,7 +1926,7 @@ export function PrivacySectionView({
         type="button"
         className={`settings__deletebtn ${isArmed ? 'is-armed' : ''}`}
         disabled={isBusy}
-        aria-label={`${label} löschen`}
+        aria-label={s.privacyDeleteAria(s.privacyTargetLabels[target])}
         onClick={() => onDelete(target)}
       >
         {isBusy ? PRIVACY_TEXTS.deleting : isArmed ? PRIVACY_TEXTS.confirm : PRIVACY_TEXTS.delete}
@@ -1829,12 +1943,9 @@ export function PrivacySectionView({
 
   return (
     <section className="settings__group">
-      <h3 className="settings__label">Privatsphäre</h3>
-      <p className="settings__hint">
-        Ehrlicher Ist-Stand, direkt vom Server gelesen — das Schloss bleibt auf der Box, die
-        Wolke geht online.
-      </p>
-      {loading && !summary && <p className="settings__hint">lädt…</p>}
+      <h3 className="settings__label">{s.privacyTitle}</h3>
+      <p className="settings__hint">{s.privacyIntro}</p>
+      {loading && !summary && <p className="settings__hint">{s.privacyLoading}</p>}
       {error && (
         <p className="settings__hint" role="alert">
           {error}
@@ -1846,13 +1957,11 @@ export function PrivacySectionView({
           <div className="settings__privacyrow">
             <div className="settings__privacymeta">
               <span className="settings__privacyline">
-                {summary.voice.cloud ? <CloudGlyph /> : <LockGlyph />} Stimme (TTS):{' '}
-                {summary.voice.engine}
+                {summary.voice.cloud ? <CloudGlyph /> : <LockGlyph />}{' '}
+                {s.privacyVoiceLine(summary.voice.engine)}
               </span>
               <span className="settings__privacydetail">
-                {summary.voice.cloud
-                  ? 'Antworttext geht für die Sprachausgabe zu OpenAI.'
-                  : 'läuft lokal — kein Text verlässt die Box.'}
+                {summary.voice.cloud ? s.privacyVoiceCloud : s.privacyVoiceLocal}
               </span>
             </div>
           </div>
@@ -1863,18 +1972,16 @@ export function PrivacySectionView({
               <span className="settings__privacyline">
                 {summary.sanitize.enabled ? (
                   <>
-                    <LockGlyph /> Cloud-Maskierung: aktiv
+                    <LockGlyph /> {s.privacySanitizeOn}
                   </>
                 ) : (
                   <>
-                    <WarnGlyph /> Cloud-Maskierung: aus
+                    <WarnGlyph /> {s.privacySanitizeOff}
                   </>
                 )}
               </span>
               <span className="settings__privacydetail">
-                {summary.sanitize.enabled
-                  ? 'Vor jedem Cloud-Call maskiert: Tokens, URLs, IP-Adressen, UUIDs, Smart-Home-IDs. Namen und normaler Inhalt bleiben.'
-                  : 'Der Antworttext geht unmaskiert in die Cloud. Aktiviert maskiert Hoshi Tokens, URLs, IP-Adressen, UUIDs und Smart-Home-IDs — Namen bleiben.'}
+                {summary.sanitize.enabled ? s.privacySanitizeOnDetail : s.privacySanitizeOffDetail}
               </span>
             </div>
           </div>
@@ -1883,13 +1990,13 @@ export function PrivacySectionView({
           <div className="settings__privacyrow">
             <div className="settings__privacymeta">
               <span className="settings__privacyline">
-                <LockGlyph /> Gedächtnis (Fakten über dich)
+                <LockGlyph /> {s.privacyMemoryLine}
               </span>
               <span className="settings__privacydetail">
-                lokale Datei · {storeDetail(summary.memory)}
+                {s.privacyLocalFile(storeDetail(summary.memory, s))}
               </span>
             </div>
-            {deleteButton('memory', 'Gedächtnis')}
+            {deleteButton('memory')}
           </div>
           {note('memory')}
 
@@ -1897,13 +2004,13 @@ export function PrivacySectionView({
           <div className="settings__privacyrow">
             <div className="settings__privacymeta">
               <span className="settings__privacyline">
-                <LockGlyph /> Episoden-Gedächtnis (frühere Gespräche)
+                <LockGlyph /> {s.privacyEpisodicLine}
               </span>
               <span className="settings__privacydetail">
-                lokale Datei · {storeDetail(summary.episodic)}
+                {s.privacyLocalFile(storeDetail(summary.episodic, s))}
               </span>
             </div>
-            {deleteButton('episodic', 'Episoden-Gedächtnis')}
+            {deleteButton('episodic')}
           </div>
           {note('episodic')}
 
@@ -1911,14 +2018,13 @@ export function PrivacySectionView({
           <div className="settings__privacyrow">
             <div className="settings__privacymeta">
               <span className="settings__privacyline">
-                <LockGlyph /> Nutzungs-Diary (Technik-Protokoll)
+                <LockGlyph /> {s.privacyDiaryLine}
               </span>
               <span className="settings__privacydetail">
-                {summary.diary.days === 1 ? '1 Tages-Datei' : `${summary.diary.days} Tages-Dateien`} ·
-                enthält keine Gesprächs-Inhalte, nur Timing/Kategorie
+                {s.privacyDiaryDetail(summary.diary.days)}
               </span>
             </div>
-            {deleteButton('diary', 'Nutzungs-Diary')}
+            {deleteButton('diary')}
           </div>
           {note('diary')}
         </div>

@@ -1,5 +1,8 @@
 package de.hoshi.kernel
 
+import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
+
 /**
  * **CapabilityKernel** — das deterministische Tat-Gate, portiert aus Hoshi 0.5
  * `CapabilityBroker`. Das Herz von „vertrauen": **DEFAULT DENY-ALL**. Eine Tat
@@ -22,6 +25,19 @@ package de.hoshi.kernel
  *
  * Bei Grant liefert der Kernel die **normalisierte data** zurück — der Aufrufer
  * baut den Effekt-Body NUR daraus, nie aus dem Roh-Input.
+ *
+ * **Mehrsprachige Absage seit 2026-07-25** (Andi: „es soll multilingual werden.
+ * von A-Z"): die GESPROCHENE Verweigerung ([Decision.Deny.phrase]) kommt aus dem
+ * `CapabilityDenyPack` der übergebenen [Language], nicht mehr aus Literalen hier.
+ * Der [Decision.Deny.reason] bleibt bewusst **deutschsprachig und unübersetzt** —
+ * er ist Log-/Diagnose-Text für Andi, kein Produkt-Text.
+ *
+ * **Architektur-Hinweis:** `:capability-kernel` hängt bereits an `:core-domain`
+ * (Abhängigkeit zeigt nach INNEN, s. `ArchitectureGuardTest` — verboten ist nur
+ * die Gegenrichtung `core → kernel`). Der Sprach-Katalog liegt im Kern, damit ihn
+ * Kernel, Adapter und Pipeline aus DERSELBEN Quelle lesen; es gibt keinen zweiten
+ * i18n-Mechanismus. Die Sprache kommt als **Parameter** herein (kein ThreadLocal,
+ * kein globaler Zustand — der Kernel bleibt eine reine Funktion).
  */
 class CapabilityKernel(
     private val policy: CapabilityPolicy = CapabilityPolicy(),
@@ -41,44 +57,53 @@ class CapabilityKernel(
     }
 
     /** Bequemer Eintritt für [WriteEffectingTool]-Träger: jede schreibende Tat MUSS hier durch. */
-    fun permit(tool: WriteEffectingTool): Decision =
-        permit(tool.domain, tool.service, tool.entityId, tool.data)
+    fun permit(tool: WriteEffectingTool, language: Language = Language.DEFAULT): Decision =
+        permit(tool.domain, tool.service, tool.entityId, tool.data, language)
 
     /**
      * Deterministische Tat-Prüfung. Eine Methode, ein Verdict.
      *
      * @param entityId betroffene Entity (Effekt-Target); null falls keine.
      * @param data der angeforderte data-Payload (Roh-Input).
+     * @param language die Sprache des Turns — bestimmt AUSSCHLIESSLICH die
+     *   gesprochene [Decision.Deny.phrase], NIE die Entscheidung selbst. Default
+     *   [Language.DEFAULT] (DE) ⇒ jeder bestehende Aufrufer bleibt byte-identisch.
      */
-    fun permit(domain: String, service: String, entityId: String?, data: Map<String, Any?>): Decision {
+    fun permit(
+        domain: String,
+        service: String,
+        entityId: String?,
+        data: Map<String, Any?>,
+        language: Language = Language.DEFAULT,
+    ): Decision {
         // (0) Hard-Off ⇒ Hard-DENY, NICHT „alles erlaubt".
         if (!policy.enabled) {
-            return deny("kernel disabled (enabled=false)")
+            return deny("kernel disabled (enabled=false)", language)
         }
         // (1) Slash-Injection-Schutz für domain/service.
         if ('/' in domain || '/' in service) {
-            return deny("ungültiger domain/service (Slash)", PHRASE_INVALID)
+            return deny("ungültiger domain/service (Slash)", language, phraseOf(language).invalid)
         }
         val key = "$domain.$service"
         val permit = policy.effectivePermits().firstOrNull { it.domain == domain && it.service == service }
-            ?: return deny("capability '$key' nicht freigegeben")   // DEFAULT DENY-ALL
+            ?: return deny("capability '$key' nicht freigegeben", language)   // DEFAULT DENY-ALL
 
         // (3) Targeting-Scopes. Leerer Scope + vorhandenes Target ⇒ Deny.
         val areaId: String? = if (AREA_KEY in data) {
             (data[AREA_KEY] as? String)?.takeIf { it.isNotBlank() }
-                ?: return deny("area_id muss ein nicht-leerer String sein für '$key'")
+                ?: return deny("area_id muss ein nicht-leerer String sein für '$key'", language)
         } else {
             null
         }
         if (entityId != null && permit.entityScope.none { glob(it, entityId) }) {
-            return deny("entity '$entityId' außerhalb des Scopes für '$key'")
+            return deny("entity '$entityId' außerhalb des Scopes für '$key'", language)
         }
         if (areaId != null && permit.areaScope.none { glob(it, areaId) }) {
-            return deny("area '$areaId' außerhalb des Area-Scopes für '$key'")
+            return deny("area '$areaId' außerhalb des Area-Scopes für '$key'", language)
         }
         if (entityId == null && areaId == null && permit.entityScope.isNotEmpty()) {
             // Targetlos wäre „alle Entities der Domain" — die breiteste mögliche Tat.
-            return deny("entity_id erforderlich für '$key'")
+            return deny("entity_id erforderlich für '$key'", language)
         }
 
         // (4)+(5) data-Keys + Ranges, rekursiv (verschachtelte Maps/Listen).
@@ -89,9 +114,9 @@ class CapabilityKernel(
                 continue
             }
             if (k !in permit.data.allowKeys) {
-                return deny("data-Key '$k' nicht erlaubt für '$key'")
+                return deny("data-Key '$k' nicht erlaubt für '$key'", language)
             }
-            when (val err = validateValue(k, v, permit, key)) {
+            when (val err = validateValue(k, v, permit, key, language)) {
                 null -> clean[k] = v
                 else -> return err
             }
@@ -104,31 +129,49 @@ class CapabilityKernel(
      * Maps: jeder Schlüssel muss EBENFALLS in allowKeys stehen. Listen: jedes
      * Element rekursiv. Gibt null zurück, wenn ok; sonst die [Decision.Deny].
      */
-    private fun validateValue(k: String, v: Any?, permit: Permit, key: String): Decision.Deny? {
+    private fun validateValue(
+        k: String,
+        v: Any?,
+        permit: Permit,
+        key: String,
+        language: Language,
+    ): Decision.Deny? {
         permit.data.ranges[k]?.let { r ->
             val n = (v as? Number)?.toDouble()
-                ?: return deny("data-Key '$k' muss numerisch sein für '$key'")
+                ?: return deny("data-Key '$k' muss numerisch sein für '$key'", language)
             if (n < r.min || n > r.max) {
-                return deny("'$k'=$n außerhalb [${r.min}..${r.max}] für '$key'")
+                return deny("'$k'=$n außerhalb [${r.min}..${r.max}] für '$key'", language)
             }
         }
         when (v) {
             is Map<*, *> -> for ((nk, nv) in v) {
-                val nks = nk as? String ?: return deny("verschachtelter data-Key nicht String für '$key'")
+                val nks = nk as? String
+                    ?: return deny("verschachtelter data-Key nicht String für '$key'", language)
                 if (nks !in permit.data.allowKeys) {
-                    return deny("verschachtelter data-Key '$nks' nicht erlaubt für '$key'")
+                    return deny("verschachtelter data-Key '$nks' nicht erlaubt für '$key'", language)
                 }
-                validateValue(nks, nv, permit, key)?.let { return it }
+                validateValue(nks, nv, permit, key, language)?.let { return it }
             }
             is List<*> -> for (item in v) {
-                validateValue(k, item, permit, key)?.let { return it }
+                validateValue(k, item, permit, key, language)?.let { return it }
             }
         }
         return null
     }
 
-    private fun deny(reason: String, phrase: String = REFUSALS.random()): Decision.Deny =
-        Decision.Deny(reason, phrase)
+    /**
+     * [reason] bleibt DE (Log/Diagnose für Andi), [phrase] folgt der Sprache
+     * (Produkt-Text, wird gesprochen).
+     */
+    private fun deny(
+        reason: String,
+        language: Language,
+        phrase: String = phraseOf(language).refusals.random(),
+    ): Decision.Deny = Decision.Deny(reason, phrase)
+
+    /** Die Absage-Texte der Turn-Sprache — EINE Quelle (der Sprachpaket-Katalog im Kern). */
+    private fun phraseOf(language: Language) =
+        LanguagePackRegistry.forLanguage(language).capabilityDeny
 
     /**
      * Glob: nur `*` ist Wildcard (⇒ `.*`), jedes andere Zeichen wird einzeln
@@ -149,14 +192,16 @@ class CapabilityKernel(
         /** Targeting-Key im data-Payload — gegen [Permit.areaScope] geprüft, nie gegen allowKeys. */
         private const val AREA_KEY = "area_id"
 
-        // Warme, ehrliche Verweigerung — Hoshi sagt nein, ohne kalt zu wirken.
-        private val REFUSALS = listOf(
-            "Das mach ich gerade lieber nicht — dafür hab ich keine Freigabe.",
-            "Da halt ich mich zurück: das schalte ich nicht einfach so.",
-            "Lieber nicht — sowas lass ich bewusst, solange es nicht freigegeben ist.",
-            "Das fass ich nicht an. Wenn das wirklich gewollt ist, müssen wir's erst freischalten.",
-        )
-
+        /**
+         * Der deutsche Anker für die strukturelle Absage. Die Laufzeit zieht den
+         * Text seit 2026-07-25 aus `LangDe.CAPABILITY_DENY.invalid` (bzw. dem Pack
+         * der aktiven Sprache) — diese Konstante bleibt als **byte-genaue
+         * DE-Referenz** bestehen (s. `CapabilityKernelTest`) und dokumentiert, dass
+         * der deutsche Wortlaut sich nicht verschoben hat.
+         *
+         * Die warmen Absage-Varianten (früher `REFUSALS` hier) leben jetzt
+         * ebenfalls im Sprachpaket — mehrsprachig statt vierfach deutsch.
+         */
         const val PHRASE_INVALID = "Ungültiger domain oder service"
     }
 }

@@ -1,12 +1,14 @@
 package de.hoshi.core.tools
 
+import de.hoshi.core.dto.Language
+
 /**
  * **AgenticToolRegistry** — die PURE Brücke zwischen dem gemma-Tool-Layer und dem
  * Kernel-[ToolCall]. Zwei Aufgaben:
  *
  *  1. [schemas]: liefert die `tools`-JSON-Struktur, die der Brain (`/v1/chat`,
  *     `tools`-Feld) erwartet — eine Liste von `{"type":"function","function":{...}}`
- *     je agentischem Tool, deutsch beschrieben.
+ *     je agentischem Tool, beschrieben in der Turn-Sprache ([ToolSchemaTexts]).
  *  2. [resolve]: mappt einen vom Brain emittierten + [ToolCallParser]-geparsten
  *     [ParsedToolCall] auf einen permit-kompatiblen [ToolCall] (oder `null`).
  *
@@ -23,46 +25,59 @@ object AgenticToolRegistry {
     /**
      * Die gemma-`tools`-Schemas (ein `function`-Eintrag je Tool). Direkt als
      * `tools`-Feld in den `/v1/chat`-Body serialisierbar (reine Map/List/String).
+     *
+     * **[language] steuert NUR die `description`-Texte** (Sprach-Naht-Scheibe
+     * 2026-07-25, Katalog [ToolSchemaTexts]): Tool-NAMEN, Parameter-NAMEN, die
+     * `enum`-Werte (`on`/`off`) und die Raum-Ids ([ToolAreas.AREAS]) sind der
+     * Brain-/HA-Vertrag und bleiben in jeder Sprache identisch. Die Beschreibungen
+     * gehen in denselben `/v1/chat`-Call wie der System-Prompt — deutsche
+     * Tool-Texte sind in einem englischen Turn ein deutscher Anker, der die
+     * Antwortsprache zurückzieht.
+     *
+     * **Default [Language.DEFAULT] (= DE) ⇒ byte-identisch zum bisherigen Aufruf.**
+     * Der Default ist bewusst und ausschließlich für den EINEN Bestands-Aufrufer da
+     * (`TurnOrchestrator.agenticTurn`, `registry.schemas()`), der in dieser Welle
+     * einem anderen Pod gehört: er darf dort ohne Signatur-Bruch auf
+     * `registry.schemas(ctx.language)` gezogen werden — ein Ein-Zeilen-Zug. Bis
+     * dahin sieht der Brain im agentischen Pfad weiter die deutschen Beschreibungen.
      */
-    fun schemas(): List<Map<String, Any?>> = listOf(
+    fun schemas(language: Language = Language.DEFAULT): List<Map<String, Any?>> = listOf(
         function(
             name = "light_set",
-            description = "Schaltet oder dimmt das Licht in einem Raum. " +
-                "state=on schaltet ein, state=off schaltet aus. Optional brightness_pct " +
-                "(0–100) zum Dimmen und color_name für eine Farbe.",
+            description = ToolSchemaTexts.lightDescription(language),
             properties = mapOf(
-                "area" to stringParam("Der Raum, z.B. wohnzimmer, kuche, schlafzimmer.", ToolAreas.AREAS),
-                "state" to stringParam("Gewünschter Zustand des Lichts.", listOf("on", "off")),
+                "area" to stringParam(ToolSchemaTexts.lightArea(language), ToolAreas.AREAS),
+                "state" to stringParam(ToolSchemaTexts.lightState(language), listOf("on", "off")),
                 "brightness_pct" to mapOf(
                     "type" to "integer",
-                    "description" to "Helligkeit in Prozent (0–100), optional.",
+                    "description" to ToolSchemaTexts.lightBrightness(language),
                 ),
                 "color_name" to mapOf(
                     "type" to "string",
-                    "description" to "Farbname (englisch), z.B. red, blue, warm. Optional.",
+                    "description" to ToolSchemaTexts.lightColorName(language),
                 ),
             ),
             required = listOf("area", "state"),
         ),
         function(
             name = "climate_set",
-            description = "Setzt die Zieltemperatur der Heizung/Klima in einem Raum.",
+            description = ToolSchemaTexts.climateDescription(language),
             properties = mapOf(
-                "area" to stringParam("Der Raum, z.B. wohnzimmer, schlafzimmer, badezimmer.", ToolAreas.AREAS),
+                "area" to stringParam(ToolSchemaTexts.climateArea(language), ToolAreas.AREAS),
                 "temperature" to mapOf(
                     "type" to "integer",
-                    "description" to "Zieltemperatur in Grad Celsius (z.B. 21).",
+                    "description" to ToolSchemaTexts.climateTemperature(language),
                 ),
             ),
             required = listOf("area", "temperature"),
         ),
         function(
             name = "scene_activate",
-            description = "Aktiviert eine benannte Szene (z.B. Kino, Entspannen).",
+            description = ToolSchemaTexts.sceneDescription(language),
             properties = mapOf(
                 "name" to mapOf(
                     "type" to "string",
-                    "description" to "Name der Szene, die aktiviert werden soll.",
+                    "description" to ToolSchemaTexts.sceneName(language),
                 ),
             ),
             required = listOf("name"),

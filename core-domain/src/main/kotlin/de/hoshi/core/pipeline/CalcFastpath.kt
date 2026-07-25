@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.fallsBackToEnglish
 import de.hoshi.core.tools.Calculator
 import de.hoshi.core.tools.ToolCall
 import java.math.BigDecimal
@@ -29,7 +30,7 @@ class CalcFastpath {
     fun handle(call: ToolCall, language: Language): String {
         val expr = (call.data["expr"] as? String)?.takeIf { it.isNotBlank() } ?: return ""
         val echo = (call.data["echo"] as? String)?.takeIf { it.isNotBlank() }
-        val en = language == Language.EN
+        val en = language.fallsBackToEnglish
         return when (val result = Calculator.evaluate(expr)) {
             is Calculator.Result.Value -> {
                 val number = formatNumber(result.value, en)

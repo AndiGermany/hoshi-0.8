@@ -67,7 +67,7 @@ class TurnOrchestratorAnswerEntropyTest {
             ),
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
-                entityMemory = { null },
+                entityMemory = { _, _ -> null },
                 grounding = GroundingPort.fixed("\n\nHINTERGRUND: 330 Meter."),
                 episodicMemory = null,
             ),

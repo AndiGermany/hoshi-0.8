@@ -199,6 +199,12 @@ Betreiber-Attestation und wird nicht aus Scores erraten.
 Das ist absichtlich strenger als „17 Tests grün“. Auch ein READY führt keinen
 Live-Flip aus: Wiring, Deploy und Owner-Gate bleiben beim Orchestrator/Andi.
 
+Der erzeugte A/B-Report wiederholt die Grenze bei genau einem Profil absichtlich
+prominent: Es existiert kein Runner-up, also ist die Margin-Regel in diesem Lauf
+inaktiv. Enrollment-Impostor-Proben dieses Profils prüfen nur die absolute
+Schwelle; sie belegen weder Zwei-Profil-Cross-Binding noch das Verhalten der
+Margin-Regel.
+
 ### Nutzung
 
 ```bash
@@ -208,17 +214,30 @@ python3 tools/speaker-ab/calibrate_pair.py --selftest
 # Vollständige Negativ-/Leakage-Tests:
 python3 -m unittest tools/speaker-ab/test_calibrate_pair.py
 
-# Echter Lauf; Eingabe und Ausgabe MÜSSEN außerhalb des Repos liegen:
+# Vor dem Holdout: Manifest-Hash auf dem Bus vorregistrieren, dann nur
+# score-blind Abdeckung/Leakage prüfen (kein Report, keine Entscheidung):
+python3 tools/speaker-ab/calibrate_pair.py \
+  --input /private/tmp/hoshi-speaker-scores.tsv \
+  --validate-only \
+  --active-aggregation best-sample \
+  --active-tau 0.45 \
+  --active-delta 0.10 \
+  --config-evidence-sha256 <SHA256-DER-SANITISIERTEN-BOOTZEILE> \
+  --expected-manifest-sha256 <VORREGISTRIERTER-MANIFEST-SHA256>
+
+# Einmaliger echter Lauf; Eingabe und Ausgabe MÜSSEN außerhalb des Repos liegen:
 python3 tools/speaker-ab/calibrate_pair.py \
   --input /private/tmp/hoshi-speaker-scores.tsv \
   --out-dir ~/.hoshi/speaker-pair-calibration/frozen2 \
   --active-aggregation best-sample \
   --active-tau 0.45 \
   --active-delta 0.10 \
-  --config-evidence-sha256 <SHA256-DER-SANITISIERTEN-BOOTZEILE>
+  --config-evidence-sha256 <SHA256-DER-SANITISIERTEN-BOOTZEILE> \
+  --expected-manifest-sha256 <VORREGISTRIERTER-MANIFEST-SHA256>
 ```
 
-Die vier `active-*`-/Evidence-Angaben sind Pflicht. Weicht der bewiesene
+Die aktiven Config-/Evidence-Angaben und der vorregistrierte Manifest-Hash sind
+Pflicht. Weicht der bewiesene
 Laufzeitstand von der vorregistrierten Baseline
 `best-sample / tau=0.45 / delta=0.10` ab, entsteht kein READY-Report. Der
 Evidence-Hash verweist auf die sanitisiert festgehaltene aktive Boot-/Readback-
@@ -235,9 +254,11 @@ privaten Scorezeilen zu teilen.
 
 „Einmaliger Holdout" ist zusätzlich eine Prozessregel: **vor** dem ersten
 Öffnen des Holdout-Reports werden Manifest-SHA und Code-Commit auf dem Bus
-vorregistriert. Das Tool verhindert mathematisches Train/Holdout-Leakage, kann
-aber nicht erkennen, ob ein Mensch nach einem Lauf den Split neu etikettiert;
-genau dafür dienen Hash + Bus-Historie.
+vorregistriert. Der Real-Lauf verweigert ein abweichendes Manifest technisch.
+Bei fehlenden Truth-/Kanalzellen oder ohne train-sicheren Kandidaten wertet das
+Tool den Holdout gar nicht aus und markiert `holdout_evaluated: false`. Erst
+danach erscheinen die vorher festgelegten Diagnose-Slices nach Kanal, Qualität
+und Dauer (`<2 s`, `2–4 s`, `>4 s`); sie wählen keinen Kandidaten aus.
 
 ### Claim-Grenze bei kleinem N
 

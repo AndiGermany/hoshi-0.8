@@ -84,7 +84,9 @@ class InMemoryPendingLocationQuestionStore(
     override fun offer(key: String, pending: PendingLocationQuestion) {
         if (key.isBlank() || pending.query.isBlank()) return
         byKey.entries.removeIf { expired(it.value) }
-        byKey[key] = pending
+        // Zeit-Autorität ist der Store (identisch zu [InMemoryPendingLookupStore]):
+        // Stempel und Verfallsprüfung MÜSSEN aus derselben Uhr kommen.
+        byKey[key] = pending.copy(ts = clock.instant())
     }
 
     override fun consume(key: String): PendingLocationQuestion? {

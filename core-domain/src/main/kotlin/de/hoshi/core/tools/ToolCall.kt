@@ -1,5 +1,7 @@
 package de.hoshi.core.tools
 
+import de.hoshi.core.dto.Language
+
 /**
  * Ein **strukturierter Tat-Wunsch** des Turns: was der deterministische
  * Intent-Classifier aus dem Text destilliert hat, bevor irgendeine Tat passiert.
@@ -24,4 +26,22 @@ data class ToolCall(
      * hält jeden bestehenden (Schreib-)Call byte-identisch.
      */
     val read: Boolean = false,
+
+    /**
+     * **Die Sprache des Turns, mitgereist auf dem Tat-Wunsch** (Andi 2026-07-25:
+     * „Smart-Home-Bestätigungen … es soll multilingual werden. von A-Z").
+     *
+     * Warum HIER und nicht als Methoden-Parameter: Gate ([de.hoshi.core.port.CapabilityPort])
+     * und Executor ([de.hoshi.core.port.ToolPort]) sind Ein-Argument-Ports —
+     * `check(call)` / `execute(call)`. Der [ToolCall] ist damit der EINZIGE saubere
+     * Kanal, über den die aktive Sprache bis zu den beiden Sprechern der Tat kommt
+     * (`de.hoshi.adapters.ha.HaToolPort` für die Quittung, `de.hoshi.kernel.CapabilityKernel`
+     * für die Absage) — explizit mitgereicht statt aus einem globalen/ThreadLocal-
+     * Zustand gezogen (s. `core-domain`-ArchUnit-Guard gegen `LocaleContextHolder`).
+     *
+     * Default [Language.DEFAULT] (= DE) ⇒ jeder bestehende Aufrufer bleibt
+     * byte-identisch; wer die Sprache kennt, setzt sie (s.
+     * [de.hoshi.core.pipeline.DeterministicToolIntentClassifier]).
+     */
+    val language: Language = Language.DEFAULT,
 )

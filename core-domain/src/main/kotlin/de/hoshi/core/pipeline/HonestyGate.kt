@@ -1,5 +1,7 @@
 package de.hoshi.core.pipeline
 
+import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import kotlin.random.Random
 
 /**
@@ -57,6 +59,13 @@ fun interface NamedEntitySignal {
  * Reines Kotlin, kein `@Component` — das Wiring kommt im Orchestrator.
  *
  * Klassifikation bewusst konservativ (lieber durchlassen als fälschlich blocken).
+ *
+ * **Mehrsprachig seit 2026-07-25 (Andi: „Multilingualität von A-Z"):** die
+ * KLASSIFIKATION bleibt bewusst das geteilte, fein kalibrierte DE+EN-Regelwerk der
+ * vier Detektoren — nur der GESPROCHENE Ehrlichkeits-Satz kommt jetzt aus dem
+ * [de.hoshi.core.pipeline.lang.LanguagePack] der Turn-Sprache ([assess]). Vorher
+ * feuerten die Phrasen hart deutsch, auch bei `language = EN`. Der Default
+ * [Language.DEFAULT] hält jeden Bestands-Aufrufer byte-identisch.
  */
 class HonestyGate(
     private val weakDomain: WeakDomainSignal,
@@ -85,7 +94,12 @@ class HonestyGate(
 
     private enum class Kind { ONLINE_REQUEST, RECIPE, EXISTENCE_CLAIM, EXISTENCE_NAMED_ENTITY, BRIDGE_DOWN }
 
-    fun assess(text: String): Verdict {
+    /**
+     * Die Vorschalt-Prüfung. [language] wählt NUR die gesprochene Phrase (die
+     * Klassifikation ist sprach-übergreifend, s. Klassen-KDoc); Default
+     * [Language.DEFAULT] ⇒ jeder Bestands-Aufrufer bleibt byte-identisch deutsch.
+     */
+    fun assess(text: String, language: Language = Language.DEFAULT): Verdict {
         val kind = classify(text) ?: return Verdict.Pass
         // Mehrdeutige Eigennamen-Fragen: wenn disambig-ask-back aktiv ist, an den
         // Disambig-Flow delegieren (pendingOptions setzen) statt statisch ablehnen.
@@ -95,14 +109,14 @@ class HonestyGate(
         // Bridge-tot ist ein lokaler Infrastrukturfehler, KEINE Einladung zu
         // einem externen Privacy-Wechsel. Auch bei verfügbarem Nachschlag bleibt
         // deshalb die bestehende ehrliche Reachability-Phrase maßgeblich.
-        if (kind == Kind.BRIDGE_DOWN) return Verdict.Refuse(refusalPhrase(kind))
+        if (kind == Kind.BRIDGE_DOWN) return Verdict.Refuse(refusalPhrase(kind, language))
         val lookupAvailable = cloudEnabled()
         if (lookupAvailable) {
             // Explizite Online-Bitte → aufgreifende Consent-Frage statt redundantem „Soll ich?".
             return if (kind == Kind.ONLINE_REQUEST) Verdict.AskConsentExplicit else Verdict.AskConsent
         }
         // Cloud aus → ehrlich absagen statt den Brain raten lassen.
-        return Verdict.Refuse(refusalPhrase(kind))
+        return Verdict.Refuse(refusalPhrase(kind, language))
     }
 
     /**
@@ -126,54 +140,22 @@ class HonestyGate(
         return null
     }
 
-    private fun refusalPhrase(kind: Kind): String = when (kind) {
-        Kind.ONLINE_REQUEST -> ONLINE_REQUEST_REFUSALS.random(rnd)
-        Kind.RECIPE -> RECIPE_REFUSALS.random(rnd)
-        Kind.EXISTENCE_CLAIM -> EXISTENCE_REFUSALS.random(rnd)
-        Kind.EXISTENCE_NAMED_ENTITY -> NAMED_ENTITY_REFUSALS.random(rnd)
-        Kind.BRIDGE_DOWN -> BRIDGE_DOWN_REFUSALS.random(rnd)
+    /**
+     * Die gesprochene Ehrlichkeits-Phrase der erkannten [kind] in [language] —
+     * EINE Quelle je Sprache ([de.hoshi.core.pipeline.lang.LanguagePack]), damit ein
+     * Übersetzer-Pod NUR seine `LangXx.kt` anfasst. Die DE-Pools sind WORT-FÜR-WORT
+     * dieselben wie vorher hier (byte-identisch, s. [de.hoshi.core.pipeline.lang.LangDe]).
+     */
+    private fun refusalPhrase(kind: Kind, language: Language): String {
+        val pack = LanguagePackRegistry.forLanguage(language)
+        return when (kind) {
+            Kind.ONLINE_REQUEST -> pack.honestyOnlineRequestRefusals.random(rnd)
+            Kind.RECIPE -> pack.honestyRecipeRefusals.random(rnd)
+            Kind.EXISTENCE_CLAIM -> pack.honestyExistenceRefusals.random(rnd)
+            Kind.EXISTENCE_NAMED_ENTITY -> pack.honestyNamedEntityRefusals.random(rnd)
+            Kind.BRIDGE_DOWN -> pack.honestyBridgeDownRefusals.random(rnd)
+        }
     }
 
     private val rnd = Random(System.nanoTime())
-
-    companion object {
-        // Explizite „schau online nach"-Bitte bei Cloud-AUS. Haltung, KEIN Defekt —
-        // nie „ich kann nicht". Bietet sofort das eigene Wissen an. Die interne
-        // Vokabel „lokal" bleibt DRAUSSEN (gehört nie in Hoshis Stimme).
-        private val ONLINE_REQUEST_REFUSALS = listOf(
-            "Ins offene Netz geh ich bewusst nicht — ich bleib bei dir. Aber in meinem eigenen Wissen schau ich gern nach: was genau suchst du?",
-            "Da raus ins Internet will ich gar nicht — dafür hab ich 'nen ganzen Wissensspeicher hier. Soll ich da für dich nachsehen?",
-            "Online unterwegs bin ich absichtlich nicht. Was ich aber hab, ist mein eigenes Wissen — sag mir, wonach, dann schau ich nach.",
-            "Das Internet lass ich bewusst zu — aber ich hab ne Menge selbst gespeichert. Lass mich da für dich nachschlagen, okay?",
-            "Nach draußen geh ich nicht, das ist Absicht. In meinem eigenen Wissen werd ich aber gern für dich fündig — was brauchst du?",
-        )
-
-        // Sara-Refusals: ehrlich, warm, KEIN Engine-Sprech.
-        private val RECIPE_REFUSALS = listOf(
-            "Kochen ist nicht meine Stärke — da führ ich dich in die Irre.",
-            "Beim Rezept würd ich raten, und das wär dir keine Hilfe.",
-        )
-
-        // Existenz-Claims mit Zahl-Entity: ehrlich-zweifelnd statt erfunden-bestätigend.
-        private val EXISTENCE_REFUSALS = listOf(
-            "Halt — da bin ich nicht sicher, ob's das wirklich gibt. Ich würd dir lieber nichts erfinden.",
-            "Gute Frage — bei sowas verlass ich mich ungern auf mein Bauchgefühl. Lieber sag ich's ehrlich: weiß ich nicht.",
-            "Ehrlich? Da bin ich raus. Sowas würd ich gerne nachschauen statt raten.",
-        )
-
-        // Warme, neugierige Repair-Phrasen bei unbekanntem Eigennamen. Kurz, zugewandt, fragend.
-        private val NAMED_ENTITY_REFUSALS = listOf(
-            "Hmm, der Name sagt mir gerade nichts. Klingt nach jemandem aus einer bestimmten Szene — wer genau ist das?",
-            "Sag mir mehr — Musik, Film, Geschichte, Sport? Bei dem Namen tappe ich grade im Dunkeln.",
-            "Ich kenn den Namen nicht — magst du mir was dazu sagen?",
-            "Ehrlich, da hab ich nichts zu — woher kennst du den Namen?",
-        )
-
-        // NICHT „gibt's nicht", sondern ehrlich „komm grad nicht an mein Wissen" (Bridge tot).
-        private val BRIDGE_DOWN_REFUSALS = listOf(
-            "Ich komm gerade nicht an meinen Wissensspeicher — das kann ich dir verlässlich erst gleich sagen. Magst du's in einem Moment nochmal fragen?",
-            "Hm, mein Nachschlagewerk ist im Moment nicht erreichbar. Ich will dir nichts raten — frag mich gleich nochmal, dann schau ich richtig nach.",
-            "Da häng ich grad — mein Wissensspeicher antwortet nicht. Gib mir einen Moment, dann kann ich's dir ehrlich sagen.",
-        )
-    }
 }

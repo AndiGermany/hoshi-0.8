@@ -1,5 +1,6 @@
 package de.hoshi.adapters.memory
 
+import de.hoshi.core.dto.Language
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -62,7 +63,7 @@ class EpisodicSensitiveFilterTest {
             memory.record("andi", sensitiveTurn)
             assertEquals(
                 "",
-                memory.recallBlock("andi", sensitiveQuery).block(),
+                memory.recallBlock("andi", sensitiveQuery, Language.DE).block(),
                 "sensibler Turn darf nicht gespeichert + nicht recallt werden",
             )
         }
@@ -72,7 +73,7 @@ class EpisodicSensitiveFilterTest {
     fun `Flag ON — harmloser Turn wird normal persistiert und recallt`() {
         adapter(filterEnabled = true).use { memory ->
             memory.record("andi", harmlessTurn)
-            val block = memory.recallBlock("andi", harmlessQuery).block()
+            val block = memory.recallBlock("andi", harmlessQuery, Language.DE).block()
             assertTrue(block!!.contains("Urlaub"), "harmloser Turn bleibt voll funktional: '$block'")
         }
     }
@@ -81,7 +82,7 @@ class EpisodicSensitiveFilterTest {
     fun `Flag OFF — sensibler Turn wird persistiert (byte-neutral, heutiges Verhalten)`() {
         adapter(filterEnabled = false).use { memory ->
             memory.record("andi", sensitiveTurn)
-            val block = memory.recallBlock("andi", sensitiveQuery).block()
+            val block = memory.recallBlock("andi", sensitiveQuery, Language.DE).block()
             assertTrue(
                 block!!.contains("Arzt"),
                 "ohne Filter (Default) verhält sich der Store exakt wie heute: '$block'",
@@ -94,7 +95,7 @@ class EpisodicSensitiveFilterTest {
         // Adapter ohne sensitiveFilterEnabled-Argument → Filter aus → sensibler Turn bleibt.
         EpisodicMemoryAdapter(dbPath.toString(), embedder = fakeEmbedder, minSim = 0.5).use { memory ->
             memory.record("andi", sensitiveTurn)
-            val block = memory.recallBlock("andi", sensitiveQuery).block()
+            val block = memory.recallBlock("andi", sensitiveQuery, Language.DE).block()
             assertTrue(block!!.contains("Arzt"), "Default-Konstruktor speichert wie heute: '$block'")
         }
     }

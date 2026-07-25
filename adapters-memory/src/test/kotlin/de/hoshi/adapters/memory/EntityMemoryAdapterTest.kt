@@ -1,5 +1,6 @@
 package de.hoshi.adapters.memory
 
+import de.hoshi.core.dto.Language
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -32,7 +33,7 @@ class EntityMemoryAdapterTest {
     fun `store dann recall — gleicher Sprecher findet den Fakt`() {
         memory.remember("andi", "Mein Lieblingsessen ist Pizza.", "Lecker!")
 
-        val block = memory.contextBlock("andi")
+        val block = memory.contextBlock("andi", Language.DE)
         assertNotNull(block, "andi muss einen Gedächtnis-Block bekommen")
         assertTrue(block!!.contains("lieblingsessen"), "Block trägt den Schlüssel: $block")
         assertTrue(block.contains("Pizza"), "Block erinnert Pizza: $block")
@@ -44,7 +45,7 @@ class EntityMemoryAdapterTest {
 
         // Bob teilt sich den Store, hat aber keine eigenen Fakten → kein Block,
         // und sieht keinesfalls andis Pizza.
-        assertNull(memory.contextBlock("bob"), "bob darf andis Fakt NICHT sehen")
+        assertNull(memory.contextBlock("bob", Language.DE), "bob darf andis Fakt NICHT sehen")
     }
 
     @Test
@@ -53,9 +54,9 @@ class EntityMemoryAdapterTest {
         memory.remember("unknown", "Mein Lieblingsessen ist Pasta.", "Ok.")
         memory.remember("", "Mein Lieblingsessen ist Reis.", "Ok.")
 
-        assertNull(memory.contextBlock("gast"))
-        assertNull(memory.contextBlock("unknown"))
-        assertNull(memory.contextBlock(""))
+        assertNull(memory.contextBlock("gast", Language.DE))
+        assertNull(memory.contextBlock("unknown", Language.DE))
+        assertNull(memory.contextBlock("", Language.DE))
     }
 
     @Test
@@ -65,7 +66,7 @@ class EntityMemoryAdapterTest {
 
         val reopened = EntityMemoryAdapter(dbPath.toString())
         try {
-            val block = reopened.contextBlock("andi")
+            val block = reopened.contextBlock("andi", Language.DE)
             assertNotNull(block)
             assertTrue(block!!.contains("Pizza"), "persistierter Fakt überlebt App-Boot: $block")
         } finally {
@@ -117,7 +118,7 @@ class EntityMemoryAdapterTest {
     fun `store dann recall — Wie heißt mein Hund liefert Bello via entity_facts`() {
         memory.remember("andi", "Mein Hund heißt Bello.", "Süßer Name!")
 
-        val block = memory.contextBlock("andi")
+        val block = memory.contextBlock("andi", Language.DE)
         assertNotNull(block, "andi muss einen Gedächtnis-Block bekommen")
         assertTrue(block!!.contains("hund"), "Block trägt den Entity-key: $block")
         assertTrue(block.contains("Bello"), "Block erinnert Bello: $block")

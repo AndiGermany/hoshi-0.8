@@ -160,6 +160,20 @@ object TimerIntent {
             .firstOrNull { norm.contains(it.key) }
             ?.let { return durationSlot(it.value) }
 
+        // 1b) EN „two and a half hours" / „one and a half minutes" — die generische
+        //     Halb-Kombi (die FESTEN Formen „an hour and a half"/„half an hour" stehen
+        //     oben in [FRACTIONS] und gewinnen weiterhin). Die Phrase „and a half" ist
+        //     rein englisch ⇒ ein deutscher Satz erreicht diesen Zweig nie (DE nutzt
+        //     „anderthalb"/„eineinhalb", beide bereits in [FRACTIONS]).
+        EN_AND_A_HALF_RX.find(norm)?.let { mm ->
+            val n = resolveCardinal(mm.groupValues[1])
+            val unit = unitSeconds(mm.groupValues[2])
+            if (n != null) {
+                val seconds = n * unit + unit / 2
+                if (seconds > 0) return durationSlot(seconds)
+            }
+        }
+
         // 2) Numerische/Wort-Dauer + Einheit, optional Kombi-Tail („1 stunde 30").
         val m = DURATION_RX.find(norm) ?: return null
         val n = resolveCardinal(m.groupValues[1]) ?: return null
@@ -173,8 +187,31 @@ object TimerIntent {
 
     private fun durationSlot(seconds: Long) = Slot(mode = Slot.Mode.DURATION, durationSeconds = seconds)
 
-    private fun parseClock(norm: String): Slot? {
+    /**
+     * Uhrzeit-Parsing in zwei Schichten, damit die deutsche Seite **byte-identisch**
+     * bleibt (Andi-Nebenbedingung 2026-07-25):
+     *  1. [parseClockCore] enthält die deutschen Zweige UNVERÄNDERT und in
+     *     unveränderter Reihenfolge zueinander; die englischen Zusatz-Formen
+     *     („7 o'clock", „for seven") hängen HINTEN dran. Einzige Ausnahme ist
+     *     [enPastToTime] ganz vorn — begründet an der Aufruf-Stelle, und ebenso
+     *     unerreichbar für deutsche Sätze wie die übrigen EN-Zweige.
+     *  2. [applyEnglishDaytime] verschiebt die Stunde NACHTRÄGLICH auf die
+     *     Tageshälfte, aber NUR bei unzweideutig englischen Markern („pm", „in the
+     *     evening" …). Ohne solchen Marker gibt es den Slot unverändert zurück ⇒
+     *     jeder deutsche Satz läuft durch beide Schichten byte-neutral hindurch.
+     */
+    private fun parseClock(norm: String): Slot? =
+        parseClockCore(norm)?.let { applyEnglishDaytime(norm, it) }
+
+    private fun parseClockCore(norm: String): Slot? {
         val force = norm.contains("morgen") || norm.contains("tomorrow")
+
+        // EN „quarter past seven" / „ten to eight" — muss VOR [anchorTime] laufen,
+        // sonst verschluckt der Anker „midnight" das „quarter to" davor („quarter to
+        // midnight" wäre still 00:00 statt 23:45). Für deutsche Sätze ist der Zweig
+        // unerreichbar: er verlangt eines der rein englischen Richtungswörter
+        // (past/after/to/before/till) ZWISCHEN Minute und Stunde.
+        enPastToTime(norm)?.let { (h, m) -> return clockSlot(h, m, force) }
 
         anchorTime(norm)?.let { (h, m) -> return clockSlot(h, m, force) }
 
@@ -217,8 +254,84 @@ object TimerIntent {
             val min = mm.groupValues[2].toIntOrNull() ?: 0
             if (h in 0..23 && min in 0..59) return clockSlot(h, min, force)
         }
+
+        // ── EN-only, NACH allen deutschen Zweigen (s. [parseClock]-KDoc) ─────────
+
+        // „7 o'clock" (normalize macht daraus „7 oclock") — das englische „uhr".
+        EN_OCLOCK_RX.find(norm)?.let { mm ->
+            val h = hourValue(mm.groupValues[1])
+            if (h != null && h in 0..23) return clockSlot(h, 0, force)
+        }
+
+        // „set an alarm for seven" / „… for 7 am" — „for" ist die englische
+        // Wecker-Präposition. NUR im Wecker-Kontext (ein „timer for 7" wäre eine
+        // Dauer-Bitte ohne Einheit ⇒ bleibt bewusst unerkannt) und NUR, wenn die
+        // Stunde die Aussage abschließt (s. [EN_FOR_CLOCK_RX]).
+        if (norm.contains("alarm") || norm.contains("wake")) {
+            EN_FOR_CLOCK_RX.find(norm)?.let { mm ->
+                val h = hourValue(mm.groupValues[1])
+                if (h != null && h in 0..23) return clockSlot(h, 0, force)
+            }
+        }
         return null
     }
+
+    /**
+     * Englische „<Minute> past|to <Stunde>"-Formen: „quarter past seven" (07:15),
+     * „half past seven" (07:30), „twenty to eight" (07:40), „quarter to midnight"
+     * (23:45). `to`/`before`/`till` rechnen RÜCKWÄRTS (Stunde−1, 60−Minute) — genau
+     * der Fehler, vor dem Andi gewarnt hat; deshalb steht für JEDE Richtung ein
+     * eigener Test. Die englische Lesart ist eine ANDERE als die deutsche („halb
+     * acht" = 07:30 VOR der Vollstunde, „half past seven" = 07:30 NACH ihr); die
+     * Wortlisten sind disjunkt („halb" ≠ „half"), sie können sich nicht kreuzen.
+     */
+    private fun enPastToTime(norm: String): Pair<Int, Int>? {
+        val m = EN_PAST_TO_RX.find(norm) ?: return null
+        val minutes = when (val minToken = m.groupValues[1]) {
+            "quarter" -> 15
+            "half" -> 30
+            else -> resolveCardinal(minToken)?.toInt() ?: return null
+        }
+        if (minutes !in 1..59) return null
+        val hourToken = m.groupValues[3]
+        val hour = EN_ANCHOR_HOURS[hourToken] ?: hourValue(hourToken) ?: return null
+        return when (m.groupValues[2]) {
+            "past", "after" -> normHour(hour) to minutes
+            else -> normHour(if (hour == 0) 23 else hour - 1) to (60 - minutes)
+        }
+    }
+
+    /**
+     * Verschiebt eine geparste Stunde auf die englische Tageshälfte — und NUR dann,
+     * wenn ein unzweideutig englischer Marker im Satz steht. Ohne Marker kommt der
+     * Slot unverändert (`===`) zurück ⇒ deutsche Sätze sind byte-neutral.
+     *
+     * „at night" fehlt bewusst: es ist NICHT eindeutig („11 at night" = 23 Uhr,
+     * „3 at night" = 3 Uhr) — lieber unerkannt (⇒ normaler Turn) als still falsch.
+     * Der Aufruf ist idempotent: eine bereits im „um/at"-Zweig angewandte am/pm-
+     * Endung (dort steht dieselbe [applyAmPm]-Regel) liegt danach außerhalb von
+     * 1..11 bzw. ist keine 12 mehr und wird nicht erneut verschoben.
+     */
+    private fun applyEnglishDaytime(norm: String, slot: Slot): Slot {
+        if (slot.mode != Slot.Mode.CLOCK) return slot
+        val hour = slot.clockHour ?: return slot
+        val pm = EN_PM_RX.containsMatchIn(norm)
+        val am = !pm && EN_AM_RX.containsMatchIn(norm) && hasEnglishCue(norm)
+        return when {
+            pm && hour in 1..11 -> slot.copy(clockHour = hour + 12)
+            am && hour == 12 -> slot.copy(clockHour = 0)
+            else -> slot
+        }
+    }
+
+    /**
+     * Billiger „der Satz ist englisch"-Beleg für den einzigen Marker, den beide
+     * Sprachen teilen: „am". Im Deutschen ist es die Präposition („am Abend"), im
+     * Englischen die Tageshälfte. Die Wortliste enthält NUR Tokens, die es im
+     * Deutschen nicht gibt („an"/„in"/„um" fehlen bewusst).
+     */
+    private fun hasEnglishCue(norm: String): Boolean =
+        norm.split(' ').any { it in EN_CUE_TOKENS }
 
     private fun clockSlot(hour: Int, minute: Int, force: Boolean) =
         Slot(mode = Slot.Mode.CLOCK, clockHour = hour, clockMinute = minute, forceTomorrow = force)
@@ -374,6 +487,9 @@ object TimerIntent {
         Regex("""\bhow (?:long|much longer)\b"""),
         // EN: „is a/the timer (still) running" / „is an alarm set"
         Regex("""\bis (?:a|an|the|my) (?:timer|alarm) (?:still )?(?:running|set|on|going|active)\b"""),
+        // EN: „what's left on the timer" / „what is left on my alarm" (der Apostroph
+        // ist zu diesem Zeitpunkt schon weg-normalisiert ⇒ „whats").
+        Regex("""\bwhat(?:s| is) (?:still )?left\b"""),
     )
     private val TIMER_TRIGGERS = listOf(
         "timer", "kurzzeitwecker", "küchentimer", "kuechentimer",
@@ -399,9 +515,12 @@ object TimerIntent {
         "half an hour" to 30 * 60L, "half a minute" to 30L, "halbe minute" to 30L,
     )
 
-    /** Kardinalzahl-Wort → Zahl (DE+EN, kleiner konservativer Satz; Ziffern gehen direkt). */
+    /** Kardinalzahl-Wort → Zahl (DE+EN, kleiner konservativer Satz; Ziffern gehen direkt).
+     *  „couple" = 2 ist die feste englische Wendung („a couple of minutes"); „a few"
+     *  fehlt BEWUSST — es ist unbestimmt (3? 4?), da wäre jede Zahl geraten. */
     private val CARDINALS: Map<String, Int> = mapOf(
         "a" to 1, "an" to 1, "one" to 1, "ein" to 1, "eine" to 1, "einen" to 1, "eins" to 1,
+        "couple" to 2,
         "two" to 2, "zwei" to 2, "three" to 3, "drei" to 3, "four" to 4, "vier" to 4,
         "five" to 5, "fünf" to 5, "fuenf" to 5, "six" to 6, "sechs" to 6,
         "seven" to 7, "sieben" to 7, "eight" to 8, "acht" to 8, "nine" to 9, "neun" to 9,
@@ -434,8 +553,50 @@ object TimerIntent {
 
     // Kombi-Tail bewusst NUR Ziffern (`\d+`): sonst grübe ein Wort-Tail einen
     // Artikel wie „an"/„a" (z.B. „5 Minuten an die Suppe" ⇒ fälschlich +1 s).
+    // Das optionale „of" ist die englische Zähl-Fuge („a couple OF minutes") — im
+    // Deutschen gibt es das Wort nicht ⇒ für DE-Sätze ist die Gruppe immer leer.
     private val DURATION_RX = Regex(
-        "($CARD_ALT)\\s*($UNIT_ALT)\\b" +
+        "($CARD_ALT)\\s*(?:of\\s+)?($UNIT_ALT)\\b" +
             "(?:\\s*(?:und|and)?\\s*(\\d+)\\s*(?:$UNIT_ALT)?\\b)?",
+    )
+
+    // ── EN-only Zusatz-Formen (DE erreicht keine davon — s. [parseClock]-KDoc) ──
+
+    /** „two and a half hours" — generische Halb-Kombi (rein englische Phrase). */
+    private val EN_AND_A_HALF_RX = Regex("($CARD_ALT)\\s+and\\s+a\\s+half\\s+($UNIT_ALT)\\b")
+
+    /** Volle-Stunde-Anker, die in „quarter to <X>" als Stunde stehen dürfen. */
+    private val EN_ANCHOR_HOURS: Map<String, Int> = mapOf("midnight" to 0, "noon" to 12, "midday" to 12)
+
+    /** „quarter/half/<n> past|to <Stunde>" — die englischen Viertel-/Halb-Formen. */
+    private val EN_PAST_TO_RX = Regex(
+        "\\b(quarter|half|$CARD_ALT)\\s+(past|after|to|before|till|til)\\s+" +
+            "(\\d{1,2}|$HOUR_WORD_ALT|midnight|noon|midday)\\b",
+    )
+
+    /** „7 o'clock" → normalize macht daraus „7 oclock" (Apostroph fällt weg). */
+    private val EN_OCLOCK_RX = Regex("""\b(\d{1,2}|$HOUR_WORD_ALT)\s*o\s*clock\b""")
+
+    /**
+     * „set an alarm for seven [am|pm] [tomorrow|sharp|please …]" — die Stunde muss
+     * die Aussage ABSCHLIESSEN (`$`). Sonst würde „set an alarm for 5 people"
+     * still zu 05:00; unerkannt (⇒ normaler Turn, das Brain fragt nach) ist ehrlicher.
+     */
+    private val EN_FOR_CLOCK_RX = Regex(
+        """\bfor\s+(\d{1,2}|$HOUR_WORD_ALT)\b""" +
+            """(?:\s*(?:am|pm))?(?:\s*o\s*clock)?""" +
+            """(?:\s+(?:sharp|please|thanks|tomorrow|today|tonight|in the morning|in the afternoon|in the evening))*""" +
+            """\s*$""",
+    )
+
+    /** Nachmittags-/Abend-Marker — im Deutschen gibt es keinen davon. */
+    private val EN_PM_RX = Regex("""\bpm\b|\bin the (?:afternoon|evening)\b|\btonight\b""")
+
+    /** Vormittags-Marker; „am" teilt sich das Wort mit der DE-Präposition ⇒ [hasEnglishCue]. */
+    private val EN_AM_RX = Regex("""\bam\b|\bin the morning\b""")
+
+    /** Tokens, die es NUR im Englischen gibt (s. [hasEnglishCue]). */
+    private val EN_CUE_TOKENS = setOf(
+        "for", "the", "my", "me", "to", "at", "set", "wake", "remind", "oclock", "past", "clock",
     )
 }

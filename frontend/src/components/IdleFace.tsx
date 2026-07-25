@@ -3,10 +3,11 @@ import { dayPartForHour } from './greeting';
 import { type HealthState } from '../hooks/useHealth';
 import { useOpsStatus, type OpsVoice } from '../hooks/useOpsStatus';
 import {
+  clockParts,
   dueClock,
   fmtRemaining,
   useScheduledItems,
-  KIND_WORD,
+  SCHEDULED_TEXTS,
   type ScheduledItem,
   type ScheduledKind,
 } from '../hooks/useScheduledItems';
@@ -20,7 +21,7 @@ import { AlarmGlyph, CloudGlyph, GearGlyph, LockGlyph } from './icons';
 import type { SettingsAnchorId, SettingsCategoryId } from './SettingsPanel';
 import { de } from '../i18n/de';
 import { useUiStrings } from '../i18n';
-import type { IdleFaceStrings } from '../i18n/types';
+import type { IdleFaceStrings, ScheduledStrings } from '../i18n/types';
 
 /**
  * Sprach-Katalog-Default für die exportierten PUR-Funktionen unten (Muster
@@ -114,17 +115,19 @@ export function alarmProgress(dueAtEpochMs: number, nowMs: number): number {
 
 /**
  * „Wecker 07:00 · noch 7 h 12 min" — Weck-Uhrzeit + Restzeit (nie negativ).
- * `dueClock`/`fmtRemaining` (aus `hooks/useScheduledItems.ts`, außerhalb
- * dieser Scheibe) bleiben hart de-DE/deutsche Einheiten („h"/„min") — nur der
- * umgebende Satzbau („Wecker … · noch …") folgt der aktiven UI-Sprache.
+ * Seit dem Langschwanz-Sweep 25.07 folgen auch `dueClock`/`fmtRemaining` der
+ * aktiven Sprache (Uhrzeit über `locale`, Einheiten über `scheduled`); ohne
+ * Argumente bleibt alles byte-gleich Deutsch.
  */
 export function alarmLineText(
   alarm: ScheduledItem,
   nowMs: number,
   t: IdleFaceStrings = IDLE_FACE_TEXTS,
+  s: ScheduledStrings = SCHEDULED_TEXTS,
+  locale: string = de.locale,
 ): string {
-  const remaining = fmtRemaining(Math.max(0, alarm.dueAtEpochMs - nowMs));
-  return t.alarmLine(dueClock(alarm.dueAtEpochMs), remaining);
+  const remaining = fmtRemaining(Math.max(0, alarm.dueAtEpochMs - nowMs), s);
+  return t.alarmLine(dueClock(alarm.dueAtEpochMs, locale), remaining);
 }
 
 export interface DiaryTodayStats {
@@ -182,15 +185,18 @@ const PLAN_KINDS: readonly ScheduledKind[] = ['TIMER', 'ALARM', 'REMINDER'];
 
 /**
  * „2 Timer · 1 Wecker" aus den aktiven Items — leer ⇒ „Nichts geplant".
- * `KIND_WORD` (aus `hooks/useScheduledItems.ts`, außerhalb dieser Scheibe)
- * liefert die Timer/Wecker/Erinnerung-Nomen weiter hart deutsch — nur der
- * ehrliche Leer-Text folgt der aktiven UI-Sprache.
+ * Die Timer/Wecker/Erinnerung-Nomen kommen seit dem Langschwanz-Sweep 25.07 aus
+ * `scheduled.kindWord` der AKTIVEN Sprache; ohne Argument bleibt es Deutsch.
  */
-export function planTileValue(items: ScheduledItem[], t: IdleFaceStrings = IDLE_FACE_TEXTS): string {
+export function planTileValue(
+  items: ScheduledItem[],
+  t: IdleFaceStrings = IDLE_FACE_TEXTS,
+  s: ScheduledStrings = SCHEDULED_TEXTS,
+): string {
   const parts = PLAN_KINDS.flatMap((kind) => {
     const count = items.filter((i) => i.kind === kind).length;
     if (count === 0) return [];
-    return [`${count} ${count === 1 ? KIND_WORD[kind].one : KIND_WORD[kind].many}`];
+    return [`${count} ${count === 1 ? s.kindWord[kind].one : s.kindWord[kind].many}`];
   });
   return parts.length === 0 ? t.geplant.nichtsGeplant : parts.join(' · ');
 }
@@ -366,7 +372,7 @@ export function IdleFace({
   weather,
   onOpenSettings,
 }: IdleFaceProps) {
-  const { idleFace, locale } = useUiStrings();
+  const { idleFace, locale, scheduled: schedText } = useUiStrings();
   const date = new Date(nowMs);
   const greeting = idleFace.greeting(dayPartForHour(date.getHours()));
   const dateLine = date.toLocaleDateString(locale, {
@@ -399,20 +405,22 @@ export function IdleFace({
   const geplant: IdleTile = {
     name: idleFace.geplant.name,
     honesty: 'live',
-    value: planTileValue(scheduled, idleFace),
+    value: planTileValue(scheduled, idleFace, schedText),
     note: idleFace.geplant.note,
   };
 
   // Kachel „Wetter": echte heutige Vorhersage — oder die ehrliche Lücke
   // (Deploy-OFF gestrichelt, nicht lesbar „—"). Nie Fake-Grade.
   const wetter = weatherTile(weather, idleFace);
+  const clock = clockParts(nowMs, locale);
 
   return (
     <section className="idle" aria-label={idleFace.sectionAria}>
       {/* 1 · Typo-first Uhr + tageszeitbewusster Gruß (beides echt). */}
       <header className="idle__head">
         <time className="idle__clock" dateTime={date.toISOString()}>
-          {dueClock(nowMs)}
+          {clock.time}
+          {clock.period && <span className="idle__clockperiod">{clock.period}</span>}
         </time>
         <p className="idle__greet">
           {greeting} · {dateLine}
@@ -425,7 +433,9 @@ export function IdleFace({
           <span className="idle__alarmicon" aria-hidden="true">
             <AlarmGlyph />
           </span>
-          <span className="idle__alarmtext">{alarmLineText(alarm, nowMs, idleFace)}</span>
+          <span className="idle__alarmtext">
+            {alarmLineText(alarm, nowMs, idleFace, schedText, locale)}
+          </span>
           <span className="idle__alarmtruth" title={idleFace.alarmTrustTitle}>
             {idleFace.alarmTrustText}
           </span>

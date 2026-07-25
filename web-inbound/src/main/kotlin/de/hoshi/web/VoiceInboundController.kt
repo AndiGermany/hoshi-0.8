@@ -369,7 +369,7 @@ class VoiceInboundController(
             source = TurnDiaryTap.SOURCE_VOICE,
         )
         // Brain-Turn durchs globale Admission-Gate (OFF ⇒ Passthrough ⇒ byte-neutral).
-        val turn = admissionGate.gate { orchestrator.handle(request) }
+        val turn = admissionGate.gate(request.language) { orchestrator.handle(request) }
         val streamed = if (speak) ttsStage.transform(turn, responseLanguage, request.voice) else turn
         val out = Flux.concat(
             // Speaker-Event nur bei Recognition ON (sonst leer ⇒ byte-neutral, keine Extra-Emission).

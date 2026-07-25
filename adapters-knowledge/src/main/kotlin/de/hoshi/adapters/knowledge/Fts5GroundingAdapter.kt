@@ -70,12 +70,15 @@ class Fts5GroundingAdapter(
      * `""` (kein Treffer / disabled-Kategorie / Bridge weg). Niemals ein Fehler
      * nach außen — Grounding ist best-effort.
      *
-     * **[language] wird BEWUSST ignoriert** (nicht still verloren — der Port
-     * zwingt uns seit 2026-07-25, sie anzunehmen): die Quelle dieser Scheibe ist
-     * die LOKALE DEUTSCHE Wikipedia hinter der Bridge; eine Turn-Sprache ändert
-     * daran nichts, solange kein anderssprachiger Index existiert. Der
-     * sprachabhängige Rahmen dieser Scheibe (Passage-Block + ANWEISUNG) ist eine
-     * eigene Scheibe — s. `vault/tracks/prep/PREP-i18n-backend-restklassen.md`.
+     * **[language] steuert den RAHMEN, nicht den Inhalt** (Sprach-Naht-Scheibe
+     * 2026-07-25, löst das frühere „wird bewusst ignoriert" ein): die Quelle
+     * hinter der Bridge ist und bleibt die LOKALE DEUTSCHE Wikipedia — der
+     * ZITIERTE Inhalt (`• Titel: Passage`) geht deshalb unübersetzt durch, wie
+     * jede Quelle/Nutzerdatei. Kopfzeile, ANWEISUNG und ZAHLEN-VERTRAG folgen
+     * dagegen der Turn-Sprache ([WikiBlockTexts]), denn der Block geht WÖRTLICH
+     * in den Brain-Prompt: ein deutscher Rahmen plus eine deutsche ANWEISUNG
+     * zieht die Antwort selbst bei englischer Persona nach Deutsch. Denselben
+     * Schnitt macht der Wetter-Block ([WeatherBlockTexts]).
      */
     override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> {
         // Kategorie-Gate (1:1 aus 0.5): Smalltalk/Smart-Home/Agent NICHT grounden.
@@ -113,7 +116,7 @@ class Fts5GroundingAdapter(
             .retrieve()
             .bodyToMono(String::class.java)
             .timeout(timeout)
-            .map { body -> buildBlock(parseHits(body, headNoun, definitional)) }
+            .map { body -> buildBlock(parseHits(body, headNoun, definitional), language) }
             .defaultIfEmpty("")
             .onErrorResume { e ->
                 // Bridge tot / Timeout / Parse → best-effort leerer Block, nie Crash.
@@ -180,20 +183,26 @@ class Fts5GroundingAdapter(
         ).take(topN)
     }.getOrElse { emptyList() }
 
-    /** Baut den kompakten Prompt-Block. Leer-Liste → "" (kein Block). */
-    private fun buildBlock(hits: List<Hit>): String {
+    /**
+     * Baut den kompakten Prompt-Block. Leer-Liste → "" (kein Block).
+     *
+     * **Rahmen folgt [language], Zitat nicht:** Kopf/ANWEISUNG/Vertrag kommen aus
+     * [WikiBlockTexts], die `• Titel: Passage`-Zeilen dazwischen sind der rohe
+     * (deutsche) Wiki-Treffer und werden nie übersetzt. Der [WikiBlockTexts.foreignSourceNote]
+     * macht dem Modell genau diese Mischung explizit — bei DE ist er leer, der
+     * deutsche Block bleibt damit byte-identisch.
+     */
+    private fun buildBlock(hits: List<Hit>, language: Language): String {
         if (hits.isEmpty()) return ""
         val sb = StringBuilder()
         sb.append("\n\n---\n")
-        sb.append("HINTERGRUND (nur für dich, im Gespräch NICHT erwähnen):\n")
+        sb.append(WikiBlockTexts.head(language))
         hits.forEach { h ->
             sb.append("• ").append(h.title).append(": ").append(h.text).append("\n")
         }
-        sb.append(
-            "ANWEISUNG: Nutze diese Fakten und antworte knapp im eigenen warmen Stil — " +
-                "zitiere nichts wörtlich und erwähne nie „den Text“, „den Artikel“ oder „Wikipedia“.",
-        )
-        appendNumberContract(sb, hits)
+        sb.append(WikiBlockTexts.instruction(language))
+        sb.append(WikiBlockTexts.foreignSourceNote(language))
+        appendNumberContract(sb, hits, language)
         return sb.toString()
     }
 
@@ -207,7 +216,7 @@ class Fts5GroundingAdapter(
      * Flag OFF ODER keine facts ⇒ NICHTS angehängt ⇒ der Block ist byte-identisch zum
      * bisherigen (defensiv: leere/fehlende facts sind der ehrliche Normalfall, kein Crash).
      */
-    private fun appendNumberContract(sb: StringBuilder, hits: List<Hit>) {
+    private fun appendNumberContract(sb: StringBuilder, hits: List<Hit>, language: Language) {
         if (!enableNumberContract) return
         val facts = hits.flatMap { it.facts }.filter { it.isNotBlank() }.distinct()
         if (facts.isEmpty()) return
@@ -222,11 +231,9 @@ class Fts5GroundingAdapter(
         // Kein «…»-Meta-Literal und KEINE Anführungszeichen im Beispiel: das 4B kopiert
         // jedes gezeigte Markierungs-Muster in die Antwort (Live 2026-07-02: mit „…“
         // „368 Metern“). Nur die Wert-Anker «…» selbst bleiben — die strippt die Wand.
-        sb.append("ZAHLEN-VERTRAG: Der exakte Wert zur Frage ist ").append(marked).append(". ")
-        sb.append("Nenne genau diesen Wert — gleiche Ziffern, gleiche Einheit — als direkte Eigenschaft im ERSTEN Satz, ")
-        sb.append("zum Beispiel: Der Eiffelturm ist 330 Meter hoch — ganz schön was. ")
-        sb.append("Nicht relativieren (reicht über etwas hinaus) und kein inhaltsleerer Vorsatz. ")
-        sb.append("Passt kein Wert zur Frage, erfinde KEINEN — sag dann ehrlich, dass du die genaue Zahl grad nicht parat hast.")
+        // Der Wortlaut lebt seit der Sprach-Naht in [WikiBlockTexts.numberContract]
+        // (fünf Sprachen, DE zeichengleich); die Zeichen-Hygiene gilt dort in JEDER.
+        sb.append(WikiBlockTexts.numberContract(language, marked))
     }
 
     /** Glättet Whitespace, damit der Block eine knappe Passage statt eines Roh-Dumps ist. */

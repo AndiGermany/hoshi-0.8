@@ -121,11 +121,11 @@ class EasterEggController {
     @GetMapping("/api/v1/about", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun about(): Map<String, Any> = mapOf(
         "name" to "Hoshi",
-        "version" to "0.8 — Nagareboshi",
+        "version" to "0.8.2 — Suisei",
         "team" to "Stellar Bloom",
         "motto" to "warm. lokal. wach.",
         "captain" to "andi",
-        "lineage" to "Hoshi 0.8 Nagareboshi — Essenz-Port aus 0.5 (Stellar), neu gegründet auf sauberem OSS-Fundament.",
+        "lineage" to "Hoshi 0.8.2 Suisei — Essenz-Port aus 0.5 (Stellar), neu gegründet auf sauberem OSS-Fundament.",
         "crewSize" to crew.size,
         "bootedAt" to bootedAt.toString(),
         "uptimeMs" to Duration.between(bootedAt, Instant.now()).toMillis(),

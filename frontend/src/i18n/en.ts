@@ -168,7 +168,7 @@ export const en: UiStrings = {
     enrolledNote: 'Enrolled — Hoshi recognizes you now.',
     loadError: "Speaker list isn't readable right now.",
     dialogTitle: 'Enroll your voice',
-    dialogIntro: 'Say three short sentences, one after another — just naturally, the way you talk. After the third sentence your profile is complete.',
+    dialogIntro: 'Say three short sentences, one after another — just naturally, the way you talk. Your profile needs three sessions like this on different days, then it’s complete.',
     nameLabel: 'Your name',
     nameHint: "This is what Hoshi calls you. Only your own voice — the name will show up in the list afterward.",
     nameInvalid: 'Please use only letters, digits, _ or − (1–64 characters).',
@@ -188,6 +188,28 @@ export const en: UiStrings = {
     insecure: 'Mic recording needs a secure connection (https). Open the page over https and try again.',
     noMic: 'No microphone available. Connect one and open the page over https.',
     genericFail: "Enrollment didn't work. Nothing was saved — please try again.",
+    loading: 'loading…',
+    // Natural English sentences, same warm everyday tone and length as the German set —
+    // not a literal translation. Group 1 (0–2) = session 1, group 2 (3–5) = session 2,
+    // group 3 (6–8) = session 3, each meant for a different day.
+    sentences: [
+      "Hi Hoshi, it's me — I'd like you to recognize my voice safely from now on.",
+      "Today was a pretty normal day, and I'm just telling you a bit about it, nice and calm.",
+      'If something important comes up later, please let me know kindly and in good time.',
+      'I really like it when the evening gets quiet and the flat slowly settles down.',
+      'On weekends I enjoy cooking something new and taking my time with it.',
+      'Whenever friends drop by, I always look forward to a good chat over tea.',
+      'Sometimes I just put on some music and let my thoughts wander for a while.',
+      'A walk in the fresh air pretty much always does me good.',
+      'In the evening I like to tell you how my day actually went.',
+    ],
+    sessionLabel: (session: number) => `Session ${session} of 3`,
+    sessionDoneHint: (session: number) =>
+      `Session ${session} of 3 done — please record the next one on a DIFFERENT DAY, with different sentences and a different microphone if possible.`,
+    sessionIncompleteNote:
+      "Session cancelled — the sentences you already recorded stay saved; the session just wasn't finished.",
+    statusInProgress: 'in progress',
+    statusComplete: 'complete',
   },
 
   nightMode: {
@@ -229,6 +251,7 @@ export const en: UiStrings = {
     failed: 'Switch failed — please try again.',
     betaSuffix: ' (Beta)',
     uiNotice: 'UI text and conversation follow this choice — smart-home commands stay German for now.',
+    loading: 'loading…',
   },
 
   skills: {
@@ -241,6 +264,8 @@ export const en: UiStrings = {
       LISTS: { label: 'Lists', reason: 'decision with Andi still open' },
       MUSIC: { label: 'Music', reason: 'first slice: a track starts' },
     },
+    loadFailed: 'Loading skills failed.',
+    toggleFailed: 'Switch failed.',
   },
 
   firedToast: {
@@ -321,5 +346,208 @@ export const en: UiStrings = {
     listening: (elapsed) => `listening… ${elapsed}`,
     listeningTapLabel: 'Tap again to send — or press Esc to discard',
     speakingTapLabel: "Tap to stop Hoshi's answer",
+  },
+
+  settings: {
+    categories: {
+      darstellung: 'Appearance',
+      'sprache-stimme': 'Language & voice',
+      persoenlichkeit: 'Personality',
+      'modell-leistung': 'Model & performance',
+      faehigkeiten: 'Skills',
+      'gedaechtnis-privatsphaere': 'Memory & privacy',
+      'standort-integrationen': 'Location & integrations',
+    },
+    categoryNavAria: 'Settings categories',
+    themeLabel: 'Colour theme',
+    themeGroupAria: 'Colour theme',
+    themes: {
+      aoi: { label: 'Aoi', hint: 'Morning blue on ink (青) — the default' },
+      yoru: { label: 'Yoru', hint: 'Warm lantern light (夜)' },
+      asa: { label: 'Asa', hint: 'Bright day on washi paper (朝)' },
+      natsunohi: {
+        label: 'Natsu no Hi',
+        hint: 'Summer day in ramune blue and warm washi (夏の日)',
+      },
+      kasumi: { label: 'Kasumi', hint: 'Cool misty night in jade (霞)' },
+      nagareboshi: {
+        label: 'Nagareboshi',
+        hint: 'Quiet new-moon night, dark velvet (流れ星)',
+      },
+      yoake: {
+        label: 'Yoake',
+        hint: 'Daybreak between indigo and coral (夜明け)',
+      },
+      sora: {
+        label: 'Sora',
+        hint: "Nagareboshi → Asa → Aoi → Kasumi → Yoru, by this device's clock",
+      },
+    },
+    themeGroups: {
+      automatik: {
+        title: 'Follows the day',
+        note: "Not a colour but a rule: Hoshi changes the theme with this device's clock.",
+      },
+      tageszeiten: {
+        title: 'Times of day',
+        note: 'These five normally rotate on their own. Pick one and it stays put.',
+      },
+      stimmung: {
+        title: 'Your own mood',
+        note: 'Pictures rather than times of day — these two deliberately ignore the clock.',
+      },
+    },
+    themeGlosses: {
+      aoi: 'blue',
+      yoru: 'night',
+      asa: 'morning',
+      natsunohi: 'summer day',
+      kasumi: 'haze',
+      nagareboshi: 'shooting star',
+      yoake: 'daybreak',
+      sora: 'sky',
+    },
+    themeGlossSuffix: (gloss) => ` · ${gloss}`,
+    themeSoraNow: (themeName) => `follows the day · now ${themeName}`,
+    themeArcSeparator: ' › ',
+    themeArcAria: "Sora's arc of the day",
+    themePinnedNote: (themeName) => `${themeName} is pinned right now — the automatic rotation is paused.`,
+    themeOptionAria: (groupTitle, themeName) => `${groupTitle}: ${themeName}`,
+    languageLabel: 'Language',
+    languages: {
+      auto: 'Automatic (German / English)',
+      de: 'Deutsch',
+      en: 'English',
+    },
+    languageHint: 'Controls the chat language and speech recognition (STT).',
+    languageAutoHint: 'Automatic detects German or English per message and replies to match.',
+    personaLabel: 'Personality',
+    personas: {
+      Standard: {
+        label: 'Standard',
+        description: "Warm, easy-going, friendly — Hoshi's default tone.",
+        sample: "Tomorrow will be mild, around 18 degrees — a light shower may come in the evening.",
+      },
+      Kumpel: {
+        label: 'Buddy',
+        description: 'Cheeky and playful: casual, jokes around, lots of energy.',
+        sample: 'Tomorrow? Easy 18 degrees, a bit of rain — grab a jacket, done!',
+      },
+      Knapp: {
+        label: 'Brief',
+        description: 'Terse and factual: only what is needed, no small talk.',
+        sample: 'Tomorrow: 18 degrees, light rain.',
+      },
+      Ruhig: {
+        label: 'Calm',
+        description: 'Gentle and unhurried: quiet, relaxed, subdued.',
+        sample: 'Tomorrow will be mild, around 18 degrees — some rain moves in towards evening.',
+      },
+    },
+    personaSample: (sample) => `This is how I sound: “${sample}”`,
+    escalationLabel: 'Alarm escalation',
+    escalationUnit: 'seconds',
+    escalationHint: (seconds) =>
+      `An alarm first rings on the device where you set it — after ${seconds} seconds on all of them. That way your alarm wakes you quietly where you are, and only gets loud everywhere if nobody reacts.`,
+    skillsTitle: 'Skills',
+    privacyTitle: 'Privacy',
+    privacyIntro:
+      'An honest snapshot, read straight from the server — the lock stays on the box, the cloud goes online.',
+    privacyLoading: 'loading…',
+    privacyVoiceLine: (engine) => `Voice (TTS): ${engine}`,
+    privacyVoiceCloud: 'Reply text goes to OpenAI for speech output.',
+    privacyVoiceLocal: 'runs locally — no text leaves the box.',
+    privacySanitizeOn: 'Cloud masking: on',
+    privacySanitizeOff: 'Cloud masking: off',
+    privacySanitizeOnDetail:
+      'Masked before every cloud call: tokens, URLs, IP addresses, UUIDs, smart-home ids. Names and normal content stay.',
+    privacySanitizeOffDetail:
+      'Reply text goes to the cloud unmasked. When enabled, Hoshi masks tokens, URLs, IP addresses, UUIDs and smart-home ids — names stay.',
+    privacyMemoryLine: 'Memory (facts about you)',
+    privacyEpisodicLine: 'Episodic memory (earlier conversations)',
+    privacyDiaryLine: 'Usage diary (technical log)',
+    privacyTargetLabels: {
+      memory: 'Memory',
+      episodic: 'Episodic memory',
+      diary: 'Usage diary',
+    },
+    privacyDeleteAria: (label) => `Delete ${label}`,
+    privacyLocalFile: (detail) => `local file · ${detail}`,
+    privacyStoreEmpty: 'nothing stored yet',
+    privacyStoreUnreadable: 'count not readable right now',
+    privacyStoreEntries: (entries) => `${entries} ${entries === 1 ? 'entry' : 'entries'}`,
+    privacyStoreDisabled: (count) => `${count} — recording is off, old entries are still there`,
+    privacyDiaryDetail: (days) =>
+      `${days === 1 ? '1 daily file' : `${days} daily files`} · contains no conversation content, only timing/category`,
+    privacyDeleted: (deleted, target) => {
+      const [one, many] = (
+        {
+          memory: ['entry', 'entries'],
+          episodic: ['entry', 'entries'],
+          diary: ['daily file', 'daily files'],
+        } as const
+      )[target];
+      return `Deleted: ${deleted} ${deleted === 1 ? one : many}.`;
+    },
+  },
+
+  scheduled: {
+    kindWord: {
+      TIMER: { one: 'Timer', many: 'Timers' },
+      ALARM: { one: 'Alarm', many: 'Alarms' },
+      REMINDER: { one: 'Reminder', many: 'Reminders' },
+    },
+    remainingUnderMinute: 'under 1 min',
+    remainingMinutes: (minutes) => `${minutes} min`,
+    remainingHours: (hours) => `${hours} h`,
+    remainingHoursMinutes: (hours, minutes) => `${hours} h ${minutes} min`,
+    lineOne: (word, remaining) => `${word} · ${remaining} left`,
+    lineMany: (count, word, remaining) => `${count} ${word} · next one in ${remaining}`,
+    atClock: (clock) => `at ${clock}`,
+    inRemaining: (remaining) => `${remaining} left`,
+    panelAria: 'Active timers and alarms',
+    collapse: 'Collapse',
+    expand: 'Expand — manage',
+    fallbackSummary: 'Active timers & alarms',
+    empty: 'nothing active',
+    deleteAria: (word, label) => `Delete ${word}${label ? ` "${label}"` : ''}`,
+    deleteTitle: 'Delete',
+    deleteAll: 'delete all',
+  },
+
+  ops: {
+    toneWarn: 'Ops · heads-up',
+    toneCritical: 'Ops · critical',
+    ramCritical: 'RAM critical',
+    ramWarn: 'RAM pressure',
+    title: (overall, level) => `Ops: overall ${overall} · RAM ${level}`,
+    titleDetail: (detail) => ` — ${detail}`,
+    voiceCloud: 'Voice is currently coming from the cloud (OpenAI)',
+    voiceLocal: (engine) => `Voice (${engine}): runs locally — never leaves the device.`,
+    allLocal:
+      'All local — your voice never leaves the device. Online research only with your approval.',
+  },
+
+  apiErrors: {
+    unauthorized: '401 — token missing or invalid (auth wall). Set VITE_TOKEN.',
+    unsupportedAudioType: '415 — backend rejects the audio content type (/api/v1/voice).',
+    httpStatus: (status) => `Backend responded HTTP ${status}`,
+  },
+
+  speakerChip: {
+    guest: 'Guest',
+    guestTitle: 'Not recognised for sure — better a guest than the wrong person.',
+    recognized: (name) => `Recognised as ${name}`,
+    recognizedWithConfidence: (name, percent) => `Recognised as ${name} · voice similarity ${percent}`,
+    percent: (value) => `${value}%`,
+  },
+
+  stageSparkline: {
+    ms: (ms) => `${ms} ms`,
+    outlierSuffix: ' (outlier)',
+    errorSuffix: ' · error',
+    ariaHead: (label, count) => `${label} today: ${count} measurement${count === 1 ? '' : 's'}`,
+    ariaMedian: (ms) => `median ${ms} ms`,
+    ariaP95: (ms) => `p95 ${ms} ms`,
   },
 };

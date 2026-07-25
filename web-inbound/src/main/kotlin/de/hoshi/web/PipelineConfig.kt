@@ -75,6 +75,7 @@ import de.hoshi.core.pipeline.MoodTemperaturePort
 import de.hoshi.core.pipeline.OnlineRequestDetector
 import de.hoshi.core.pipeline.PersonaResolver
 import de.hoshi.core.pipeline.PersonaService
+import de.hoshi.core.pipeline.PlayfulModeDetector
 import de.hoshi.core.pipeline.ResponseFormatter
 import de.hoshi.core.pipeline.DeterministicToolIntentClassifier
 import de.hoshi.core.pipeline.RouteRefiner
@@ -1664,6 +1665,10 @@ class PipelineConfig {
         // nochmal gelesen — [EscalationModelCatalog.providerLabel] braucht die rohe ID.
         researchEscalationPort: EscalationPort,
         @Value("\${hoshi.escalation.research-model:\${HOSHI_ESCALATION_RESEARCH_MODEL:}}") researchModel: String,
+        // Spiel-Register (Vorfall „Kuh mit Hose", 2026-07-25): erkennt ein erfundenes
+        // Gedankenexperiment und nimmt es aus der Wissens-/Grounding-Maschinerie raus.
+        // DISABLED ⇒ byte-neutral (s. playfulModeDetector-Bean).
+        playfulModeDetector: PlayfulModeDetector,
     ): TurnOrchestrator = TurnOrchestrator(
         routing = routingPolicy,
         honesty = honestyGate,
@@ -1737,7 +1742,27 @@ class PipelineConfig {
         researchEscalationProvider = researchModel.trim().let {
             if (it.isEmpty()) "" else EscalationModelCatalog.providerLabel(it)
         },
+        // Spiel-Register (Vorfall „Kuh mit Hose", 2026-07-25) — s. playfulModeDetector.
+        playfulMode = playfulModeDetector,
     )
+
+    /**
+     * **Spiel-Erkenner — flag-gated über `HOSHI_PLAYFUL_MODE_ENABLED`, Default AN.**
+     *
+     * Anders als die meisten HOSHI_*-Flags steht dieser auf `true`: der Vorfall ist
+     * live gemessen (ein erfundenes Gedankenexperiment lief als FACT_SHORT durch die
+     * Grounding-Maschinerie und bekam den „Wissen gedeckt"-Chip über einer erfundenen
+     * Kuh — eine Falschaussage gegenüber dem Nutzer), und der Erkenner ist bewusst
+     * konservativ gebaut (explizite Marker / enges Absurditäts-Vokabular /
+     * Ernst-Blocker mit Vorrang; s. [PlayfulModeDetector]). `=false` schaltet ihn
+     * jederzeit ohne Redeploy-Code-Änderung wieder auf das alte Verhalten zurück —
+     * [PlayfulModeDetector.DISABLED] ist strikt byte-neutral.
+     */
+    @Bean
+    fun playfulModeDetector(
+        @Value("\${HOSHI_PLAYFUL_MODE_ENABLED:true}") playfulModeEnabled: Boolean,
+    ): PlayfulModeDetector =
+        if (playfulModeEnabled) PlayfulModeDetector(enabled = true) else PlayfulModeDetector.DISABLED
 
     /**
      * **Verbatim-Replay-Naht** — exponiert das produktive

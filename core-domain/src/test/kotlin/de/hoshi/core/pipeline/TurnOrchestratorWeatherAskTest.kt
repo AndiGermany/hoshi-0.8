@@ -148,7 +148,7 @@ class TurnOrchestratorWeatherAskTest {
             ),
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
-                entityMemory = { null },
+                entityMemory = { _, _ -> null },
                 grounding = grounding,
                 episodicMemory = null,
             ),

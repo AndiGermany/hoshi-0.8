@@ -1,5 +1,6 @@
 package de.hoshi.adapters.memory
 
+import de.hoshi.core.dto.Language
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -47,7 +48,7 @@ class EpisodicMemoryAdapterTest {
     fun `store dann recall — gleicher Sprecher findet vergangenen Gespraechskontext`() {
         memory.record("andi", urlaubTurn)
 
-        val block = memory.recallBlock("andi", "Wo war ich im Urlaub am Meer gewesen").block()
+        val block = memory.recallBlock("andi", "Wo war ich im Urlaub am Meer gewesen", Language.DE).block()
         assertTrue(block!!.isNotEmpty(), "andi muss seinen früheren Turn wieder-erinnert bekommen: '$block'")
         assertTrue(block.contains("Urlaub"), "Recall-Block trägt den früheren Kontext: '$block'")
         assertTrue(block.startsWith("[Früher gesagt:"), "Recall-Block ist als solcher markiert: '$block'")
@@ -59,7 +60,7 @@ class EpisodicMemoryAdapterTest {
 
         // bob teilt sich den Store, hat aber keine eigenen Turns → kein Recall,
         // und sieht keinesfalls andis Urlaub.
-        assertEquals("", memory.recallBlock("bob", "Wo war ich im Urlaub am Meer gewesen").block())
+        assertEquals("", memory.recallBlock("bob", "Wo war ich im Urlaub am Meer gewesen", Language.DE).block())
     }
 
     @Test
@@ -67,7 +68,7 @@ class EpisodicMemoryAdapterTest {
         memory.record("andi", urlaubTurn)
 
         // Themenfremde Frage (Smart-Home) → Cosine unter der Schwelle → kein Block.
-        assertEquals("", memory.recallBlock("andi", "Schalte bitte das Licht im Wohnzimmer aus").block())
+        assertEquals("", memory.recallBlock("andi", "Schalte bitte das Licht im Wohnzimmer aus", Language.DE).block())
     }
 
     @Test
@@ -76,9 +77,9 @@ class EpisodicMemoryAdapterTest {
         memory.record("unknown", urlaubTurn)
         memory.record("", urlaubTurn)
 
-        assertEquals("", memory.recallBlock("gast", "Wo war ich im Urlaub").block())
-        assertEquals("", memory.recallBlock("unknown", "Wo war ich im Urlaub").block())
-        assertEquals("", memory.recallBlock("", "Wo war ich im Urlaub").block())
+        assertEquals("", memory.recallBlock("gast", "Wo war ich im Urlaub", Language.DE).block())
+        assertEquals("", memory.recallBlock("unknown", "Wo war ich im Urlaub", Language.DE).block())
+        assertEquals("", memory.recallBlock("", "Wo war ich im Urlaub", Language.DE).block())
     }
 
     @Test
@@ -88,7 +89,7 @@ class EpisodicMemoryAdapterTest {
 
         val reopened = EpisodicMemoryAdapter(dbPath.toString(), embedder = fakeEmbedder, minSim = 0.5)
         try {
-            val block = reopened.recallBlock("andi", "Wo war ich im Urlaub am Meer gewesen").block()
+            val block = reopened.recallBlock("andi", "Wo war ich im Urlaub am Meer gewesen", Language.DE).block()
             assertTrue(block!!.contains("Urlaub"), "persistierter Turn überlebt App-Boot: '$block'")
         } finally {
             reopened.close()
@@ -103,16 +104,16 @@ class EpisodicMemoryAdapterTest {
         val writer: EpisodicWriter = memory
         writer.record("andi", urlaubTurn, "Schön, dass du am Meer warst!")
 
-        val block = memory.recallBlock("andi", "Wo war ich im Urlaub am Meer gewesen").block()
+        val block = memory.recallBlock("andi", "Wo war ich im Urlaub am Meer gewesen", Language.DE).block()
         assertTrue(block!!.contains("Urlaub"), "gleicher Sprecher erinnert seinen früheren Turn: '$block'")
 
         // Anderer Sprecher (gleicher geteilter Store) erinnert NICHT (Mandanten-Trennung).
-        assertEquals("", memory.recallBlock("bob", "Wo war ich im Urlaub am Meer gewesen").block())
+        assertEquals("", memory.recallBlock("bob", "Wo war ich im Urlaub am Meer gewesen", Language.DE).block())
     }
 
     @Test
     fun `zu kurzer Turn wird nicht gesammelt`() {
         memory.record("andi", "Licht an") // < MIN_RECORD_LEN
-        assertEquals("", memory.recallBlock("andi", "Licht an").block())
+        assertEquals("", memory.recallBlock("andi", "Licht an", Language.DE).block())
     }
 }

@@ -66,7 +66,7 @@ object ListIntent {
         //     (1a) die ganze Liste leeren (literale Trigger, analog Timers
         //          CANCEL_TRIGGERS „alle timer löschen"),
         //     (1b) ein genanntes Item entfernen (Verb + Ziel-Phrase „von/aus der Liste").
-        if (CLEAR_TRIGGERS.any { qNorm.contains(it) }) {
+        if (CLEAR_TRIGGERS.any { qNorm.contains(it) } || EN_CLEAR_TRIGGERS.any { qNorm.contains(it) }) {
             return ToolCall(domain = DOMAIN, service = REMOVE, data = mapOf(ALL to true))
         }
         REMOVE_RX.find(text)?.let { m ->
@@ -76,13 +76,24 @@ object ListIntent {
         }
 
         // (2) READ — literale Fragephrasen (analog Timers QUERY_TRIGGERS).
-        if (READ_TRIGGERS.any { qNorm.contains(it) }) {
+        if (READ_TRIGGERS.any { qNorm.contains(it) } || EN_READ_TRIGGERS.any { qNorm.contains(it) }) {
             return ToolCall(domain = DOMAIN, service = READ)
         }
 
+        // (2b) Englische FRAGE-/Kopula-Eröffnung ⇒ niemals ein ADD. „list" ist im
+        //      Englischen ein Alltagswort, und die verb-lose Kurzform [ADD_BARE_RX]
+        //      („<Item> auf die Liste") frisst sonst jede Frage, die auf „… on the
+        //      list" endet: „what's on the shopping list" landete als Eintrag
+        //      „whats" auf der Liste, „did I put milk on the list" legte Milch AN
+        //      (Messung 2026-07-25 — ein STILLES Falsch-Schreiben, das Schlimmste,
+        //      was eine Liste tun kann). Die Wortliste ist rein englisch (kein
+        //      „was"/„wer"/„wie") ⇒ ein deutscher Satz erreicht diesen Zweig nie.
+        //      Höfliche Aufträge („can you add …") stehen bewusst NICHT drin.
+        if (qNorm.substringBefore(' ') in EN_QUESTION_OPENERS) return null
+
         // (3) ADD — braucht Verb+Ziel-Phrase (bevorzugt) oder mindestens die reine
         //     Ziel-Phrase am Satzanfang; beides verlangt zwingend das Listen-Nomen.
-        (ADD_WITH_VERB_RX.find(text) ?: ADD_BARE_RX.find(text))?.let { m ->
+        (ADD_WITH_VERB_RX.find(text) ?: ADD_WITH_EN_VERB_RX.find(text) ?: ADD_BARE_RX.find(text))?.let { m ->
             cleanItem(m.groupValues[1])?.let { item ->
                 return ToolCall(domain = DOMAIN, service = ADD, data = mapOf(ITEM to item))
             }
@@ -115,7 +126,8 @@ object ListIntent {
      * „Gästeliste"/„Wunschliste"/„Playlist" (kein Buchstabe direkt davor ⇒ echtes
      * eigenständiges Wort, keine Wortfuge).
      */
-    private val LIST_NOUN = """(?<![\p{L}])(?:einkaufsliste|einkaufszettel|shopping\s*list|liste|list)\b"""
+    private val LIST_NOUN =
+        """(?<![\p{L}])(?:einkaufsliste|einkaufszettel|shopping\s*list|grocery\s*list|liste|list)\b"""
 
     /** ADD-Ziel: „auf/zur/zu/in/on/onto/to (die/der/den/dem/meine/the/my)* <Listen-Nomen>". */
     private val ADD_DEST =
@@ -135,9 +147,26 @@ object ListIntent {
     /** Verb-lose Kurzform am Satzanfang: „<Item> auf die Liste." — Item = Gruppe 1. */
     private val ADD_BARE_RX = Regex("""^(.+?)\s+$ADD_DEST""", RegexOption.IGNORE_CASE)
 
-    /** „Nimm/Entfern/Lösch/Streich/Remove/Delete/Take <Item> von/aus/off der Liste." */
+    /**
+     * ADD-Ziel mit NUR englischen Artikeln — die Sicherung für [ADD_WITH_EN_VERB_RX]:
+     * „note" ist im Deutschen ein Substantiv („die Note"), das englische Verb dürfte
+     * deshalb NIE in einen deutschen Satz greifen („die Note von Mathe auf die Liste"
+     * bleibt die verb-lose Kurzform). Die deutschen Artikel fehlen hier bewusst.
+     */
+    private val ADD_DEST_EN = """\b(?:on|onto|to|in)\b\s+(?:the\s+|my\s+)*$LIST_NOUN"""
+
+    /** „Note/Write/Jot (down) <Item> on the list." — EN-Verben, EN-Ziel (s. [ADD_DEST_EN]). */
+    private val ADD_WITH_EN_VERB_RX = Regex(
+        """\b(?:note|write|jot|stick|chuck)\b\s+(?:down\s+|me\s+|please\s+)*(.+?)\s+$ADD_DEST_EN""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** „Nimm/Entfern/Lösch/Streich/Remove/Delete/Take <Item> von/aus/off der Liste."
+     *  Die englischen Zusatz-Verben (cross/scratch/strike/erase) sind keine deutschen
+     *  Wörter ⇒ sie können in keinem deutschen Satz zünden. */
     private val REMOVE_RX = Regex(
-        """\b(?:nimm|entfern|entferne|l[öo]sch|loesch|streich|streiche|remove|delete|take)\b""" +
+        """\b(?:nimm|entfern|entferne|l[öo]sch|loesch|streich|streiche|remove|delete|take""" +
+            """|cross|scratch|strike|erase)\b""" +
             """\s+(?:die\s+|den\s+|das\s+|mir\s+)*(.+?)\s+$REMOVE_DEST""",
         RegexOption.IGNORE_CASE,
     )
@@ -163,5 +192,57 @@ object ListIntent {
         "what is on the list", "what s on the list", "whats on the list",
         "what is on the shopping list", "what s on the shopping list",
         "show me the list", "read the list", "read me the list",
+    )
+
+    // ── EN-only Ergänzungen (Andi-Befund 2026-07-25: Hoshi ANTWORTET englisch,
+    //    VERSTAND aber nur deutsch) ─────────────────────────────────────────────
+
+    /**
+     * Die englischen Listen-Benennungen — einmal deklariert, für Lese- und
+     * Leer-Trigger gekreuzt. „list" allein steht bewusst NICHT drin: es ist ein
+     * häufiges englisches Alltagswort („can you list the options") und braucht
+     * immer seinen Artikel als Kontext.
+     */
+    private val EN_LIST_PHRASES = listOf(
+        "the list", "my list", "the shopping list", "my shopping list",
+        "the grocery list", "my grocery list",
+    )
+
+    /**
+     * Englische Vorlese-Fragen als Kreuzprodukt aus Frage-Kopf × Listen-Benennung —
+     * ausgeschrieben wären es ~50 Zeilen Literale, die beim Nachpflegen garantiert
+     * auseinanderlaufen. Deutsch bleibt in [READ_TRIGGERS], unangetastet.
+     */
+    private val EN_READ_TRIGGERS: List<String> = buildList {
+        val heads = listOf(
+            "whats on", "what is on", "whats still on", "what is still on",
+            "whats left on", "what is left on", "whats all on",
+            "show me", "show", "read me", "read out", "read",
+        )
+        EN_LIST_PHRASES.forEach { phrase -> heads.forEach { head -> add("$head $phrase") } }
+        add("what do i need to buy")
+        add("what do i still need to buy")
+    }
+
+    /** Englische „mach die Liste leer"-Trigger — ebenfalls als Kreuzprodukt. */
+    private val EN_CLEAR_TRIGGERS: List<String> = buildList {
+        val heads = listOf("clear", "empty", "wipe", "delete", "erase")
+        EN_LIST_PHRASES.forEach { phrase -> heads.forEach { head -> add("$head $phrase") } }
+        EN_LIST_PHRASES.forEach { phrase ->
+            add("delete everything from $phrase")
+            add("remove everything from $phrase")
+            add("take everything off $phrase")
+        }
+    }
+
+    /**
+     * Englische Frage-/Hilfsverb-Eröffnungen, die ein ADD ausschließen (s. Schritt
+     * (2b) in [classify]). Bewusst OHNE „was"/„wer"/„wie" (deutsch) und ohne die
+     * Modalverben „can/could/would" — „can you add milk to the list" ist ein
+     * höflicher AUFTRAG und muss weiter greifen.
+     */
+    private val EN_QUESTION_OPENERS = setOf(
+        "what", "whats", "which", "who", "whose", "why", "how", "where", "when",
+        "is", "are", "were", "do", "does", "did", "have", "has", "had", "should",
     )
 }

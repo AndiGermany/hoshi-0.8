@@ -16,15 +16,29 @@ package de.hoshi.core.tools
  */
 object ToolAreas {
 
-    /** Raum-Wort → echte HA-`area_id` (DE + EN-Aliase), konservativ. */
+    /**
+     * Raum-Wort → echte HA-`area_id` (DE + EN-Aliase), konservativ.
+     *
+     * **Ein Alias ist eine ZUORDNUNG, keine Übersetzung.** Der Wert ist immer die
+     * reale, deutsche HA-`area_id` — sie wird nirgends übersetzt, gespiegelt oder
+     * umbenannt (eiserne Projektregel: Nutzerdaten bleiben unangetastet). Ein
+     * englischer Alias ist nur ein zusätzlicher SCHLÜSSEL, über den derselbe reale
+     * Raum getroffen wird; gesprochen/geschrieben wird weiterhin [LABELS].
+     *
+     * Mehrwort-Aliase (`living room`) stehen mit Leerzeichen im Schlüssel — sie
+     * matchen nie ein einzelnes Token, sondern nur über die Token-PAAR-Suche
+     * ([mentionsRoom] bzw. `DeterministicToolIntentClassifier.roomOrNull`). Für alle
+     * bestehenden Ein-Wort-Konsumenten (`SceneMatcher`, `resolveArea`) sind sie
+     * folgenlos.
+     */
     val ROOMS: Map<String, String> = mapOf(
-        "wohnzimmer" to "wohnzimmer",
-        "schlafzimmer" to "schlafzimmer", "bedroom" to "schlafzimmer",
+        "wohnzimmer" to "wohnzimmer", "living room" to "wohnzimmer", "livingroom" to "wohnzimmer",
+        "schlafzimmer" to "schlafzimmer", "bedroom" to "schlafzimmer", "bed room" to "schlafzimmer",
         "küche" to "kuche", "kueche" to "kuche", "kuche" to "kuche", "kitchen" to "kuche",
         "arbeitszimmer" to "arbeitszimmer", "büro" to "arbeitszimmer",
         "buero" to "arbeitszimmer", "office" to "arbeitszimmer",
-        "flur" to "flur", "hallway" to "flur",
-        "keller" to "keller", "basement" to "keller",
+        "flur" to "flur", "hallway" to "flur", "corridor" to "flur",
+        "keller" to "keller", "basement" to "keller", "cellar" to "keller",
         "bad" to "badezimmer", "badezimmer" to "badezimmer", "bathroom" to "badezimmer",
     )
 
@@ -79,12 +93,23 @@ object ToolAreas {
 
     /**
      * `true`, wenn [text] mindestens ein bekanntes Raum-Wort als eigenes Token nennt
-     * (gegen [ROOMS], token-genau — kein Substring-Fehlfeuer). Für die Anaphern-Logik:
+     * (gegen [ROOMS], token-genau — kein Substring-Fehlfeuer) ODER einen Mehrwort-
+     * Alias als benachbartes Token-PAAR („living room"). Für die Anaphern-Logik:
      * EXPLIZIT genannter Raum ⇒ kein Last-Area-Fallback (der genannte Raum gewinnt).
+     *
+     * Das Token-Paar ist der Grund, warum ein englischer Satz überhaupt hier ankommt:
+     * „turn on the light in the living room" nannte vorher (für diese Prüfung) KEINEN
+     * Raum — die Anaphern-Logik hat den explizit gesagten Raum dann durch die zuletzt
+     * geschaltete Area ersetzt (oder den Befehl ganz fallen lassen).
      */
     fun mentionsRoom(text: String): Boolean {
         if (text.isBlank()) return false
-        return text.lowercase().split(TOKEN_SPLIT).any { it.isNotBlank() && ROOMS.containsKey(it) }
+        val tokens = text.lowercase().split(TOKEN_SPLIT).filter { it.isNotBlank() }
+        for (i in tokens.indices) {
+            if (ROOMS.containsKey(tokens[i])) return true
+            if (i + 1 < tokens.size && ROOMS.containsKey("${tokens[i]} ${tokens[i + 1]}")) return true
+        }
+        return false
     }
 
     /**

@@ -102,7 +102,7 @@ class ExtendedThinkLookupCacheTest {
             ),
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
-                entityMemory = { null },
+                entityMemory = { _, _ -> null },
                 // NUR die Nachgeschlagen-Scheibe — der Beweis gilt für die Schicht selbst,
                 // die volle CompositeGroundingPort-Verkettung ist CompositeGroundingPortTest.
                 grounding = reader,
@@ -176,7 +176,7 @@ class ExtendedThinkLookupCacheTest {
             ),
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
-                entityMemory = { null },
+                entityMemory = { _, _ -> null },
                 grounding = reader,
                 episodicMemory = null,
             ),

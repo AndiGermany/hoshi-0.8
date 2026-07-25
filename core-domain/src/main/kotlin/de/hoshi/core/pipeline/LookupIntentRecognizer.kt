@@ -82,6 +82,14 @@ object LookupIntentRecognizer {
         RECHERCHE_NOUN_DIRECTIVE,
         Regex("(?:^| )web ?suche"),
         Regex("(?:^| )internet ?suche"),
+        // EN-Pendants (Andi-Vorfall 2026-07-25): Wendungen, die OHNE Netz-Marker
+        // unmissverständlich eine Nachschau-Bitte SIND. Ein blosses „google"
+        // fehlt bewusst („What is Google?" darf nie triggern) — es zählt nur mit
+        // Objekt/Modal davor/dahinter.
+        Regex("(?:^| )look (?:it|that|this|them) up"),
+        Regex("(?:^| )(?:search|browse) the (?:web|internet|net)"),
+        Regex("(?:^| )google (?:it|that|this|for me)"),
+        Regex("(?:^| )(?:can|could|please|just) (?:you )?google"),
     )
 
     /**
@@ -96,7 +104,17 @@ object LookupIntentRecognizer {
      * — konservativ, false-positive-avers wie der Rest dieser Datei.
      */
     private val VERB_PATTERNS: List<Regex> = listOf(
-        Regex("(?:^| )(?:schau|guck|sieh|schlag|schläg|nachschau|nachguck|nachschlag|such|prüf|pruef|check|look|search|research)"),
+        Regex(
+            "(?:^| )(?:schau|guck|sieh|schlag|schläg|nachschau|nachguck|nachschlag|such|prüf|pruef|check|" +
+                // EN (Andi-Vorfall 2026-07-25): „look"/„search"/„check" sind häufige
+                // Alltagswörter und zählen — wie ihre DE-Vorbilder — NUR mit einem
+                // [SCOPE_PATTERNS]-Marker. „find out" bewusst ZWEIWORTIG (das blosse
+                // „find"/„finde" fängt sonst „Ich finde das Internet toll"); „google"
+                // fehlt hier bewusst (es stünde sonst auch in „Was macht Google
+                // online?" — einer Aussage ÜBER die Firma) und steht stattdessen in
+                // [STANDALONE], wo es ein Objekt/Modal neben sich braucht.
+                "look|search|research|find out|browse)",
+        ),
     )
 
     /**
@@ -121,21 +139,64 @@ object LookupIntentRecognizer {
         return hasVerb && hasScope
     }
 
-    /** Füllwörter, die zum Intent-Präfix gehören, aber selbst keine Query tragen. */
-    private val FILLER_WORDS = setOf("bitte", "mal", "kurz", "doch")
+    /**
+     * Füllwörter, die zum Intent-Präfix gehören, aber selbst keine Query tragen.
+     * EN-Ergänzungen (2026-07-25) sind bewusst Wörter, die es im Deutschen NICHT
+     * gibt — der Scanner ist sprach-agnostisch, DE-Sätze dürfen sich dadurch nicht
+     * um ein Byte anders verhalten.
+     */
+    private val FILLER_WORDS = setOf("bitte", "mal", "kurz", "doch", "please", "just", "quickly")
 
     /** Wie [SCOPE_PATTERNS], als Token-Set für den Wort-für-Wort-Scanner in [extractInlineQuery]. */
     private val SCOPE_WORDS = setOf("online", "internet", "netz", "web")
 
     /**
-     * Präpositionen direkt VOR einem Scope-Wort („im Internet", „ins Netz") — vom
-     * [SCOPE_PATTERNS]-Regex bereits toleriert (der Anker prüft nur das Scope-Wort
-     * selbst, nicht was davor steht); der Wort-für-Wort-Scanner braucht diese
-     * Kategorie EXPLIZIT, sonst bricht er an „im"/„ins" ab, bevor er das folgende
-     * Scope-Wort erreicht. Nur konsumiert, wenn das NÄCHSTE Token wirklich ein
-     * Scope-Wort ist (sonst ist „im"/„in"/„ins" schon Teil der eigentlichen Query).
+     * Präpositionen (+ EN-Artikel) direkt VOR einem Scope-Wort („im Internet",
+     * „ins Netz", „on **the** web") — vom [SCOPE_PATTERNS]-Regex bereits toleriert
+     * (der Anker prüft nur das Scope-Wort selbst, nicht was davor steht); der
+     * Wort-für-Wort-Scanner braucht diese Kategorie EXPLIZIT, sonst bricht er an
+     * „im"/„on" ab, bevor er das folgende Scope-Wort erreicht. Nur konsumiert,
+     * wenn nach höchstens [MAX_SCOPE_PREP_HOPS] weiteren Tokens dieser Kategorie
+     * WIRKLICH ein Scope-Wort folgt ([leadsToScope]) — sonst ist „im"/„in"/„the"
+     * schon Teil der eigentlichen Query. Genau diese Bedingung macht das sehr
+     * häufige „the" hier ungefährlich: es wird NUR als Anlauf auf „web/internet/
+     * net" geschluckt, nie mitten in einer Frage.
      */
-    private val SCOPE_PREPOSITIONS = setOf("im", "ins", "in")
+    private val SCOPE_PREPOSITIONS = setOf("im", "ins", "in", "on", "the")
+
+    /** „on the web" = 2 Anläufe („on", „the") bis zum Scope-Wort — mehr braucht keine Sprache. */
+    private const val MAX_SCOPE_PREP_HOPS = 2
+
+    /**
+     * TRUE gdw. ab Token [index] (exklusiv) nach höchstens [MAX_SCOPE_PREP_HOPS]
+     * weiteren [SCOPE_PREPOSITIONS]-Tokens ein [SCOPE_WORDS]-Token folgt.
+     */
+    private fun leadsToScope(tokens: List<MatchResult>, index: Int): Boolean {
+        var j = index + 1
+        var hops = 0
+        while (j < tokens.size && hops <= MAX_SCOPE_PREP_HOPS) {
+            val next = tokenNorm(tokens[j].value)
+            if (next in SCOPE_WORDS) return true
+            if (next !in SCOPE_PREPOSITIONS) return false
+            j++
+            hops++
+        }
+        return false
+    }
+
+    /**
+     * **EN-Rahmenwörter der Bitte** (Modal / Subjekt / Partikel / unbestimmter
+     * Artikel), die zum Intent-Präfix gehören, aber selbst kein Thema tragen:
+     * „**can you** look **it up**", „**take a** look online **for** …",
+     * „check **it out** online". Wie [FILLER_WORDS] nur im Präfix-Scan wirksam —
+     * das erste Token AUSSERHALB aller Kategorien beendet den Scan, ab dort ist
+     * alles Query. Bewusst KEIN Wort, das auch deutsch ist (insbesondere NICHT
+     * „an"): der Scanner ist sprach-agnostisch, DE muss byte-gleich bleiben.
+     */
+    private val EN_FRAME_WORDS = setOf(
+        "can", "could", "would", "you", "do", "take", "a", "for", "up",
+        "it", "that", "this", "out", "me", "us", "some",
+    )
 
     /**
      * Wie [VERB_PATTERNS], als Präfix-Liste für den Wort-für-Wort-Scanner in
@@ -144,7 +205,14 @@ object LookupIntentRecognizer {
     private val VERB_STEMS = listOf(
         "schau", "guck", "sieh", "schlag", "schläg", "nachschau", "nachguck",
         "nachschlag", "such", "prüf", "pruef", "check", "look", "search", "research",
+        // EN (2026-07-25) — „find" fehlt hier ABSICHTLICH als Stamm (es würde per
+        // `startsWith` auch „findings" in einer echten Query schlucken); die
+        // zweiwortige Form „find out" hat einen eigenen Scanner-Zweig.
+        "browse", "google",
     )
+
+    /** Das trennbare Zweitwort von „find out" (eigener Scanner-Zweig, s. [VERB_STEMS]). */
+    private const val FIND_OUT_PARTICLE = "out"
 
     /** s. [RECHERCHE_DETERMINER_EXCLUSION] — dieselbe Determiner-Liste, hier als Token-Set. */
     private val RECHERCHE_NOUN_DETERMINERS = setOf(
@@ -229,9 +297,14 @@ object LookupIntentRecognizer {
      * PRÄFIX-ANCHORED (bewusst konservativ: ein Trigger, der nicht am Anfang der
      * Äußerung steht, wird NICHT geöffnet, s.u.) Wort für Wort vom Anfang, solange
      * jedes Token EINES von diesen ist:
-     *  - ein Füllwort ([FILLER_WORDS]: bitte/mal/kurz/doch),
-     *  - eine Präposition direkt VOR einem Scope-Wort ([SCOPE_PREPOSITIONS]: „im
-     *    Internet", „ins Netz"),
+     *  - ein Füllwort ([FILLER_WORDS]: bitte/mal/kurz/doch, EN please/just),
+     *  - eine Präposition/ein Artikel direkt VOR einem Scope-Wort
+     *    ([SCOPE_PREPOSITIONS] + [leadsToScope]: „im Internet", „ins Netz",
+     *    „on the web"),
+     *  - ein EN-Rahmenwort ([EN_FRAME_WORDS]: „**can you** look **it up**",
+     *    „**take a** look online **for** …" — Andi-Vorfall 2026-07-25: ohne diese
+     *    Kategorie brach der Scan schon am ersten Token „Take" ab und die im Satz
+     *    stehende Frage („a recept of pizza") ging verloren),
      *  - ein Online-Scope-Wort ([SCOPE_WORDS]),
      *  - das trennbare Verb-Partikel „nach" (nur NACHDEM ein Trigger schon griff —
      *    „schau … nach" ist EIN Verb, „nachschauen" getrennt geschrieben),
@@ -240,6 +313,7 @@ object LookupIntentRecognizer {
      *    „Schaust **du** online nach?", Andi-Live-Repro 2026-07-20 Teil B — s.
      *    [PRONOUN_WORDS]-KDoc),
      *  - der Recherche-Verb-Stamm („recherchier…"),
+     *  - die zweiwortige EN-Form „find out" ([FIND_OUT_PARTICLE]),
      *  - „Recherche" in Zeige-Kombination ([isRechercheDirective]),
      *  - eines der Nachschau-Verben ([VERB_STEMS], per `startsWith` — deckt
      *    Konjugationen wie „schaust/schauen").
@@ -269,8 +343,13 @@ object LookupIntentRecognizer {
                 norm in FILLER_WORDS -> i++
                 norm == "nach" && consumedTrigger -> i++
                 norm in PRONOUN_WORDS && consumedTrigger -> i++
-                norm in SCOPE_PREPOSITIONS && tokens.getOrNull(i + 1)?.value?.let(::tokenNorm) in SCOPE_WORDS -> i++
+                norm in SCOPE_PREPOSITIONS && leadsToScope(tokens, i) -> i++
+                norm in EN_FRAME_WORDS -> i++
                 norm in SCOPE_WORDS -> { consumedTrigger = true; i++ }
+                norm == "find" && tokens.getOrNull(i + 1)?.value?.let(::tokenNorm) == FIND_OUT_PARTICLE -> {
+                    consumedTrigger = true
+                    i += 2
+                }
                 norm.startsWith("recherchier") -> { consumedTrigger = true; i++ }
                 norm == "recherche" && isRechercheDirective(tokens, i) -> { consumedTrigger = true; i += 2 }
                 VERB_STEMS.any { norm.startsWith(it) } -> { consumedTrigger = true; i++ }
@@ -492,5 +571,86 @@ object ConsentRecognizer {
         val tokens = text.lowercase().split(TOKEN_SPLIT).filter { it.isNotBlank() }
         if (tokens.isEmpty() || tokens.size > MAX_TOKENS) return false
         return tokens.joinToString(" ") in CONSENTS
+    }
+}
+
+/**
+ * **TopicAnswerRecognizer** — beantwortet die EINE Frage der Themen-Rückfrage
+ * (Naht C4, Andi-Vorfall 2026-07-25): „was genau soll ich nachschauen?" wurde
+ * gefragt — ist die NÄCHSTE Nachricht das gesuchte THEMA, oder ist sie es nicht?
+ *
+ * Semantisch ist das der Gegen-Erkenner zu [ConsentRecognizer]/
+ * [AffirmationRecognizer]: dort löst ein „ja" ein BEKANNTES Thema ein, hier IST
+ * die Nachricht selbst das Thema. Darum gilt hier die umgekehrte Logik — nicht
+ * eine enge Positiv-Liste, sondern eine enge NEGATIV-Liste: (fast) alles ist ein
+ * Thema, AUSSER den drei Klassen, die erkennbar keines sind:
+ *
+ *  1. **Leer** — nichts zum Nachschlagen.
+ *  2. **Bloße Zustimmung** („ja", „ok", „yes", „sure"): trägt keinen Sachinhalt.
+ *     Eine Zustimmung auf eine WAS-Frage ist keine Antwort — das Angebot verfällt
+ *     still (one-shot), statt „ja" nach draußen zu schicken.
+ *  3. **Abwinken** ([CANCELS], „egal", „vergiss es", „never mind", „nein"):
+ *     der Nutzer nimmt die Bitte zurück — still verfallen lassen.
+ *
+ * Das Abwinken wird — anders als die Zustimmung — auch als PRÄFIX erkannt
+ * („egal, mach das Licht an"): wer abwinkt und im selben Atemzug etwas anderes
+ * will, hat GANZ sicher kein Nachschlag-Thema genannt.
+ *
+ * **Was dieser Erkenner NICHT leistet (bewusst, s. [TurnOrchestrator]):** er
+ * unterscheidet kein „Thema" von einem „Befehl" („mach das Licht an"). Der
+ * offensichtliche Themenwechsel per Befehl wird eine Ebene höher abgefangen —
+ * dort, wo die deterministischen Fastpaths ohnehin schon entscheiden, ob eine
+ * Äußerung ein Befehl ist. Ein Erkenner, eine Zuständigkeit.
+ */
+object TopicAnswerRecognizer {
+
+    private val TOKEN_SPLIT = Regex("[^a-zäöüß0-9]+")
+
+    /**
+     * Abwink-Phrasen, die auch als PRÄFIX zählen („egal, mach das Licht an"):
+     * Wendungen, mit denen KEIN denkbares Nachschlag-Thema beginnt.
+     */
+    private val CANCEL_PREFIXES: List<String> = listOf(
+        // DE
+        "egal", "ist egal", "alles egal", "vergiss", "vergiss es", "vergiss das",
+        "schon gut", "lass gut sein", "passt schon", "nicht nötig", "nicht noetig",
+        "kein bedarf", "nein",
+        // EN
+        "never mind", "nevermind", "forget", "forget it", "forget that",
+        "no thanks", "no thank you", "doesnt matter", "does not matter",
+        "skip it", "leave it",
+    )
+
+    /**
+     * Abwink-Wörter, die NUR als GANZE Äußerung zählen — als Präfix wären sie zu
+     * gierig und würden echte Themen wegwerfen („**No** Mans Sky Release",
+     * „**Nichts** über 5 Euro", „**ne** Pizza").
+     */
+    private val CANCEL_EXACT: Set<String> = setOf(
+        "nee", "ne", "nö", "noe", "nichts", "nix",
+        "no", "nope", "nothing",
+    )
+
+    /** Normalisierte Token-Folge (lowercase, alles außer Buchstaben/Ziffern als Trenner). */
+    private fun normalized(text: String): String =
+        text.lowercase().split(TOKEN_SPLIT).filter { it.isNotBlank() }.joinToString(" ")
+
+    /** TRUE gdw. [text] ein Abwinken ist ([CANCEL_EXACT] ganz / [CANCEL_PREFIXES] am Anfang). */
+    fun isCancel(text: String): Boolean {
+        val norm = normalized(text)
+        if (norm.isEmpty()) return false
+        if (norm in CANCEL_EXACT) return true
+        return CANCEL_PREFIXES.any { norm == it || norm.startsWith("$it ") }
+    }
+
+    /**
+     * TRUE gdw. [text] als das gesuchte NACHSCHLAG-THEMA taugt: nicht leer, keine
+     * bloße Zustimmung, kein Abwinken (s. Klassen-KDoc).
+     */
+    fun isTopic(text: String): Boolean {
+        if (text.isBlank()) return false
+        if (normalized(text).isEmpty()) return false
+        if (isCancel(text)) return false
+        return !AffirmationRecognizer.matches(text) && !ConsentRecognizer.matches(text)
     }
 }

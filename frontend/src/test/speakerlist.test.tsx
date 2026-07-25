@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+  ENROLL_TOTAL_SAMPLES,
   SPEAKER_TEXTS,
   SpeakerListView,
   formatEnrolledDate,
@@ -45,6 +46,24 @@ describe('SpeakerListView — Liste rendert aus GET-Daten', () => {
     expect(html).toContain('3 Sätze'); // Multi-Sample-Profil
     expect(html).toContain('1 Satz'); // Alt-Profil (Ein-Satz) bleibt ehrlich sichtbar
     expect(render()).not.toContain('Satz'); // ohne samples-Feld: nichts erfinden
+  });
+
+  it('Status-Badge: <9 Sätze ⇒ „in Arbeit", genau 9 ⇒ „vollständig" (Andi-Auftrag 25.07: drei Sitzungen)', () => {
+    expect(ENROLL_TOTAL_SAMPLES).toBe(9);
+    const html = render({
+      speakers: [
+        speaker({ name: 'halb', samples: 3 }),
+        speaker({ name: 'fast', samples: 8 }),
+        speaker({ name: 'voll', samples: 9 }),
+      ],
+    });
+    expect(html).toContain(SPEAKER_TEXTS.statusInProgress);
+    expect(html).toContain(SPEAKER_TEXTS.statusComplete);
+    // „voll" (9 Sätze) ist die einzige mit dem Vollständig-Badge — Rest ist noch in Arbeit.
+    const inProgressCount = (html.match(new RegExp(SPEAKER_TEXTS.statusInProgress, 'g')) ?? []).length;
+    expect(inProgressCount).toBe(2);
+    expect(render()).not.toContain(SPEAKER_TEXTS.statusInProgress); // ohne samples-Feld: nichts erfinden
+    expect(render()).not.toContain(SPEAKER_TEXTS.statusComplete);
   });
 
   it('gibt je Person genau EINEN Löschen-Knopf (dein Profil, dein Löschen)', () => {

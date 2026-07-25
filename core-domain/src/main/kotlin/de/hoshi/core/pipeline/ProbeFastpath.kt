@@ -1,5 +1,9 @@
 package de.hoshi.core.pipeline
 
+import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.LangDe
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
+
 /**
  * **ProbeFastpath** — der Selbsttest-Satz „Hoshi, Probe." (Golden-Utterance
  * #20, Andis Abnahme-Ritual für den Satelliten-Testtag): EIN warmer,
@@ -21,8 +25,11 @@ package de.hoshi.core.pipeline
  * „Probe." / „Probe" / „Hoshi, Probe" (Satzzeichen/Groß-Klein sind der
  * [normalize]-Politur egal, exakt wie bei [DateFastpath]/[DailyNoteFastpath]).
  *
- * Die Antwort ist bewusst STATISCH + NUR DEUTSCH (Andis Ritual-Vokabel, wie
- * die [WorkshopNoteFastpath]-Quittung) — **ein Happy-Path-Satz, KEIN
+ * Die Antwort ist bewusst STATISCH und kommt seit 2026-07-25 in der TURN-SPRACHE
+ * aus dem [de.hoshi.core.pipeline.lang.LanguagePack] (Andi: „Multilingualität von
+ * A-Z" — ein deutscher Status-Satz auf eine englische Probe wäre genau der
+ * Bruch, den diese Golden-Utterance beweisen soll). Der ERKENNER bleibt deutsch
+ * („Probe" ist Andis Ritual-Vokabel) — **ein Happy-Path-Satz, KEIN
  * Degraded-Stufen-Ast**: das im Golden-Utterance-Report referenzierte Design
  * „[R03 §4]" (ein Status-Satz JE Degraded-Stufe) lag beim Bau NICHT im Repo
  * vor (`vault/tracks/GOLDEN-UTTERANCES-satellit.md` #20 nennt nur den
@@ -49,10 +56,10 @@ class ProbeFastpath(
      * Funktion, kein `now()`-Punkt nötig (anders als die datierten
      * Geschwister-Fastpaths).
      */
-    fun handle(text: String): String? {
+    fun handle(text: String, language: Language = Language.DEFAULT): String? {
         if (!enabled || text.isBlank()) return null
         if (!isProbe(text)) return null
-        return RECEIPT
+        return LanguagePackRegistry.forLanguage(language).probeReceipt
     }
 
     /**
@@ -80,13 +87,16 @@ class ProbeFastpath(
         val DISABLED = ProbeFastpath(enabled = false)
 
         /**
-         * Deterministische, warme Quittung — exakt gepinnt in den Tests. Ehrlich
-         * über die bewiesene Kette (Ohren = STT hat den Ruf transkribiert, Draht
-         * = der Turn kam am Server an, Stimme = diese Antwort läuft gerade durch
-         * TTS zurück) — KEIN Design-Wortlaut in `vault/tracks/GOLDEN-UTTERANCES-
+         * Deterministische, warme Quittung auf DEUTSCH — exakt gepinnt in den Tests.
+         * Ehrlich über die bewiesene Kette (Ohren = STT hat den Ruf transkribiert,
+         * Draht = der Turn kam am Server an, Stimme = diese Antwort läuft gerade
+         * durch TTS zurück) — KEIN Design-Wortlaut in `vault/tracks/GOLDEN-UTTERANCES-
          * satellit.md` #20 vorgegeben, darum der Fallback-Satz aus dem Bau-Auftrag.
+         *
+         * Seit der Mehrsprachigkeit nur noch der DE-Zeiger auf die EINE Quelle
+         * ([LangDe]) — der byte-identische Beweis, dass der de-Pfad nicht wackelt.
          */
-        internal const val RECEIPT = "Ich hör dich klar und deutlich — Ohren, Draht und Stimme stehen."
+        internal val RECEIPT: String = LangDe.PACK.probeReceipt
 
         /** Das eine tolerierte Wake-Wort-Präfix-Token (Codebase-Konvention: „Hoshi, …", s. [WorkshopNoteFastpath]-KDoc). */
         private const val WAKE_WORD = "hoshi"

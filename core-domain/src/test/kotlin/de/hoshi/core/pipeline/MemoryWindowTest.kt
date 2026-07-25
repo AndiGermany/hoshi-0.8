@@ -22,7 +22,7 @@ class MemoryWindowTest {
     private fun assembler(windowTurns: Int): TurnPromptAssembler =
         TurnPromptAssembler(
             persona = PersonaService(),
-            entityMemory = EntityContextPort { null },
+            entityMemory = EntityContextPort { _, _ -> null },
             grounding = GroundingPort.EMPTY,
             episodicMemory = null,
             historyWindowTurns = windowTurns,

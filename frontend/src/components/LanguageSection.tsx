@@ -119,7 +119,9 @@ export function LanguageSectionView({ current, loading, error, busy, note, onSel
       <label className="settings__label" htmlFor="settings-server-language">
         {LANGUAGE_SETTINGS_TEXTS.label}
       </label>
-      {loading && !current && <p className="settings__hint">lädt…</p>}
+      {loading && !current && (
+        <p className="settings__hint">{LANGUAGE_SETTINGS_TEXTS.loading}</p>
+      )}
       {error && (
         <p className="settings__hint" role="alert">
           {error}

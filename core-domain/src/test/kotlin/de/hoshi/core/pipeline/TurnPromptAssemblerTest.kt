@@ -54,9 +54,9 @@ class TurnPromptAssemblerTest {
         persona: PersonaService = PersonaService(),
         ambient: AmbientWarmthPort = AmbientWarmthPort.NONE,
     ): Pair<TurnPromptAssembler, RecordingGrounding> {
-        val entityMemory = EntityContextPort { entityBlock }
+        val entityMemory = EntityContextPort { _, _ -> entityBlock }
         val episodic: EpisodicRecallPort? =
-            if (episodicBlock != null) EpisodicRecallPort { _, _ -> Mono.just(episodicBlock) } else null
+            if (episodicBlock != null) EpisodicRecallPort { _, _, _ -> Mono.just(episodicBlock) } else null
         return TurnPromptAssembler(
             persona = persona,
             entityMemory = entityMemory,

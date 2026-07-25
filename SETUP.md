@@ -1,22 +1,37 @@
 # SETUP — Hoshi 0.8 selbst zum Laufen bringen
 
-> Kurzfassung vorweg, ehrlich: Mit dem, was in diesem Repo liegt, bekommst du einen
-> laufenden Kotlin-Backend + Frontend + einen **kompletten Voice-Turn** — Brain (Text-
-> Generation), STT (Spracherkennung) und Speaker-ID (wer spricht) sind **alle drei** als
-> Python-Sidecars in diesem Repo, jeder mit `bootstrap.sh` + `run.sh`. **Text-Chat UND
-> Sprache-rein funktionieren Ende-zu-Ende.** Ehrlich bleibt: `bin/hoshi up` bzw.
-> `pipeline/stack-lib.sh` starten die Sidecars heute noch über Pfade aus einem privaten
-> Vorgänger-Checkout (`Hoshi_0.5`) — der Cutover auf die Sidecars in diesem Repo ist ein
-> offener, bewusster Schritt (siehe Abschnitt 5). Für einen frischen Klon ohne `Hoshi_0.5`
-> startest du die Sidecars direkt über `sidecars/*/run.sh` — das funktioniert unabhängig
-> vom Cutover-Status der Pipeline-Skripte. Dieses Dokument sagt genau, wo die Grenze
-> verläuft, statt sie zu verstecken.
+> Kurzfassung vorweg, ehrlich: Mit dem, was in diesem Repo liegt, bekommst du ein
+> laufendes Kotlin-Backend + Frontend + einen **kompletten Voice-Turn** — Brain (Text-
+> Generation), STT (Spracherkennung), Speaker-ID (wer spricht), die Knowledge-Bridge
+> (Wiki-Suche) und die Sprachausgabe liegen **alle** als Python-Sidecars in diesem Repo,
+> jeder mit `bootstrap.sh` + `run.sh`. **Text-Chat, Sprache-rein und Sprache-raus
+> funktionieren Ende-zu-Ende, ohne einen einzigen API-Schlüssel.** Die Sprachausgabe ist
+> auf einem frischen Klon `say`, das macOS-Bordmittel: kein Schlüssel, kein
+> Modell-Download, nur einmalig `sidecars/say/bootstrap.sh`.
+>
+> Was extern bleibt und bleiben muss: die **Modelle** (Gemma, Whisper, CAM++) und die
+> **Wikipedia-Datenbank** — Lizenz- und Größengründe, siehe Schritt 3. Dieses Dokument sagt
+> genau, wo die Grenzen verlaufen, statt sie zu verstecken.
+
+**Der kürzeste Weg** — was ein frischer Klon wirklich erlebt, wenn alles gut geht:
+
+```bash
+./gradlew build && (cd frontend && npm install && npm run build)
+tools/models-verify.sh          # sagt read-only, welche Modelle noch fehlen
+sidecars/say/bootstrap.sh       # die Sprachausgabe — einmalig, kein Schlüssel, kein Modell
+sidecars/brain/bootstrap.sh     # das Sprachmodell (Modell-Download läuft über HuggingFace)
+bin/hoshi up                    # Stack hoch + ehrlicher Status
+bin/hoshi voice                 # der Beweis: Hoshi spricht wirklich
+```
+
+Alles darunter erklärt dieselben Schritte langsam, inklusive der Stellen, an denen sie
+schiefgehen.
 
 ## 0. Für wen das hier ist
 
-Release 1 richtet sich an einen **technisch versierten Menschen**, der bereit ist, Kanten
+Das hier richtet sich an einen **technisch versierten Menschen**, der bereit ist, Kanten
 zu akzeptieren — kein Installer, kein Wizard, kein Support-Kanal. Wenn dir das nicht
-reicht: warte auf den vollen OSS-Fahrplan (Roadmap in [`docs/vault/00-INDEX.md`](docs/vault/00-INDEX.md)).
+reicht: warte auf den vollen OSS-Fahrplan (Roadmap in [`vault/00-INDEX.md`](vault/00-INDEX.md)).
 
 ## 1. Voraussetzungen
 
@@ -28,9 +43,13 @@ reicht: warte auf den vollen OSS-Fahrplan (Roadmap in [`docs/vault/00-INDEX.md`]
 - **Node 20+** fürs Frontend.
 - Ein **HuggingFace-Account** (für den Modell-Download; einige Modelle brauchen eine
   akzeptierte Lizenz, siehe Schritt 3).
-- Optional: ein eigener **OpenAI-API-Key**, wenn du Cloud-TTS (gesprochene Antworten ohne
-  lokalen TTS-Sidecar) oder die Online-Eskalation nutzen willst. Ohne Key läuft Hoshi
-  lokal-only.
+- **Kein API-Schlüssel nötig.** Sprachausgabe, Spracherkennung und Sprachmodell laufen
+  vollständig lokal. Ein eigener **OpenAI-API-Key** ist nur dann interessant, wenn du die
+  Cloud-Stimme oder die Online-Recherche ausprobieren willst — beides ist opt-in und
+  standardmäßig aus.
+- Für Piper (die zweite lokale Sprachausgabe) zusätzlich: die Bereitschaft, eine
+  **GPL-3.0-Laufzeit** zu installieren und Stimm-Modelle zu laden. Piper ist bewusst
+  optional; `say` braucht das alles nicht.
 
 ## 2. Backend + Frontend bauen
 
@@ -58,76 +77,103 @@ Was du brauchst (Details + Lizenzen in `models.json`):
 | `mlx-community/gemma-4-e2b-it-4bit` | Brain (Default) | HuggingFace (Gemma-Lizenz — Terms auf HF akzeptieren) | ja |
 | `mlx-community/gemma-4-e4b-it-4bit` | Brain (Alt/Komfort) | HuggingFace (Gemma-Lizenz) | nein |
 | `mlx-community/whisper-large-v3-turbo` | STT-Modellgewicht | HuggingFace (lazy beim ersten Request, siehe `sidecars/stt`) | ja, für Sprache-als-Eingabe |
-| `Wespeaker/wespeaker-voxceleb-campplus` | Speaker-ID-Gewicht | Direct-Download (Apache-2.0, `sidecars/speaker/bootstrap.sh`) | ja, für Sprecher-Erkennung |
+| `Wespeaker/wespeaker-voxceleb-campplus` | Speaker-ID-Gewicht | Direct-Download (Apache-2.0, `sidecars/speaker/bootstrap.sh`) | nur fürs Anlernen — die Erkennung ist aus, siehe §8 |
 | `embeddinggemma:300m` | Episodic-Memory-Embedding | Ollama (`ollama pull embeddinggemma:300m`) | ja, für Memory |
 
 Modelle werden **nie** in diesem Repo mitgeliefert (Lizenzgründe + Größe) — Download läuft
 über den HuggingFace-Cache (`huggingface_hub`) bzw. `ollama pull`, nicht über Git.
 
-## 4. Sidecars starten (Brain, STT, Speaker-ID)
+## 4. Sidecars bootstrappen
 
-Alle drei Voice-Turn-Sidecars folgen demselben Muster: `bootstrap.sh` einmalig (venv +
-Requirements, ggf. Modell-Download), `run.sh` zum Starten.
+Alle Sidecars folgen demselben Muster: `bootstrap.sh` einmalig (venv + gepinnte
+Requirements, ggf. Modell-Download), `run.sh` zum Starten. **Das Bootstrappen ist der
+eigentliche Einrichtungsschritt** — starten kann sie danach `bin/hoshi up` für dich
+(Abschnitt 5).
 
 ```bash
-sidecars/brain/bootstrap.sh     && sidecars/brain/run.sh     # :8041 — Text-Generation (Gemma-4/MLX)
-sidecars/stt/bootstrap.sh       && sidecars/stt/run.sh       # :9001 — Sprache → Text (Whisper/MLX)
-sidecars/speaker/bootstrap.sh   && sidecars/speaker/run.sh   # :9002 — wer spricht (CAM++/ONNX)
+sidecars/say/bootstrap.sh        # :8044 — Sprachausgabe (macOS `say`) ← der Fresh-Clone-Default
+sidecars/brain/bootstrap.sh      # :8041 — Text-Generation (Gemma-4/MLX)
+sidecars/stt/bootstrap.sh        # :9001 — Sprache → Text (Whisper/MLX)
+sidecars/speaker/bootstrap.sh    # :9002 — wer spricht (CAM++/ONNX)
+sidecars/knowledge/bootstrap.sh  # :8035 — Wiki-Suche (SQLite-FTS5, DB extern)
 ```
 
-Alle drei sind FastAPI-Prozesse, die einen dokumentierten HTTP-Vertrag sprechen (Details
-je `README.md` im jeweiligen Sidecar-Ordner):
+Alle sind FastAPI-Prozesse mit dokumentiertem HTTP-Vertrag (Details je `README.md` im
+jeweiligen Sidecar-Ordner):
 
+- **say-TTS** (`sidecars/say`): der eine Default, wenn nichts gewählt wurde. Ruft
+  `/usr/bin/say` + `/usr/bin/afconvert` als Unterprozess — **kein ML-Modell, kein
+  Download, kein Schlüssel**. Läuft dafür ausschließlich auf macOS; das prüft
+  `bootstrap.sh` vorab und bricht sonst ehrlich ab.
 - **Brain** (`sidecars/brain`): `POST /v1/chat`, `POST /v1/score`, `GET /health` — der
   `BrainPort`-Vertrag.
 - **STT** (`sidecars/stt`): `POST /asr?...` (Multipart-Audio) → `{"text": "…"}`,
   `GET /health`. Braucht zusätzlich installiertes `ffmpeg` (`brew install ffmpeg`).
 - **Speaker-ID** (`sidecars/speaker`): `POST /embed`, `POST /verify`, `GET /health` —
   512-d CAM++-Embeddings, bewusst ohne torch/funasr (ONNX, ~100-130 MB RSS).
+  *Ehrlich: die Sprecher-**Erkennung** ist im Backend abgeschaltet (siehe Abschnitt 8) —
+  der Sidecar wird gebraucht, seine Antwort aber nicht zur Identifikation benutzt.*
+- **Knowledge-Bridge** (`sidecars/knowledge`): `GET /health`, `GET /search`,
+  `GET /article/{id}`. `bootstrap.sh` lädt **keine Datenbank** — `run.sh` bricht ab, wenn
+  unter `HOSHI_WIKI_DB_PATH` (Default `~/.hoshi/knowledge/wiki-de/articles.db`) keine
+  lesbare Wikipedia-DB liegt. Ohne sie läuft der Rest weiter, Antworten fallen ehrlich auf
+  „ohne Wiki-Grounding" zurück.
 
-Mit allen drei laufend + Backend + Frontend hast du einen **vollständigen Voice-Turn**:
-`bin/hoshi turn` beweist den Text-Pfad, `bin/hoshi voicein` beweist den gesprochenen
-Eingabe-Pfad (WAV → `/api/v1/voice` → STT → Turn) gegen die echte App.
+Piper (`sidecars/piper`) ist die **optionale** zweite lokale Sprachausgabe. Sein
+`bootstrap.sh` lädt Laufzeit und Stimm-Modelle erst nach einer bewussten Entscheidung —
+Piper ist GPL-3.0-or-later, Begründung in [`sidecars/piper/LICENSES.md`](sidecars/piper/LICENSES.md).
+Erst danach ist `HOSHI_TTS=piper` bzw. die Auswahl im Einstellungs-Panel sinnvoll.
 
-## 5. Ehrlich bleibt: der Pipeline-Cutover ist offen
+## 5. Stack starten
 
-Die Sidecars in `sidecars/` sind 1:1-Portierungen aus einem privaten, unveröffentlichten
-Vorgänger-Checkout (`Hoshi_0.5`) — Logik unverändert, nur Bootstrap/Run neu gebaut (siehe
-`Cutover-Status` in `sidecars/stt/README.md` und `sidecars/speaker/README.md`). Was noch
-NICHT passiert ist: `bin/hoshi up` und `pipeline/stack-lib.sh` selbst starten die Sidecars
-weiterhin über `$HOSHI_05_ROOT`-Pfade aus diesem alten Checkout, nicht über
-`sidecars/*/run.sh` in diesem Repo. Das ist die "Scheibe 4" aus der internen Roadmap —
-ein eigener, bewusster Schritt, kein versteckter Blocker.
+```bash
+bin/hoshi up        # fährt Brain + Sidecars idempotent hoch und zeigt danach den doctor-Status
+```
 
-**Was das konkret bedeutet:**
+`bin/hoshi up` wählt **automatisch** den Sidecar aus diesem Repo, sobald dessen `.venv`
+existiert — also sobald `bootstrap.sh` einmal gelaufen ist. Fehlt das venv, sagt es das in
+einer Zeile und **überspringt den Sidecar mit einer Warnung**, statt einen Start
+vorzutäuschen; auf einem frischen Klon ohne Bootstrap ist das der Normalfall. Erzwingen
+lässt sich die Seite mit `HOSHI_SIDECARS_FROM_REPO=true|false` — mit `true` und fehlendem
+venv gibt es einen **lauten Fehler statt eines stillen Rückfalls**, denn ein kaputter Pfad
+soll nie scheinbar gesund starten. Ohne laufendes Brain endet `bin/hoshi up` ehrlich mit
+Fehlercode; fehlende Nebensidecars degradieren nur.
 
-- **Wenn du dieses Repo frisch klonst** (kein `Hoshi_0.5`-Checkout vorhanden), ignorierst
-  du `bin/hoshi up` für die Sidecars und startest sie direkt wie in Abschnitt 4 gezeigt —
-  das funktioniert unabhängig vom Cutover-Status, da `sidecars/*/run.sh` keine Abhängigkeit
-  auf `HOSHI_05_ROOT` hat.
-- **`bin/hoshi up` versucht weiterhin**, die Sidecars best-effort über `$HOSHI_05_ROOT` zu
-  starten; findet es keinen konfigurierten Checkout, überspringt es sie **still, mit
-  Warnung**, und der Java-Teil startet trotzdem. Kein Absturz, aber auch keine
-  automatisch gestarteten Sidecars — starte sie in dem Fall manuell (Abschnitt 4).
-- Sobald die Sidecars manuell laufen (egal ob über `sidecars/*/run.sh` oder eine eigene
-  Implementierung), spricht das Backend mit ihnen über dieselben Ports/Verträge — die
-  Kotlin-Adapter (`adapters-stt/.../WhisperSttAdapter.kt`,
-  `adapters-speaker/.../CamppSpeakerAdapter.kt`) kennen keinen Unterschied. Konfiguration
-  bei Bedarf über `HOSHI_STT_BASE_URL` / `HOSHI_SPEAKER_BASE_URL`.
-- **Gesprochene Antworten (Text-zu-Sprache)** gehen zusätzlich, wenn du einen eigenen
-  OpenAI-Key setzt (`OpenAiTtsAdapter`, Cloud, opt-in) — kein lokaler TTS-Sidecar nötig
-  dafür. `bin/hoshi tts-openai` beweist das isoliert.
+Für die Sprachausgabe ist das explizit verdrahtet: fehlt `sidecars/say/.venv`, wartet
+`bin/hoshi up` nicht zwanzig Sekunden auf einen Prozess, der unmöglich starten kann,
+sondern nennt exakt den nächsten Zug — `sidecars/say/bootstrap.sh`. Dasselbe gilt für
+`bin/hoshi voice` und `bin/hoshi voicein`. Kein stiller Cloud-Fallback; ein Prüfskript
+(`pipeline/test-first-run-tts.sh`) hält genau das fest.
+
+Du kannst jeden Sidecar auch weiterhin einzeln über `sidecars/*/run.sh` starten — das
+Backend spricht mit ihnen über dieselben Ports und Verträge, die Kotlin-Adapter kennen
+keinen Unterschied (Konfiguration bei Bedarf über `HOSHI_STT_BASE_URL` /
+`HOSHI_SPEAKER_BASE_URL`).
+
+Der einzige Pfad, der noch auf einen privaten, unveröffentlichten Vorgänger-Checkout
+(`HOSHI_05_ROOT`) zeigt, ist der **abgeschaltete Legacy-Voxtral-Pfad**. Auf einem frischen
+Klon wird ein fehlender Sidecar ehrlich übersprungen — Warnung statt Fake-Start.
 
 ## 6. Backend starten + verifizieren
 
 ```bash
 bin/hoshi run       # bootet lokal auf :8090, prüft Health + die Auth-Wand (401 ohne Token)
-bin/hoshi turn       # Text-Turn-Beweis: POST /api/v1/chat/stream → SSE-Antwort
-bin/hoshi doctor     # ehrlicher, read-only Stack-Status (Brain/Sidecars/RAM — OK/DEGRADED/DOWN)
+bin/hoshi turn      # Text-Turn-Beweis: POST /api/v1/chat/stream → SSE-Antwort
+bin/hoshi voice     # Audio-Beweis: der Turn wird wirklich gesprochen (echtes WAV)
+bin/hoshi voicein   # Eingabe-Beweis: WAV → /api/v1/voice → STT → Turn
+bin/hoshi doctor    # ehrlicher, read-only Stack-Status (Brain/Sidecars/RAM — OK/DEGRADED/DOWN)
 ```
 
+Der Unterschied zwischen `run` und `voice` ist Absicht: **`bin/hoshi run` beweist nur
+App-Boot und Auth-Wand, nicht die Hörbarkeit.** `bin/hoshi voice` ist der echte
+Audio-Beweis und bricht mit einer konkreten Bootstrap-/Sidecar-Meldung ab, statt einen
+stummen Turn als „läuft" zu verkaufen.
+
 `bin/hoshi doctor` sagt dir schwarz auf weiß, welche Sidecars es sieht und welche fehlen —
-das ist der schnellste Weg herauszufinden, wo du gerade stehst.
+das ist der schnellste Weg herauszufinden, wo du gerade stehst. Die Gesundheitsanzeige in
+der App prüft dazu die **tatsächlich aktive** Sprachausgabe-Engine statt immer derselben:
+sonst kann „alles grün" dastehen, während genau die Komponente, die wirklich spricht,
+unerreichbar ist.
 
 ## 7. Konfiguration
 
@@ -137,13 +183,28 @@ Cloud-Opt-ins) ist [`tools/systemd/hoshi-0.8-backend.service`](tools/systemd/hos
 für lokale Entwicklung reichen die Defaults. `HOSHI_API_TOKEN` musst du selbst generieren
 (z.B. `openssl rand -hex 32`) und **nie committen**.
 
-## 8. Bekannte Grenzen (Stand dieses Exports)
+## 8. Bekannte Grenzen (Stand 0.8.2)
 
-- Pipeline-Cutover (`bin/hoshi up` startet Sidecars noch über `$HOSHI_05_ROOT`): siehe
-  §5 — offen. Manueller Start über `sidecars/*/run.sh` umgeht das vollständig.
-- Knowledge-Bridge/Wiki-RAG (`:8035`, `HOSHI_KNOWLEDGE_BRIDGE_URL`) ist kein Bestandteil
-  dieses Exports — Grounding-Antworten fallen ohne sie ehrlich auf "ohne Wiki-Grounding"
-  zurück (siehe `pipeline/ground.sh`), der Rest der Pipeline läuft trotzdem.
+- **Hoshi antwortet in fünf Sprachen, versteht aber noch nicht in fünf.** Übersetzt sind
+  die Antworten (Backend und Oberfläche); die *Erkenner* — was als Befehl durchgeht — sind
+  in großen Teilen weiterhin deutsch. Auf Spanisch gestellt bekommst du spanische
+  Antworten, musst Befehle aber weiter auf Deutsch oder Englisch sagen. Hoshi weist im
+  Sprach-Panel selbst darauf hin; alles außer Deutsch trägt dort ein „Beta".
+- **ES/FR/IT sind nicht muttersprachlich gegengelesen.** Es sind echte Übersetzungen, keine
+  Platzhalter — aber niemand mit der jeweiligen Muttersprache hat sie geprüft. Für diese
+  drei Sprachen gibt es außerdem keine Piper-Stimme; sie werden von `say` gesprochen.
+- **Die Sprecher-Erkennung ist abgeschaltet.** Das erste lokale Sicherheits-Gate hat keinen
+  tragfähigen Betriebspunkt gefunden (reproduzierte Fehlbindung), deshalb bleibt sie aus.
+  Anlernen und Profile funktionieren; erkannt wird niemand. Unbekannte Stimmen werden nie
+  automatisch angelernt.
+- **Der sanfte Neustart ist konfiguriert, aber nicht bewiesen.** Laufende Gespräche bekommen
+  beim Herunterfahren bis zu 20 Sekunden (`server.shutdown=graceful`). Plausibel, aber noch
+  nicht gegen ein echtes laufendes Gespräch gemessen.
+- **Die Wikipedia-Datenbank ist nicht Teil dieses Repos.** Der Knowledge-Sidecar liegt hier
+  (`sidecars/knowledge`), die DB nicht — ohne sie fallen Grounding-Antworten ehrlich auf
+  „ohne Wiki-Grounding" zurück (siehe `pipeline/ground.sh`), der Rest läuft weiter.
+- Der **Legacy-Voxtral-Pfad** ist gewollt abgeschaltet und als einziger noch nicht aus dem
+  privaten Vorgänger-Checkout portiert.
 - Dieses Setup ist auf **einer** konkreten Maschine gehärtet (ein Apple-Silicon-Mac);
   Pfade/Ports/Annahmen spiegeln das. Erwarte Anpassungsarbeit auf abweichender Hardware.
 - Kein Installer, kein First-Run-Wizard, kein Auto-Update — dieses Dokument *ist* der Weg.

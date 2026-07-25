@@ -719,6 +719,65 @@ class WeatherGroundingProviderTest {
             assertNull(provider.todayForecast().block(Duration.ofSeconds(5)))
         }
 
+    // ── Bug-Fix 2026-07-25 (PREP-i18n-backend-restklassen.md): codeText stand
+    // bis heute hart auf Language.DE, egal welche UI-Sprache aktiv war — die
+    // Wetter-Kachel zeigte im englischen Modus deutschen Text. [todayForecast]
+    // nimmt jetzt eine [displayLanguage] entgegen (Default DE, byte-neutral). ──
+
+    @Test
+    fun `todayForecast ohne Parameter bleibt Deutsch - byte-neutraler Default`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val today = provider.todayForecast().block(Duration.ofSeconds(5))!!
+            assertEquals("leichter Regen", today.codeText, "Default-Aufruf bleibt Deutsch")
+        }
+
+    @Test
+    fun `todayForecast folgt der uebergebenen Anzeigesprache - je eine Stichprobe pro Sprache`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+
+            assertEquals("leichter Regen", provider.todayForecast(Language.DE).block(Duration.ofSeconds(5))!!.codeText)
+            assertEquals("light rain", provider.todayForecast(Language.EN).block(Duration.ofSeconds(5))!!.codeText)
+            assertEquals("lluvia ligera", provider.todayForecast(Language.ES).block(Duration.ofSeconds(5))!!.codeText)
+            assertEquals("pluie légère", provider.todayForecast(Language.FR).block(Duration.ofSeconds(5))!!.codeText)
+            assertEquals("pioggia leggera", provider.todayForecast(Language.IT).block(Duration.ofSeconds(5))!!.codeText)
+        }
+
+    @Test
+    fun `todayForecast - unbekannter WMO-Code liefert in jeder Sprache einen Fallback-Text, nie roh oder leer`() {
+        val unknownCodeJson = """
+            {
+              "latitude": 52.52,
+              "longitude": 13.41,
+              "current": { "temperature_2m": 14.2, "weathercode": 17 },
+              "daily": {
+                "time": ["2026-07-05"],
+                "temperature_2m_max": [19.4],
+                "temperature_2m_min": [11.3],
+                "precipitation_sum": [3.4],
+                "weathercode": [17]
+              }
+            }
+        """.trimIndent()
+        withOpenMeteo(unknownCodeJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val expected = mapOf(
+                Language.DE to "wechselhaft",
+                Language.EN to "changeable",
+                Language.ES to "variable",
+                Language.FR to "changeant",
+                Language.IT to "variabile",
+            )
+            expected.forEach { (language, text) ->
+                val today = provider.todayForecast(language).block(Duration.ofSeconds(5))!!
+                assertEquals(text, today.codeText, "unbekannter Code 17, $language")
+                assertFalse(today.codeText.isBlank(), "nie leer ($language)")
+                assertFalse(today.codeText.contains("17"), "nie der rohe Code ($language): ${today.codeText}")
+            }
+        }
+    }
+
     @Test
     fun `expliziter-Ort-Erkenner erkennt GROSS UND klein (Bigram erlaubt), aber keine Zahlen oder Zeit-Stoppwoerter`() {
         // WICHTIG (Live-Bug-Fix 2026-07-15): früher war dieser Erkenner auf

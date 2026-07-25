@@ -1,5 +1,8 @@
 package de.hoshi.core.pipeline
 
+import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
+import de.hoshi.core.pipeline.lang.SCORE_PLACEHOLDER
 import de.hoshi.core.port.DailyNote
 import de.hoshi.core.port.DailyNotePort
 import java.time.Clock
@@ -21,10 +24,22 @@ import java.time.Clock
  * (Gegen-Tests in `DailyNoteFastpathTest`). Kein Treffer ⇒ `null` ⇒ der
  * Orchestrator fällt unverändert in den normalen Turn (byte-neutral).
  *
- * Die Erkennungs-Wörter sind bewusst NUR deutsch („Tagesnote" ist Andis
- * North-Star-Vokabel) — die Quittung darum immer deutsch. Der **einzige
+ * Die QUITTUNG kommt seit 2026-07-25 in der TURN-SPRACHE aus dem
+ * [de.hoshi.core.pipeline.lang.LanguagePack] (Andi: „Multilingualität von
+ * A-Z") — die Note selbst ist eine Zahl und reist unübersetzt als
+ * [SCORE_PLACEHOLDER] durch den Satz. Der **einzige
  * `now()`-Punkt** ist der injizierte [Clock] (Timer/Date-Muster): er stempelt
  * [DailyNote.ts]; Tests setzen `Clock.fixed` ⇒ voll deterministisch.
+ *
+ * **Erkennungs-Wörter seit 2026-07-25 (Nachtrag) EN/ES/FR/IT:** „Tagesnote" war
+ * als Andis North-Star-Vokabel bewusst NUR deutsch — genau das war die Lücke,
+ * die Andi beim Testen fand (die ANTWORTEN übersetzt, das VERSTEHEN nicht). Die
+ * neuen Muster brauchen wie das DE-Original eine mehrwortige Wendung
+ * („daily note"/„nota diaria"/„note du jour"/„nota del giorno" — NIE das bloße
+ * „note", das im Englischen etwas völlig anderes ist als eine Schulnote-artige
+ * Bewertung). Die deutsche „…er Tag"-Kurzform (2. Muster) ist ein reines
+ * Sprachidiom ohne sauberes Pendant und bleibt bewusst unübersetzt — die
+ * mehrwortige Form deckt jede Sprache trotzdem ab.
  *
  * [DISABLED] (`enabled = false`, NONE-Port) ist der nie-antwortende Default:
  * ohne `HOSHI_ANDI_FAKTOR_ENABLED` liefert [handle] immer `null`, der Zweig im
@@ -47,13 +62,13 @@ class DailyNoteFastpath(
      * (⇒ normaler Turn). [source] ist der Eingangs-Rand des Turns
      * ("chat"/"voice"/"ws") und fließt nur in die JSONL-Zeile.
      */
-    fun handle(text: String, source: String): String? {
+    fun handle(text: String, source: String, language: Language = Language.DEFAULT): String? {
         if (!enabled || text.isBlank()) return null
         val match = match(text) ?: return null
         val replaced = store.record(
             DailyNote(ts = clock.instant(), score = match.score, grund = match.grund, source = source),
         )
-        return receipt(match.score, replaced)
+        return receipt(match.score, replaced, language)
     }
 
     /**
@@ -82,13 +97,16 @@ class DailyNoteFastpath(
             .ifBlank { null }
 
     /**
-     * Deterministische, warme Quittung — exakt gepinnt in den Tests:
-     * neu ⇒ „Notiert: heute eine 4. Danke dir!", zweite Note am selben Tag ⇒
-     * ehrlich „Aktualisiert: heute eine 4. Danke dir!".
+     * Deterministische, warme Quittung in [language] — auf Deutsch exakt gepinnt in
+     * den Tests: neu ⇒ „Notiert: heute eine 4. Danke dir!", zweite Note am selben Tag
+     * ⇒ ehrlich „Aktualisiert: heute eine 4. Danke dir!". Die Note ist eine ZAHL und
+     * wird nie übersetzt — sie ersetzt nur den [SCORE_PLACEHOLDER] im Sprach-Template.
      */
-    private fun receipt(score: Int, replaced: Boolean): String =
-        if (replaced) "Aktualisiert: heute eine $score. Danke dir!"
-        else "Notiert: heute eine $score. Danke dir!"
+    private fun receipt(score: Int, replaced: Boolean, language: Language): String {
+        val pack = LanguagePackRegistry.forLanguage(language)
+        val template = if (replaced) pack.dailyNoteUpdated else pack.dailyNoteRecorded
+        return template.replace(SCORE_PLACEHOLDER, score.toString())
+    }
 
     companion object {
         /** Nie-antwortender Default (Flag-OFF): der Zweig ist tot ⇒ byte-neutral. */
@@ -99,6 +117,12 @@ class DailyNoteFastpath(
          * Gruppe 1 = Score (nur 1–5; der Lookahead `(?!\s*[.,]?\s*\d)` blockt
          * „45", „4,5", „4.5" — lieber KEIN Treffer als eine falsche Note),
          * Gruppe 2 = roher Grund-Rest (wird in [cleanGrund] geputzt).
+         *
+         * EN/ES/FR/IT (Andi-Befund 2026-07-25): dieselbe Score-Gruppe/-Sperre,
+         * derselbe optionale Verbindungs-Konnektor vor dem Trenner. BEWUSST das
+         * bloße „note"/„nota" NIE als Trigger — nur die mehrwortige Wendung, s.
+         * Klassen-KDoc. FR ohne „aujourd'hui"-Konnektor (Apostroph-Risiko in der
+         * Original-Text-Regex); die „…er Tag"-Kurzform bleibt unübersetzt.
          */
         private val PATTERNS = listOf(
             // „Tagesnote 4" / „Tagesnote: 3, zu langsam" / „Tagesnote ist 2" / „tagesnote 5 weil alles lief"
@@ -109,6 +133,26 @@ class DailyNoteFastpath(
             // „heute war ein 4er Tag" / „heute ist ein 3er Tag, weil …"
             Regex(
                 "heute\\s+(?:war|ist)\\s+(?:so\\s+)?ein\\s+([1-5])er[\\s\\-]*tag\\b[\\s,;:.\\-–—]*(.*)$",
+                RegexOption.IGNORE_CASE,
+            ),
+            // EN: „daily note 4" / „daily note: 3, too slow" / „daily note is 2"
+            Regex(
+                "daily\\s+note\\s*(?:is|was|today)?\\s*[:=\\-–—]?\\s*([1-5])(?!\\s*[.,]?\\s*\\d)\\s*[,;:\\-–—.]?\\s*(.*)$",
+                RegexOption.IGNORE_CASE,
+            ),
+            // ES: „nota diaria 4" / „nota diaria: 3, muy lento" / „nota diaria es 2"
+            Regex(
+                "nota\\s+diaria\\s*(?:es|fue|hoy)?\\s*[:=\\-–—]?\\s*([1-5])(?!\\s*[.,]?\\s*\\d)\\s*[,;:\\-–—.]?\\s*(.*)$",
+                RegexOption.IGNORE_CASE,
+            ),
+            // FR: „note du jour 4" / „note du jour : 3, trop lent" / „note du jour est 2"
+            Regex(
+                "note\\s+du\\s+jour\\s*(?:est|était)?\\s*[:=\\-–—]?\\s*([1-5])(?!\\s*[.,]?\\s*\\d)\\s*[,;:\\-–—.]?\\s*(.*)$",
+                RegexOption.IGNORE_CASE,
+            ),
+            // IT: „nota del giorno 4" / „nota del giorno: 3, troppo lento" / „nota del giorno è 2"
+            Regex(
+                "nota\\s+del\\s+giorno\\s*(?:è|era|oggi)?\\s*[:=\\-–—]?\\s*([1-5])(?!\\s*[.,]?\\s*\\d)\\s*[,;:\\-–—.]?\\s*(.*)$",
                 RegexOption.IGNORE_CASE,
             ),
         )
