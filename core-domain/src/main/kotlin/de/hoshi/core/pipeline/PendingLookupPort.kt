@@ -41,8 +41,8 @@ data class PendingLookup(
  *
  * **Wiederverwendbar geschnitten:** der Port kennt nur „Angebot gemerkt/geholt" —
  * er ist NICHT an den FactCoverage-Deflect gebunden. Der zweite Angebots-Pfad
- * (HonestyGate.AskConsent, v1 bewusst NICHT umgebaut) kann später dieselbe
- * Naht als zweite Quelle nutzen (ein Erkenner, zwei Angebots-Quellen).
+ * ([HonestyGate.Verdict.AskConsent]) nutzt dieselbe Naht als zweite Quelle:
+ * ein Store, ein TTL-/One-shot-Vertrag, ein [AffirmationRecognizer].
  *
  * [NONE] ist der verhaltens-neutrale Default (merkt nie, liefert nie) ⇒ ohne
  * Wiring (Decke `HOSHI_EXTENDED_THINK_ENABLED=false`) bleibt jeder Pfad

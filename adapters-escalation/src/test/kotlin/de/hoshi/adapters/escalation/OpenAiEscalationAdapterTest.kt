@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer
 import de.hoshi.core.dto.Language
 import de.hoshi.core.port.EscalationResult
 import de.hoshi.core.port.EscalationSourceRef
+import de.hoshi.core.port.EscalationUnavailableReason
 import de.hoshi.kernel.EgressPort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -319,7 +320,7 @@ class OpenAiEscalationAdapterTest {
             chatStatus = 500,
         ) { url, responsesRequests, chatRequests, _, _ ->
             val result = lookup(adapter(url, webSearch = true), "Wie hoch ist der Eiffelturm?")
-            assertEquals(EscalationResult.Unavailable, result)
+            assertUnavailable(result, EscalationUnavailableReason.HTTP_STATUS, httpStatus = 500)
             assertEquals(1, responsesRequests.get())
             assertEquals(1, chatRequests.get())
         }
@@ -347,6 +348,17 @@ class OpenAiEscalationAdapterTest {
 
     private fun lookup(a: OpenAiEscalationAdapter, query: String, snippets: String = ""): EscalationResult? =
         a.lookup(query, snippets, Language.DE).block(Duration.ofSeconds(10))
+
+    private fun assertUnavailable(
+        result: EscalationResult?,
+        reason: EscalationUnavailableReason,
+        httpStatus: Int? = null,
+    ): EscalationResult.Unavailable {
+        val unavailable = assertInstanceOf(EscalationResult.Unavailable::class.java, result)
+        assertEquals(reason, unavailable.reason)
+        assertEquals(httpStatus, unavailable.httpStatus)
+        return unavailable
+    }
 
     // ── Köder-Tests (Tom-Messung #1): Hard-Block ⇒ Declined + 0 Requests ─────
 
@@ -514,7 +526,7 @@ class OpenAiEscalationAdapterTest {
     fun `ohne Key wird die API gar nicht erst gefragt — Unavailable`() =
         withOpenAi(chatJson("egal")) { url, requests, _ ->
             val result = lookup(adapter(url, apiKey = "   "), "Wie hoch ist der Eiffelturm?")
-            assertEquals(EscalationResult.Unavailable, result)
+            assertUnavailable(result, EscalationUnavailableReason.MISSING_KEY)
             assertEquals(0, requests.get(), "ohne Key darf kein Call rausgehen")
         }
 
@@ -522,7 +534,7 @@ class OpenAiEscalationAdapterTest {
     fun `leere Query wird nicht eskaliert — Unavailable, NULL Requests`() =
         withOpenAi(chatJson("egal")) { url, requests, _ ->
             val result = lookup(adapter(url), "   ")
-            assertEquals(EscalationResult.Unavailable, result)
+            assertUnavailable(result, EscalationUnavailableReason.EMPTY_QUERY)
             assertEquals(0, requests.get())
         }
 
@@ -530,14 +542,14 @@ class OpenAiEscalationAdapterTest {
     fun `HTTP-Fehler (500) liefert Unavailable, nie Crash`() =
         withOpenAi("""{"error":"boom"}""", status = 500) { url, _, _ ->
             val result = lookup(adapter(url), "Wie hoch ist der Eiffelturm?")
-            assertEquals(EscalationResult.Unavailable, result)
+            assertUnavailable(result, EscalationUnavailableReason.HTTP_STATUS, httpStatus = 500)
         }
 
     @Test
     fun `API down (connection refused) liefert Unavailable, nie Crash`() {
         val a = adapter("http://127.0.0.1:1")
         val result = lookup(a, "Wie hoch ist der Eiffelturm?")
-        assertEquals(EscalationResult.Unavailable, result)
+        assertUnavailable(result, EscalationUnavailableReason.NETWORK)
     }
 
     @Test
@@ -545,7 +557,7 @@ class OpenAiEscalationAdapterTest {
         withOpenAi("das ist kein json") { url, _, _ ->
             val spend = FileBackedEscalationSpendStore(tempSpendPath())
             val result = lookup(adapter(url, spendStore = spend), "Wie hoch ist der Eiffelturm?")
-            assertEquals(EscalationResult.Unavailable, result)
+            assertUnavailable(result, EscalationUnavailableReason.PARSE)
             assertTrue(spend.spentTodayCents() > 0.0, "auch ein unparsbarer Call wird konservativ gebucht")
         }
 
@@ -553,7 +565,7 @@ class OpenAiEscalationAdapterTest {
     fun `leere Antwort-Wahl liefert Unavailable`() =
         withOpenAi(chatJson("")) { url, _, _ ->
             val result = lookup(adapter(url), "Wie hoch ist der Eiffelturm?")
-            assertEquals(EscalationResult.Unavailable, result)
+            assertUnavailable(result, EscalationUnavailableReason.EMPTY_RESPONSE)
         }
 
     @Test

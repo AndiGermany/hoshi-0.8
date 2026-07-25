@@ -187,7 +187,9 @@ bin/hoshi doctor   # honest, read-only stack status (OK/DEGRADED/DOWN)
 
 Requires an Apple Silicon Mac (MLX needs the Metal GPU); the Gradle wrapper auto-provisions
 JDK 21. Brain, Whisper STT, speaker ID, the knowledge bridge, and the `say`/Piper local-TTS
-sidecars live in [`sidecars/`](sidecars/) with pinned bootstrap paths. Large models and the
+sidecars live in [`sidecars/`](sidecars/) with pinned bootstrap paths. A fresh install defaults
+to macOS `say` (local, no API key and no voice-model download); Piper remains an explicit
+GPL/model opt-in. Large models and the
 Wikipedia database remain external artifacts; the legacy Voxtral server still comes from a
 separate local checkout and is deliberately disabled. Full German guide: [Build & Run](#build--run).
 
@@ -268,18 +270,36 @@ und lokale TTS-Optionen (`say` `:8044`, Piper `:8045`; der alte Voxtral-Pfad wä
 OpenAI-TTS ist kein lokaler Sidecar. `bin/hoshi up` fährt den lokalen Stack brain-guard-sicher und
 idempotent hoch (siehe `bin/hoshi help` bzw. [`pipeline/up.sh`](pipeline/up.sh)).
 
+**Fresh-Clone-TTS:** Ohne gespeicherte Wahl und ohne `HOSHI_TTS` ist der eine
+Default **`say`**. Er braucht keinen API-Key und kein Sprachmodell; einmalig werden
+nur die gepinnten Python-Webserver-Abhängigkeiten eingerichtet:
+
+```bash
+sidecars/say/bootstrap.sh
+bin/hoshi up
+bin/hoshi voice
+```
+
+`bin/hoshi run` beweist bewusst nur App-Boot und Auth-Wand, nicht die Hörbarkeit.
+`bin/hoshi voice` ist der echte Audio-Beweis und bricht mit einer konkreten
+Bootstrap-/Sidecar-Meldung ab, statt einen stummen Turn als „läuft“ zu verkaufen.
+Piper bleibt optional: `sidecars/piper/bootstrap.sh` lädt Runtime und Modelle erst
+nach einer expliziten Entscheidung; anschließend kann `HOSHI_TTS=piper` bzw. die
+Einstellung im UI gewählt werden.
+
 **Brain, Whisper-STT, Speaker-ID und Knowledge-Bridge sind Teil dieses Repos** ([`sidecars/`](sidecars/)): je Sidecar
 ein gepinntes `bootstrap.sh` (venv + requirements; externe Modelle/Daten bleiben ausserhalb) und ein
 `run.sh`. `bin/hoshi up` wählt automatisch den Repo-Sidecar, sobald
 sein venv gebootstrapped ist (Override: `HOSHI_SIDECARS_FROM_REPO=true|false`). `say` und Piper
-liegen als optionale lokale TTS-Engines im Repo. Nur der deaktivierte Legacy-Voxtral-Pfad nutzt
+liegen als lokale TTS-Engines im Repo; `say` ist der Fresh-Clone-Default, Piper
+bleibt wegen Bootstrap/Modell/GPL explizit opt-in. Nur der deaktivierte Legacy-Voxtral-Pfad nutzt
 noch Run-Skripte eines separaten, unveröffentlichten Vorgänger-Checkouts (`HOSHI_05_ROOT`);
 auf einem frischen Klon wird ein fehlender Sidecar ehrlich übersprungen (Warnung statt Fake-Start).
 
 **Backend starten**
 ```bash
 bin/hoshi run      # bootet lokal auf :8090, prüft Health + die Auth-Wand (401 ohne Token)
-bin/hoshi verify   # der grüne Gate: Build + Tests + Live-Brain-Smoke
+bin/hoshi verify   # Gate: Deploy-Render + TTS-Fresh-HOME + Build/Tests + Live-Brain
 bin/hoshi doctor   # ehrlicher, read-only Stack-Status (Brain/Sidecars/RAM — OK/DEGRADED/DOWN)
 ```
 

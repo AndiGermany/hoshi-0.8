@@ -22,7 +22,7 @@
 #                    rendert deploy.sh die aktuelle Mac-IP frisch ein.
 #
 # 🔒 SECRETS (HÄRTUNG 2026-07-12): HOSHI_API_TOKEN / HOSHI_HA_TOKEN /
-# OPENAI_API_KEY stehen NICHT mehr als __PLATZHALTER__ in dieser Unit (bis
+# OPENAI_API_KEY stehen NICHT mehr als sed-Platzhalter in dieser Unit (bis
 # 2026-07-11 standen sie inline als Environment=<wert> — `systemctl cat` dumpte
 # sie im Klartext, so leakten sie real in ein Transcript). Sie kommen jetzt aus
 # EnvironmentFile=/etc/hoshi-0.8/secrets.env (siehe unten), root-only (chmod
@@ -83,6 +83,12 @@ ExecStart=/usr/bin/java -jar __REMOTE_DIR__/web-inbound.jar \
   --hoshi.perimeter.enabled=true \
   --hoshi.brain.base-url=http://__MAC_IP__:8041
 
+# ⏳ Graceful Shutdown (0.8.1): application.yml setzt server.shutdown=graceful +
+# spring.lifecycle.timeout-per-shutdown-phase=20s ⇒ laufende Turns/WebSockets trinken beim
+# Deploy-Restart aus, statt hart per SIGTERM gekappt zu werden. TimeoutStopSec knapp ÜBER der
+# 20s-Grace, sonst schickt systemd vorzeitig SIGKILL und die Grace verpufft.
+TimeoutStopSec=30s
+
 # ── 🔒 HTTPS / TLS (Secure-Context fürs Browser-Mikro) ────────────────────────
 # getUserMedia (Mikro) verlangt einen "secure context": über http://<LAN-IP> verweigert
 # Chrome den Mikro-Zugriff → die ganze Sprach-Eingabe ist tot. Lösung: das Backend
@@ -132,24 +138,24 @@ Environment=HOSHI_BRAIN_EXPECTED_MODEL=__BRAIN_EXPECTED__
 # Gerätesteuerung aus indirekten Phrasen = sein Gate). Scharf: HOSHI_AGENTIC_TOOLS_ENABLED=true.
 # Environment=HOSHI_AGENTIC_TOOLS_ENABLED=true   # ← Andi zieht
 Environment=HOSHI_HA_BASE_URL=http://192.168.178.56:8123
-# 🎙️ Voice-TTS (Andi: OpenAI, NICHT Voxtral): Hoshis Antwort wird gesprochen, wenn der
-# Turn speak=true setzt (FE-🔊 / Sprach-Turn). Key kommt aus der EnvironmentFile oben
-# (secrets.env, aus ~/.hoshi/openai.key auf dem Mac gerendert, NIE geloggt). Voxtral
-# bleibt aus (RAM).
-Environment=HOSHI_TTS=openai
+# 🎙️ Voice-TTS — Engine wird gerendert (__TTS_ENGINE__) aus secrets.json["tts"]
+# (deploy.sh: resolve_tts_engine). DEFAULT = lokal-first "say": macOS-Bordmittel,
+# kein Key, kein Modell, kein Cloud-Egress; `bin/hoshi up` startet genau diesen
+# Sidecar nach dessen einmaligem Python-Bootstrap. Cloud "openai" ist OPT-IN via
+# secrets.json["tts"]="openai" (Key aus der EnvironmentFile oben, nie geloggt).
+# Piper ist ebenfalls NUR explizit anwählbar: Bootstrap + Modell-Download +
+# GPL-Opt-in dürfen nie als Fresh-Clone-Default untergeschoben werden.
+# Die Sidecars laufen auf dem Mac; ct-106 erreicht sie über die Mac-LAN-IP.
+Environment=HOSHI_TTS=__TTS_ENGINE__
 # 🎙️ DRITTE TTS-Engine (say-Sidecar, sidecars/say/, Port 8044, macOS-Bordmittel —
-# kein Modell-RAM, kein Cloud-Egress). NICHT scharf hier (HOSHI_TTS bleibt openai,
-# s.o. — Andis Engine-Wahl ist ein eigener Gate, kein Teil dieser Scheibe). Zum
-# Testen: HOSHI_TTS=say setzen UND die Mac-IP-Zeile unten einkommentieren (Muster
-# wie HOSHI_STT_BASE_URL/HOSHI_SPEAKER_BASE_URL — der Sidecar laeuft auf dem Mac,
-# ct-106 erreicht ihn nur ueber die Mac-LAN-IP, NICHT ueber den Default 127.0.0.1).
+# kein Modell-RAM, kein Cloud-Egress). Fresh-Clone-Default; eine explizite
+# secrets.json-Wahl kann ihn ersetzen. Der Sidecar muss auf dem Mac laufen,
+# ct-106 erreicht ihn über die gerenderte Mac-IP.
 Environment=HOSHI_TTS_SAY_BASE_URL=http://__MAC_IP__:8044
 # 🎙️ VIERTE TTS-Engine (piper-Sidecar, sidecars/piper/, Port 8045, CPU-only/ONNX/
-# Thorsten medium, lokal — kein Cloud-Egress). NICHT scharf hier (HOSHI_TTS bleibt
-# openai, s.o. — Andis Blind-Hörprobe + Lizenz-/Contest-Entscheid stehen noch aus,
-# Codex-Sidecar-Übergabe 19.07). Zum Testen: HOSHI_TTS=piper setzen UND die
-# Mac-IP-Zeile unten einkommentieren (Muster wie HOSHI_TTS_SAY_BASE_URL — der
-# Sidecar laeuft auf dem Mac, ct-106 erreicht ihn nur ueber die Mac-LAN-IP).
+# Thorsten medium, lokal — kein Cloud-Egress). Optional und explizit:
+# `secrets.json["tts"]="piper"` erst nach Bootstrap, Modell-/Lizenz-Opt-in und
+# Startnachweis. Kein stiller Default-Flip.
 Environment=HOSHI_TTS_PIPER_BASE_URL=http://__MAC_IP__:8045
 # 🎤 Voice-IN (STT): Whisper-MLX-Sidecar läuft auf dem Mac (:9001), nicht auf ct-106
 # → die Default-localhost:9001-URL ist hier FALSCH (Connection refused → "nichts

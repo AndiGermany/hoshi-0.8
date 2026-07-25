@@ -4,10 +4,10 @@
 # grün≠lebt: der STT-Bogen lebt erst, wenn eine echte WAV-Datei real durch
 # /api/v1/voice einen Turn auslöst. Dieses Skript beweist genau das, end-to-end,
 # self-contained:
-#   (a) erzeugt eine deutsche Frage-WAV via Voxtral-TTS (:8042 /tts) — die
+#   (a) erzeugt eine deutsche Frage-WAV via macOS-say-TTS (:8044 /tts) — die
 #       „gesprochene Frage" (Hoshi spricht sich die Frage selbst vor),
 #   (b) bootet die ECHTE 0.8-App (web-inbound) auf :8090 mit Token,
-#       Brain → :8041, TTS → :8042, STT → :9001,
+#       Brain → :8041, TTS → say :8044, STT → :9001,
 #   (c) POSTet die WAV roh (application/octet-stream) an /api/v1/voice,
 #   (d) parst aus dem SSE-Stream das STT-Transkript (Step kind=transcript) UND
 #       die Hoshi-Antwort (Text-Deltas) + den Audio-Beleg (≥1 AudioChunk).
@@ -17,7 +17,7 @@
 #   - Hoshi-Antwort-Text NICHT leer (Turn lief durchs Hexagon),
 #   - terminales done. Kein stiller Tod.
 #
-# Voraussetzung: Voxtral-TTS (:8042) + Whisper-STT (:9001) leben. Brain (:8041)
+# Voraussetzung: say-TTS (:8044) + Whisper-STT (:9001) leben. Brain (:8041)
 # ist Kür — fehlt er, greift Never-Silent und die Fallback-Phrase wird Antwort.
 #
 # Exit 0 nur, wenn Transkript UND Antwort nicht leer sind. App sauber gestoppt.
@@ -35,6 +35,7 @@ FRAGE_WAV="$PIPELINE_LOG_DIR/voicein-$TS-frage.wav"
 
 PORT=8090
 TOKEN="testtoken"
+SAY_URL="${HOSHI_TTS_SAY_BASE_URL:-http://localhost:8044}"
 LANG_CODE="${2:-DE}"
 QUESTION="${1:-Wer war Konrad Adenauer?}"
 
@@ -47,10 +48,15 @@ else
     fail "Whisper-STT (:9001) NICHT erreichbar — ohne STT-Sidecar kein Eingabe-Beweis"
     exit 1
 fi
-if curl -s -m 5 "http://localhost:8042/health" 2>/dev/null | grep -q '"status":"ok"'; then
-    ok "Voxtral-TTS (:8042) lebt — Frage-WAV kann erzeugt werden"
+if curl -s -m 5 "$SAY_URL/health" 2>/dev/null | grep -q '"status":"ok"'; then
+    ok "say-TTS ($SAY_URL) lebt — Frage-WAV kann erzeugt werden"
 else
-    fail "Voxtral-TTS (:8042) NICHT erreichbar — brauche es, um die Frage-WAV zu erzeugen"
+    fail "say-TTS ($SAY_URL) NICHT erreichbar — brauche es, um die Frage-WAV zu erzeugen."
+    if [ ! -x "$REPO_ROOT/sidecars/say/.venv/bin/python" ]; then
+        fail "Fresh-Clone-Stopp: sidecars/say/.venv fehlt. Einmalig ausführen: sidecars/say/bootstrap.sh"
+    else
+        fail "Der Sidecar ist installiert, aber nicht gestartet. Ausführen: bin/hoshi up"
+    fi
     exit 1
 fi
 BRAIN_OK=0
@@ -62,10 +68,10 @@ else
 fi
 echo
 
-# ── (1) Die „gesprochene Frage": Voxtral-TTS → WAV ───────────────────────────
-say "Frage-WAV erzeugen via Voxtral-TTS (:8042 /tts):  \"$QUESTION\""
+# ── (1) Die „gesprochene Frage": say-TTS → WAV ────────────────────────────────
+say "Frage-WAV erzeugen via say-TTS ($SAY_URL/tts):  \"$QUESTION\""
 HTTP_TTS="$(curl -s -m 60 -o "$FRAGE_WAV" -w '%{http_code}' \
-    -X POST "http://localhost:8042/tts" \
+    -X POST "$SAY_URL/tts" \
     -H "Content-Type: application/json" \
     -d "{\"text\":\"$QUESTION\",\"lang\":\"$(echo "$LANG_CODE" | tr '[:upper:]' '[:lower:]')\"}" 2>>"$LOG" || echo 000)"
 WAV_BYTES="$(wc -c < "$FRAGE_WAV" 2>/dev/null | tr -d ' ' || echo 0)"
@@ -97,8 +103,8 @@ if [ -z "$JAR" ]; then
 fi
 ok "Artefakt: ${JAR#$REPO_ROOT/}"
 
-# ── (3) App auf :8090 booten (STT → :9001, Brain → :8041, TTS → :8042) ────────
-say "App booten auf :$PORT (Token gesetzt; STT → :9001, Brain → :8041, TTS → :8042)"
+# ── (3) App auf :8090 booten (STT → :9001, Brain → :8041, TTS → say) ─────────
+say "App booten auf :$PORT (Token gesetzt; STT → :9001, Brain → :8041, TTS → say $SAY_URL)"
 APP_PID=""
 cleanup() {
     if [ -n "${APP_PID:-}" ] && kill -0 "$APP_PID" 2>/dev/null; then
@@ -111,12 +117,12 @@ cleanup() {
 trap cleanup EXIT
 
 log "java: $JAVA_BIN"
-HOSHI_API_TOKEN="$TOKEN" "$JAVA_BIN" -jar "$JAR" \
+HOSHI_TTS=say HOSHI_API_TOKEN="$TOKEN" "$JAVA_BIN" -jar "$JAR" \
     --server.port="$PORT" \
     --hoshi.perimeter.enabled=true \
     --hoshi.perimeter.token="$TOKEN" \
     --hoshi.brain.base-url="http://localhost:8041" \
-    --hoshi.tts.base-url="http://localhost:8042" \
+    --hoshi.tts.say.base-url="$SAY_URL" \
     --hoshi.stt.base-url="http://localhost:9001" \
     >"$APP_LOG" 2>&1 &
 APP_PID=$!

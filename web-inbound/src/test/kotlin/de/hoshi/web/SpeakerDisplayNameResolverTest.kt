@@ -50,7 +50,7 @@ class SpeakerDisplayNameResolverTest {
 
     @Test
     fun `Flag ON + enrolltes Profil + Default-displayName - loest gross geschrieben auf`(@TempDir dir: Path) {
-        val store = storeWith(dir, "andi", "cindy")
+        val store = storeWith(dir, "andi", "person-b")
         val resolver = SpeakerDisplayNameResolver(enabled = true, storeProvider = SpeakerDisplayNameResolver.providerOf(store))
         val context = SpeakerContext(speakerId = "andi", score = 0.9)
 

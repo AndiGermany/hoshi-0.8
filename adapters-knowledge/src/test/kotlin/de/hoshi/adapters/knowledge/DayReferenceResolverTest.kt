@@ -1,5 +1,6 @@
 package de.hoshi.adapters.knowledge
 
+import de.hoshi.core.dto.Language
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -93,10 +94,28 @@ class DayReferenceResolverTest {
 
     @Test
     fun `dayLabel - heute und morgen wie bisher, ab 2 der Tag beim Namen`() {
-        assertEquals("heute", resolver.dayLabel(0))
-        assertEquals("morgen", resolver.dayLabel(1))
+        assertEquals("heute", resolver.dayLabel(0, Language.DE))
+        assertEquals("morgen", resolver.dayLabel(1, Language.DE))
         // Sonntag + 2 = Dienstag, Sonntag + 4 = Donnerstag.
-        assertEquals("am Dienstag (in 2 Tagen)", resolver.dayLabel(2))
-        assertEquals("am Donnerstag (in 4 Tagen)", resolver.dayLabel(4))
+        assertEquals("am Dienstag (in 2 Tagen)", resolver.dayLabel(2, Language.DE))
+        assertEquals("am Donnerstag (in 4 Tagen)", resolver.dayLabel(4, Language.DE))
+    }
+
+    @Test
+    fun `dayLabel folgt der Turn-Sprache - derselbe Tag in allen fuenf Sprachen`() {
+        // Der Tagesbezug steht MITTEN in der Wetter-Zeile; bliebe er deutsch,
+        // wäre jeder fremdsprachige Block halbdeutsch (Sprach-Naht 2026-07-25).
+        assertEquals("today", resolver.dayLabel(0, Language.EN))
+        assertEquals("tomorrow", resolver.dayLabel(1, Language.EN))
+        assertEquals("on Thursday (in 4 days)", resolver.dayLabel(4, Language.EN))
+
+        assertEquals("hoy", resolver.dayLabel(0, Language.ES))
+        assertEquals("el jueves (en 4 días)", resolver.dayLabel(4, Language.ES))
+
+        assertEquals("aujourd'hui", resolver.dayLabel(0, Language.FR))
+        assertEquals("jeudi (dans 4 jours)", resolver.dayLabel(4, Language.FR))
+
+        assertEquals("oggi", resolver.dayLabel(0, Language.IT))
+        assertEquals("giovedì (tra 4 giorni)", resolver.dayLabel(4, Language.IT))
     }
 }

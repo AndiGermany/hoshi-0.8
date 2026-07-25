@@ -9,8 +9,13 @@
    vorbehalten. Animiert wird nur transform/opacity/filter (+ ein sanfter
    box-shadow-Atem am Mic) → 60fps, kein Layout-Thrash. Diese Datei wird per
    Import in der Voice-Komponente (ChatView) geladen; sie nutzt EIGENE
-   Klassennamen (vc-*), sodass sie nicht mit den alten .compose__*/.star-Regeln
-   in index.css um Spezifität/Reihenfolge ringt. */
+   Klassennamen (vc-…), sodass sie nicht mit den alten .compose__… und .star
+   Regeln in index.css um Spezifität/Reihenfolge ringt.
+
+   NICHT die Sternchen-Schreibweise .compose__<stern><slash>.star zurückholen:
+   die Zeichenfolge Stern-Slash schließt den Blockkommentar mitten im Satz, der
+   Rest wird als CSS gelesen und esbuild meldet 'Unexpected /' (Codex-Befund
+   0.8.1 — der Build lief trotzdem grün, die Warnung stand nur im Rauschen). */
 
 /* ---- gemeinsames Icon ---- */
 .vc-ico {

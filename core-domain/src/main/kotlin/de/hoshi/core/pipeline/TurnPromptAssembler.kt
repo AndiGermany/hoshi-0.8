@@ -44,9 +44,51 @@ fun interface EntityMemoryWriter {
 /**
  * Wiki-Grounding-Naht: liefert für eine Wissensfrage einen Fakten-Block (leer =
  * kein Treffer). Infra (articles.db/Bridge) bleibt im Adapter.
+ *
+ * **Turn-Sprache ist PFLICHT-Parameter (Multilingual-Welle, 2026-07-24 →
+ * entdoppelt 2026-07-25):** [groundingBlock] trägt die SPRACHE DES TURNS — der
+ * Grounding-Block (z.B. der Wetter-Block aus
+ * [de.hoshi.adapters.knowledge.WeatherGroundingProvider]) geht WÖRTLICH in den
+ * Brain-Prompt und muss deshalb der Turn-Sprache folgen, NICHT einer separaten
+ * Anzeigesprache: ein deutscher Datenblock + eine deutsche ANWEISUNG holen die
+ * Antwort selbst bei englischer Persona zuverlässig nach Deutsch zurück.
+ *
+ * **Warum GENAU EIN Member (und kein `fun interface` mehr):** die erste Fassung
+ * rüstete die Sprache über ein ZWEITES, nicht-abstraktes Overload nach (Kotlin
+ * verbietet Default-Werte am einen abstrakten Member eines `fun interface`).
+ * Folge: drei von vier Implementierungen überschrieben nur die 2-Arg-Variante
+ * und verloren die Sprache STILL — ohne Compiler- oder Test-Warnung. Seit
+ * 2026-07-25 gibt es deshalb nur noch DIESE eine Signatur: wer den Port
+ * implementiert, MUSS die Sprache annehmen (und darf sie bewusst ignorieren,
+ * wenn seine Quelle sprachneutral ist). Der Preis — Lambdas werden zu
+ * `object : GroundingPort { … }` — ist die Compiler-Garantie wert.
+ *
+ * Sprach-agnostische Implementierungen (z.B. der Leer-Port [EMPTY]) nehmen
+ * [language] entgegen und ignorieren ihn sichtbar; sprachbewusste Scheiben
+ * (Wetter) bauen ihren Text daraus.
  */
-fun interface GroundingPort {
-    fun groundingBlock(query: String, category: RouteCategory): Mono<String>
+interface GroundingPort {
+    fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String>
+
+    companion object {
+        /**
+         * Port mit KONSTANTEM Block — sprach-unabhängig, weil an einem festen
+         * String nichts zu übersetzen ist. Ersetzt die früheren
+         * `GroundingPort { _, _ -> Mono.just(x) }`-Lambdas (Stub-Wiring,
+         * Test-Fakes), ohne dass jemand die Sprach-Signatur umgehen kann.
+         */
+        fun fixed(block: String): GroundingPort = object : GroundingPort {
+            override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> =
+                Mono.just(block)
+        }
+
+        /**
+         * Verhaltens-neutraler Leer-Port (nie ein Block) — der frühere
+         * `GroundingPort { _, _ -> Mono.just("") }`-Lambda-Ausdruck, jetzt als
+         * EINE benannte Wahrheit (Muster [EntityMemoryWriter.NOOP]).
+         */
+        val EMPTY: GroundingPort = fixed("")
+    }
 }
 
 /**
@@ -237,7 +279,10 @@ class TurnPromptAssembler(
             if (decision.provider == RouteProvider.LOCAL && wikiGroundingEnabled) {
                 Mono.defer {
                     val t0 = nanoTime()
-                    grounding.groundingBlock(groundingQuery ?: ctx.text, decision.category)
+                    // Turn-Sprache durchreichen (Multilingual-Welle 2026-07-24): der
+                    // Grounding-Block muss der SPRACHE DES TURNS folgen (siehe
+                    // [GroundingPort]-KDoc), nicht einer separaten Anzeigesprache.
+                    grounding.groundingBlock(groundingQuery ?: ctx.text, decision.category, ctx.language)
                         .defaultIfEmpty("")
                         .doOnNext { groundingElapsedMs.set((nanoTime() - t0) / 1_000_000) }
                 }

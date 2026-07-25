@@ -12,8 +12,11 @@ import de.hoshi.core.pipeline.lang.deOr
 import de.hoshi.core.port.BrainPort
 import de.hoshi.core.port.CapabilityPort
 import de.hoshi.core.port.EscalationPort
+import de.hoshi.core.port.EscalationDiagnosticsPort
 import de.hoshi.core.port.EscalationResult
 import de.hoshi.core.port.EscalationSourceRef
+import de.hoshi.core.port.EscalationUnavailableEvent
+import de.hoshi.core.port.EscalationUnavailableReason
 import de.hoshi.core.port.LookupNote
 import de.hoshi.core.port.LookupNoteFenceGuard
 import de.hoshi.core.port.LookupNoteNormalizer
@@ -281,6 +284,12 @@ class TurnOrchestrator(
     private val pendingLocation: PendingLocationQuestionPort = PendingLocationQuestionPort.NONE,
     /** Timeout des Eskalations-Lookups (~8 s) — danach der warme Unavailable-Pfad (never-silent). */
     private val escalationTimeout: Duration = ESCALATION_LOOKUP_TIMEOUT,
+    /**
+     * Finaler Diagnose-Rand des Eskalations-Turns. Default NOOP haelt den Kern
+     * rein; das Web-Wiring injiziert den Logger-Adapter. Genau hier ist erstmals
+     * bekannt, dass der Nutzer wirklich die Unavailable-Phrase erhaelt.
+     */
+    private val escalationDiagnostics: EscalationDiagnosticsPort = EscalationDiagnosticsPort.NONE,
     /**
      * **Nachgeschlagen-Store-WRITE (Extended Think S3).** Default [LookupNotePort.NOOP]
      * (schreibt nie) ⇒ byte-neutral. Bei echtem Store: [escalationTurn] persistiert
@@ -667,9 +676,9 @@ class TurnOrchestrator(
                         is HonestyGate.Verdict.Refuse ->
                             warmDirectAnswer(decision.provider.name, decision.category.name, verdict.phrase)
                         HonestyGate.Verdict.AskConsent ->
-                            warmDirectAnswer(decision.provider.name, decision.category.name, formatter.cloudConsentAsk(ctx.language))
+                            honestyLookupOffer(ctx, decision, explicit = false)
                         HonestyGate.Verdict.AskConsentExplicit ->
-                            warmDirectAnswer(decision.provider.name, decision.category.name, formatter.cloudConsentAskExplicit(ctx.language))
+                            honestyLookupOffer(ctx, decision, explicit = true)
                         // ── Pass: der einzige Pfad, der den Brain (genau 1×) ruft ──
                         // Mit agentischem Tool-Layer läuft der Pass über den sicheren
                         // [agenticBrainTurn] (Brain-mit-Tools → klassifizieren → ggf. gaten);
@@ -1460,6 +1469,26 @@ class TurnOrchestrator(
             ?: PendingLookupPort.LOCAL_KEY
 
     /**
+     * Zweite Quelle DESSELBEN offenen Nachschlag-Angebots: ein HonestyGate-
+     * Deflect, für den [HonestyGate] die externe Fortsetzung bereits als
+     * verfügbar gegatet hat. Merkt die Originalfrage über denselben
+     * [pendingLookup]-Port wie FactCoverage; der Folge-Turn löst oben an Naht B
+     * mit demselben [AffirmationRecognizer], TTL und One-shot-Vertrag ein.
+     *
+     * [explicit] ändert nur die bereits bestehende hörbare Formulierung. Das
+     * Angebot selbst und seine Einlösung haben keinen zweiten Sonderpfad.
+     */
+    private fun honestyLookupOffer(
+        ctx: TurnPrompt,
+        decision: RouteDecision,
+        explicit: Boolean,
+    ): Flux<ChatEvent> {
+        pendingLookup.offer(pendingKey(ctx), PendingLookup(query = ctx.text, language = ctx.language))
+        val phrase = if (explicit) formatter.cloudConsentAskExplicit(ctx.language) else formatter.cloudConsentAsk(ctx.language)
+        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase)
+    }
+
+    /**
      * **Einlösung eines Nachschlags** (geteilt von Naht B [Affirmation] und Naht C
      * [Lookup-Intent]): dieselbe modus-gegatete Kaskade, mit der ein Consent heute
      * eingelöst wird — AUS ⇒ ehrlicher Setting-Hinweis (nie ein stiller Call),
@@ -1724,11 +1753,35 @@ class TurnOrchestrator(
         val sources = AtomicReference<List<EscalationSourceRef>?>(null)
         // H3 Diary: Cap-Erschöpfung EHRLICH von einem Netzfehler unterscheidbar.
         val capExhausted = AtomicBoolean(false)
-        val outcome: Flux<ChatEvent> = escalationPort.lookup(query, "", language)
+        val startedAt = nanoTime()
+        val outcome: Flux<ChatEvent> = Mono.defer { escalationPort.lookup(query, "", language) }
             .timeout(escalationTimeout)
-            .onErrorReturn(EscalationResult.Unavailable)
-            .defaultIfEmpty(EscalationResult.Unavailable)
+            .onErrorResume { error ->
+                val reason = if (error is java.util.concurrent.TimeoutException) {
+                    EscalationUnavailableReason.TIMEOUT
+                } else {
+                    EscalationUnavailableReason.PORT_ERROR
+                }
+                Mono.just(EscalationResult.Unavailable(reason))
+            }
+            .switchIfEmpty(Mono.just(EscalationResult.Unavailable(EscalationUnavailableReason.EMPTY_RESULT)))
             .doOnNext { result ->
+                if (result is EscalationResult.Unavailable) {
+                    // Diagnose darf Never-Silent selbst bei einem kaputten Adapter
+                    // nie brechen. Mono liefert hoechstens ein finales Ergebnis,
+                    // daher entsteht pro Unavailable-Turn exakt ein Callback.
+                    runCatching {
+                        escalationDiagnostics.unavailable(
+                            EscalationUnavailableEvent(
+                                provider = providerLabel,
+                                reason = result.reason,
+                                elapsedMs = ((nanoTime() - startedAt).coerceAtLeast(0L) / 1_000_000L),
+                                timeoutMs = escalationTimeout.toMillis(),
+                                httpStatus = result.httpStatus,
+                            ),
+                        )
+                    }
+                }
                 // H2 Diary: derselbe Hash, mit dem die Notiz GERADE geschrieben wurde
                 // (recordLookupNote gibt sie zurück statt einer zweiten Normalisierung —
                 // eine Wahrheit, kein Duplikat).
@@ -1850,7 +1903,7 @@ class TurnOrchestrator(
             listOf(ChatEvent.TextDelta(escalationUnclear(language), provider = provider))
         is EscalationResult.Declined ->
             listOf(ChatEvent.TextDelta(escalationDeclined(language), provider = provider))
-        EscalationResult.Unavailable ->
+        is EscalationResult.Unavailable ->
             listOf(ChatEvent.TextDelta(escalationUnavailable(language), provider = provider))
         // H3: EIGENE, ehrliche Phrase — Cap-Erschöpfung ist NICHTS Kaputtes, darum NIE
         // die Unavailable-Phrase (die bleibt Netz-/Key-Fehlern vorbehalten, unverändert).

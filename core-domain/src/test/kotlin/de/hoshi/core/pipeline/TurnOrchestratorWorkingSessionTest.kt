@@ -67,7 +67,7 @@ class TurnOrchestratorWorkingSessionTest {
         val base = TurnPromptAssembler(
             persona = persona,
             entityMemory = { null },
-            grounding = { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = null,
         )
         return if (session == null) {

@@ -1,6 +1,7 @@
 package de.hoshi.adapters.knowledge
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -57,7 +58,7 @@ class NachgeschlagenGroundingProviderTest {
         writeNote(path, queryNorm = "wie hoch ist der eiffelturm", ts = Instant.parse("2026-07-01T12:00:00Z"))
         val provider = NachgeschlagenGroundingProvider(path, clock = clockAt("2026-07-05T12:00:00Z"))
 
-        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))!!
 
         assertTrue(block.isNotBlank())
@@ -73,14 +74,14 @@ class NachgeschlagenGroundingProviderTest {
         writeNote(path, queryNorm = "wie hoch ist der eiffelturm")
         val provider = NachgeschlagenGroundingProvider(path)
 
-        val block = provider.groundingBlock("mir ist kalt", RouteCategory.SMART_HOME).block(Duration.ofSeconds(2))
+        val block = provider.groundingBlock("mir ist kalt", RouteCategory.SMART_HOME, Language.DE).block(Duration.ofSeconds(2))
         assertEquals("", block)
     }
 
     @Test
     fun `fehlende Datei liefert leeren Block, wirft nie`(@TempDir dir: Path) {
         val provider = NachgeschlagenGroundingProvider(dir.resolve("fehlt.jsonl"))
-        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))
         assertEquals("", block)
     }
@@ -92,7 +93,7 @@ class NachgeschlagenGroundingProviderTest {
         writeNote(path, queryNorm = "wie hoch ist der eiffelturm", ts = Instant.parse("2026-06-01T12:00:00Z"), ttlDays = 30)
         val provider = NachgeschlagenGroundingProvider(path, clock = clockAt("2026-07-05T12:00:00Z"))
 
-        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))
         assertEquals("", block, "eine abgelaufene Notiz zählt nicht als Cache-Treffer ⇒ Kette geht zu wiki weiter")
     }
@@ -103,7 +104,7 @@ class NachgeschlagenGroundingProviderTest {
         writeNote(path, queryNorm = "wie hoch ist der eiffelturm", ts = Instant.parse("2026-06-06T12:00:00Z"), ttlDays = 30)
         val provider = NachgeschlagenGroundingProvider(path, clock = clockAt("2026-07-05T12:00:00Z"))
 
-        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))
         assertTrue(block!!.isNotBlank(), "29 von 30 Tagen ⇒ noch ein Treffer")
     }
@@ -114,7 +115,7 @@ class NachgeschlagenGroundingProviderTest {
         writeNote(path, queryNorm = "wie hoch ist der eiffelturm")
         val provider = NachgeschlagenGroundingProvider(path)
 
-        val block = provider.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))
         assertEquals("", block, "kein Token-Overlap ⇒ kein Fehl-Treffer (Nora-Linie: lieber verpasst als falsch)")
     }
@@ -136,7 +137,7 @@ class NachgeschlagenGroundingProviderTest {
         )
         val provider = NachgeschlagenGroundingProvider(path, clock = clockAt("2026-07-02T12:00:00Z"))
 
-        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))
         assertTrue(block!!.contains("330 Meter."), "die kaputte erste Zeile darf die gute zweite nicht blockieren")
     }
@@ -150,7 +151,7 @@ class NachgeschlagenGroundingProviderTest {
         writeNote(path, queryNorm = "wie hoch ist der eiffelturm", answer = "330 Meter hoch.")
         val provider = NachgeschlagenGroundingProvider(path)
 
-        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))
         assertTrue(block!!.contains("330 Meter hoch."), "der Treffer über der Schwelle gewinnt")
         assertTrue(!block.contains("1889 erbaut."), "der schwache Treffer unter der Schwelle wird NICHT verwendet")
@@ -169,7 +170,7 @@ class NachgeschlagenGroundingProviderTest {
         writeNote(path, queryNorm = "wie hoch ist der eiffelturm", answer = injected, ts = Instant.parse("2026-07-01T12:00:00Z"))
         val provider = NachgeschlagenGroundingProvider(path, clock = clockAt("2026-07-05T12:00:00Z"))
 
-        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))!!
 
         val fenceStartIdx = block.indexOf(NachgeschlagenGroundingProvider.QUOTE_FENCE_START)
@@ -202,7 +203,7 @@ class NachgeschlagenGroundingProviderTest {
         )
         val provider = NachgeschlagenGroundingProvider(path)
 
-        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))!!
 
         val startCount = block.split(NachgeschlagenGroundingProvider.QUOTE_FENCE_START).size - 1
@@ -277,7 +278,7 @@ class NachgeschlagenGroundingProviderTest {
         writeNote(path, queryNorm = "wie hoch ist der eiffelturm", ts = Instant.parse("2026-07-01T12:00:00Z"))
         val provider = NachgeschlagenGroundingProvider(path, clock = clockAt("2026-07-05T12:00:00Z"), quoteFence = false)
 
-        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))!!
 
         val expected = "\n\n---\n" +

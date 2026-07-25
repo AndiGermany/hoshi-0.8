@@ -131,15 +131,19 @@ class OfflineReplayHarnessTest {
      * spiegelt: ein Block NUR fuer die Grounding-Kategorien (FACT_SHORT/NEEDS_WEB/AMBIG),
      * sonst leer. So beweist der Marker im System-Prompt den Grounding-TRIGGER, ohne Bridge.
      */
-    private fun groundingPort() = GroundingPort { query, category ->
-        if (category == RouteCategory.FACT_SHORT ||
-            category == RouteCategory.NEEDS_WEB ||
-            category == RouteCategory.AMBIG
-        ) {
-            Mono.just("\n\n$GROUNDING_MARKER (q=$query)")
-        } else {
-            Mono.just("")
-        }
+    private fun groundingPort() = object : GroundingPort {
+        // Seit 2026-07-25 ist GroundingPort kein `fun interface` mehr (die Sprach-Signatur
+        // ist Pflicht, s. dortiges KDoc) — dieser Fake ist sprachneutral und ignoriert
+        // `language` deshalb SICHTBAR.
+        override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> =
+            if (category == RouteCategory.FACT_SHORT ||
+                category == RouteCategory.NEEDS_WEB ||
+                category == RouteCategory.AMBIG
+            ) {
+                Mono.just("\n\n$GROUNDING_MARKER (q=$query)")
+            } else {
+                Mono.just("")
+            }
     }
 
     private fun assembler(persona: PersonaService, grounding: GroundingPort) = TurnPromptAssembler(

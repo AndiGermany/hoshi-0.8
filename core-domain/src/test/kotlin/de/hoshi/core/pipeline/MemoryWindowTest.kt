@@ -4,7 +4,6 @@ import de.hoshi.core.dto.ChatMessage
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
-import reactor.core.publisher.Mono
 
 /**
  * **Server-side Working-Memory-Window** ([TurnPromptAssembler.windowHistory]).
@@ -24,7 +23,7 @@ class MemoryWindowTest {
         TurnPromptAssembler(
             persona = PersonaService(),
             entityMemory = EntityContextPort { null },
-            grounding = GroundingPort { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = null,
             historyWindowTurns = windowTurns,
         )

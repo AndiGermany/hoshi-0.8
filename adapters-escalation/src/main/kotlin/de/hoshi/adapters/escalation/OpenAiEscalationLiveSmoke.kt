@@ -61,7 +61,9 @@ fun main(args: Array<String>) {
         EscalationResult.Unclear -> println("[smoke] UNKLAR — Modell weiß es ehrlich nicht")
         is EscalationResult.Declined -> println("[smoke] DECLINED — ${result.auditReason}")
         EscalationResult.CapExhausted -> println("[smoke] CAP_EXHAUSTED — Tages-Budget aufgebraucht")
-        EscalationResult.Unavailable, null -> println("[smoke] UNAVAILABLE — kein Ergebnis (Key/Netz?)")
+        is EscalationResult.Unavailable ->
+            println("[smoke] UNAVAILABLE — cause=${result.reason.logValue} httpStatus=${result.httpStatus ?: "-"}")
+        null -> println("[smoke] UNAVAILABLE — leerer Port-Ausgang")
     }
     println("[smoke] Tages-Spend (Temp-Datei): ${"%.4f".format(store.spentTodayCents())} ct")
 }

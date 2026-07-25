@@ -16,6 +16,7 @@ export const fr: UiStrings = {
     mainNav: 'Navigation principale',
     openSettingsAria: 'Ouvrir les réglages',
     settingsTitle: 'Réglages',
+    closeSettingsAria: 'Fermer les réglages',
   },
 
   idleFace: {
@@ -72,6 +73,10 @@ export const fr: UiStrings = {
     seedSuffix: ' (valeur par défaut du déploiement)',
     hint: 'Le lieu pour les questions météo — valable pour tous les appareils. Pour un autre lieu, demande simplement « Météo à … ? ».',
     saved: (label: string) => `Lieu enregistré : ${label}.`,
+    label: 'Lieu météo',
+    placeholder: 'p. ex. Duisbourg',
+    loading: 'chargement…',
+    current: (label: string) => `Actuel : ${label}`,
   },
 
   lookupModel: {
@@ -82,6 +87,7 @@ export const fr: UiStrings = {
     unknown: 'Modèle inconnu.',
     failed: 'Échec du changement — réessaie.',
     priceSuffix: (cents: number) => `env. ${cents.toFixed(2)} ct/recherche`,
+    loading: 'chargement…',
   },
 
   ttsEngine: {
@@ -95,6 +101,13 @@ export const fr: UiStrings = {
     active: 'actif',
     available: 'disponible',
     notStarted: 'non démarré',
+    loading: 'chargement…',
+    engineLabels: {
+      openai: 'OpenAI (cloud)',
+      say: 'macOS say (local)',
+      piper: 'Piper (local)',
+      voxtral: 'Voxtral (local)',
+    },
   },
 
   stimme: {
@@ -108,6 +121,12 @@ export const fr: UiStrings = {
     cloudPrivacy: "En toute franchise : chaque échantillon vocal et chaque voix cloud part chez OpenAI.",
     localLine: 'La voix parlée des réponses de Hoshi — fonctionne en local.',
     localPrivacy: "Ne quitte jamais l'appareil.",
+    loading: 'chargement…',
+    sampleAria: (voice: string) => `Écouter l'échantillon de la voix ${voice}`,
+    sampleTitle: "Écouter l'échantillon vocal",
+    noVoicesFor: (engine: string) => `Aucune voix disponible pour ${engine} pour le moment.`,
+    licensePrefix: (license: string) => `Licence : ${license}`,
+    sampleFailed: "L'échantillon vocal n'est pas disponible pour le moment.",
   },
 
   brainModel: {
@@ -122,6 +141,9 @@ export const fr: UiStrings = {
     statusOk: 'en cours',
     statusLoading: 'chargement…',
     statusUnreachable: 'injoignable',
+    loading: 'chargement…',
+    statusReading: '(lecture du statut…)',
+    statusPrefix: 'Statut : ',
   },
 
   privacy: {
@@ -193,6 +215,9 @@ export const fr: UiStrings = {
     locked: "Encore désactivé côté serveur — le réglage est enregistré mais ne s'appliquera qu'une fois le mode nuit activé au déploiement.",
     invalid: 'Saisie invalide — vérifie les valeurs.',
     failed: "Échec de l'enregistrement — réessaie.",
+    loading: 'chargement…',
+    deviceGroupAria: 'Appareil',
+    modeGroupAria: 'Mode',
   },
 
   language: {
@@ -206,6 +231,18 @@ export const fr: UiStrings = {
     uiNotice: "Les textes de l'interface et la conversation suivent ce choix — les commandes domotiques restent en allemand pour l'instant.",
   },
 
+  skills: {
+    hint: "Active ou désactive certaines compétences à chaud — côté serveur, pour tous les appareils.",
+    loading: 'chargement…',
+    badgeLocked: 'désactivé au déploiement',
+    badgeEgress: 'passe en ligne',
+    badgeSoon: 'à venir',
+    future: {
+      LISTS: { label: 'Listes', reason: 'décision avec Andi en attente' },
+      MUSIC: { label: 'Musique', reason: 'première étape : un morceau démarre' },
+    },
+  },
+
   firedToast: {
     headline: {
       TIMER: 'Minuteur terminé',
@@ -217,6 +254,11 @@ export const fr: UiStrings = {
       ALARM: 'Alarme',
       REMINDER: 'Rappel',
     },
+    ackTitle: 'Appuie pour confirmer',
+    gearAria: "Ouvrir les réglages d'escalade d'alarme (Compétences)",
+    gearTitle: "Changer l'escalade",
+    missed: (noun, label, time) =>
+      `${label ? `${noun} « ${label} »` : noun} était prévu à ${time} — je n'ai pas pu te joindre`,
   },
 
   activity: {
@@ -256,6 +298,7 @@ export const fr: UiStrings = {
     micIdle: 'Maintiens pour parler (ou appuie pour basculer)', micListening: 'Relâche pour envoyer, ou appuie sur Échap pour abandonner', micTranscribing: 'Je comprends…', micResponding: 'Le micro/Échap interrompt la réponse',
     ttsOn: 'Mode parole activé : Hoshi dit la réponse', ttsOff: 'Mode parole désactivé : texte seulement', greeting: (dayPart) => `${({ night: 'Bonne nuit', morning: 'Bonjour', day: 'Bonjour', evening: 'Bonsoir' } as const)[dayPart]} — que puis-je faire pour toi ?`,
     speakerSettingsAria: 'Ouvrir les réglages des locuteurs (Mémoire et confidentialité)', manageSpeakers: 'Gérer les locuteurs', recordingUnderstood: 'Je comprends ton enregistrement', sourcesTitle: 'Afficher les sources de cette réponse', sources: 'Sources', micAria: 'Micro : maintiens pour parler', discardRecording: 'Abandonner l’enregistrement', discard: 'Abandonner (Échap)', speaking: 'je parle…', processingRecording: 'Traitement de ton enregistrement', transcribing: 'je comprends…', thinking: 'je réfléchis…', placeholder: 'Message à Hoshi…',
+    send: 'Envoyer', sendTitle: 'Envoyer (Entrée)',
   },
   voiceChat: { slowTurn: 'Cela prend un peu plus de temps que d’habitude — je m’en occupe.', connection: 'Connexion', errorStage: (stage) => `Erreur · ${stage}`, noAudioHeard: 'Je n’ai rien entendu : maintiens le micro et parle.' },
   turnAnatomy: {
@@ -263,5 +306,16 @@ export const fr: UiStrings = {
     answering: 'répond', speaking: 'parle',
     recognized: (who) => `reconnu : ${who}`,
     guest: 'Invité', rowLabel: 'Ce que ce tour a réellement fait',
+    local: 'local', cloudSuffix: ' · est passé en ligne',
+    localTitle: "Cette réponse est restée sur l'appareil", cloudTitle: 'Cette réponse est passée par un fournisseur cloud',
+    grounded: 'Appuyé sur des connaissances', groundedTitle: 'La réponse s’appuyait sur des connaissances chargées (filtre FactCoverage)',
+  },
+  voiceOrb: {
+    sectionAria: 'Parle à Hoshi',
+    idleHint: 'Appuie pour parler',
+    idleTapLabel: 'Appuie et parle',
+    listening: (elapsed) => `écoute… ${elapsed}`,
+    listeningTapLabel: 'Appuie à nouveau pour envoyer — ou Échap pour abandonner',
+    speakingTapLabel: "Appuie pour interrompre la réponse de Hoshi",
   },
 };

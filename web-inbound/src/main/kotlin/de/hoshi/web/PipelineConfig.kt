@@ -17,6 +17,7 @@ import de.hoshi.adapters.escalation.EscalationModelCatalog
 import de.hoshi.adapters.escalation.EscalationSpendStore
 import de.hoshi.adapters.escalation.FileBackedEscalationSpendStore
 import de.hoshi.adapters.escalation.OpenAiEscalationAdapter
+import de.hoshi.adapters.escalation.OpenAiEscalationAvailability
 import de.hoshi.adapters.memory.EntityMemoryAdapter
 import de.hoshi.adapters.memory.EpisodicMemoryAdapter
 import de.hoshi.adapters.memory.WorkingSessionAdapter
@@ -24,12 +25,9 @@ import de.hoshi.adapters.routing.EmbeddingRouterRefiner
 import de.hoshi.adapters.routing.OllamaRouteEmbedder
 import de.hoshi.adapters.speaker.CamppSpeakerAdapter
 import de.hoshi.adapters.stt.WhisperSttAdapter
-import de.hoshi.adapters.tts.OpenAiTtsAdapter
-import de.hoshi.adapters.tts.PiperTtsAdapter
-import de.hoshi.adapters.tts.SayTtsAdapter
-import de.hoshi.adapters.tts.VoxtralTtsAdapter
-import de.hoshi.adapters.tts.LoudnessNormalizingTtsPort
-import de.hoshi.adapters.tts.TtsLoudnessNormalizer
+// KEINE `de.hoshi.adapters.tts.*`-Importe mehr: seit 0.8.1 baut diese Config keine
+// TTS-Engine und keinen TTS-Dekorator mehr selbst — das tut ausschliesslich die
+// TtsEngineFactory (s. ttsPort-KDoc, festgenagelt in TtsBuildPathSingleTruthTest).
 import de.hoshi.core.port.AreaCatalogPort
 import de.hoshi.core.port.DeviceDownlinkPort
 import de.hoshi.core.port.InMemoryScheduledItemStore
@@ -96,6 +94,8 @@ import de.hoshi.core.port.WorkshopNotePort
 import de.hoshi.core.port.LookupNotePort
 import reactor.core.publisher.Mono
 import de.hoshi.core.port.EscalationPort
+import de.hoshi.core.port.EscalationDiagnosticsPort
+import de.hoshi.core.port.EscalationAvailabilityPort
 import de.hoshi.kernel.EgressPort
 import de.hoshi.core.port.WorkingSessionPort
 import de.hoshi.core.port.WorkingSessionWriter
@@ -103,7 +103,6 @@ import de.hoshi.core.port.SpeakerEmbedPort
 import de.hoshi.core.port.SttPort
 import de.hoshi.core.port.ToolPort
 import de.hoshi.core.port.TtsPort
-import de.hoshi.core.port.TtsSanitizePort
 import de.hoshi.core.skills.SkillRegistry
 import de.hoshi.core.skills.SkillStatePort
 import de.hoshi.core.tools.AgenticToolRegistry
@@ -306,127 +305,38 @@ class PipelineConfig {
     )
 
     /**
-     * Die Audio-Naht — **per Env [HOSHI_TTS] umschaltbar**, Default lokal.
+     * Die Audio-Naht — **per Env [HOSHI_TTS] umschaltbar**, Default lokal
+     * (`say`, s. [TtsEngineIds.canonicalOf]).
      *
-     *  - `HOSHI_TTS=openai` → [OpenAiTtsAdapter] (OpenAI-Cloud-TTS, `/v1/audio/speech`,
-     *    Key aus der Env `OPENAI_API_KEY`). Für Tests, wenn der Voxtral-Sidecar
-     *    gestoppt ist (RAM sparen). Key wird nie geloggt/konfiguriert — nur die Env.
-     *  - `HOSHI_TTS=say` → [SayTtsAdapter] (macOS-`say`-Sidecar, `sidecars/say/`,
-     *    Default-Base-URL `http://127.0.0.1:8044`). Dritte, rein lokale Engine ohne
-     *    Modell-RAM und ohne Cloud-Egress — Bordmittel-Stimmen.
-     *  - `HOSHI_TTS=piper` → [PiperTtsAdapter] (Piper-Sidecar, `sidecars/piper/`,
-     *    Default-Base-URL `http://127.0.0.1:8045`). Vierte, CPU-only-lokale Engine
-     *    (ONNX/Thorsten medium, GPL-3.0-Runtime hinter HTTP isoliert — s.
-     *    `sidecars/piper/README.md`). Default-OFF, `Codex`-Contract 19.07: Andis
-     *    Blind-Hörprobe + Lizenz-/Contest-Entscheid stehen noch aus, diese Naht macht
-     *    die Engine nur anwählbar, sie flippt keinen Default.
-     *  - sonst (Default, unbekannter/leerer Wert) → [VoxtralTtsAdapter] (lokaler
-     *    Sidecar :8042) — UNVERÄNDERTE Semantik, weder `say` noch `piper` verschärfen
-     *    die Fallback-Regel.
+     * **Dieser Bean BAUT NICHTS MEHR SELBST.** Er löst nur noch den Boot-Wunsch
+     * `HOSHI_TTS` in eine kanonische Engine-Id auf und lässt die [TtsEngineFactory]
+     * bauen — dieselbe Fabrik, die auch ein Laufzeit-Switch
+     * (`PUT /api/v1/settings/tts`, [TtsSettingsController]) benutzt.
      *
-     * Alle vier erfüllen denselben best-effort [TtsPort]: TTS-Fehler killen den
+     * **Warum (0.8.1, struktureller Fix).** Vorher setzte dieser Bean die Kette selbst
+     * zusammen — Sanitize + Loudness — und die Fabrik ihre eigene — Sanitize +
+     * Verbalize. Zwei Wege, eine Regel, nur ein Weg gepflegt: weil
+     * [TtsRuntimeConfig.delegatingTtsPort] bei unangetasteten Settings GENAU DIESEN
+     * Bean nimmt, war `HOSHI_TTS_VERBALIZE_ENABLED=true` auf einer frischen
+     * Installation ein stiller No-op — und umgekehrt verlor jeder Engine-Switch die
+     * Loudness-Normalisierung. Derselbe Fehlertyp hatte davor die SICHERHEITSLÜCKE
+     * verursacht, dass say/piper/voxtral hier ohne Sanitize-Hülle gebaut wurden
+     * ([PipelineConfigTtsSanitizeTest]). Jetzt gibt es EINEN Ort, an dem Dekoratoren
+     * hängen: [TtsEngineFactory.build]. Festgenagelt in [TtsBuildPathSingleTruthTest].
+     *
+     * Engine-Wahl, Dekorator-Reihenfolge (Sanitize auf TEXT zuerst, Loudness auf AUDIO
+     * außen), der openai-Sonderfall (interner Sanitizer statt zweiter Hülle) und ALLE
+     * `HOSHI_TTS_*`-Flags stehen deshalb ausschließlich dort bzw. an der einen
+     * Bau-Aufrufstelle [TtsRuntimeConfig.ttsEngineFactory].
+     *
+     * Alle vier Engines erfüllen denselben best-effort [TtsPort]: TTS-Fehler killen den
      * Text-Turn NIE (Never-Silent).
-     *
-     * **Cloud-Egress-Sanitize (Ticket #5, P0-Leak) — flag-gated `HOSHI_TTS_SANITIZE_ENABLED`,
-     * default OFF.** Nur der CLOUD-Pfad ([OpenAiTtsAdapter]) verlaesst die Box, darum
-     * bekommt NUR er den Sanitizer. Bei OFF (Default) [TtsSanitizePort.IDENTITY] ⇒ der
-     * rohe Antworttext geht (wie heute) an OpenAI ⇒ byte-identisch. Bei ON maskiert der
-     * [NeverSpeakTtsSanitizer] die Never-Speak-Spans (Token/URL/IP/UUID/HA-Entity-ID) VOR
-     * dem Body-Bau, behaelt aber Namen/normalen Inhalt (warmes Audio). Das Scharfschalten
-     * schliesst den Live-Leak. [VoxtralTtsAdapter] ist lokal (kein Egress) — unberuehrt.
      */
     @Bean
     fun ttsPort(
+        ttsEngineFactory: TtsEngineFactory,
         @Value("\${HOSHI_TTS:}") ttsImpl: String,
-        @Value("\${hoshi.tts.base-url:http://localhost:8042}") baseUrl: String,
-        @Value("\${hoshi.tts.voice:de_female}") voice: String,
-        @Value("\${hoshi.tts.openai.model:gpt-4o-mini-tts}") openaiModel: String,
-        @Value("\${hoshi.tts.openai.voice:coral}") openaiVoice: String,
-        // ── say-Engine (Auftrag 19.07, dritte TTS-Engine, sidecars/say/) ──
-        // Base-URL mit ENV-Spiegel (Spring relaxed binding: HOSHI_TTS_SAY_BASE_URL →
-        // hoshi.tts.say.base-url, identisches Muster zu hoshi.speaker.base-url).
-        // Default 127.0.0.1:8044 (lokaler Mac-Sidecar, byte-neutral solange HOSHI_TTS != "say").
-        @Value("\${hoshi.tts.say.base-url:http://127.0.0.1:8044}") sayBaseUrl: String,
-        // Leer = Sidecar-Default (server.py DEFAULT_VOICE) statt eines hier hart
-        // codierten macOS-Stimmnamens.
-        @Value("\${hoshi.tts.say.voice:}") sayVoice: String,
-        // 0 = kein Rate-Override (say/Sidecar entscheidet selbst).
-        @Value("\${hoshi.tts.say.rate:0}") sayRate: Int,
-        // ── piper-Engine (Codex-Sidecar-Übergabe 19.07, vierte TTS-Engine, sidecars/piper/) ──
-        // Base-URL mit ENV-Spiegel (Spring relaxed binding: HOSHI_TTS_PIPER_BASE_URL →
-        // hoshi.tts.piper.base-url, identisches Muster zu hoshi.tts.say.base-url).
-        // Default 127.0.0.1:8045 (lokaler Mac-Sidecar, byte-neutral solange HOSHI_TTS != "piper").
-        @Value("\${hoshi.tts.piper.base-url:http://127.0.0.1:8045}") piperBaseUrl: String,
-        // Codex-Contract #2: IMMER die geladene Stimme mitschicken (kein optionales Feld
-        // wie bei say) — der Sidecar validiert hart und antwortet mit 422 bei Mismatch.
-        @Value("\${hoshi.tts.piper.voice:de_DE-thorsten-medium}") piperVoice: String,
-        // ── Cloud-TTS Egress-Sanitize (Ticket #5) — default OFF (byte-neutral, IDENTITY) ──
-        @Value("\${HOSHI_TTS_SANITIZE_ENABLED:false}") sanitizeEnabled: Boolean,
-        // ── TTS-Loudness-Normalisierung (0.5-Port) — flag-gated, default OFF (byte-neutral) ──
-        // Fixt Andis Befund 2026-06-21 „Stimme unterschiedlich laut". OFF ⇒ exakt der nackte
-        // Adapter ⇒ byte-identisches Audio wie heute. Aktivierung = Andi-Hörprobe.
-        @Value("\${HOSHI_TTS_LOUDNESS_ENABLED:false}") loudnessEnabled: Boolean,
-        @Value("\${hoshi.tts.loudness.target-rms-db:-18.0}") loudnessTargetRmsDb: Double,
-        @Value("\${hoshi.tts.loudness.peak-ceiling-db:-1.0}") loudnessPeakCeilingDb: Double,
-        // ── Gain-Cap (Ravi-Messung 2026-07-03, Andi „Wetter-Antwort ungleich laut") ──
-        // Live-Messung der ECHTEN coral-Stimme (streamEnabled=true, 3 Wetter-Sätze):
-        // coral rendert Sätze mit 3–5 dB Roh-Pegel-Streuung (Satz-zu-Satz), und ihr
-        // Roh-RMS liegt chronisch ~−28…−34 dBFS ⇒ um aufs −18-Ziel zu kommen braucht
-        // JEDER Satz +9…+13 dB. Der bisherige +6-Cap SÄTTIGT damit ALLE Sätze auf
-        // exakt +6 dB (Onset-Gains gemessen alle ≈+6, am Cap) ⇒ die Normalisierung
-        // reicht jeden Satz identisch verschoben durch und kann die coral-Streuung
-        // NICHT entfernen ⇒ Andi hört die Roh-Stufen (~4,6 dB gated). +12 dB gibt der
-        // Pro-Satz-Schätzung Luft, LEISERE Sätze STÄRKER anzuheben als lautere ⇒ die
-        // Satz-zu-Satz-Spanne schrumpft (gemessen 4,6 → 3,0 dB gated / 4,2 → 2,5 dB
-        // full-RMS). Clip-Schutz (Peak-Guard, −1 dBFS) bleibt je Slice; die Restspanne
-        // ist crest-faktor-bedingt (peakige Sätze) und bräuchte einen Limiter (Andi-Call).
-        @Value("\${hoshi.tts.loudness.max-gain-db:12.0}") loudnessMaxGainDb: Double,
-        @Value("\${hoshi.tts.loudness.silence-floor-db:-50.0}") loudnessSilenceFloorDb: Double,
-        // ── TTS-Streaming (Lars-Befund: Batch-Roundtrip dominiert ~1,9s) — default OFF ──
-        // ON ⇒ OpenAI PCM-Stream, in ~600ms-Slices (Zero-Crossing) je als eigenes WAV
-        // ⇒ erstes Audio ~1,1s statt ~2,0-2,8s (gemessen). Flip erst nach Hoerprobe.
-        @Value("\${HOSHI_TTS_STREAM_ENABLED:false}") ttsStreamEnabled: Boolean,
-    ): TtsPort {
-        val base: TtsPort =
-            when {
-                ttsImpl.equals("openai", ignoreCase = true) -> OpenAiTtsAdapter(
-                    apiKey = System.getenv("OPENAI_API_KEY"),
-                    model = openaiModel,
-                    voice = openaiVoice,
-                    // P0-Leak-Riegel: OFF ⇒ IDENTITY (roher Text, byte-neutral),
-                    // ON ⇒ Never-Speak-Maskierung VOR dem Cloud-Call.
-                    sanitizer = if (sanitizeEnabled) NeverSpeakTtsSanitizer() else TtsSanitizePort.IDENTITY,
-                    streamEnabled = ttsStreamEnabled,
-                )
-                // Dritte Engine (Auftrag 19.07): lokaler macOS-`say`-Sidecar, kein Cloud-Egress.
-                ttsImpl.equals("say", ignoreCase = true) -> SayTtsAdapter(
-                    baseUrl = sayBaseUrl,
-                    voice = sayVoice.ifBlank { null },
-                    rate = sayRate.takeIf { it > 0 },
-                )
-                // Vierte Engine (Codex-Sidecar-Übergabe 19.07): lokaler Piper-Sidecar,
-                // CPU-only, kein Cloud-Egress. Default-OFF bis Andis Hörprobe/Lizenz-Gate.
-                ttsImpl.equals("piper", ignoreCase = true) -> PiperTtsAdapter(
-                    baseUrl = piperBaseUrl,
-                    voice = piperVoice,
-                )
-                // Default/unbekannter Wert — UNVERÄNDERTE Semantik (Voxtral, wie vor say/piper).
-                else -> VoxtralTtsAdapter(baseUrl = baseUrl, voice = voice)
-            }
-        return if (loudnessEnabled) {
-            LoudnessNormalizingTtsPort(
-                delegate = base,
-                normalizer = TtsLoudnessNormalizer(
-                    targetRmsDb = loudnessTargetRmsDb,
-                    peakCeilingDb = loudnessPeakCeilingDb,
-                    maxGainDb = loudnessMaxGainDb,
-                    silenceFloorDb = loudnessSilenceFloorDb,
-                ),
-            )
-        } else {
-            base
-        }
-    }
+    ): TtsPort = ttsEngineFactory.build(TtsEngineIds.canonicalOf(ttsImpl))
 
     /**
      * Satzweises TTS-Chunking zwischen Orchestrator-Output und SSE (best-effort, never-silent).
@@ -478,12 +388,12 @@ class PipelineConfig {
 
     /**
      * Der reale Engine-Name fürs Audio-Telemetrie-Tag — DECKUNGSGLEICH mit der
-     * Adapter-Wahl in [ttsPort]: `HOSHI_TTS=openai` ⇒ „openai" (OpenAiTtsAdapter),
-     * `HOSHI_TTS=say` ⇒ „say" (SayTtsAdapter), `HOSHI_TTS=piper` ⇒ „piper"
-     * (PiperTtsAdapter), sonst „voxtral" (VoxtralTtsAdapter, Default-Naht —
-     * unbekannte Werte fallen wie bisher hierher). Delegiert an [TtsEngineIds.canonicalOf]
-     * (die EINE kanonische Namens-Wahrheit, geteilt mit dem Settings-Rand) — reines
-     * Umbenennen, identische Branch-Logik wie vor dieser Naht.
+     * Adapter-Wahl, weil BEIDE dieselbe Funktion rufen: [ttsPort] baut
+     * `factory.build(TtsEngineIds.canonicalOf(ttsImpl))`, das Tag nennt
+     * `TtsEngineIds.canonicalOf(ttsImpl)`. `HOSHI_TTS=openai` ⇒ „openai",
+     * `=say` ⇒ „say", `=voxtral` ⇒ „voxtral", leer ⇒ „say". Unbekannt bricht
+     * hart ab, statt Telemetrie und tatsächlichen Adapter still auseinanderlaufen
+     * zu lassen (s. [TtsEngineIds.canonicalOf]).
      */
     private fun ttsEngineName(ttsImpl: String): String = TtsEngineIds.canonicalOf(ttsImpl)
 
@@ -597,11 +507,16 @@ class PipelineConfig {
     /**
      * Honesty-Gate: ECHTE reine Heuristiken (Weak-Domain/Online-Request, mitportiert)
      * + konservative Stubs für die infra-koppelnden Existence/Named-Entity-Signale.
-     * Cloud ist in 0.8 aus → Gate-Treffer enden in einer ehrlichen warmen Absage.
+     * Die historische `hoshi.cloud.enabled`-Property ist NICHT die heutige
+     * Nachschlag-Wahrheit (sie wird im Deploy nirgends gesetzt). Ein Angebot ist
+     * nur dann ehrlich, wenn Extended Think zur Laufzeit nicht AUS ist UND der
+     * echte Adapter lokal Key+Tagesbudget bestätigt. Sonst bleibt die bestehende
+     * Refusal byte-identisch.
      */
     @Bean
     fun honestyGate(
-        @Value("\${hoshi.cloud.enabled:false}") cloudEnabled: Boolean,
+        escalationAvailabilityPort: EscalationAvailabilityPort,
+        escalationModeStore: JsonFileEscalationModeStore,
         // ── Echte Bridge-Probe-Adapter (0.5-Port) — flag-gated, default OFF (byte-neutral) ──
         // Bei OFF die inerten Stubs (HonestySignal.NONE) ⇒ Gate-Verhalten unverändert. Bei ON
         // prüfen ExistenceClaim/NamedEntity gegen die Wiki-Bridge (:8035 /search, synchron via
@@ -615,7 +530,9 @@ class PipelineConfig {
             onlineRequest = OnlineRequestDetector(),
             existenceClaim = existenceClaim,
             namedEntity = namedEntity,
-            cloudEnabled = { cloudEnabled },
+            cloudEnabled = {
+                escalationModeStore.mode() != EscalationMode.AUS && escalationAvailabilityPort.canOffer()
+            },
         )
     }
 
@@ -680,7 +597,7 @@ class PipelineConfig {
                     quoteFence = quoteFenceEnabled,
                 )
             } else {
-                GroundingPort { _, _ -> Mono.just("") }
+                GroundingPort.EMPTY
             }
         // weatherEnabled || extendedThinkEnabled: Cache-Hit-vor-Cloud ist Architektur,
         // kein Wetter-Anhängsel — die Schicht muss auch ohne Wetter erreichbar sein.
@@ -697,7 +614,7 @@ class PipelineConfig {
                         enableWeatherContract = weatherContractEnabled,
                     )
                 } else {
-                    GroundingPort { _, _ -> Mono.just("") }
+                    GroundingPort.EMPTY
                 },
                 wiki = wiki,
                 nachgeschlagen = nachgeschlagen,
@@ -1540,6 +1457,30 @@ class PipelineConfig {
         @Value("\${hoshi.escalation.spend.path:\${HOSHI_ESCALATION_SPEND_PATH:}}") spendPath: String,
     ): EscalationSpendStore = FileBackedEscalationSpendStore(FileBackedEscalationSpendStore.resolveDefaultPath(spendPath))
 
+    /** Finale, klartextfreie Diagnose jedes wirklich gesprochenen Unavailable-Ausgangs. */
+    @Bean
+    fun escalationDiagnosticsPort(): EscalationDiagnosticsPort = EscalationDiagnosticsLog()
+
+    /**
+     * Read-only Angebots-Gate für HonestyGate: dieselbe Key-/Cap-Wahrheit wie
+     * der echte OpenAI-Adapter, aber ohne Egress. Decke zu ⇒ NONE. Der
+     * Laufzeit-Mode wird separat im [honestyGate]-Supplier geprüft, damit ein
+     * Settings-PUT ab dem nächsten Turn greift.
+     */
+    @Bean
+    fun escalationAvailabilityPort(
+        @Value("\${HOSHI_EXTENDED_THINK_ENABLED:false}") extendedThinkEnabled: Boolean,
+        escalationSpendStore: EscalationSpendStore,
+    ): EscalationAvailabilityPort =
+        if (!extendedThinkEnabled) {
+            EscalationAvailabilityPort.NONE
+        } else {
+            OpenAiEscalationAvailability(
+                apiKey = System.getenv("OPENAI_API_KEY"),
+                spendStore = escalationSpendStore,
+            )
+        }
+
     /**
      * Extended Think (S1): der OpenAI-Nano-EscalationPort — Egress-Riegel (guard) +
      * Tages-Cap 0,50 €/Tag leben BY CONSTRUCTION im Adapter. Decke zu (Default) ⇒
@@ -1683,6 +1624,7 @@ class PipelineConfig {
         // Namen "escalationPort" gegen die GLEICHNAMIGE Bean matchen (der rohe,
         // Boot-fixe Adapter) — der Qualifier erzwingt explizit den Delegaten.
         @Qualifier("delegatingEscalationPort") escalationPort: EscalationPort,
+        escalationDiagnosticsPort: EscalationDiagnosticsPort,
         lookupNotePort: LookupNotePort,
         // Bean aus ExtendedThinkConfig.kt — DIESELBE Instanz wie der Settings-PUT-Rand.
         escalationModeStore: JsonFileEscalationModeStore,
@@ -1759,6 +1701,7 @@ class PipelineConfig {
         probe = probeFastpath,
         // Extended Think (S2, default OFF ⇒ NONE/AUS ⇒ byte-neutral).
         escalation = escalationPort,
+        escalationDiagnostics = escalationDiagnosticsPort,
         lookupNotes = lookupNotePort,
         pendingLookup = pendingLookupPort,
         // Drei-Stufen-Mode als SUPPLIER (pro Turn gelesen): Decke zu ⇒ konstant AUS;

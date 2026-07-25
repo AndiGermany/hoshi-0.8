@@ -3,6 +3,7 @@ package de.hoshi.adapters.knowledge
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.pipeline.GroundingPort
 import org.slf4j.LoggerFactory
@@ -15,8 +16,10 @@ import kotlin.math.roundToInt
  * **WeatherGroundingProvider** — eine zweite reale Grounding-Scheibe: statt der
  * lokalen Wikipedia (siehe [Fts5GroundingAdapter]) zapft sie für Wetter-Fragen die
  * freie **Open-Meteo**-API an (`https://api.open-meteo.com/v1/forecast`, KEIN
- * API-Key) und liefert einen kompakten deutschen „HINTERGRUND…"-Block in derselben
- * Form, die der [Fts5GroundingAdapter] nutzt.
+ * API-Key) und liefert einen kompakten „HINTERGRUND…"-Block in derselben Form,
+ * die der [Fts5GroundingAdapter] nutzt — seit 2026-07-25 KOMPLETT in der
+ * Turn-Sprache (Rahmen + Daten, s. [WeatherBlockTexts]), nicht mehr nur mit
+ * übersetzter Wetterlage in einem deutschen Rahmen.
  *
  * Ziel: „Wie wird das Wetter morgen?" → Hoshi antwortet mit einer ECHTEN, geerdeten
  * Vorhersage (nicht halluziniert). Die Essenz (Open-Meteo `daily`-Forecast +
@@ -91,8 +94,9 @@ class WeatherGroundingProvider(
      * unabhängig davon, WER es gesetzt hat (Wiki-Zahl oder Wetter-Wert) — die
      * Wand steht schon, dieser Adapter muss nur noch markieren.
      *
-     * ON ⇒ [buildBlock] umschließt Ortsname, Min/Max-Temperatur und Wetterlage
-     * jeder Tages-Zeile mit «…» + hängt eine kurze WETTER-VERTRAG-Instruktion an
+     * ON ⇒ [buildBlock] umschließt Ortsname, Tagesbezug, Min/Max-Temperatur
+     * und Wetterlage jeder Tages-Zeile mit «…» + hängt eine kurze
+     * WETTER-VERTRAG-Instruktion an
      * (Muster ZAHLEN-VERTRAG). Live-Befunde, die das motivieren: „Wetter
      * morgen?" trug im Block 17,1–22,7°, gesprochen wurde „17–20" (Obergrenze
      * verstümmelt); „Wetter in Kairo?" grounded nachweislich Kairo, die
@@ -115,10 +119,21 @@ class WeatherGroundingProvider(
     /**
      * Holt für eine WETTER-Frage einen kompakten Hintergrund-Block (NUR die
      * referenzierten Tage; ohne Referenz heute+morgen) aus Open-Meteo, oder `""`
-     * (Nicht-Wissens-Kategorie / keine Wetter-Absicht / API weg).
-     * Niemals ein Fehler nach außen — Grounding ist best-effort.
+     * (Nicht-Wissens-Kategorie / keine Wetter-Absicht / API weg). Niemals ein
+     * Fehler nach außen — Grounding ist best-effort.
+     *
+     * **[language] ist die TURN-Sprache** (der Assembler reicht `ctx.language`
+     * durch) und bestimmt den KOMPLETTEN Block: Kopfzeile, Tages-Zeilen inkl.
+     * Tagesbezug, Wetterlage, Niederschlag, ANWEISUNG und (falls an) den
+     * Wetter-Vertrag. Es gab hier bis 2026-07-25 einen zweiten, sprachlosen
+     * Overload plus ein Ctor-Sprach-Feld als Fallback — beides ist weg: die
+     * Sprache kommt jetzt ausschließlich pro Turn herein und kann deshalb weder
+     * still verloren gehen noch von einer Adapter-Konfiguration überstimmt
+     * werden. (Die Anzeigesprache von [todayForecast]/`GET /api/v1/weather/today`
+     * ist eine ANDERE Frage und bleibt bewusst unberührt — s.
+     * `vault/tracks/prep/PREP-i18n-backend-restklassen.md`.)
      */
-    override fun groundingBlock(query: String, category: RouteCategory): Mono<String> {
+    override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> {
         // Kategorie-Gate (identisch zum Fts5GroundingAdapter): nur Wissens-Kategorien
         // grounden. „mir ist kalt" (SMART_HOME-Komfort) o.ä. erreicht uns so nie.
         // (Companion-Wahrheit [isKnowledgeCategory] — geteilt mit der Wetter-Orts-
@@ -137,9 +152,9 @@ class WeatherGroundingProvider(
         val reference = days.resolve(query)
         val place = if (geocoding != null) explicitPlace(query) else null
         return if (place != null && geocoding != null) {
-            explicitPlaceBlock(place, geocoding, reference)
+            explicitPlaceBlock(place, geocoding, reference, language)
         } else {
-            configuredLocationBlock(reference)
+            configuredLocationBlock(reference, language)
         }
     }
 
@@ -155,16 +170,17 @@ class WeatherGroundingProvider(
         place: String,
         geocoder: OpenMeteoGeocodingClient,
         reference: DayReferenceResolver.DayReference,
+        language: Language,
     ): Mono<String> =
         geocoder.geocode(place)
             // Ops-Sichtbarkeit: WELCHER Ort diesen Turn grounded (Diagnose-Anker,
             // falls eine Antwort nach dem falschen Ort klingt — Log statt Raten).
             .doOnNext { log.info("[weather-grounding] Turn-Ort: {} (geocodet aus '{}')", it.label, place) }
-            .flatMap { location -> forecastBlock(location, reference) }
+            .flatMap { location -> forecastBlock(location, reference, language) }
             .switchIfEmpty(
                 Mono.fromSupplier {
                     log.info("[weather-grounding] Geocode '{}' ohne Treffer — ehrlicher Hinweis statt Heimat-Fallback", place)
-                    honestyBlock(place)
+                    honestyBlock(place, language)
                 },
             )
             .onErrorResume { e ->
@@ -174,14 +190,14 @@ class WeatherGroundingProvider(
                     place,
                     e.message,
                 )
-                Mono.just(honestyBlock(place))
+                Mono.just(honestyBlock(place, language))
             }
 
     /** Kein expliziter Ort ⇒ byte-identisch zum bisherigen Verhalten: konfigurierter Ort. */
-    private fun configuredLocationBlock(reference: DayReferenceResolver.DayReference): Mono<String> =
+    private fun configuredLocationBlock(reference: DayReferenceResolver.DayReference, language: Language): Mono<String> =
         Mono.fromSupplier { configuredLocation() }
             .doOnNext { log.info("[weather-grounding] Turn-Ort: {} (konfiguriert)", it.label) }
-            .flatMap { location -> forecastBlock(location, reference) }
+            .flatMap { location -> forecastBlock(location, reference, language) }
             .defaultIfEmpty("")
             .onErrorResume { e ->
                 // API tot / Timeout / Parse → best-effort leerer Block, nie Crash.
@@ -194,13 +210,13 @@ class WeatherGroundingProvider(
      * auflösen konnte — Gegenstück zu [buildBlock] im selben Block-Baustil
      * (Trenner + „…, im Gespräch NICHT erwähnen"-Marker), aber ohne Fakten:
      * der Brain soll die Lücke offen benennen statt sie mit Heimat-Wetter zu
-     * kaschieren.
+     * kaschieren. Folgt der Turn-Sprache ([WeatherBlockTexts.placeNotFound]) —
+     * eine deutsche Ehrlichkeits-Anweisung in einem englischen Turn wäre genau
+     * derselbe Sprachbruch wie beim Datenblock. Der ORTSNAME selbst wird nie
+     * übersetzt (Nutzer-/Weltdatum).
      */
-    private fun honestyBlock(place: String): String =
-        "\n\n---\n" +
-            "WETTER-HINWEIS (nur für dich, im Gespräch NICHT erwähnen): " +
-            "Der Ort „$place“ wurde nicht gefunden — keine Wetterdaten dafür. " +
-            "Sag das ehrlich und biete den konfigurierten Ort an."
+    private fun honestyBlock(place: String, language: Language): String =
+        "\n\n---\n" + WeatherBlockTexts.placeNotFound(language, place)
 
     /** Store-Wert gewinnt; nie gespeichert (`null`) ⇒ ENV-Seed aus dem Ctor. */
     private fun configuredLocation(): WeatherLocation =
@@ -234,7 +250,12 @@ class WeatherGroundingProvider(
                                 label = location.label,
                                 todayMin = today.tMin,
                                 todayMax = today.tMax,
-                                codeText = weatherCodeText(today.code, Lang.DE),
+                                // Bewusst Language.DE (NICHT die Turn-Sprache): dies ist der
+                                // Lese-Pfad der ANZEIGESPRACHE (`GET /api/v1/weather/today`,
+                                // Wetter-Kachel), eine andere Frage als die Turn-Sprache von
+                                // [buildBlock] — siehe KDoc von [groundingBlock] und
+                                // PREP-i18n-backend-restklassen.md. Nicht Teil dieser Scheibe.
+                                codeText = weatherCodeText(today.code, Language.DE),
                                 precipMm = today.precipMm,
                             ),
                         )
@@ -246,11 +267,12 @@ class WeatherGroundingProvider(
     private fun forecastBlock(
         location: WeatherLocation,
         reference: DayReferenceResolver.DayReference,
+        language: Language,
     ): Mono<String> =
         fetchDailyJson(location)
             .map { body ->
                 val requested = parseDays(body).filter { it.offset in reference.offsets }
-                buildBlock(requested, location.label, reference.explicit)
+                buildBlock(requested, location.label, reference.explicit, language)
             }
 
     /** Der EINE Open-Meteo-`/v1/forecast`-Call (rohes JSON) — geteilt von Grounding- und Lese-Pfad. */
@@ -303,37 +325,57 @@ class WeatherGroundingProvider(
     private fun JsonNode.numOrZero(i: Int): Double = this.path(i).asDouble(0.0)
 
     /**
-     * Baut den kompakten deutschen Hintergrund-Block. Leere Liste → `""`.
+     * Baut den kompakten Hintergrund-Block. Leere Liste → `""`.
+     *
+     * **Der GANZE Rahmen folgt [language]** (Sprach-Naht 2026-07-25, vorher nur
+     * die Wetterlage): Kopfzeile, Zeilen-Schablone, Tagesbezug
+     * ([DayReferenceResolver.dayLabel]), Wetterlage ([weatherCodeText]),
+     * Niederschlag, ANWEISUNG und Wetter-Vertrag kommen aus EINEM Katalog
+     * ([WeatherBlockTexts]). Vorher war ein englischer Turn ein deutscher
+     * Rahmen um einen englischen Katalog — das Brain bekam eine DEUTSCHE
+     * Anweisung und antwortete entsprechend deutsch. **NICHT übersetzt wird das
+     * Orts-Label** ([label]): Orts-/Nutzerdaten bleiben, wie sie sind.
+     *
+     * [language] = [Language.DE] hält den Block ZEICHENGLEICH zum bisherigen
+     * Verhalten (Pin-Test-Garantie: die DE-Zweige des Katalogs sind eingefroren).
+     *
      * Bei EXPLIZITER Tages-Referenz kommt ein Tages-Vertrag dazu (Muster
      * ZAHLEN-VERTRAG im [Fts5GroundingAdapter]): Antworte für den gefragten Tag,
      * nenne den Tag beim Namen. OHNE Referenz bleibt die ANWEISUNG byte-gleich
      * zum bisherigen Block.
      *
      * **WeatherNumberContract** ([enableWeatherContract] ON, s. Ctor-KDoc): jede
-     * Tages-Zeile umschließt Ortsname, Min/Max-Temperatur und Wetterlage mit
-     * [mark] («…») + [appendWeatherContract] hängt die Zitier-Instruktion an.
+     * Tages-Zeile umschließt Ortsname, Tagesbezug, Min/Max-Temperatur und
+     * Wetterlage mit [mark] («…») + [appendWeatherContract] hängt die
+     * Zitier-Instruktion an. Der Tagesbezug gehört zum Vertrag, obwohl er kein
+     * Messwert ist: er bindet die Messwerte an den vom Resolver bestimmten Tag
+     * und ist damit Teil desselben geerdeten Fakts.
      * OFF ⇒ [mark] ist die Identität ⇒ Zeile und Block bleiben byte-identisch
      * zum bisherigen Verhalten (s. Pin-Tests).
      */
-    private fun buildBlock(forecastDays: List<Day>, label: String, explicitDay: Boolean): String {
+    private fun buildBlock(forecastDays: List<Day>, label: String, explicitDay: Boolean, language: Language): String {
         if (forecastDays.isEmpty()) return ""
         val sb = StringBuilder()
         sb.append("\n\n---\n")
-        sb.append("HINTERGRUND (nur für dich, im Gespräch NICHT erwähnen):\n")
+        sb.append(WeatherBlockTexts.head(language))
         forecastDays.forEach { d ->
-            sb.append("• Wetter ").append(mark(label)).append(' ').append(days.dayLabel(d.offset)).append(": ")
-                .append(mark(d.tMin.toString())).append(" bis ").append(mark(d.tMax.toString())).append(" Grad, ")
-                .append(mark(weatherCodeText(d.code, Lang.DE))).append(", ")
-                .append(precipText(d.precipMm)).append(".\n")
+            sb.append(
+                WeatherBlockTexts.line(
+                    language = language,
+                    label = mark(label),
+                    day = mark(days.dayLabel(d.offset, language)),
+                    min = mark(d.tMin.toString()),
+                    max = mark(d.tMax.toString()),
+                    condition = mark(weatherCodeText(d.code, language)),
+                    precip = precipText(d.precipMm, language),
+                ),
+            )
         }
-        sb.append(
-            "ANWEISUNG: Nutze diese ECHTEN Wetterdaten und antworte knapp im eigenen warmen Stil — " +
-                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“.",
-        )
+        sb.append(WeatherBlockTexts.instruction(language))
         if (explicitDay) {
-            sb.append(" Antworte für den gefragten Tag; nenne den Tag beim Namen.")
+            sb.append(WeatherBlockTexts.explicitDaySuffix(language))
         }
-        appendWeatherContract(sb)
+        appendWeatherContract(sb, language)
         return sb.toString()
     }
 
@@ -354,12 +396,10 @@ class WeatherGroundingProvider(
      * ([de.hoshi.core.pipeline.TurnOrchestrator.stripContractMarkers]), egal ob
      * diese Instruktion befolgt wird oder nicht.
      */
-    private fun appendWeatherContract(sb: StringBuilder) {
+    private fun appendWeatherContract(sb: StringBuilder, language: Language) {
         if (!enableWeatherContract) return
         sb.append("\n")
-        sb.append("WETTER-VERTRAG: Die Werte in «» oben (Ort, Temperaturen, Wetterlage) sind exakt. ")
-        sb.append("Nenne sie genau so weiter — gleicher Ortsname, gleiche Ziffern, gleiche Einheit — ")
-        sb.append("nicht runden, nicht umformulieren, keinen anderen Ort oder Wert erfinden.")
+        sb.append(WeatherBlockTexts.contract(language))
     }
 
     // ── Expliziter Ort in der Frage ─────────────────────────────────────────────
@@ -378,9 +418,13 @@ class WeatherGroundingProvider(
      */
     internal fun explicitPlace(query: String): String? = placeInQuery(query)
 
-    /** Niederschlags-Hinweis: ab ~0,5 mm konkret, sonst „kaum Niederschlag". */
-    private fun precipText(mm: Double): String =
-        if (mm >= 0.5) "etwa ${mm.roundToInt()} mm Niederschlag" else "kaum Niederschlag"
+    /**
+     * Niederschlags-Hinweis in der Turn-Sprache: ab ~0,5 mm konkret, sonst
+     * „kaum Niederschlag" (Schwelle + Rundung unverändert; nur der TEXT folgt
+     * jetzt [WeatherBlockTexts.precipitation]).
+     */
+    private fun precipText(mm: Double, language: Language): String =
+        WeatherBlockTexts.precipitation(language, mm.roundToInt(), measurable = mm >= 0.5)
 
     // ── Wetter-Absichts-Erkennung ───────────────────────────────────────────────
 
@@ -391,9 +435,6 @@ class WeatherGroundingProvider(
      * `internal` für die Unit-Tests.
      */
     internal fun isWeatherIntent(query: String): Boolean = weatherIntent(query)
-
-    /** Sprache der Code→Text-Tabelle. */
-    internal enum class Lang { DE, EN }
 
     /**
      * Wire-/Lese-Vertrag der heutigen Vorhersage ([todayForecast], Read-Endpoint
@@ -505,39 +546,25 @@ class WeatherGroundingProvider(
         )
 
         /**
-         * **WMO-Wettercode → Text (DE/EN).** Essenz aus Hoshi 0.5
-         * `WeatherService.weatherCodeToGerman`, hier um die englischen Pendants ergänzt.
+         * **WMO-Wettercode → Text, alle 5 Sprachen (DE/EN/ES/FR/IT).** Essenz aus
+         * Hoshi 0.5 `WeatherService.weatherCodeToGerman`; die eigentliche Tabelle
+         * lebt seit der Multilingual-Welle (2026-07-24) strukturiert in
+         * [WeatherCodeTexts] (ein `when`-Block je Sprache statt code-für-code
+         * interleaved) — diese Funktion bleibt nur als STABILE Signatur/API
+         * erhalten (schon vor der Welle `internal` in Tests referenziert:
+         * `WeatherGroundingProvider.weatherCodeText(code, language)`).
          * Deckt die gängigen Lagen ab (klar/bewölkt/Nebel/Niesel/Regen/Schnee/Schauer/
-         * Gewitter); unbekannte Codes → „wechselhaft" / „changeable". `internal` für Tests.
+         * Gewitter); unbekannte Codes → „wechselhaft"/„changeable"/… (siehe
+         * [WeatherCodeTexts] für die anderssprachigen Pendants). `internal` für Tests.
+         *
+         * **[language] ist die zentrale [Language]** (core-domain) — der bis
+         * 2026-07-25 hier lebende modul-interne `Lang`-Enum samt `Language.toLang()`
+         * ist entfallen: er war seit der Multilingual-Welle exakt isomorph zu
+         * [Language] und damit eine zweite Sprach-Wahrheit ohne Modul- oder
+         * Semantikgrenze (dieser Adapter kennt [Language] ohnehin — sie steht in
+         * der [GroundingPort]-Signatur direkt darüber).
          */
-        internal fun weatherCodeText(code: Int, lang: Lang): String = when (code) {
-            0 -> if (lang == Lang.DE) "klar und sonnig" else "clear and sunny"
-            1 -> if (lang == Lang.DE) "überwiegend klar" else "mostly clear"
-            2 -> if (lang == Lang.DE) "teilweise bewölkt" else "partly cloudy"
-            3 -> if (lang == Lang.DE) "bedeckt" else "overcast"
-            45 -> if (lang == Lang.DE) "neblig" else "foggy"
-            48 -> if (lang == Lang.DE) "gefrierender Nebel" else "freezing fog"
-            51 -> if (lang == Lang.DE) "leichter Nieselregen" else "light drizzle"
-            53 -> if (lang == Lang.DE) "mäßiger Nieselregen" else "moderate drizzle"
-            55 -> if (lang == Lang.DE) "starker Nieselregen" else "dense drizzle"
-            56, 57 -> if (lang == Lang.DE) "gefrierender Nieselregen" else "freezing drizzle"
-            61 -> if (lang == Lang.DE) "leichter Regen" else "light rain"
-            63 -> if (lang == Lang.DE) "mäßiger Regen" else "moderate rain"
-            65 -> if (lang == Lang.DE) "starker Regen" else "heavy rain"
-            66, 67 -> if (lang == Lang.DE) "gefrierender Regen" else "freezing rain"
-            71 -> if (lang == Lang.DE) "leichter Schneefall" else "light snow"
-            73 -> if (lang == Lang.DE) "mäßiger Schneefall" else "moderate snow"
-            75 -> if (lang == Lang.DE) "starker Schneefall" else "heavy snow"
-            77 -> if (lang == Lang.DE) "Schneekörner" else "snow grains"
-            80 -> if (lang == Lang.DE) "leichte Regenschauer" else "light rain showers"
-            81 -> if (lang == Lang.DE) "mäßige Regenschauer" else "moderate rain showers"
-            82 -> if (lang == Lang.DE) "starke Regenschauer" else "violent rain showers"
-            85 -> if (lang == Lang.DE) "leichte Schneeschauer" else "light snow showers"
-            86 -> if (lang == Lang.DE) "starke Schneeschauer" else "heavy snow showers"
-            95 -> if (lang == Lang.DE) "Gewitter" else "thunderstorm"
-            96 -> if (lang == Lang.DE) "Gewitter mit Hagel" else "thunderstorm with hail"
-            99 -> if (lang == Lang.DE) "Gewitter mit starkem Hagel" else "thunderstorm with heavy hail"
-            else -> if (lang == Lang.DE) "wechselhaft" else "changeable"
-        }
+        internal fun weatherCodeText(code: Int, language: Language): String =
+            WeatherCodeTexts.text(code, language)
     }
 }

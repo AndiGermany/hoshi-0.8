@@ -3,6 +3,7 @@ package de.hoshi.web
 import de.hoshi.core.dto.Language
 import de.hoshi.core.port.EscalationPort
 import de.hoshi.core.port.EscalationResult
+import de.hoshi.core.port.EscalationUnavailableReason
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
@@ -43,6 +44,6 @@ class DelegatingEscalationPortTest {
     fun `Decke-zu-Fall - initial NONE bleibt bis zum ersten Switch bestehen`() {
         val port = DelegatingEscalationPort(initialModelId = "gpt-5.4-nano", initial = EscalationPort.NONE)
         val result = port.lookup("Frage", "", Language.DE).block(Duration.ofSeconds(2))!!
-        assertEquals(EscalationResult.Unavailable, result)
+        assertEquals(EscalationResult.Unavailable(EscalationUnavailableReason.DISABLED), result)
     }
 }

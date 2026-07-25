@@ -107,14 +107,15 @@ class TurnOrchestratorWeatherAskTest {
     }
 
     /** Grounding-Fake: liefert den Wetter-Block NUR, wenn der Fake-Store konfiguriert ist. */
-    private fun groundingFor(ask: FakeWeatherAsk): GroundingPort = GroundingPort { query, _ ->
-        Mono.just(
-            if (ask.configured && query.lowercase().contains("wetter")) {
-                "\n\nHINTERGRUND: Wetter Duisburg morgen: 12 bis 18 Grad."
-            } else {
-                ""
-            },
-        )
+    private fun groundingFor(ask: FakeWeatherAsk): GroundingPort = object : GroundingPort {
+        override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> =
+            Mono.just(
+                if (ask.configured && query.lowercase().contains("wetter")) {
+                    "\n\nHINTERGRUND: Wetter Duisburg morgen: 12 bis 18 Grad."
+                } else {
+                    ""
+                },
+            )
     }
 
     // ── Echte Pipeline-Nähte (Spring-frei), Wetter-Nähte EXPLIZIT ────────────────
@@ -125,7 +126,7 @@ class TurnOrchestratorWeatherAskTest {
         pendingLookup: PendingLookupPort = PendingLookupPort.NONE,
         escalation: EscalationPort = EscalationPort.NONE,
         mode: () -> EscalationMode = { EscalationMode.AUS },
-        grounding: GroundingPort = GroundingPort { _, _ -> Mono.just("") },
+        grounding: GroundingPort = GroundingPort.EMPTY,
     ): TurnOrchestrator {
         val persona = PersonaService()
         return TurnOrchestrator(

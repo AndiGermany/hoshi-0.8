@@ -87,7 +87,7 @@ class TurnOrchestratorLookupNoteTest {
                 persona = persona,
                 entityMemory = { null },
                 // Leeres Grounding ⇒ FACT_SHORT ohne Deckung ⇒ der Deflect-Zweig feuert.
-                grounding = { _, _ -> Mono.just("") },
+                grounding = GroundingPort.EMPTY,
                 episodicMemory = null,
             ),
             persona = persona,
@@ -182,7 +182,7 @@ class TurnOrchestratorLookupNoteTest {
     @Test
     fun `Unavailable wird NIE gespeichert`() {
         val notes = RecordingLookupNotePort()
-        val o = orchestrator(FixedEscalationPort(EscalationResult.Unavailable), notes)
+        val o = orchestrator(FixedEscalationPort(EscalationResult.Unavailable()), notes)
 
         turn(o)
 
@@ -222,7 +222,7 @@ class TurnOrchestratorLookupNoteTest {
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
                 entityMemory = { null },
-                grounding = { _, _ -> Mono.just("") },
+                grounding = GroundingPort.EMPTY,
                 episodicMemory = null,
             ),
             persona = persona,

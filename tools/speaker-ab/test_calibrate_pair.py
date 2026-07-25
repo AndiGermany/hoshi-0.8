@@ -135,8 +135,8 @@ class ManifestValidationTest(unittest.TestCase):
             {"channel": "macbook"},
             {"split": "test"},
             {"probe_id": "andi001"},
-            {"group_id": "cindy001"},
-            {"quality": "cindy"},
+            {"group_id": "person-b001"},
+            {"quality": "person-b"},
         )
         for index, changes in enumerate(invalid):
             with self.subTest(changes=changes):

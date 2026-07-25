@@ -65,7 +65,7 @@ class TurnOrchestratorCacheHitTest {
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
                 entityMemory = { null },
-                grounding = { _, _ -> Mono.just(groundBlock) },
+                grounding = GroundingPort.fixed(groundBlock),
                 episodicMemory = null,
             ),
             persona = persona,

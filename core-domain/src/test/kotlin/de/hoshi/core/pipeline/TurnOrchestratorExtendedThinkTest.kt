@@ -10,8 +10,11 @@ import de.hoshi.core.dto.RouteDecision
 import de.hoshi.core.dto.RouteProvider
 import de.hoshi.core.port.BrainPort
 import de.hoshi.core.port.EscalationPort
+import de.hoshi.core.port.EscalationDiagnosticsPort
 import de.hoshi.core.port.EscalationResult
 import de.hoshi.core.port.EscalationSourceRef
+import de.hoshi.core.port.EscalationUnavailableEvent
+import de.hoshi.core.port.EscalationUnavailableReason
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -93,6 +96,13 @@ class TurnOrchestratorExtendedThinkTest {
         }
     }
 
+    private class RecordingEscalationDiagnostics : EscalationDiagnosticsPort {
+        val events = mutableListOf<EscalationUnavailableEvent>()
+        override fun unavailable(event: EscalationUnavailableEvent) {
+            events += event
+        }
+    }
+
     private class MutableClock(private var now: Instant) : Clock() {
         override fun getZone(): ZoneId = ZoneOffset.UTC
         override fun withZone(zone: ZoneId?): Clock = this
@@ -107,6 +117,7 @@ class TurnOrchestratorExtendedThinkTest {
         pending: PendingLookupPort = PendingLookupPort.NONE,
         mode: () -> EscalationMode = { EscalationMode.AUS },
         timeout: Duration = Duration.ofSeconds(8),
+        diagnostics: EscalationDiagnosticsPort = EscalationDiagnosticsPort.NONE,
     ): TurnOrchestrator {
         val persona = PersonaService()
         return TurnOrchestrator(
@@ -130,7 +141,7 @@ class TurnOrchestratorExtendedThinkTest {
                 persona = persona,
                 entityMemory = { null },
                 // Leeres Grounding ⇒ FACT_SHORT ohne Deckung ⇒ der Deflect-Zweig feuert.
-                grounding = { _, _ -> Mono.just("") },
+                grounding = GroundingPort.EMPTY,
                 episodicMemory = null,
             ),
             persona = persona,
@@ -141,6 +152,7 @@ class TurnOrchestratorExtendedThinkTest {
             pendingLookup = pending,
             escalationMode = mode,
             escalationTimeout = timeout,
+            escalationDiagnostics = diagnostics,
         )
     }
 
@@ -373,11 +385,13 @@ class TurnOrchestratorExtendedThinkTest {
     // ── (8) Unclear/Unavailable/Declined/Timeout/Fehler ⇒ warm + never-silent ────
     @Test
     fun `Unavailable - warme Phrase, kein Crash, Done am Ende`() {
+        val diagnostics = RecordingEscalationDiagnostics()
         val o = orchestrator(
             FakeBrainPort(),
-            RecordingEscalationPort { Mono.just(EscalationResult.Unavailable) },
+            RecordingEscalationPort { Mono.just(EscalationResult.Unavailable()) },
             InMemoryPendingLookupStore(),
             mode = { EscalationMode.ERST_FRAGEN },
+            diagnostics = diagnostics,
         )
         turn(o, question)
         val ja = turn(o, "ja")
@@ -394,6 +408,8 @@ class TurnOrchestratorExtendedThinkTest {
         assertNull(done.escalationSource, "Unavailable schrieb keine Notiz")
         // H3: ein echter Netzfehler ist KEINE Cap-Erschöpfung (nullable Wire-Feld, s. KDoc).
         assertNull(done.escalationCapExhausted, "Unavailable ist kein Cap-Fall")
+        assertEquals(1, diagnostics.events.size, "der finale Unavailable-Ausgang wird genau einmal beobachtet")
+        assertEquals(EscalationUnavailableReason.UNKNOWN, diagnostics.events.single().reason)
     }
 
     // ── (8b) H3: Tages-Cap erreicht ⇒ EIGENE ehrliche Phrase, NICHT Unavailable ──
@@ -449,31 +465,60 @@ class TurnOrchestratorExtendedThinkTest {
 
     @Test
     fun `Timeout - haengender Lookup endet im warmen Unavailable-Pfad (never-silent)`() {
+        val diagnostics = RecordingEscalationDiagnostics()
         val o = orchestrator(
             FakeBrainPort(),
             RecordingEscalationPort { Mono.never() }, // hängt — der Timeout muss retten
             InMemoryPendingLookupStore(),
             mode = { EscalationMode.ERST_FRAGEN },
             timeout = Duration.ofMillis(100),
+            diagnostics = diagnostics,
         )
         turn(o, question)
         val ja = turn(o, "ja")
         assertTrue(joinedText(ja).contains(TurnOrchestrator.ESCALATION_UNAVAILABLE_DE))
         assertTrue(ja.last() is ChatEvent.Done, "never-silent auch bei hängendem Port")
+        assertEquals(1, diagnostics.events.size, "der aeussere Timeout erzeugt genau eine Diagnose")
+        assertEquals(EscalationUnavailableReason.TIMEOUT, diagnostics.events.single().reason)
+        assertEquals(100L, diagnostics.events.single().timeoutMs)
     }
 
     @Test
     fun `Port-Fehler - Mono-error endet im warmen Unavailable-Pfad, kein Crash`() {
+        val diagnostics = RecordingEscalationDiagnostics()
         val o = orchestrator(
             FakeBrainPort(),
             RecordingEscalationPort { Mono.error(IllegalStateException("kaputt")) },
             InMemoryPendingLookupStore(),
             mode = { EscalationMode.ERST_FRAGEN },
+            diagnostics = diagnostics,
         )
         turn(o, question)
         val ja = turn(o, "ja")
         assertTrue(joinedText(ja).contains(TurnOrchestrator.ESCALATION_UNAVAILABLE_DE))
         assertTrue(ja.last() is ChatEvent.Done)
+        assertEquals(1, diagnostics.events.size)
+        assertEquals(EscalationUnavailableReason.PORT_ERROR, diagnostics.events.single().reason)
+    }
+
+    @Test
+    fun `leerer Port-Ausgang endet warm und wird genau einmal als empty_result diagnostiziert`() {
+        val diagnostics = RecordingEscalationDiagnostics()
+        val o = orchestrator(
+            FakeBrainPort(),
+            RecordingEscalationPort { Mono.empty() },
+            InMemoryPendingLookupStore(),
+            mode = { EscalationMode.ERST_FRAGEN },
+            diagnostics = diagnostics,
+        )
+
+        turn(o, question)
+        val ja = turn(o, "ja")
+
+        assertTrue(joinedText(ja).contains(TurnOrchestrator.ESCALATION_UNAVAILABLE_DE))
+        assertTrue(ja.last() is ChatEvent.Done)
+        assertEquals(1, diagnostics.events.size)
+        assertEquals(EscalationUnavailableReason.EMPTY_RESULT, diagnostics.events.single().reason)
     }
 
     // ── Marker-Hygiene: die verbatim-Antwort läuft NICHT durch die Brain-Naht ────

@@ -31,8 +31,11 @@ import java.nio.file.Path
  *    einem Wechsel auf eine andere Engine beim Boot-Stand stehen — bewiesen kongruent
  *    in PrivacyEndpointTest).
  *  - `sanitize` — ist die Cloud-Egress-Maskierung ([NeverSpeakTtsSanitizer]) aktiv?
- *    Dieselbe Env `HOSHI_TTS_SANITIZE_ENABLED`, mit der [PipelineConfig.ttsPort] den
- *    Sanitizer verdrahtet.
+ *    Dieselbe Env `HOSHI_TTS_SANITIZE_ENABLED`, MIT DEMSELBEN `@Value`-Default, mit
+ *    der [TtsRuntimeConfig.ttsEngineFactory] den Sanitizer in die EINE TTS-Kette
+ *    verdrahtet ([TtsEngineFactory.build]). Beide Ausdrücke müssen buchstabengleich
+ *    bleiben — sonst zeigt diese Anzeige etwas anderes an, als die Kette tut; der
+ *    Riegel dagegen ist `PipelineConfigTtsSanitizeTest.Default-Riegel …`.
  *  - `memory`/`episodic` — sqlite-Store-Dateien: exists + Größe + ECHTER `COUNT(*)`
  *    über eine kurzlebige Lese-Connection ([EntityMemoryAdapter.countFacts]/
  *    [EpisodicMemoryAdapter.countTurns]). Count nicht möglich ⇒ `entries=null`
@@ -73,7 +76,11 @@ class PrivacyController(
     // Gilt NUR, solange NIE per PUT /settings/tts umgeschaltet wurde (s. [ttsEngineStore]
     // unten, [buildSummary] ruft dieselbe [TtsEngineIds.effectiveEngineId]-Naht).
     @Value("\${HOSHI_TTS:}") private val ttsImpl: String,
-    @Value("\${HOSHI_TTS_SANITIZE_ENABLED:false}") private val sanitizeEnabled: Boolean,
+    // Default ON seit 0.8.1 (Sicherheits-Default) — MUSS buchstabengleich mit
+    // TtsRuntimeConfig.ttsEngineFactory sein (der EINEN Bau-Aufrufstelle), sonst behauptet
+    // diese Anzeige etwas anderes, als die TTS-Kette tatsächlich tut. Riegel:
+    // PipelineConfigTtsSanitizeTest.`Default-Riegel …` prüft beide Ausdrücke per Reflection.
+    @Value("\${HOSHI_TTS_SANITIZE_ENABLED:true}") private val sanitizeEnabled: Boolean,
     @Value("\${HOSHI_MEMORY_ENABLED:false}") private val memoryEnabled: Boolean,
     @Value("\${hoshi.memory.db-path:}") private val memoryDbPath: String,
     @Value("\${HOSHI_EPISODIC_ENABLED:false}") private val episodicEnabled: Boolean,

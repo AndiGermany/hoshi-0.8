@@ -1,6 +1,7 @@
 package de.hoshi.adapters.knowledge
 
 import com.sun.net.httpserver.HttpServer
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -77,7 +78,7 @@ class Fts5GroundingAdapterTest {
     fun `Wissensfrage liefert kompakten Grounding-Block aus der Bridge-Antwort`() =
         withBridge(adenauerJson) { url, captured ->
             val adapter = Fts5GroundingAdapter(baseUrl = url)
-            val block = adapter.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT)
+            val block = adapter.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
 
             assertTrue(block.isNotBlank(), "Block darf nicht leer sein")
@@ -96,7 +97,7 @@ class Fts5GroundingAdapterTest {
     fun `Bridge down liefert best-effort leeren Block, nie Crash`() {
         // Port, auf dem nichts lauscht → connection refused → leerer Block.
         val adapter = Fts5GroundingAdapter(baseUrl = "http://127.0.0.1:1", timeout = Duration.ofSeconds(2))
-        val block = adapter.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT)
+        val block = adapter.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(5))
         assertEquals("", block)
     }
@@ -105,7 +106,7 @@ class Fts5GroundingAdapterTest {
     fun `Bridge-Fehler (500) liefert leeren Block`() =
         withBridge("kaputt", status = 500) { url, _ ->
             val adapter = Fts5GroundingAdapter(baseUrl = url)
-            val block = adapter.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT)
+            val block = adapter.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5))
             assertEquals("", block)
         }
@@ -114,7 +115,7 @@ class Fts5GroundingAdapterTest {
     fun `leere Trefferliste liefert leeren Block`() =
         withBridge("""{"query":"x","totalHits":0,"hits":[]}""") { url, _ ->
             val adapter = Fts5GroundingAdapter(baseUrl = url)
-            val block = adapter.groundingBlock("Gibt es etwas Unauffindbares?", RouteCategory.FACT_SHORT)
+            val block = adapter.groundingBlock("Gibt es etwas Unauffindbares?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5))
             assertEquals("", block)
         }
@@ -125,7 +126,7 @@ class Fts5GroundingAdapterTest {
             """{"hits":[{"title":"Schwach","bm25Score":-1.0,"extract":"kaum relevant","summary":null}]}""",
         ) { url, _ ->
             val adapter = Fts5GroundingAdapter(baseUrl = url) // bm25Max = -3.0 → -1.0 fällt raus
-            val block = adapter.groundingBlock("Irgendwas Schwaches", RouteCategory.FACT_SHORT)
+            val block = adapter.groundingBlock("Irgendwas Schwaches", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5))
             assertEquals("", block)
         }
@@ -136,7 +137,7 @@ class Fts5GroundingAdapterTest {
     fun `WikiNumberContract ON verankert facts als verbatim-Spans plus Instruktion`() =
         withBridge(factsJson) { url, captured ->
             val adapter = Fts5GroundingAdapter(baseUrl = url, enableNumberContract = true)
-            val block = adapter.groundingBlock("Wie viele Zähne hat eine Weinbergschnecke?", RouteCategory.FACT_SHORT)
+            val block = adapter.groundingBlock("Wie viele Zähne hat eine Weinbergschnecke?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
 
             assertTrue(block.contains("«40.000 Zähnchen»"), "Zahl-Span steht verbatim in Guillemets: $block")
@@ -170,11 +171,11 @@ class Fts5GroundingAdapterTest {
     fun `WikiNumberContract OFF laesst den Block byte-neutral und schickt kein fact_query`() =
         withBridge(factsJson) { url, captured ->
             val on = Fts5GroundingAdapter(baseUrl = url, enableNumberContract = true)
-                .groundingBlock("Wie viele Zähne hat eine Weinbergschnecke?", RouteCategory.FACT_SHORT)
+                .groundingBlock("Wie viele Zähne hat eine Weinbergschnecke?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
             // Default-Adapter = Flag OFF. Diese Anfrage läuft als LETZTE → captured = OFF-URL.
             val off = Fts5GroundingAdapter(baseUrl = url)
-                .groundingBlock("Wie viele Zähne hat eine Weinbergschnecke?", RouteCategory.FACT_SHORT)
+                .groundingBlock("Wie viele Zähne hat eine Weinbergschnecke?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
 
             assertFalse(off.contains("«"), "OFF: kein verbatim-Span im Block")
@@ -190,7 +191,7 @@ class Fts5GroundingAdapterTest {
     fun `WikiNumberContract ON ohne facts haengt nichts an (defensiv)`() =
         withBridge(adenauerJson) { url, _ -> // adenauerJson trägt "facts": []
             val adapter = Fts5GroundingAdapter(baseUrl = url, enableNumberContract = true)
-            val block = adapter.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT)
+            val block = adapter.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
 
             assertTrue(block.isNotBlank(), "normaler Grounding-Block bleibt")
@@ -202,7 +203,7 @@ class Fts5GroundingAdapterTest {
     fun `Nicht-Wissens-Kategorie groundet nicht (kein Bridge-Call)`() =
         withBridge(adenauerJson) { url, captured ->
             val adapter = Fts5GroundingAdapter(baseUrl = url)
-            val block = adapter.groundingBlock("Sag mal Hallo", RouteCategory.SMALLTALK)
+            val block = adapter.groundingBlock("Sag mal Hallo", RouteCategory.SMALLTALK, Language.DE)
                 .block(Duration.ofSeconds(5))
             assertEquals("", block)
             assertEquals(null, captured.get(), "Bridge darf bei Smalltalk nicht angefragt werden")
@@ -251,7 +252,7 @@ class Fts5GroundingAdapterTest {
             """{"hits":[{"title":"Photosynthese","bm25Score":-71.0,"extract":"Grüne Pflanzen wandeln Licht in Energie.","summary":null}]}""",
         ) { url, _ ->
             val a = Fts5GroundingAdapter(baseUrl = url)
-            val block = a.groundingBlock("Was bedeutet Photosynthese?", RouteCategory.FACT_SHORT)
+            val block = a.groundingBlock("Was bedeutet Photosynthese?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
             assertTrue(block.contains("Photosynthese"), "exakter Titel groundet: $block")
             assertTrue(block.contains("Grüne Pflanzen"), "Passage im Block: $block")
@@ -266,7 +267,7 @@ class Fts5GroundingAdapterTest {
             val a = Fts5GroundingAdapter(baseUrl = url)
             // Beide Treffer passieren das BM25-Gate (-8.4 <= -3.0), aber KEINER heißt
             // exakt "Mittwoch" → ehrlich abstinieren statt tangential grounden.
-            val block = a.groundingBlock("Woher kommt der Name Mittwoch?", RouteCategory.FACT_SHORT)
+            val block = a.groundingBlock("Woher kommt der Name Mittwoch?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5))
             assertEquals("", block, "kein exakter Titel-Treffer → Lane A deflektet ehrlich")
         }
@@ -278,7 +279,7 @@ class Fts5GroundingAdapterTest {
                         {"title":"Photosynthese","bm25Score":-40.0,"extract":"Grüne Pflanzen wandeln Licht um.","summary":null}]}""",
         ) { url, _ ->
             val a = Fts5GroundingAdapter(baseUrl = url) // topN=1
-            val block = a.groundingBlock("Was bedeutet Photosynthese?", RouteCategory.FACT_SHORT)
+            val block = a.groundingBlock("Was bedeutet Photosynthese?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
             assertTrue(block.contains("Grüne Pflanzen"), "exakter Titel gewinnt trotz schwächerem BM25: $block")
             assertFalse(block.contains("Kabarett"), "mehrdeutige Gruppe verliert gegen exakten Titel: $block")
@@ -311,7 +312,7 @@ class Fts5GroundingAdapterTest {
             """{"hits":[{"title":"Mittwoch","bm25Score":-21.0,"extract":"Der Mittwoch ist der Wochentag zwischen Dienstag und Donnerstag.","summary":null}]}""",
         ) { url, captured ->
             val a = Fts5GroundingAdapter(baseUrl = url)
-            val block = a.groundingBlock("Warum heißt der Mittwoch eigentlich Mittwoch?", RouteCategory.FACT_SHORT)
+            val block = a.groundingBlock("Warum heißt der Mittwoch eigentlich Mittwoch?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
             assertTrue(block.contains("Wochentag"), "Mittwoch-Artikel groundet: $block")
             val q = captured.get() ?: ""
@@ -337,7 +338,7 @@ class Fts5GroundingAdapterTest {
             """{"hits":[{"title":"Eigentliche Eulen","bm25Score":-52.0,"extract":"Die Eigentlichen Eulen (Striginae) sind eine Unterfamilie der Eulen.","summary":null}]}""",
         ) { url, captured ->
             val a = Fts5GroundingAdapter(baseUrl = url)
-            val block = a.groundingBlock("Was sind Eigentliche Eulen?", RouteCategory.FACT_SHORT)
+            val block = a.groundingBlock("Was sind Eigentliche Eulen?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
             assertTrue(block.contains("Eigentliche Eulen"), "Titel-Nennung groundet weiter: $block")
             assertTrue(block.contains("Unterfamilie"), "Passage im Block: $block")
@@ -370,7 +371,7 @@ class Fts5GroundingAdapterTest {
             """{"hits":[{"title":"Albert Einstein","bm25Score":-17.8,"extract":"Physiker der Relativitätstheorie.","summary":null}]}""",
         ) { url, _ ->
             val a = Fts5GroundingAdapter(baseUrl = url)
-            val block = a.groundingBlock("Wer war Einstein?", RouteCategory.FACT_SHORT)
+            val block = a.groundingBlock("Wer war Einstein?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5)) ?: ""
             assertTrue(block.contains("Albert Einstein"), "Freitext-Frage groundet ohne exakten Titel: $block")
         }

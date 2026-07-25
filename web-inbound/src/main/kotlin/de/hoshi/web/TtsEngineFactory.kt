@@ -1,8 +1,12 @@
 package de.hoshi.web
 
+import de.hoshi.adapters.tts.IcuVerbalizer
+import de.hoshi.adapters.tts.LoudnessNormalizingTtsPort
 import de.hoshi.adapters.tts.OpenAiTtsAdapter
 import de.hoshi.adapters.tts.PiperTtsAdapter
 import de.hoshi.adapters.tts.SayTtsAdapter
+import de.hoshi.adapters.tts.TtsLoudnessNormalizer
+import de.hoshi.adapters.tts.VerbalizingTtsPort
 import de.hoshi.adapters.tts.VoxtralTtsAdapter
 import de.hoshi.core.dto.Language
 import de.hoshi.core.pipeline.lang.LanguagePackRegistry
@@ -21,21 +25,41 @@ object TtsEngineIds {
     const val SAY = "say"
     const val PIPER = "piper"
     const val VOXTRAL = "voxtral"
+    /** Fresh-Clone-Default: macOS-Bordmittel, kein Key, kein Modell und kein Lizenz-Opt-in. */
+    const val DEFAULT = SAY
 
     /** Alle bekannten Engines, in der Anzeige-Reihenfolge der Settings-UI. */
     val ALL: List<String> = listOf(OPENAI, SAY, PIPER, VOXTRAL)
 
     /**
      * Kanonische Id aus dem rohen `HOSHI_TTS`-Wert — DECKUNGSGLEICH mit der
-     * `when`-Verzweigung in [PipelineConfig.ttsPort]: case-insensitiv
-     * `openai`/`say`/`piper`, jeder andere (auch leere) Wert fällt auf `voxtral`
-     * zurück (unveränderte Default-Semantik, s. dortiges KDoc).
+     * `when`-Verzweigung in [TtsEngineFactory.buildRaw] (dieselbe Fallback-Regel,
+     * damit der NAME nie eine andere Engine meldet als die, die gebaut wird):
+     * case-insensitiv `openai`/`say`/`piper`/`voxtral`; leer fällt auf [DEFAULT]
+     * (`say`) zurück. Ein unbekannter NICHT-leerer Wert bricht dagegen hart ab:
+     * ein Tippfehler darf nie still eine andere Engine wählen.
+     *
+     * **First-Run-Wahrheit 0.8.1:** Ein zwischenzeitlicher P5-Fix setzte hier und
+     * im systemd-Renderer `piper`. Das war zwar lokal, aber auf einem frischen Klon
+     * stumm: Piper braucht Bootstrap, Modell-Download und GPL-Opt-in und wird von
+     * `bin/hoshi up` nicht gestartet. [SAY] ist auf der ohnehin vorausgesetzten
+     * macOS-Plattform die kleinere Wahrheit: kein Key, kein Modell, kein
+     * Cloud-Egress; `up` startet genau diesen Sidecar. Der Sidecar selbst braucht
+     * einmalig seinen Python-Webserver-Bootstrap und meldet dessen Fehlen laut.
+     *
+     * `voxtral` bleibt vollwertig anwählbar — nur eben EXPLIZIT (`HOSHI_TTS=voxtral`
+     * oder per `PUT /api/v1/settings/tts`), nicht mehr als stiller Auffang-Zweig.
      */
-    fun canonicalOf(rawTtsImpl: String): String = when {
-        rawTtsImpl.equals(OPENAI, ignoreCase = true) -> OPENAI
-        rawTtsImpl.equals(SAY, ignoreCase = true) -> SAY
-        rawTtsImpl.equals(PIPER, ignoreCase = true) -> PIPER
-        else -> VOXTRAL
+    fun canonicalOf(rawTtsImpl: String): String {
+        val normalized = rawTtsImpl.trim().lowercase()
+        return when (normalized) {
+            "" -> DEFAULT
+            OPENAI, SAY, PIPER, VOXTRAL -> normalized
+            else -> throw IllegalArgumentException(
+                "Unbekannte TTS-Engine '$rawTtsImpl'. Erlaubt: ${ALL.joinToString(", ")}. " +
+                    "Abbruch statt stiller Ersatz-Engine.",
+            )
+        }
     }
 
     /**
@@ -110,22 +134,27 @@ object TtsVoiceResolver {
 }
 
 /**
- * **TtsEngineFactory** — baut EINEN benannten TTS-Adapter frisch (Andi-Notiz:
- * „die vier Adapter werden lazy/leichtgewichtig konstruiert — WebClient-
- * Konstruktion ist billig"). Reine Konstruktions-Naht, KEINE Adapter-Logik: die
- * vier Adapter-Klassen selbst bleiben unangetastet (VERBOTEN laut Auftrag).
+ * **TtsEngineFactory** — die EINZIGE Bauwahrheit für einen [TtsPort]. Sie baut den
+ * benannten Adapter frisch (Andi-Notiz: „die vier Adapter werden lazy/leichtgewichtig
+ * konstruiert — WebClient-Konstruktion ist billig") UND hängt die komplette
+ * Dekorator-Kette an. Reine Konstruktions-Naht, KEINE Adapter-Logik: die vier
+ * Adapter-Klassen selbst bleiben unangetastet.
  *
- * Die Konstruktor-Parameter spiegeln 1:1 die `@Value`-Parameter von
- * [PipelineConfig.ttsPort] (gleiche Property-Namen/Defaults an der Aufrufstelle)
- * — EIN Ort, an dem „wie baut man Engine X" steht, egal ob beim Boot
- * ([PipelineConfig.ttsPort] bleibt für die Bestandstests unangetastet und baut
- * weiterhin selbst) oder bei einem Runtime-Switch ([TtsSettingsController]).
+ * **Warum EIN Ort (0.8.1, struktureller Fix).** Es gab ZWEI Bau-Wege — diesen und
+ * `PipelineConfig.ttsPort`, das die Kette selbst zusammensetzte — und sie liefen
+ * auseinander: der Boot-Weg hatte Sanitize+Loudness, aber KEIN Verbalize; dieser Weg
+ * hatte Sanitize+Verbalize, aber KEIN Loudness. Weil [TtsRuntimeConfig.delegatingTtsPort]
+ * bei unangetasteten Settings den BOOT-Weg nimmt, war `HOSHI_TTS_VERBALIZE_ENABLED=true`
+ * auf einer frischen Installation ein stiller No-op. Derselbe Fehlertyp („zwei Wege,
+ * eine Regel, nur ein Weg gepflegt") hatte davor die SICHERHEITSLÜCKE verursacht, dass
+ * say/piper/voxtral im Boot-Pfad Rohtext sprachen (s. [PipelineConfigTtsSanitizeTest]).
+ * Deshalb baut `PipelineConfig.ttsPort` seit 0.8.1 NICHTS mehr selbst, sondern ruft
+ * diese Fabrik ([PipelineConfig.ttsPort] → [build]) — festgenagelt in
+ * [TtsBuildPathSingleTruthTest].
  *
- * **Bewusst OHNE Loudness-Wrap:** [de.hoshi.adapters.tts.LoudnessNormalizingTtsPort]
- * bleibt eine Boot-Entscheidung des `ttsPort`-Beans (Andi-Hörprobe-Gate) — ein
- * Runtime-Switch hier liefert den nackten Engine-Adapter. Der BOOT-Zustand (inkl.
- * Loudness, falls aktiv) bleibt unverändert, solange niemand die Engine wechselt
- * (s. [TtsRuntimeConfig.delegatingTtsPort]-KDoc).
+ * **Die Kette, in Aufruf-Reihenfolge des Textes/Audios:**
+ * `Loudness( Sanitize( Verbalize( Engine ) ) )` — s. [build] für die Begründung
+ * jeder Position.
  *
  * **Stimm-Wunsch je Engine** (Andi-Live-Befund: „die Stimme-Sektion muss der
  * aktiven Engine folgen"): [build] nimmt optional eine konkrete [voice] entgegen
@@ -146,27 +175,112 @@ class TtsEngineFactory(
     private val piperVoice: String,
     private val sanitizeEnabled: Boolean,
     private val ttsStreamEnabled: Boolean,
+    // Default `false` (statt eines Pflicht-Parameters): haelt die bestehenden
+    // Testfixturen (SanitizingTtsPortTest/TtsSettingsControllerTest/
+    // LanguageSettingsControllerTest, alle mit vollstaendiger Named-Arg-Liste OHNE
+    // dieses Feld) unveraendert kompilierbar UND verkoerpert direkt den geforderten
+    // Default OFF (Muster sanitizeEnabled/ttsStreamEnabled oben).
+    private val verbalizeEnabled: Boolean = false,
+    // ── Loudness (0.5-Port, war bis 0.8.1 NUR im Boot-Bean) ──────────────────
+    // Wanderte hierher, damit ein Runtime-Engine-Switch die Normalisierung NICHT mehr
+    // verliert (vorher: `PUT /settings/tts` ⇒ nackter Adapter ohne Loudness, obwohl
+    // HOSHI_TTS_LOUDNESS_ENABLED=true in der Prod-Unit steht). Defaults = exakt die
+    // `@Value`-Defaults der EINEN Aufrufstelle (TtsRuntimeConfig.ttsEngineFactory),
+    // damit Testfixturen ohne diese Felder byte-neutral OFF bleiben.
+    private val loudnessEnabled: Boolean = false,
+    private val loudnessTargetRmsDb: Double = -18.0,
+    private val loudnessPeakCeilingDb: Double = -1.0,
+    private val loudnessMaxGainDb: Double = 12.0,
+    private val loudnessSilenceFloorDb: Double = -50.0,
 ) {
     /** Baut den Adapter für [engineId] mit dem BOOT-Default (kein Stimm-Wunsch) — unverändertes Bestandsverhalten. */
     fun build(engineId: String): TtsPort = build(engineId, voice = null)
 
     /**
-     * Baut den Adapter für [engineId] (eine der [TtsEngineIds]-Konstanten).
-     * Unbekannt ⇒ Voxtral (Default-Naht). [voice] überschreibt — falls
-     * nicht-leer — die konfigurierte Boot-Stimme NUR dieser einen Engine.
+     * Baut den Adapter für [engineId] (eine der [TtsEngineIds]-Konstanten) samt
+     * kompletter Dekorator-Kette. Unbekannt ⇒ harter Abbruch; der Fresh-Clone-
+     * Default wird ausschließlich von [TtsEngineIds.canonicalOf] aufgelöst.
+     * [voice] überschreibt — falls nicht-leer — die konfigurierte Boot-Stimme NUR
+     * dieser einen Engine.
+     *
+     * **Reihenfolge — der Grund steht in den Tests:**
+     *  1. **Sanitize wirkt auf TEXT und muss ZUERST laufen** ⇒ die Hülle sitzt AUSSEN,
+     *     der Verbalizer INNEN. Beim Aufruf sieht `sanitize()` dadurch die rohe
+     *     Ziffernform (z.B. eine LAN-IP), erst DANACH verbalisiert der
+     *     [VerbalizingTtsPort] den bereits maskierten Text. Vertauscht man die beiden,
+     *     sähe der Sanitizer nur noch die ausgeschriebene Wort-Form und die
+     *     Masken-Regex träfe NICHT mehr (bewiesen in [VerbalizingWiringTest]:
+     *     „Sanitizer UND Verbalizer an — die Reihenfolge stimmt").
+     *  2. **Loudness wirkt auf AUDIO, ist also orthogonal** zum Text ⇒ es ist egal, ob
+     *     die Normalisierung innerhalb oder außerhalb der Text-Dekoratoren hängt; sie
+     *     kommt ganz nach außen, weil sie erst mit den fertigen WAV-Bytes arbeitet
+     *     (und ein Text-Dekorator um sie herum die Bytes gar nicht mehr anfassen könnte).
+     *
+     * **openai-Sonderfall:** der [OpenAiTtsAdapter] trägt seinen Sanitizer INTERN,
+     * direkt vor dem Cloud-Call (stärkste Position, bewiesen in
+     * [OpenAiTtsSanitizeWiringTest]) — solange NICHTS zwischen Hülle und Adapter sitzt,
+     * wäre eine zweite Maskierung wirkungslos-doppelt und wird weggelassen (dieselbe
+     * bewusste Asymmetrie, die der Boot-Pfad schon hatte). Hängt aber der Verbalizer
+     * dazwischen, ist die INTERNE Position zu spät (sie sähe nur die Wort-Form) — dann
+     * ist die äußere Hülle die einzige, die Regel 1 durchsetzt, und wird gesetzt.
      */
     fun build(engineId: String, voice: String?): TtsPort {
+        require(engineId in TtsEngineIds.ALL) {
+            "Unbekannte TTS-Engine '$engineId'. Erlaubt: ${TtsEngineIds.ALL.joinToString(", ")}."
+        }
         // Sanitize-Hülle um JEDE Engine (Andi-Befund 21.07.: piper/say lasen Quellen-URLs
         // vor, weil der Sanitizer NUR im OpenAI-Adapter hing — die „sprich niemals ein
         // Geheimnis"-Regel galt damit ausgerechnet nicht für die lokalen Engines).
         // Neue Engines sind dadurch automatisch geschützt; man kann es nicht vergessen.
-        return wrapSanitizing(buildRaw(engineId, voice))
+        val raw = buildRaw(engineId, voice)
+        val verbalized = wrapVerbalizing(raw)
+        // `verbalized === raw` ⇒ zwischen Hülle und Adapter sitzt NICHTS. Die Identität
+        // (statt eines zweiten `if (verbalizeEnabled)`) ist absichtlich: die Ausnahme kann
+        // nicht von der tatsächlichen Kette abdriften, egal welche Dekoratoren hier später
+        // dazukommen.
+        val carriesOwnSanitizer = raw is OpenAiTtsAdapter && verbalized === raw
+        return wrapLoudness(if (carriesOwnSanitizer) verbalized else wrapSanitizing(verbalized))
     }
 
     /** Hüllt [port], solange die Sanitize-Regel scharf ist — sonst unverändert (byte-neutral). */
     private fun wrapSanitizing(port: TtsPort): TtsPort =
         if (sanitizeEnabled) SanitizingTtsPort(port, NeverSpeakTtsSanitizer()) else port
 
+    /**
+     * Hüllt [port] mit [VerbalizingTtsPort]/[IcuVerbalizer], solange
+     * `HOSHI_TTS_VERBALIZE_ENABLED` scharf ist — sonst unverändert (byte-neutral,
+     * Muster [wrapSanitizing]/[wrapLoudness]).
+     * MUSS innerhalb von [wrapSanitizing] aufgerufen werden (s. [build]-KDoc).
+     */
+    private fun wrapVerbalizing(port: TtsPort): TtsPort =
+        if (verbalizeEnabled) VerbalizingTtsPort(port, IcuVerbalizer()) else port
+
+    /**
+     * Hüllt [port] mit [LoudnessNormalizingTtsPort]/[TtsLoudnessNormalizer], solange
+     * `HOSHI_TTS_LOUDNESS_ENABLED` scharf ist — sonst unverändert (byte-neutral,
+     * Muster [wrapSanitizing]/[wrapVerbalizing]). Wirkt auf AUDIO ⇒ ganz außen
+     * (s. [build]-KDoc, Punkt 2).
+     */
+    private fun wrapLoudness(port: TtsPort): TtsPort =
+        if (loudnessEnabled) {
+            LoudnessNormalizingTtsPort(
+                delegate = port,
+                normalizer = TtsLoudnessNormalizer(
+                    targetRmsDb = loudnessTargetRmsDb,
+                    peakCeilingDb = loudnessPeakCeilingDb,
+                    maxGainDb = loudnessMaxGainDb,
+                    silenceFloorDb = loudnessSilenceFloorDb,
+                ),
+            )
+        } else {
+            port
+        }
+
+    /**
+     * Der nackte Engine-Adapter. [build] hat [engineId] bereits gegen
+     * [TtsEngineIds.ALL] validiert; deshalb gibt es hier keinen stillen
+     * Fallback-Zweig.
+     */
     private fun buildRaw(engineId: String, voice: String?): TtsPort {
         val wish = voice?.trim()?.takeIf { it.isNotBlank() }
         return when (engineId) {
@@ -186,7 +300,8 @@ class TtsEngineFactory(
                 baseUrl = piperBaseUrl,
                 voice = wish ?: piperVoice,
             )
-            else -> VoxtralTtsAdapter(baseUrl = voxtralBaseUrl, voice = wish ?: voxtralVoice)
+            TtsEngineIds.VOXTRAL -> VoxtralTtsAdapter(baseUrl = voxtralBaseUrl, voice = wish ?: voxtralVoice)
+            else -> error("TTS-Engine wurde trotz Build-Validierung unbekannt: $engineId")
         }
     }
 

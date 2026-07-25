@@ -1,4 +1,4 @@
-export { useUiStrings } from './useUiStrings';
+export { useActiveUiLanguage, useUiStrings } from './useUiStrings';
 export {
   getActiveUiLanguage,
   setActiveUiLanguage,

@@ -41,7 +41,9 @@ fun interface EscalationPort {
          * eskaliert NIE, antwortet immer [EscalationResult.Unavailable] —
          * kein Netz, kein Spend, kein Verhalten.
          */
-        val NONE: EscalationPort = EscalationPort { _, _, _ -> Mono.just(EscalationResult.Unavailable) }
+        val NONE: EscalationPort = EscalationPort {
+            _, _, _ -> Mono.just(EscalationResult.Unavailable(EscalationUnavailableReason.DISABLED))
+        }
     }
 }
 
@@ -106,7 +108,12 @@ sealed interface EscalationResult {
      * Netzfehler-Phrase unterzugehen (Andi kann sonst „kein Internet" nicht
      * von „Budget alle" unterscheiden).
      */
-    data object Unavailable : EscalationResult
+    data class Unavailable(
+        /** Klartext-freie, stabile Ursache fuer Betrieb/Tests — nie Query, Key oder Antworttext. */
+        val reason: EscalationUnavailableReason = EscalationUnavailableReason.UNKNOWN,
+        /** Nur bei [EscalationUnavailableReason.HTTP_STATUS], sonst `null`. */
+        val httpStatus: Int? = null,
+    ) : EscalationResult
 
     /**
      * **Tages-Cap erreicht (H3, additiv)** — der Adapter hat VOR jedem Call
@@ -120,6 +127,46 @@ sealed interface EscalationResult {
      * derselben Zeile zu verschmelzen.
      */
     data object CapExhausted : EscalationResult
+}
+
+/**
+ * Klartext-freie Ursachen eines [EscalationResult.Unavailable]. Diese Werte sind
+ * bewusst provider-neutral: auch ein spaeterer lokaler Escalation-Adapter kann
+ * denselben Vertrag erfuellen. Sie enthalten NIE Query-, Antwort- oder Key-Daten.
+ */
+enum class EscalationUnavailableReason(val logValue: String) {
+    DISABLED("disabled"),
+    EMPTY_QUERY("empty_query"),
+    MISSING_KEY("missing_key"),
+    TIMEOUT("timeout"),
+    HTTP_STATUS("http_status"),
+    NETWORK("network"),
+    PARSE("parse"),
+    EMPTY_RESPONSE("empty_response"),
+    EMPTY_RESULT("empty_result"),
+    PORT_ERROR("port_error"),
+    UNKNOWN("unknown"),
+}
+
+/** Ein finaler, warmer Unavailable-Ausgang an der Orchestrationsgrenze. */
+data class EscalationUnavailableEvent(
+    val provider: String,
+    val reason: EscalationUnavailableReason,
+    val elapsedMs: Long,
+    val timeoutMs: Long,
+    val httpStatus: Int? = null,
+)
+
+/**
+ * Beobachtungs-Port fuer den finalen Unavailable-Ausgang. Der reine Kern kennt
+ * keinen Logger; der Inbound-Adapter schreibt daraus genau eine sichere Zeile.
+ */
+fun interface EscalationDiagnosticsPort {
+    fun unavailable(event: EscalationUnavailableEvent)
+
+    companion object {
+        val NONE: EscalationDiagnosticsPort = EscalationDiagnosticsPort { }
+    }
 }
 
 /**

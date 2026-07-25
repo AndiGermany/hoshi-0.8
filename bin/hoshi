@@ -5,7 +5,7 @@
 # EIN Einstieg mit Subcommands, die an pipeline/<cmd>.sh delegieren.
 #
 # Usage:
-#   bin/hoshi verify       # grüner Gate: build (alle Module + Tests) + LIVE-Brain-Smoke
+#   bin/hoshi verify       # Gate: Render + TTS-First-Run + Build/Tests + LIVE-Brain
 #   bin/hoshi run          # lauffähig-Beweis: App auf :8090 booten + Health/401/200 prüfen
 #   bin/hoshi turn         # M2-Beweis: echter Turn durchs Hexagon (POST /chat/stream → SSE)
 #   bin/hoshi ask "<frage>"# M4-Step-2-Beweis: grounded Turn — Antwort spiegelt echtes Wiki-Wissen
@@ -40,8 +40,8 @@ usage() {
     cat <<EOF
 ${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (0.8 / Nagareboshi)
 
-  ${C_CYAN}verify${C_RESET}       grüner Gate: ./gradlew build (alle Module + ArchUnit/Unit)
-               + LIVE-Brain-Smoke gegen echten e4b (:8041)
+  ${C_CYAN}verify${C_RESET}       grüner Gate: Deploy-Render + TTS-Fresh-HOME +
+               ./gradlew build (ArchUnit/Unit) + LIVE-Brain-Smoke (:8041)
   ${C_CYAN}run${C_RESET}          lauffähig-Beweis: App auf :8090 booten,
                /api/health→200, /api/v1/ping ohne Token→401, mit Token→200
   ${C_CYAN}turn${C_RESET}         M2-Beweis: echter Turn durchs Hexagon — POST /api/v1/chat/stream
@@ -49,8 +49,8 @@ ${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (0.8 / Nagareboshi)
   ${C_CYAN}ask${C_RESET} "<frage>" M4-Step-2-Beweis: grounded Turn — App mit HOSHI_GROUNDING_ENABLED=true,
                Router→FACT→Fts5GroundingAdapter (:8035) → Antwort spiegelt echtes Wiki-Wissen
   ${C_CYAN}voice${C_RESET}        Audio-Beweis: der Turn ist HÖRBAR — speak=true → ≥1 AudioChunk
-               (Voxtral :8042), gibt AudioChunks/Bytes/ms aus, WAV nach .pipeline/
-  ${C_CYAN}voicein${C_RESET}      Eingabe-Beweis: Andi SPRICHT Hoshi an — WAV (Voxtral :8042)
+               (Fresh-Clone-Default macOS say :8044), Audiochunks/Bytes/ms + WAV
+  ${C_CYAN}voicein${C_RESET}      Eingabe-Beweis: gesprochene WAV (macOS say :8044)
                → POST /api/v1/voice → Whisper :9001 → Turn; zeigt Transkript + Antwort
   ${C_CYAN}tts-openai${C_RESET}   Cloud-TTS-Beweis (ohne Brain): OpenAiTtsAdapter → OpenAI
                /v1/audio/speech (\"Hallo, ich bin Hoshi.\") → WAV-Bytes (RIFF), gibt Byte-Länge aus
@@ -63,7 +63,7 @@ ${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (0.8 / Nagareboshi)
   ${C_CYAN}heal${C_RESET}         Zombie/Wedge/Down-Brain auto-fixen: guard-sicher kill→start,
                Erfolg ERST bei bewiesenem Roundtrip (--brain-only, Default)
   ${C_CYAN}up${C_RESET}           Stack brain-guard-sicher hochfahren: Brain (wenn nicht OK) +
-               whisper/bridge/speaker-id best-effort, idempotent (voxtral gewollt aus)
+               whisper/bridge/speaker-id/say-TTS best-effort, idempotent (voxtral gewollt aus)
   ${C_CYAN}seam-watch${C_RESET}   die Brain-Naht (e4b :8041) beobachten (--once für einen Schuss)
   ${C_CYAN}deploy${C_RESET}       lokaler launchd-Service: io.hoshi.0.8.backend (:8090, HA-scharf,
                self-healing) bauen+installieren+verifizieren (Health/401-Wand/Turn/Log);

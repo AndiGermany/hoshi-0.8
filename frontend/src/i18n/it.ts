@@ -16,6 +16,7 @@ export const it: UiStrings = {
     mainNav: 'Navigazione principale',
     openSettingsAria: 'Apri le impostazioni',
     settingsTitle: 'Impostazioni',
+    closeSettingsAria: 'Chiudi le impostazioni',
   },
 
   idleFace: {
@@ -72,6 +73,10 @@ export const it: UiStrings = {
     seedSuffix: ' (predefinito dal deploy)',
     hint: 'Il luogo per le domande sul meteo — vale per tutti i dispositivi. Per un altro luogo, chiedi semplicemente «Che tempo fa a …?».',
     saved: (label: string) => `Luogo salvato: ${label}.`,
+    label: 'Luogo meteo',
+    placeholder: 'es. Duisburg',
+    loading: 'caricamento…',
+    current: (label: string) => `Attuale: ${label}`,
   },
 
   lookupModel: {
@@ -82,6 +87,7 @@ export const it: UiStrings = {
     unknown: 'Modello sconosciuto.',
     failed: 'Cambio non riuscito — riprova.',
     priceSuffix: (cents: number) => `circa ${cents.toFixed(2)} ct/ricerca`,
+    loading: 'caricamento…',
   },
 
   ttsEngine: {
@@ -95,6 +101,13 @@ export const it: UiStrings = {
     active: 'attivo',
     available: 'disponibile',
     notStarted: 'non avviato',
+    loading: 'caricamento…',
+    engineLabels: {
+      openai: 'OpenAI (cloud)',
+      say: 'macOS say (locale)',
+      piper: 'Piper (locale)',
+      voxtral: 'Voxtral (locale)',
+    },
   },
 
   stimme: {
@@ -108,6 +121,12 @@ export const it: UiStrings = {
     cloudPrivacy: 'Onestamente: ogni campione vocale e ogni voce cloud va a OpenAI.',
     localLine: 'La voce parlata delle risposte di Hoshi — funziona in locale.',
     localPrivacy: 'Non lascia mai il dispositivo.',
+    loading: 'caricamento…',
+    sampleAria: (voice: string) => `Riproduci il campione vocale di ${voice}`,
+    sampleTitle: 'Riproduci campione vocale',
+    noVoicesFor: (engine: string) => `Al momento nessuna voce disponibile per ${engine}.`,
+    licensePrefix: (license: string) => `Licenza: ${license}`,
+    sampleFailed: 'Il campione vocale non è disponibile al momento.',
   },
 
   brainModel: {
@@ -122,6 +141,9 @@ export const it: UiStrings = {
     statusOk: 'attivo',
     statusLoading: 'in caricamento…',
     statusUnreachable: 'non raggiungibile',
+    loading: 'caricamento…',
+    statusReading: '(lettura dello stato…)',
+    statusPrefix: 'Stato: ',
   },
 
   privacy: {
@@ -193,6 +215,9 @@ export const it: UiStrings = {
     locked: "Ancora disattivato lato server — l'impostazione viene salvata ma si applicherà solo quando la modalità notte sarà attivata al deploy.",
     invalid: 'Valore non valido — controlla i dati inseriti.',
     failed: 'Salvataggio non riuscito — riprova.',
+    loading: 'caricamento…',
+    deviceGroupAria: 'Dispositivo',
+    modeGroupAria: 'Modalità',
   },
 
   language: {
@@ -206,6 +231,18 @@ export const it: UiStrings = {
     uiNotice: "I testi dell'interfaccia e la conversazione seguono questa scelta — i comandi smart-home restano in tedesco per ora.",
   },
 
+  skills: {
+    hint: "Attiva e disattiva singole abilità a caldo — lato server, vale per tutti i dispositivi.",
+    loading: 'caricamento…',
+    badgeLocked: 'disattivato al deploy',
+    badgeEgress: 'va online',
+    badgeSoon: 'in arrivo',
+    future: {
+      LISTS: { label: 'Liste', reason: 'decisione con Andi ancora aperta' },
+      MUSIC: { label: 'Musica', reason: 'primo passo: parte un brano' },
+    },
+  },
+
   firedToast: {
     headline: {
       TIMER: 'Timer terminato',
@@ -217,6 +254,11 @@ export const it: UiStrings = {
       ALARM: 'Sveglia',
       REMINDER: 'Promemoria',
     },
+    ackTitle: 'Tocca per confermare',
+    gearAria: 'Apri le impostazioni di escalation della sveglia (Abilità)',
+    gearTitle: 'Cambia escalation',
+    missed: (noun, label, time) =>
+      `${label ? `${noun} «${label}»` : noun} scadeva alle ${time} — non sono riuscito a raggiungerti`,
   },
 
   activity: {
@@ -256,6 +298,7 @@ export const it: UiStrings = {
     micIdle: 'Tieni premuto per parlare (o tocca per cambiare)', micListening: 'Rilascia per inviare, oppure premi Esc per annullare', micTranscribing: 'Capisco…', micResponding: 'Microfono/Esc interrompe la risposta',
     ttsOn: 'Modalità voce attiva: Hoshi pronuncia la risposta', ttsOff: 'Modalità voce disattiva: solo testo', greeting: (dayPart) => `${({ night: 'Buonanotte', morning: 'Buongiorno', day: 'Ciao', evening: 'Buonasera' } as const)[dayPart]} — cosa posso fare per te?`,
     speakerSettingsAria: 'Apri le impostazioni dei parlanti (Memoria e privacy)', manageSpeakers: 'Gestisci i parlanti', recordingUnderstood: 'Sto capendo la tua registrazione', sourcesTitle: 'Mostra le fonti di questa risposta', sources: 'Fonti', micAria: 'Microfono: tieni premuto per parlare', discardRecording: 'Scarta registrazione', discard: 'Scarta (Esc)', speaking: 'parlo…', processingRecording: 'Elaborazione della tua registrazione', transcribing: 'capisco…', thinking: 'sto pensando…', placeholder: 'Messaggio a Hoshi…',
+    send: 'Invia', sendTitle: 'Invia (Invio)',
   },
   voiceChat: { slowTurn: 'Sta richiedendo un po’ più tempo del solito — ci sto lavorando.', connection: 'Connessione', errorStage: (stage) => `Errore · ${stage}`, noAudioHeard: 'Non ho sentito nulla: tieni premuto il microfono e parla.' },
   turnAnatomy: {
@@ -263,5 +306,16 @@ export const it: UiStrings = {
     answering: 'risponde', speaking: 'parla',
     recognized: (who) => `riconosciuto: ${who}`,
     guest: 'Ospite', rowLabel: 'Cosa ha fatto davvero questo turno',
+    local: 'locale', cloudSuffix: ' · è andato online',
+    localTitle: 'Questa risposta è rimasta sul dispositivo', cloudTitle: 'Questa risposta è passata da un provider cloud',
+    grounded: 'Supportato da conoscenza', groundedTitle: 'La risposta era supportata da conoscenza caricata (filtro FactCoverage)',
+  },
+  voiceOrb: {
+    sectionAria: 'Parla con Hoshi',
+    idleHint: 'Tocca per parlare',
+    idleTapLabel: 'Tocca e parla',
+    listening: (elapsed) => `sto ascoltando… ${elapsed}`,
+    listeningTapLabel: 'Tocca di nuovo per inviare — oppure premi Esc per annullare',
+    speakingTapLabel: 'Tocca per interrompere la risposta di Hoshi',
   },
 };

@@ -112,7 +112,7 @@ class TurnOrchestratorLookupIntentTest {
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
                 entityMemory = { null },
-                grounding = { _, _ -> Mono.just(grounding) },
+                grounding = GroundingPort.fixed(grounding),
                 episodicMemory = null,
             ),
             persona = persona,

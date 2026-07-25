@@ -95,7 +95,7 @@ class TurnOrchestratorVerbatimReplayTest {
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
                 entityMemory = { null },
-                grounding = { _, _ -> Mono.just("") },
+                grounding = GroundingPort.EMPTY,
                 episodicMemory = null,
             ),
             persona = persona,

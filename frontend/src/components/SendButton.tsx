@@ -1,3 +1,5 @@
+import { useUiStrings } from '../i18n';
+
 /**
  * „Senden"-Affordance der Compose-Bar — der EINE Gold-CTA.
  *
@@ -6,12 +8,14 @@
  * sichtbares Wort „Senden" (im Geiste von Hoshi 0.5). So ist die Aktion benannt,
  * barrierearm und intentional, statt ein einzelnes Zeichen raten zu lassen.
  *
- * a11y: trägt immer `aria-label="Senden"`; `disabled` (leeres Feld ODER laufender
- * Stream) kommt von außen. Während des Streams (`busy`) zeigen drei ruhige Punkte
- * statt des Flugzeugs „Hoshi arbeitet" — die Pillen-Breite bleibt durch das stets
- * sichtbare Label stabil (kein Layout-Springen). Hover/Active/Focus-Ring stecken
- * in der `.compose__send`-CSS; die globale prefers-reduced-motion-Regel (`*`)
- * stellt deren Transitions automatisch ruhig.
+ * a11y: trägt immer `aria-label={chat.send}` (Andi-Sweep 24.07: README-Screenshot-
+ * Befund — das Wort war hartkodiert Deutsch, egal welche UI-Sprache aktiv war;
+ * jetzt aus dem Katalog, DE bleibt byte-gleich „Senden"); `disabled` (leeres Feld
+ * ODER laufender Stream) kommt von außen. Während des Streams (`busy`) zeigen drei
+ * ruhige Punkte statt des Flugzeugs „Hoshi arbeitet" — die Pillen-Breite bleibt
+ * durch das stets sichtbare Label stabil (kein Layout-Springen). Hover/Active/
+ * Focus-Ring stecken in der `.compose__send`-CSS; die globale prefers-reduced-
+ * motion-Regel (`*`) stellt deren Transitions automatisch ruhig.
  */
 
 /** Schlichtes Paper-Plane-Glyph (currentColor) — der Send-Kern (lucide-Geist). */
@@ -34,18 +38,19 @@ function SendGlyph() {
 }
 
 export function SendButton({ disabled, busy }: { disabled: boolean; busy: boolean }) {
+  const { chat } = useUiStrings();
   return (
     <button
       className="compose__send"
       type="submit"
       disabled={disabled}
-      aria-label="Senden"
-      title="Senden (Enter)"
+      aria-label={chat.send}
+      title={chat.sendTitle}
     >
       <span className="compose__send-ico-wrap" aria-hidden="true">
         {busy ? <span className="compose__send-dots">…</span> : <SendGlyph />}
       </span>
-      <span className="compose__send-label">Senden</span>
+      <span className="compose__send-label">{chat.send}</span>
     </button>
   );
 }

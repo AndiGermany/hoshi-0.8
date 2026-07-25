@@ -55,8 +55,8 @@ import {
   saveBrainModel,
 } from '../api/brainSettings';
 import { de } from '../i18n/de';
-import { useUiStrings } from '../i18n';
-import type { BrainModelStrings } from '../i18n/types';
+import { useActiveUiLanguage, useUiStrings } from '../i18n';
+import type { BrainModelStrings, FutureSkillId } from '../i18n/types';
 import { CloudGlyph, LockGlyph, PlayGlyph, WarnGlyph } from './icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -299,6 +299,7 @@ export function SettingsPanel({
   category,
   anchor,
 }: Props) {
+  const t = useUiStrings();
   const closeRef = useRef<HTMLButtonElement>(null);
   const asideRef = useRef<HTMLElement>(null);
   const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>('darstellung');
@@ -368,17 +369,17 @@ export function SettingsPanel({
         className="settings"
         role="dialog"
         aria-modal="true"
-        aria-label="Einstellungen"
+        aria-label={t.topNav.settingsTitle}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="settings__head">
-          <h2 className="settings__title">Einstellungen</h2>
+          <h2 className="settings__title">{t.topNav.settingsTitle}</h2>
           <button
             ref={closeRef}
             type="button"
             className="settings__close"
             onClick={onClose}
-            aria-label="Einstellungen schließen"
+            aria-label={t.topNav.closeSettingsAria}
           >
             ✕
           </button>
@@ -493,7 +494,6 @@ export function SettingsPanel({
           {/* ── Skills (S2.3): Zwei-Stufen-Toggle, serverseitig ─────────── */}
           <SkillsSection
             skills={skills}
-            language={language}
             loading={skillsLoading}
             error={skillsError}
             busyId={busyId}
@@ -545,8 +545,12 @@ export function SettingsPanel({
   );
 }
 
-/** Die leise ehrliche Zeile, wenn die Hörprobe scheitert (503/Netz/Audio-Decode). */
-export const SAMPLE_ERROR_TEXT = 'Hörprobe grad nicht möglich.';
+/**
+ * Die leise ehrliche Zeile, wenn die Hörprobe scheitert (503/Netz/Audio-Decode)
+ * — jetzt eine Referenz auf den `de`-Katalog (byte-gleich zum bisherigen Stand,
+ * Andi-Sweep 24.07). Gerendert wird `useUiStrings().stimme.sampleFailed`.
+ */
+export const SAMPLE_ERROR_TEXT = de.stimme.sampleFailed;
 
 /**
  * **EscalationSection** — die Zahl-Einstellung „Eskalation nach … Sekunden" der
@@ -716,9 +720,9 @@ export function WeatherLocationSectionView({
   return (
     <section className="settings__group">
       <label className="settings__label" htmlFor="settings-weather-place">
-        Wetter-Ort
+        {WEATHER_LOCATION_TEXTS.label}
       </label>
-      {loading && !current && <p className="settings__hint">lädt…</p>}
+      {loading && !current && <p className="settings__hint">{WEATHER_LOCATION_TEXTS.loading}</p>}
       {error && (
         <p className="settings__hint" role="alert">
           {error}
@@ -726,7 +730,7 @@ export function WeatherLocationSectionView({
       )}
       {current && (
         <p className="settings__hint">
-          Aktuell: {current.label}
+          {WEATHER_LOCATION_TEXTS.current(current.label)}
           {!current.fromStore && WEATHER_LOCATION_TEXTS.seedSuffix}
         </p>
       )}
@@ -735,7 +739,7 @@ export function WeatherLocationSectionView({
           id="settings-weather-place"
           type="text"
           className="settings__text"
-          placeholder="z. B. Duisburg"
+          placeholder={WEATHER_LOCATION_TEXTS.placeholder}
           value={place}
           disabled={busy}
           onChange={(e) => onPlace(e.target.value)}
@@ -869,7 +873,7 @@ export function LookupModelSectionView({
       <label className="settings__label" htmlFor="settings-lookup-model">
         {LOOKUP_MODEL_TEXTS.label}
       </label>
-      {loading && !current && <p className="settings__hint">lädt…</p>}
+      {loading && !current && <p className="settings__hint">{LOOKUP_MODEL_TEXTS.loading}</p>}
       {error && (
         <p className="settings__hint" role="alert">
           {error}
@@ -908,13 +912,11 @@ export function LookupModelSectionView({
 //  TTS-Engine — welcher Adapter spricht (Andi-Video-Auftrag)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Anzeige-Labels der vier Engines (die Wire-Ids selbst sind stabil, s. TtsEngineIds im BE). */
-const TTS_ENGINE_LABELS: Record<string, string> = {
-  openai: 'OpenAI (Cloud)',
-  say: 'macOS say (lokal)',
-  piper: 'Piper (lokal)',
-  voxtral: 'Voxtral (lokal)',
-};
+// Die Anzeige-Labels der vier Engines („OpenAI (Cloud)", „macOS say (lokal)" …)
+// stehen jetzt im Katalog (`ttsEngine.engineLabels`, DE byte-gleich zum
+// bisherigen Hardcode): „(lokal)" stand vorher auch in der englischen
+// Oberfläche (EN-Sweep 25.07). Die Wire-Ids selbst sind stabil (TtsEngineIds im
+// BE); unbekannte Ids rendern weiterhin as-is.
 
 /**
  * Ehrliche Texte des TTS-Engine-Settings (auch von Tests referenziert) — jetzt
@@ -951,7 +953,7 @@ export function TtsEngineSectionView({
   return (
     <section className="settings__group">
       <h3 className="settings__label">{TTS_ENGINE_TEXTS.label}</h3>
-      {loading && !current && <p className="settings__hint">lädt…</p>}
+      {loading && !current && <p className="settings__hint">{TTS_ENGINE_TEXTS.loading}</p>}
       {error && (
         <p className="settings__hint" role="alert">
           {error}
@@ -964,7 +966,9 @@ export function TtsEngineSectionView({
             return (
               <div className="settings__skill" key={e.id}>
                 <div className="settings__skillmeta">
-                  <span className="settings__skillname">{TTS_ENGINE_LABELS[e.id] ?? e.id}</span>
+                  <span className="settings__skillname">
+                    {TTS_ENGINE_TEXTS.engineLabels[e.id] ?? e.id}
+                  </span>
                   <span className="settings__skillbadges">
                     {isActive && (
                       <span className="settings__badge settings__badge--egress">{TTS_ENGINE_TEXTS.active}</span>
@@ -983,7 +987,7 @@ export function TtsEngineSectionView({
                   type="button"
                   role="switch"
                   aria-checked={isActive}
-                  aria-label={TTS_ENGINE_LABELS[e.id] ?? e.id}
+                  aria-label={TTS_ENGINE_TEXTS.engineLabels[e.id] ?? e.id}
                   className={`settings__toggle ${isActive ? 'is-on' : ''}`}
                   disabled={isActive || !e.verfuegbar || busy}
                   onClick={() => onSelect(e.id)}
@@ -1061,7 +1065,7 @@ export function StimmeSectionView({
   const t = useUiStrings();
   const STIMME_TEXTS = t.stimme;
   const isOpenAi = current?.aktiv === 'openai';
-  const engineLabel = current ? (TTS_ENGINE_LABELS[current.aktiv] ?? current.aktiv) : '';
+  const engineLabel = current ? (t.ttsEngine.engineLabels[current.aktiv] ?? current.aktiv) : '';
   const selectedVoice = current?.stimmen.find((v) => v.id === activeVoice);
 
   return (
@@ -1069,7 +1073,7 @@ export function StimmeSectionView({
       <label className="settings__label" htmlFor="settings-voice">
         {STIMME_TEXTS.label}
       </label>
-      {loading && !current && <p className="settings__hint">lädt…</p>}
+      {loading && !current && <p className="settings__hint">{STIMME_TEXTS.loading}</p>}
       {error && (
         <p className="settings__hint" role="alert">
           {error}
@@ -1095,8 +1099,8 @@ export function StimmeSectionView({
             className="settings__samplebtn"
             onClick={onPlaySample}
             disabled={sampleBusy}
-            aria-label={`Hörprobe der Stimme ${activeVoice} abspielen`}
-            title="Hörprobe abspielen"
+            aria-label={STIMME_TEXTS.sampleAria(activeVoice)}
+            title={STIMME_TEXTS.sampleTitle}
           >
             {sampleBusy ? <span className="settings__samplespin" aria-hidden="true" /> : <PlayGlyph />}
           </button>
@@ -1104,7 +1108,7 @@ export function StimmeSectionView({
       )}
       {current && current.stimmen.length === 0 && (
         <p className="settings__hint">
-          {current.stimmenHinweis || `Für ${engineLabel} stehen aktuell keine Stimmen zur Auswahl.`}
+          {current.stimmenHinweis || STIMME_TEXTS.noVoicesFor(engineLabel)}
         </p>
       )}
       {current && (
@@ -1125,7 +1129,9 @@ export function StimmeSectionView({
       {current && current.stimmen.length > 0 && current.stimmenHinweis && (
         <p className="settings__hint">{current.stimmenHinweis}</p>
       )}
-      {selectedVoice?.lizenz && <p className="settings__hint">Lizenz: {selectedVoice.lizenz}</p>}
+      {selectedVoice?.lizenz && (
+        <p className="settings__hint">{STIMME_TEXTS.licensePrefix(selectedVoice.lizenz)}</p>
+      )}
       {voiceBusy && <p className="settings__hint">{STIMME_TEXTS.switching}</p>}
       {voiceNote && (
         <p className="settings__hint settings__voicenote" role="status">
@@ -1281,7 +1287,7 @@ export function TtsAndVoiceSection({
       audio.onerror = release;
       await audio.play();
     } catch {
-      setSampleError(SAMPLE_ERROR_TEXT);
+      setSampleError(STIMME_TEXTS.sampleFailed);
     } finally {
       setSampleBusy(false);
     }
@@ -1486,7 +1492,7 @@ export function BrainModelSectionView({
       <label className="settings__label" htmlFor="settings-brain-model">
         {BRAIN_MODEL_TEXTS.label}
       </label>
-      {loading && !current && <p className="settings__hint">lädt…</p>}
+      {loading && !current && <p className="settings__hint">{BRAIN_MODEL_TEXTS.loading}</p>}
       {error && (
         <p className="settings__hint" role="alert">
           {error}
@@ -1503,7 +1509,7 @@ export function BrainModelSectionView({
           >
             {!current.aktiv && (
               <option value="" disabled>
-                (Status wird gelesen…)
+                {BRAIN_MODEL_TEXTS.statusReading}
               </option>
             )}
             {current.modelle.map((m) => (
@@ -1513,7 +1519,8 @@ export function BrainModelSectionView({
             ))}
           </select>
           <p className="settings__hint">
-            Status: {brainStatusLabel(current.status, BRAIN_MODEL_TEXTS)}
+            {BRAIN_MODEL_TEXTS.statusPrefix}
+            {brainStatusLabel(current.status, BRAIN_MODEL_TEXTS)}
             {current.aktiv && ` (${current.modelle.find((m) => m.id === current.aktiv)?.label ?? current.aktiv})`}
           </p>
         </>
@@ -1533,40 +1540,20 @@ export function BrainModelSectionView({
   );
 }
 
-/** Zweisprachige Badge-Texte (Skill-Labels selbst kommen aus der Registry/Wire). */
-const SKILL_BADGES = {
-  locked: { de: 'deaktiviert beim Deploy', en: 'disabled at deploy' },
-  egress: { de: 'geht online', en: 'goes online' },
-  soon: { de: 'kommt noch', en: 'coming' },
-} as const;
-
 /**
  * Ehrliche Zukunfts-Skills — statisch ausgegraut MIT Grund, bewusst OHNE Toggle
  * (kein Fake-Schalter, der nichts schaltet). Sobald ein Skill real im Backend
  * landet, kommt er über die Registry/Wire-Liste und fliegt hier raus.
  * (WEATHER ist raus: der Wetter-Ort ist jetzt eine echte Sektion, siehe
  * {@link WeatherLocationSection}.)
+ *
+ * Nur noch die IDs: Label und Grund stehen im Katalog (`t.skills.future`) und
+ * gibt es damit in allen fünf Sprachen statt nur de/en (EN-Sweep 25.07).
  */
-export const FUTURE_SKILLS: {
-  id: string;
-  label: { de: string; en: string };
-  reason: { de: string; en: string };
-}[] = [
-  {
-    id: 'LISTS',
-    label: { de: 'Listen', en: 'Lists' },
-    reason: { de: 'Andi-Gabel offen', en: 'decision with Andi still open' },
-  },
-  {
-    id: 'MUSIC',
-    label: { de: 'Musik', en: 'Music' },
-    reason: { de: 'Track startet', en: 'first slice: a track starts' },
-  },
-];
+export const FUTURE_SKILL_IDS: readonly FutureSkillId[] = ['LISTS', 'MUSIC'];
 
 interface SkillsSectionProps {
   skills: Skill[];
-  language: Language;
   loading?: boolean;
   error?: string | null;
   busyId?: string | null;
@@ -1582,23 +1569,23 @@ interface SkillsSectionProps {
  *  - `locked` ⇒ Toggle disabled + Badge „deaktiviert beim Deploy".
  *  - `tier === 'EGRESS'` ⇒ Badge „geht online" (greift, sobald CURRENCY/ONLINE_LOOKUP kommen).
  *  - Der Schalter spiegelt `enabled`; die Decke (`locked`/`effective`) sagt das Badge.
+ *
+ * Sprache (EN-Sweep 25.07): Hinweis, Lade-Zeile, Badges und Zukunfts-Skills
+ * kommen aus dem Katalog der AKTIVEN UI-SPRACHE. Vorher hing die Wahl an der
+ * CHAT-Sprache (`language`-Prop, Default `'auto'`) — die Skill-Zeile blieb
+ * deutsch, obwohl die Oberfläche auf Englisch stand. Die Skill-NAMEN liefert
+ * der Server nur zweisprachig (`labelDe`/`labelEn`); für es/fr/it bleibt darum
+ * der DE-Fallback des Katalogs, bis der Draht mehr Sprachen führt.
  */
-export function SkillsSection({
-  skills,
-  language,
-  loading,
-  error,
-  busyId,
-  onToggle,
-}: SkillsSectionProps) {
-  const lang: 'de' | 'en' = language === 'en' ? 'en' : 'de';
+export function SkillsSection({ skills, loading, error, busyId, onToggle }: SkillsSectionProps) {
+  const uiLang = useActiveUiLanguage();
+  const t = useUiStrings().skills;
+  const lang: 'de' | 'en' = uiLang === 'en' ? 'en' : 'de';
   return (
     <section className="settings__group">
       <h3 className="settings__label">Skills</h3>
-      <p className="settings__hint">
-        Schaltet einzelne Fähigkeiten zur Laufzeit ein/aus — serverseitig, gilt für alle Geräte.
-      </p>
-      {loading && skills.length === 0 && <p className="settings__hint">lädt…</p>}
+      <p className="settings__hint">{t.hint}</p>
+      {loading && skills.length === 0 && <p className="settings__hint">{t.loading}</p>}
       {error && (
         <p className="settings__hint" role="alert">
           {error}
@@ -1616,12 +1603,12 @@ export function SkillsSection({
                   <span className="settings__skillbadges">
                     {s.tier === 'EGRESS' && (
                       <span className="settings__badge settings__badge--egress">
-                        {SKILL_BADGES.egress[lang]}
+                        {t.badgeEgress}
                       </span>
                     )}
                     {s.locked && (
                       <span className="settings__badge settings__badge--locked">
-                        {SKILL_BADGES.locked[lang]}
+                        {t.badgeLocked}
                       </span>
                     )}
                   </span>
@@ -1642,13 +1629,13 @@ export function SkillsSection({
           );
         })}
         {/* Zukunfts-Skills: ausgegraut mit ehrlichem Grund — KEIN Fake-Toggle. */}
-        {FUTURE_SKILLS.map((f) => (
-          <div className="settings__skill settings__skill--future" key={f.id}>
+        {FUTURE_SKILL_IDS.map((id) => (
+          <div className="settings__skill settings__skill--future" key={id}>
             <div className="settings__skillmeta">
-              <span className="settings__skillname">{f.label[lang]}</span>
-              <span className="settings__skillreason">{f.reason[lang]}</span>
+              <span className="settings__skillname">{t.future[id].label}</span>
+              <span className="settings__skillreason">{t.future[id].reason}</span>
             </div>
-            <span className="settings__badge settings__badge--soon">{SKILL_BADGES.soon[lang]}</span>
+            <span className="settings__badge settings__badge--soon">{t.badgeSoon}</span>
           </div>
         ))}
       </div>

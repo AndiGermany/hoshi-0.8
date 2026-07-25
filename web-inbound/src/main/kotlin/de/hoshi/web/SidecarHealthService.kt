@@ -53,7 +53,8 @@ data class OpsStatus(
     /**
      * Andis Schloss-Wunsch (2026-07-20): `true` NUR wenn der GESAMTE Sprech-Pfad lokal
      * ist — STT (`whisper-stt` OK) UND Brain (OK, nicht DEGRADED/Drift/Loading) UND die
-     * GEWÄHLTE TTS-Engine lokal (`!voice.cloud`). S. [SidecarHealthService.deriveAllLocal].
+     * GEWÄHLTE lokale TTS-Engine erreichbar (`say-tts`/`piper-tts`/`voxtral-tts` OK).
+     * S. [SidecarHealthService.deriveAllLocal].
      */
     val allLocal: Boolean,
     val ts: Long,
@@ -187,6 +188,8 @@ class SidecarHealthService(
     @Value("\${hoshi.brain.base-url:http://localhost:8041}") brainUrl: String,
     @Value("\${hoshi.stt.base-url:http://localhost:9001}") sttUrl: String,
     @Value("\${hoshi.tts.base-url:http://localhost:8042}") ttsUrl: String,
+    @Value("\${hoshi.tts.say.base-url:http://localhost:8044}") sayUrl: String,
+    @Value("\${hoshi.tts.piper.base-url:http://localhost:8045}") piperUrl: String,
     @Value("\${hoshi.knowledge.bridge.base-url:http://localhost:8035}") bridgeUrl: String,
     @Value("\${hoshi.speaker.base-url:http://localhost:9002}") speakerUrl: String,
     @Value("\${hoshi.sidecar.watch.failure-threshold:2}") private val failureThreshold: Int,
@@ -218,33 +221,47 @@ class SidecarHealthService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Die bekannten Sidecars mit Contract-Namen + den verifizierten BOOT-Soll-Modellen.
+     * Die immer relevanten Sidecars mit Contract-Namen + den verifizierten
+     * BOOT-Soll-Modellen.
      * URLs aus den injizierten Properties (Mac-IP auf ct-106). `ramCostMb`/
      * `restartCommand` sind hier irrelevant (der Watchdog SENST nur — kein Restart,
      * kein RAM-Arbiter). Das Brain-`expectedModel` hier ist NUR der Boot-Default —
      * [currentSpecs] überschreibt es dynamisch, sobald ein Runtime-Switch vorliegt.
+     *
+     * TTS steht bewusst NICHT statisch hier: [currentSpecs] hängt genau den
+     * GEWÄHLTEN lokalen TTS-Sidecar an. Sonst könnte der Report Voxtral prüfen,
+     * während der echte Pfad `say` nutzt, und trotz nicht erreichbarer Ausgabe
+     * fälschlich `allLocal=true` melden.
      */
     private val staticSpecs: List<SidecarSpec> = listOf(
         SidecarSpec(name = "brain", url = brainUrl, ramCostMb = 0, expectedModel = brainExpectedModel.ifBlank { null }),
         SidecarSpec(name = "whisper-stt", url = sttUrl, ramCostMb = 0, expectedModel = "whisper-large-v3-turbo"),
         SidecarSpec(name = "speaker-id", url = speakerUrl, ramCostMb = 0, expectedModel = "CAM++"),
         SidecarSpec(name = "bridge", url = bridgeUrl, ramCostMb = 0),
-        SidecarSpec(name = "voxtral-tts", url = ttsUrl, ramCostMb = 0, expectedModel = "Voxtral"),
+    )
+    private val ttsSpecs: Map<String, SidecarSpec> = mapOf(
+        TtsEngineIds.SAY to SidecarSpec(name = "say-tts", url = sayUrl, ramCostMb = 0),
+        TtsEngineIds.PIPER to SidecarSpec(name = "piper-tts", url = piperUrl, ramCostMb = 0),
+        TtsEngineIds.VOXTRAL to SidecarSpec(name = "voxtral-tts", url = ttsUrl, ramCostMb = 0, expectedModel = "Voxtral"),
     )
 
     /** Pro-Sidecar Zähler aufeinanderfolgender Nicht-OK-Proben (für die Glättung). */
     private val failureCounts = ConcurrentHashMap<String, Int>()
 
     /**
-     * Die Sidecar-Specs FÜR DIESEN Tick: identisch zu [staticSpecs], außer dass das
-     * Brain-Soll dynamisch überschrieben wird, WENN je ein Runtime-Switch passiert ist
-     * ([brainModelStore]) — sonst bleibt der Boot-Default ([brainExpectedModel]) die
-     * Wahrheit (Erst-Boot-Fall, nie umgeschaltet). Drift ist damit IMMER „laufendes
-     * Modell ≠ GEWÄHLTES Modell", nie gegen ein statisches Deploy-Literal.
+     * Die Sidecar-Specs FÜR DIESEN Tick: das Brain-Soll wird dynamisch überschrieben,
+     * WENN je ein Runtime-Switch passiert ist ([brainModelStore]); außerdem wird genau
+     * der GEWÄHLTE lokale TTS-Sidecar angehängt. OpenAI hat keinen lokalen TTS-Sidecar
+     * und wird daher nicht als lokaler Prozess vorgetäuscht.
      */
-    private fun currentSpecs(): List<SidecarSpec> {
-        val chosen = brainModelStore?.selectedRepo()?.takeIf { it.isNotBlank() } ?: return staticSpecs
-        return staticSpecs.map { if (it.name == "brain") it.copy(expectedModel = chosen) else it }
+    private fun currentSpecs(ttsEngine: String): List<SidecarSpec> {
+        val chosenBrain = brainModelStore?.selectedRepo()?.takeIf { it.isNotBlank() }
+        val base = if (chosenBrain == null) {
+            staticSpecs
+        } else {
+            staticSpecs.map { if (it.name == "brain") it.copy(expectedModel = chosenBrain) else it }
+        }
+        return ttsSpecs[ttsEngine]?.let { base + it } ?: base
     }
 
     /**
@@ -300,7 +317,8 @@ class SidecarHealthService(
     @Scheduled(initialDelay = INITIAL_DELAY_MS, fixedDelay = REFRESH_INTERVAL_MS)
     fun refresh() {
         if (!enabled) return
-        val sidecars = currentSpecs().map { spec ->
+        val voice = currentVoice()
+        val sidecars = currentSpecs(voice.engine).map { spec ->
             val raw = runCatching { probe.probe(spec) }
                 .getOrElse { SidecarHealth.down("Probe warf: ${it.message?.take(80)}") }
             smooth(spec.name, raw)
@@ -309,7 +327,6 @@ class SidecarHealthService(
             .getOrElse {
                 MemoryStatus("UNKNOWN", BrainMemoryHeuristic.SOURCE, "Brain-Health-Abfrage warf — RAM-Druck unbekannt.")
             }
-        val voice = currentVoice()
         snapshot = OpsStatus(
             enabled = true,
             overall = deriveOverall(sidecars, memory),
@@ -346,9 +363,9 @@ class SidecarHealthService(
      * kritischer Sidecar DEGRADED ist ODER der Mac-RAM-Druck CRITICAL ist (das ist Andis eigentlicher
      * Alarm-Wunsch). Memory WARN trägt die UI separat über das `memory`-Feld.
      *
-     * **Optionale Sidecars** ([OPTIONAL_SIDECARS]: Voxtral-TTS, Speaker-ID) sind bewusst aus (RAM,
-     * 16-GB-Wand) — ihr DOWN treibt `overall` NICHT (sonst dauerhaft rote Pille = cry-wolf); sie
-     * erscheinen weiter in der Liste, damit nichts verschwiegen wird.
+     * **Optionale Sidecars** ([OPTIONAL_SIDECARS]: Speaker-ID) dürfen bewusst aus sein
+     * und treiben `overall` nicht. Der jeweils ausgewählte lokale TTS-Sidecar ist
+     * dagegen Teil des kritischen Sprechpfads: sein DOWN muss sichtbar werden.
      */
     private fun deriveOverall(sidecars: List<SidecarStatus>, memory: MemoryStatus): String {
         val critical = sidecars.filterNot { it.name in OPTIONAL_SIDECARS }
@@ -362,23 +379,26 @@ class SidecarHealthService(
     /**
      * Andis Schloss-Wunsch (2026-07-20): GRÜN nur, wenn der GESAMTE Sprech-Pfad lokal
      * ist — STT (`whisper-stt` OK) UND Brain (OK, nicht DEGRADED — kein Drift/Loading)
-     * UND die GEWÄHLTE TTS-Engine lokal (`!voice.cloud`, s. [currentVoice]: say/piper/
-     * voxtral). Fehlt einer der beiden Sidecar-Status (Warmup, unbekannter Name) ⇒
-     * `false` — ehrlich „noch nicht bewiesen", nie ein optimistisches Grün.
+     * UND die GEWÄHLTE lokale TTS-Engine erreichbar (ihr Sidecar-Status ist `OK`).
+     * OpenAI ist Cloud und daher immer `false`. Fehlt einer der drei Sidecar-Status
+     * (Warmup, unbekannter Name) ⇒ `false` — ehrlich „noch nicht bewiesen", nie ein
+     * optimistisches Grün.
      */
     private fun deriveAllLocal(sidecars: List<SidecarStatus>, voice: VoiceStatus): Boolean {
         val stt = sidecars.firstOrNull { it.name == "whisper-stt" }?.status
         val brain = sidecars.firstOrNull { it.name == "brain" }?.status
-        return stt == "OK" && brain == "OK" && !voice.cloud
+        val ttsName = ttsSpecs[voice.engine]?.name
+        val tts = ttsName?.let { selected -> sidecars.firstOrNull { it.name == selected }?.status }
+        return stt == "OK" && brain == "OK" && !voice.cloud && tts == "OK"
     }
 
     companion object {
         /**
-         * Bewusst-aus-Sidecars (16-GB-Wand): ihr DOWN treibt `overall` nicht (cry-wolf-Schutz).
-         * Voxtral-TTS (:8042) ist aus, weil Andi OpenAI-TTS nutzt; Speaker-ID (CAM++ :9002) ist
-         * aus, bis Multi-User-Bedarf besteht. Werden weiter geprobt + angezeigt, nur nicht alarmierend.
+         * Bewusst-aus-Sidecars (16-GB-Wand): ihr DOWN treibt `overall` nicht
+         * (cry-wolf-Schutz). Speaker-ID (CAM++ :9002) darf aus sein, bis
+         * Multi-User-Bedarf besteht. Die GEWÄHLTE lokale TTS ist nie optional.
          */
-        val OPTIONAL_SIDECARS = setOf("voxtral-tts", "speaker-id")
+        val OPTIONAL_SIDECARS = setOf("speaker-id")
 
         /** Erster Tick kurz nach Boot — vorher liefert der Controller die Warmup-Zeile. */
         const val INITIAL_DELAY_MS = 5_000L

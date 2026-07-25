@@ -2,6 +2,7 @@ package de.hoshi.adapters.knowledge
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.pipeline.GroundingPort
 import org.slf4j.LoggerFactory
@@ -68,8 +69,15 @@ class Fts5GroundingAdapter(
      * Holt für [query] einen kompakten Grounding-Block aus der Wiki-Bridge, oder
      * `""` (kein Treffer / disabled-Kategorie / Bridge weg). Niemals ein Fehler
      * nach außen — Grounding ist best-effort.
+     *
+     * **[language] wird BEWUSST ignoriert** (nicht still verloren — der Port
+     * zwingt uns seit 2026-07-25, sie anzunehmen): die Quelle dieser Scheibe ist
+     * die LOKALE DEUTSCHE Wikipedia hinter der Bridge; eine Turn-Sprache ändert
+     * daran nichts, solange kein anderssprachiger Index existiert. Der
+     * sprachabhängige Rahmen dieser Scheibe (Passage-Block + ANWEISUNG) ist eine
+     * eigene Scheibe — s. `vault/tracks/prep/PREP-i18n-backend-restklassen.md`.
      */
-    override fun groundingBlock(query: String, category: RouteCategory): Mono<String> {
+    override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> {
         // Kategorie-Gate (1:1 aus 0.5): Smalltalk/Smart-Home/Agent NICHT grounden.
         if (category != RouteCategory.FACT_SHORT &&
             category != RouteCategory.NEEDS_WEB &&

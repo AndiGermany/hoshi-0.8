@@ -3,6 +3,7 @@ package de.hoshi.core.pipeline
 import de.hoshi.core.dto.ChatEvent
 import de.hoshi.core.dto.ChatMessage
 import de.hoshi.core.dto.ChatRequest
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.LlmDelta
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteDecision
@@ -100,7 +101,10 @@ class TurnOrchestratorFactCoverageChainTest {
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
                 entityMemory = { null },
-                grounding = { _, _ -> Mono.just(groundBlock) },
+                grounding = object : GroundingPort {
+                    override fun groundingBlock(query: String, category: RouteCategory, language: Language) =
+                        Mono.just(groundBlock)
+                },
                 episodicMemory = null,
             ),
             persona = persona,

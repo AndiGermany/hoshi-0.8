@@ -49,7 +49,8 @@ fun interface NamedEntitySignal {
  * Entkoppelt von Spring + Infra: die vier Bestands-Detektoren werden als schmale
  * Ports ([WeakDomainSignal]/[OnlineRequestSignal]/[ExistenceClaimSignal]/
  * [NamedEntitySignal]) injiziert; `SkillRegistry.isEnabled(...)` wird zum
- * [cloudEnabled]-Supplier, `HoshiProperties.routing.disambigAskBackEnabled` zum
+ * [cloudEnabled]-Supplier (heute: per-Turn-Verfügbarkeit aus Decke, Modus, Key
+ * und Tagesbudget), `HoshiProperties.routing.disambigAskBackEnabled` zum
  * [disambigAskBackEnabled]-Flag. Die infra-koppelnden Detektoren (Existence/Named-
  * Entity proben die Wissens-Bridge) bleiben als Port draußen — die reinen
  * Heuristiken ([WeakDomainDetector]/[OnlineRequestDetector]) sind mitportiert.
@@ -91,8 +92,12 @@ class HonestyGate(
         if (kind == Kind.EXISTENCE_NAMED_ENTITY && disambigAskBackEnabled) {
             return Verdict.Pass
         }
-        val cloudOn = cloudEnabled()
-        if (cloudOn) {
+        // Bridge-tot ist ein lokaler Infrastrukturfehler, KEINE Einladung zu
+        // einem externen Privacy-Wechsel. Auch bei verfügbarem Nachschlag bleibt
+        // deshalb die bestehende ehrliche Reachability-Phrase maßgeblich.
+        if (kind == Kind.BRIDGE_DOWN) return Verdict.Refuse(refusalPhrase(kind))
+        val lookupAvailable = cloudEnabled()
+        if (lookupAvailable) {
             // Explizite Online-Bitte → aufgreifende Consent-Frage statt redundantem „Soll ich?".
             return if (kind == Kind.ONLINE_REQUEST) Verdict.AskConsentExplicit else Verdict.AskConsent
         }

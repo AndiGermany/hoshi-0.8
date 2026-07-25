@@ -1,6 +1,7 @@
 import type { FiredItem, FiredKind } from '../hooks/useFiredItems';
 import { de } from '../i18n/de';
 import { useUiStrings } from '../i18n';
+import type { FiredToastStrings } from '../i18n/types';
 import { AlarmGlyph, GearGlyph } from './icons';
 import type { SettingsAnchorId, SettingsCategoryId } from './SettingsPanel';
 
@@ -49,28 +50,23 @@ export function dueTimeLabel(dueAtEpochMs: number): string {
 
 /**
  * Ehrliche Verpasst-Zeile: „Timer „Tee" war um 07:00 fällig — hab dich nicht
- * erreicht". `missedNoun` ist injizierbar (Default: der DE-Katalog, s. oben) —
- * {@link FiredToast} reicht den Katalog der AKTIVEN UI-Sprache durch; Tests, die
- * ohne zweites Argument aufrufen, sehen unverändert Deutsch.
+ * erreicht". Der ganze SATZ kommt jetzt aus dem Katalog (EN-Sweep 25.07: er war
+ * hier hartkodiert Deutsch und stand so auch in der englischen Oberfläche) —
+ * `t` ist injizierbar (Default: der DE-Katalog, s. oben); {@link FiredToast}
+ * reicht den Katalog der AKTIVEN UI-Sprache durch, Tests ohne zweites Argument
+ * sehen unverändert Deutsch (byte-gleich).
  */
-export function missedLine(item: FiredItem, missedNoun: Record<FiredKind, string> = MISSED_NOUN): string {
-  const noun = missedNoun[item.kind];
-  const subject = item.label ? `${noun} „${item.label}"` : noun;
-  return `${subject} war um ${dueTimeLabel(item.dueAtEpochMs)} fällig — hab dich nicht erreicht`;
+export function missedLine(item: FiredItem, t: FiredToastStrings = de.firedToast): string {
+  return t.missed(t.missedNoun[item.kind], item.label ?? null, dueTimeLabel(item.dueAtEpochMs));
 }
 
 /**
  * Eine Banner-Zeile pro Item: frisch = Überschrift (+ Label), verpasst =
- * ehrliche Meldung. `headline`/`missedNoun` injizierbar (Default: DE) — siehe
- * {@link missedLine}.
+ * ehrliche Meldung. `t` injizierbar (Default: DE) — siehe {@link missedLine}.
  */
-export function firedLine(
-  item: FiredItem,
-  headline: Record<FiredKind, string> = FIRED_HEADLINE,
-  missedNoun: Record<FiredKind, string> = MISSED_NOUN,
-): string {
-  if (item.missed) return missedLine(item, missedNoun);
-  return item.label ? `${headline[item.kind]} — ${item.label}` : headline[item.kind];
+export function firedLine(item: FiredItem, t: FiredToastStrings = de.firedToast): string {
+  if (item.missed) return missedLine(item, t);
+  return item.label ? `${t.headline[item.kind]} — ${item.label}` : t.headline[item.kind];
 }
 
 export function FiredToast({
@@ -100,7 +96,7 @@ export function FiredToast({
           type="button"
           className="fired-toast__ack"
           onClick={onAck}
-          title="Tippen zum Bestätigen"
+          title={t.firedToast.ackTitle}
         >
           <span className="fired-toast__icon" aria-hidden="true">
             <AlarmGlyph />
@@ -108,7 +104,7 @@ export function FiredToast({
           <span className="fired-toast__body">
             {items.map((item) => (
               <span key={item.id} className="fired-toast__line">
-                {firedLine(item, t.firedToast.headline, t.firedToast.missedNoun)}
+                {firedLine(item, t.firedToast)}
               </span>
             ))}
           </span>
@@ -118,8 +114,8 @@ export function FiredToast({
             type="button"
             className="ctxgear fired-toast__gear"
             onClick={() => onOpenSettings('faehigkeiten', 'wecker-eskalation')}
-            aria-label="Wecker-Eskalation-Einstellungen öffnen (Fähigkeiten)"
-            title="Eskalation ändern"
+            aria-label={t.firedToast.gearAria}
+            title={t.firedToast.gearTitle}
           >
             <GearGlyph className="ctxgear__icon" />
           </button>

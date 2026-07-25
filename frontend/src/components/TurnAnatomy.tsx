@@ -161,10 +161,19 @@ const PROVIDER_LABEL: Record<string, string> = {
 /**
  * Text des Quelle/Egress-Chips: LOCAL blieb auf dem Gerät („lokal"), alles
  * andere IST ein Cloud-Provider → Name + „ging online" (ehrlich, Tom-Regel).
+ *
+ * `t` ist injizierbar (Default: der DE-Katalog, s. {@link turnStages}) — Andi-
+ * Sweep 24.07 (README-Screenshot-Befund): „lokal" blieb hartkodiert Deutsch,
+ * egal welche UI-Sprache aktiv war. Tests, die ohne zweites Argument aufrufen,
+ * sehen unverändert Deutsch (byte-gleich); {@link TurnChips} reicht den Katalog
+ * der AKTIVEN UI-Sprache durch.
  */
-export function providerChipText(provider: string): string {
-  if (provider === 'LOCAL') return 'lokal';
-  return `${PROVIDER_LABEL[provider] ?? provider} · ging online`;
+export function providerChipText(
+  provider: string,
+  t: TurnAnatomyStrings = de.turnAnatomy,
+): string {
+  if (provider === 'LOCAL') return t.local;
+  return `${PROVIDER_LABEL[provider] ?? provider}${t.cloudSuffix}`;
 }
 
 /**
@@ -202,6 +211,7 @@ export function TurnStagesRow({ anatomy }: { anatomy: TurnAnatomyState }) {
  * nichts; erfundene Chips (Ziel/Volume, Nachhör-Fenster) gibt es nicht.
  */
 export function TurnChips({ anatomy }: { anatomy: TurnAnatomyState }) {
+  const { turnAnatomy } = useUiStrings();
   const route = anatomy.route;
   if (!route) return null;
   const cloud = route.provider !== 'LOCAL';
@@ -209,25 +219,18 @@ export function TurnChips({ anatomy }: { anatomy: TurnAnatomyState }) {
     <div className="turnchips">
       <span
         className="turnchip"
-        title={
-          cloud
-            ? 'Diese Antwort kam über einen Cloud-Provider'
-            : 'Diese Antwort blieb auf dem Gerät'
-        }
+        title={cloud ? turnAnatomy.cloudTitle : turnAnatomy.localTitle}
       >
         {cloud ? (
           <CloudGlyph className="turnchip__ico" />
         ) : (
           <LockGlyph className="turnchip__ico" />
         )}
-        {providerChipText(route.provider)}
+        {providerChipText(route.provider, turnAnatomy)}
       </span>
       {route.grounded && (
-        <span
-          className="turnchip"
-          title="Die Antwort war durch geladenes Wissen gedeckt (FactCoverage-Gate)"
-        >
-          Wissen gedeckt
+        <span className="turnchip" title={turnAnatomy.groundedTitle}>
+          {turnAnatomy.grounded}
         </span>
       )}
     </div>

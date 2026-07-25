@@ -4,6 +4,7 @@ import de.hoshi.adapters.knowledge.BridgeExistenceClaimAdapter
 import de.hoshi.adapters.knowledge.BridgeKnowledgeProbe
 import de.hoshi.adapters.knowledge.BridgeNamedEntityAdapter
 import de.hoshi.adapters.knowledge.BridgeSearchClient
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteDecision
 import de.hoshi.core.dto.RouteProvider
@@ -55,9 +56,13 @@ class EntityContextStubAdapter : EntityContextPort {
     override fun contextBlock(speakerId: String): String? = null
 }
 
-/** [GroundingPort]-Stub: kein Wiki-Treffer (Wiki-RAG-Bridge kommt in M4). */
+/**
+ * [GroundingPort]-Stub: kein Wiki-Treffer (Wiki-RAG-Bridge kommt in M4).
+ * [language] ist gegenstandslos — ein leerer Block hat keine Sprache.
+ */
 class GroundingStubAdapter : GroundingPort {
-    override fun groundingBlock(query: String, category: RouteCategory): Mono<String> = Mono.just("")
+    override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> =
+        Mono.just("")
 }
 
 /**

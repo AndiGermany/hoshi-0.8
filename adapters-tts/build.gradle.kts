@@ -29,6 +29,11 @@ dependencies {
     implementation("org.slf4j:slf4j-api:2.0.13")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.13")
 
+    // ICU4J: RuleBasedNumberFormat (SPELLOUT/ORDINAL) fuer den IcuVerbalizer —
+    // ziffernfreie Endform VOR der TTS-Synthese (Multilingualitaet Phase 1).
+    // Bewusst NICHT in core-domain (das bleibt Spring-frei/dependency-arm).
+    implementation("com.ibm.icu:icu4j:75.1")
+
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.projectreactor:reactor-test:3.6.9")

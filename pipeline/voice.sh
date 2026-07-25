@@ -4,12 +4,12 @@
 # grün≠lebt: bootet die ECHTE 0.8-App (web-inbound) auf :8090, schickt mit
 # Test-Token einen deutschen Turn an POST /api/v1/chat/stream (speak=true), und
 # beweist OBJEKTIV, dass durch die volle Pipeline (Routing → Honesty → Prompt →
-# Brain(1×) → Never-Silent → TtsStage → Voxtral :8042) MINDESTENS EIN AudioChunk
+# Brain(1×) → Never-Silent → TtsStage → macOS say :8044) MINDESTENS EIN AudioChunk
 # mit NICHT-LEEREN WAV-Bytes zurückkam. Gibt Chunks/Bytes/ms wörtlich aus und
 # schreibt die zusammengesetzte WAV nach .pipeline/ (für Andis Hörprobe — das
 # Wärme-Urteil ist NICHT Sache dieses Skripts).
 #
-# Voraussetzung: der Voxtral-TTS-Sidecar (:8042) lebt. Der e4b-Brain (:8041) ist
+# Voraussetzung: der say-TTS-Sidecar (:8044) lebt. Der e4b-Brain (:8041) ist
 # Kür — fehlt er, greift Never-Silent und die warme Fallback-Phrase wird vertont
 # (Audio kommt trotzdem). Beides wird ehrlich gemeldet.
 #
@@ -30,6 +30,7 @@ WAV_OUT="$PIPELINE_LOG_DIR/voice-$TS.wav"
 
 PORT=8090
 TOKEN="testtoken"
+SAY_URL="${HOSHI_TTS_SAY_BASE_URL:-http://localhost:8044}"
 LANG_CODE="${1:-DE}"   # optional: bin/hoshi voice EN  → englischer Turn
 if [ "$LANG_CODE" = "EN" ]; then
     QUESTION="Say hello in one warm sentence."
@@ -41,11 +42,16 @@ cd "$REPO_ROOT"
 
 # ── Sidecar-Vorprüfung (ehrlich) ─────────────────────────────────────────────
 TTS_OK=0
-if curl -s -m 5 "http://localhost:8042/health" 2>/dev/null | grep -q '"status":"ok"'; then
+if curl -s -m 5 "$SAY_URL/health" 2>/dev/null | grep -q '"status":"ok"'; then
     TTS_OK=1
-    ok "Voxtral-TTS (:8042) lebt — hörbarer Turn möglich"
+    ok "say-TTS ($SAY_URL) lebt — hörbarer Turn möglich"
 else
-    fail "Voxtral-TTS (:8042) NICHT erreichbar — ohne TTS-Sidecar kein Audio-Beweis"
+    fail "say-TTS ($SAY_URL) NICHT erreichbar — ohne TTS-Sidecar kein Audio-Beweis."
+    if [ ! -x "$REPO_ROOT/sidecars/say/.venv/bin/python" ]; then
+        fail "Fresh-Clone-Stopp: sidecars/say/.venv fehlt. Einmalig ausführen: sidecars/say/bootstrap.sh"
+    else
+        fail "Der Sidecar ist installiert, aber nicht gestartet. Ausführen: bin/hoshi up"
+    fi
     exit 1
 fi
 BRAIN_OK=0
@@ -78,7 +84,7 @@ fi
 ok "Artefakt: ${JAR#$REPO_ROOT/}"
 
 # ── (2) App auf :8090 booten ─────────────────────────────────────────────────
-say "App booten auf :$PORT (Token gesetzt, Brain → :8041, TTS → :8042)"
+say "App booten auf :$PORT (Token gesetzt, Brain → :8041, TTS → say $SAY_URL)"
 APP_PID=""
 cleanup() {
     if [ -n "${APP_PID:-}" ] && kill -0 "$APP_PID" 2>/dev/null; then
@@ -91,12 +97,12 @@ cleanup() {
 trap cleanup EXIT
 
 log "java: $JAVA_BIN"
-HOSHI_API_TOKEN="$TOKEN" "$JAVA_BIN" -jar "$JAR" \
+HOSHI_TTS=say HOSHI_API_TOKEN="$TOKEN" "$JAVA_BIN" -jar "$JAR" \
     --server.port="$PORT" \
     --hoshi.perimeter.enabled=true \
     --hoshi.perimeter.token="$TOKEN" \
     --hoshi.brain.base-url="http://localhost:8041" \
-    --hoshi.tts.base-url="http://localhost:8042" \
+    --hoshi.tts.say.base-url="$SAY_URL" \
     >"$APP_LOG" 2>&1 &
 APP_PID=$!
 log "PID=$APP_PID  ·  App-Log: ${APP_LOG#$REPO_ROOT/}"

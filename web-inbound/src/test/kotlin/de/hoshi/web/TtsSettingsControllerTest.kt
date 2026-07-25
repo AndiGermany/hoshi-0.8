@@ -109,7 +109,9 @@ class TtsSettingsControllerTest {
         )
         val view = controller(dir, probe = probe).ttsSettings().block(Duration.ofSeconds(2))!!
 
-        assertEquals("voxtral", view.aktiv, "leerer HOSHI_TTS ⇒ Boot-Default voxtral")
+        // Fresh-Clone-Wahrheit 0.8.1: Code und Renderer wählen denselben gestarteten,
+        // key-/modellfreien macOS-say-Pfad.
+        assertEquals("say", view.aktiv, "leerer HOSHI_TTS ⇒ Boot-Default say (lokal-first)")
         assertEquals(4, view.engines.size)
         val voxtral = view.engines.single { it.id == TtsEngineIds.VOXTRAL }
         assertTrue(!voxtral.verfuegbar && voxtral.hinweis == "nicht gestartet", "ehrlich NICHT verfügbar, kein Fake-grün")

@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.ChatRequest
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteDecision
 import de.hoshi.core.dto.RouteProvider
@@ -34,7 +35,10 @@ class TurnPromptAssemblerGroundingTimingTest {
     ) = TurnPromptAssembler(
         persona = PersonaService(),
         entityMemory = { null },
-        grounding = { _, _ -> if (groundBlock.isEmpty()) Mono.empty() else Mono.just(groundBlock) },
+        grounding = object : GroundingPort {
+            override fun groundingBlock(query: String, category: RouteCategory, language: Language) =
+                if (groundBlock.isEmpty()) Mono.empty<String>() else Mono.just(groundBlock)
+        },
         episodicMemory = null,
         wikiGroundingEnabled = wikiGroundingEnabled,
         nanoTime = nano,

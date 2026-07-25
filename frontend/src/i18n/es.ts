@@ -16,6 +16,7 @@ export const es: UiStrings = {
     mainNav: 'Navegación principal',
     openSettingsAria: 'Abrir ajustes',
     settingsTitle: 'Ajustes',
+    closeSettingsAria: 'Cerrar ajustes',
   },
 
   idleFace: {
@@ -74,6 +75,10 @@ export const es: UiStrings = {
     seedSuffix: ' (valor por defecto del despliegue)',
     hint: 'El lugar para las preguntas del tiempo — vale para todos los dispositivos. Para otro lugar, solo pregunta «¿Qué tiempo hace en …?».',
     saved: (label: string) => `Lugar guardado: ${label}.`,
+    label: 'Lugar del tiempo',
+    placeholder: 'p. ej. Duisburgo',
+    loading: 'cargando…',
+    current: (label: string) => `Actual: ${label}`,
   },
 
   lookupModel: {
@@ -84,6 +89,7 @@ export const es: UiStrings = {
     unknown: 'Modelo desconocido.',
     failed: 'Error al cambiar — inténtalo de nuevo.',
     priceSuffix: (cents: number) => `aprox. ${cents.toFixed(2)} ct/consulta`,
+    loading: 'cargando…',
   },
 
   ttsEngine: {
@@ -97,6 +103,13 @@ export const es: UiStrings = {
     active: 'activo',
     available: 'disponible',
     notStarted: 'no iniciado',
+    loading: 'cargando…',
+    engineLabels: {
+      openai: 'OpenAI (nube)',
+      say: 'macOS say (local)',
+      piper: 'Piper (local)',
+      voxtral: 'Voxtral (local)',
+    },
   },
 
   stimme: {
@@ -110,6 +123,12 @@ export const es: UiStrings = {
     cloudPrivacy: 'Con honestidad: cada muestra de voz y cada voz en la nube va a OpenAI.',
     localLine: 'La voz hablada de las respuestas de Hoshi — funciona en local.',
     localPrivacy: 'No sale del dispositivo.',
+    loading: 'cargando…',
+    sampleAria: (voice: string) => `Reproducir muestra de voz de ${voice}`,
+    sampleTitle: 'Reproducir muestra de voz',
+    noVoicesFor: (engine: string) => `Ahora mismo no hay voces disponibles para ${engine}.`,
+    licensePrefix: (license: string) => `Licencia: ${license}`,
+    sampleFailed: 'La muestra de voz no está disponible ahora mismo.',
   },
 
   brainModel: {
@@ -124,6 +143,9 @@ export const es: UiStrings = {
     statusOk: 'en marcha',
     statusLoading: 'cargando…',
     statusUnreachable: 'inaccesible',
+    loading: 'cargando…',
+    statusReading: '(leyendo el estado…)',
+    statusPrefix: 'Estado: ',
   },
 
   privacy: {
@@ -195,6 +217,9 @@ export const es: UiStrings = {
     locked: 'Todavía desactivado en el servidor — el ajuste se guarda, pero solo se aplicará cuando el modo noche esté activado en el despliegue.',
     invalid: 'Entrada no válida — revisa los valores.',
     failed: 'Error al guardar — inténtalo de nuevo.',
+    loading: 'cargando…',
+    deviceGroupAria: 'Dispositivo',
+    modeGroupAria: 'Modo',
   },
 
   language: {
@@ -208,6 +233,18 @@ export const es: UiStrings = {
     uiNotice: 'El texto de la interfaz y la conversación siguen esta elección — las órdenes de domótica se quedan por ahora en alemán.',
   },
 
+  skills: {
+    hint: 'Activa y desactiva habilidades concretas en marcha — del lado del servidor, vale para todos los dispositivos.',
+    loading: 'cargando…',
+    badgeLocked: 'desactivado en el despliegue',
+    badgeEgress: 'sale a internet',
+    badgeSoon: 'llegará',
+    future: {
+      LISTS: { label: 'Listas', reason: 'decisión con Andi pendiente' },
+      MUSIC: { label: 'Música', reason: 'primer paso: suena una pista' },
+    },
+  },
+
   firedToast: {
     headline: {
       TIMER: 'El temporizador ha terminado',
@@ -219,6 +256,11 @@ export const es: UiStrings = {
       ALARM: 'Alarma',
       REMINDER: 'Recordatorio',
     },
+    ackTitle: 'Toca para confirmar',
+    gearAria: 'Abrir ajustes de escalado de alarma (Habilidades)',
+    gearTitle: 'Cambiar el escalado',
+    missed: (noun, label, time) =>
+      `${label ? `${noun} «${label}»` : noun} vencía a las ${time} — no pude avisarte`,
   },
 
   activity: {
@@ -258,6 +300,7 @@ export const es: UiStrings = {
     micIdle: 'Mantén pulsado para hablar (o toca para alternar)', micListening: 'Suelta para enviar, o pulsa Esc para descartar', micTranscribing: 'Entendiendo…', micResponding: 'El micro/Esc interrumpe la respuesta',
     ttsOn: 'Modo voz activado: Hoshi dice la respuesta', ttsOff: 'Modo voz desactivado: solo texto', greeting: (dayPart) => `${({ night: 'Buenas noches', morning: 'Buenos días', day: 'Hola', evening: 'Buenas tardes' } as const)[dayPart]} — ¿qué puedo hacer por ti?`,
     speakerSettingsAria: 'Abrir ajustes de hablantes (Memoria y privacidad)', manageSpeakers: 'Gestionar hablantes', recordingUnderstood: 'Entendiendo tu grabación', sourcesTitle: 'Mostrar las fuentes de esta respuesta', sources: 'Fuentes', micAria: 'Micrófono: mantén pulsado para hablar', discardRecording: 'Descartar grabación', discard: 'Descartar (Esc)', speaking: 'hablando…', processingRecording: 'Procesando tu grabación', transcribing: 'entendiendo…', thinking: 'pensando…', placeholder: 'Mensaje para Hoshi…',
+    send: 'Enviar', sendTitle: 'Enviar (Intro)',
   },
   voiceChat: { slowTurn: 'Está tardando un poco más de lo habitual; sigo con ello.', connection: 'Conexión', errorStage: (stage) => `Error · ${stage}`, noAudioHeard: 'No he oído nada: mantén pulsado el micrófono y habla.' },
   turnAnatomy: {
@@ -265,5 +308,16 @@ export const es: UiStrings = {
     answering: 'respondiendo', speaking: 'hablando',
     recognized: (who) => `reconocido: ${who}`,
     guest: 'Invitado', rowLabel: 'Lo que realmente hizo este turno',
+    local: 'local', cloudSuffix: ' · fue a internet',
+    localTitle: 'Esta respuesta se quedó en el dispositivo', cloudTitle: 'Esta respuesta llegó a través de un proveedor en la nube',
+    grounded: 'Respaldado por conocimiento', groundedTitle: 'La respuesta estuvo respaldada por conocimiento cargado (filtro FactCoverage)',
+  },
+  voiceOrb: {
+    sectionAria: 'Habla con Hoshi',
+    idleHint: 'Toca para hablar',
+    idleTapLabel: 'Toca y habla',
+    listening: (elapsed) => `escuchando… ${elapsed}`,
+    listeningTapLabel: 'Toca otra vez para enviar, o pulsa Esc para descartar',
+    speakingTapLabel: 'Toca para interrumpir la respuesta de Hoshi',
   },
 };

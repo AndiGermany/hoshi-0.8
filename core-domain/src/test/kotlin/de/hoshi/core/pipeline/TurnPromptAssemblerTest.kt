@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.ChatRequest
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteDecision
 import de.hoshi.core.dto.RouteProvider
@@ -35,8 +36,12 @@ class TurnPromptAssemblerTest {
     /** Zählender Grounding-Fake. */
     private class RecordingGrounding(private val result: () -> Mono<String>) : GroundingPort {
         val calls = mutableListOf<Pair<String, RouteCategory>>()
-        override fun groundingBlock(query: String, category: RouteCategory): Mono<String> {
+
+        /** Mitgeschriebene Turn-Sprachen — der Port trägt sie seit 2026-07-25 als Pflicht-Argument. */
+        val languages = mutableListOf<Language>()
+        override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> {
             calls += query to category
+            languages += language
             return result()
         }
     }

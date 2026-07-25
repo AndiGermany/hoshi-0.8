@@ -10,6 +10,7 @@ import de.hoshi.core.dto.RouteDecision
 import de.hoshi.core.dto.RouteProvider
 import de.hoshi.core.pipeline.EntityMemoryWriter
 import de.hoshi.core.pipeline.ExistenceClaimSignal
+import de.hoshi.core.pipeline.GroundingPort
 import de.hoshi.core.pipeline.HeuristicLanguageDetector
 import de.hoshi.core.pipeline.HonestyGate
 import de.hoshi.core.pipeline.HonestySignal
@@ -116,7 +117,7 @@ class StageTimingsDiaryTraceTest {
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
                 entityMemory = { null },
-                grounding = { _, _ -> Mono.just("\n\nHINTERGRUND: 330 Meter.") },
+                grounding = GroundingPort.fixed("\n\nHINTERGRUND: 330 Meter."),
                 episodicMemory = null,
             ),
             persona = persona,

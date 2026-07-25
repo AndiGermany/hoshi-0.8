@@ -24,6 +24,8 @@ class OpsStatusControllerTest {
         brainUrl = "http://localhost:8041",
         sttUrl = "http://localhost:9001",
         ttsUrl = "http://localhost:8042",
+        sayUrl = "http://localhost:8044",
+        piperUrl = "http://localhost:8045",
         bridgeUrl = "http://localhost:8035",
         speakerUrl = "http://localhost:9002",
         failureThreshold = 2,
@@ -65,11 +67,13 @@ class OpsStatusControllerTest {
     }
 
     @Test
-    fun `voice — HOSHI_TTS leer (Default) ⇒ engine voxtral, cloud false (lokal, kein Banner)`() {
+    fun `voice — HOSHI_TTS leer (Default) ⇒ engine say, cloud false (lokal, kein Banner)`() {
+        // First-Run-Wahrheit 0.8.1: der Code-Default ist das lokale macOS-Bordmittel
+        // say. Das WICHTIGE bleibt: Der Default darf niemals der Egress-Pfad sein.
         val svc = service(enabled = true)
         svc.refresh()
         val body = OpsStatusController(svc).status() as OpsStatus
-        assertEquals(VoiceStatus(engine = "voxtral", cloud = false), body.voice)
+        assertEquals(VoiceStatus(engine = "say", cloud = false), body.voice)
     }
 
     @Test

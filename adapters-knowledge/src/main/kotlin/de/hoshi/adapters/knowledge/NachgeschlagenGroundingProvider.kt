@@ -1,6 +1,7 @@
 package de.hoshi.adapters.knowledge
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.pipeline.GroundingPort
 import de.hoshi.core.pipeline.TurnPromptAssembler
@@ -107,7 +108,15 @@ class NachgeschlagenGroundingProvider(
         }
     }
 
-    override fun groundingBlock(query: String, category: RouteCategory): Mono<String> {
+    /**
+     * **[language] wird BEWUSST ignoriert** (nicht still verloren — der Port
+     * zwingt uns seit 2026-07-25, sie anzunehmen): eine nachgeschlagene Notiz ist
+     * ein WÖRTLICH gespeichertes Zitat aus einer früheren (bezahlten) Antwort —
+     * sie in die Turn-Sprache zu übersetzen wäre eine Fälschung des Zitats. Der
+     * deutsche RAHMEN um das Zitat (HINTERGRUND-Kopf/Instruktion) ist eine eigene
+     * Scheibe, s. `vault/tracks/prep/PREP-i18n-backend-restklassen.md`.
+     */
+    override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> {
         // Kategorie-Gate — identisch zur Weather-Scheibe (geteilte companion-Wahrheit,
         // beide leben im selben Modul/Package).
         if (!WeatherGroundingProvider.isKnowledgeCategory(category)) {

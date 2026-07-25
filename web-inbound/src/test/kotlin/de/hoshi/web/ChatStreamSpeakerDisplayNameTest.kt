@@ -9,6 +9,7 @@ import de.hoshi.core.dto.RouteProvider
 import de.hoshi.core.dto.SpeakerContext
 import de.hoshi.core.pipeline.EntityMemoryWriter
 import de.hoshi.core.pipeline.ExistenceClaimSignal
+import de.hoshi.core.pipeline.GroundingPort
 import de.hoshi.core.pipeline.HeuristicLanguageDetector
 import de.hoshi.core.pipeline.HonestyGate
 import de.hoshi.core.pipeline.HonestySignal
@@ -94,7 +95,7 @@ class ChatStreamSpeakerDisplayNameTest {
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
                 entityMemory = { null },
-                grounding = { _, _ -> Mono.just("") },
+                grounding = GroundingPort.EMPTY,
                 episodicMemory = null,
             ),
             persona = persona,

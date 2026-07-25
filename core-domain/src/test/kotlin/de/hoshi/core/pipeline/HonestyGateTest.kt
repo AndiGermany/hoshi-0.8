@@ -106,6 +106,18 @@ class HonestyGateTest {
         )
     }
 
+    @Test
+    fun `Bridge-down bleibt auch bei verfuegbarem Cloud-Nachschlag lokal und bietet nichts an`() {
+        val v = gate(cloudOn = true, existence = existenceBridgeDown).assess("Gibt es einen 11 Euro schein?")
+        assertTrue(v is HonestyGate.Verdict.Refuse, "Bridge-down darf kein Cloud-Angebot werden: $v")
+        val phrase = (v as HonestyGate.Verdict.Refuse).phrase.lowercase()
+        assertTrue(
+            phrase.contains("wissensspeicher") || phrase.contains("nachschlagewerk") ||
+                phrase.contains("nicht erreichbar") || phrase.contains("antwortet nicht"),
+            "bestehende Reachability-Phrase erwartet: ${v.phrase}",
+        )
+    }
+
     // ── Explizite Online-Nachschau-Bitte ─────────────────────────────────────
 
     @Test
@@ -245,6 +257,12 @@ class HonestyGateTest {
             !phrase.contains("der name sagt mir") && !phrase.contains("tappe ich grade im dunkeln"),
             "Bridge-down darf nicht wie 'kenne ich nicht' klingen: ${v.phrase}"
         )
+    }
+
+    @Test
+    fun `named-entity bei toter Bridge bietet auch bei Cloud an keinen Privacy-Wechsel an`() {
+        val v = gate(cloudOn = true, named = namedBridgeDown).assess("Wer ist Marie Curie?")
+        assertTrue(v is HonestyGate.Verdict.Refuse, "Bridge-down bleibt lokal: $v")
     }
 
     @Test

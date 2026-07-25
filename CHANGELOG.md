@@ -5,7 +5,57 @@ Alle nennenswerten Änderungen an Hoshi. Format lose an
 noch keine erste stabile Version, Einträge sind daher grob nach Thema statt
 nach Release sortiert.
 
-## 0.8.0 — Nagareboshi (unreleased)
+## 0.8.1-rc1 — Nagareboshi (Release Candidate)
+
+Post-Submission-Aufräumrunde: integrierte Review-Pakete + Betriebs-Härtung + die erste Schicht
+Mehrsprachigkeit. **Warum RC und nicht final:** der komplette lokale Sprach-Turn ist auf einer
+Entwicklungsmaschine bewiesen (echtes WAV, ohne Cloud-Schlüssel), aber noch nicht auf dem
+Produktiv-Host deployt und noch nicht am Lautsprecher gemessen. Zum Ausprobieren gedacht,
+nicht als „fertig" ausgegeben.
+
+- **Eskalations-Observability.** Ein „unavailable" trägt jetzt eine Ursachen-Klassifikation
+  (timeout/missing_key/network/…) und der Web-Rand schreibt am finalen Ausgang eine
+  Diagnosezeile — reine Observability, kein Verhaltens-Eingriff. (Codex P6, `bfd9f49`)
+- **Nachschlag-Angebote einlösbar.** Der HonestyGate legt bei einem Angebot jetzt ein
+  PendingLookup an (derselbe Vertrag wie der FactCoverage-Deflect); ein „ja" löst die
+  Originalfrage ein, statt ins Leere zu laufen. (Codex P7, `b170e72`)
+- **Wetter-Tagesbezug im Faktenvertrag.** Der Tagesbezug jeder Wetter-Zeile („heute"/„morgen")
+  wandert in den «»-Vertrag, damit die Messwerte an den richtigen Tag gebunden bleiben.
+  (Codex P8, `fd535bb`)
+
+- **Der erste Start spricht lokal — oder sagt exakt, was fehlt.** Bisher verdrahtete das
+  Deploy-Template die Sprachausgabe hart in die Cloud, und wer das Projekt frisch klonte, bekam
+  je nach Startweg eine Engine, die gar nicht laufen konnte. Jetzt ist `say` der Default
+  (macOS-Bordmittel, kein Schlüssel, kein Modell-Download), die Engine wird aus der eigenen
+  Konfiguration gelesen, und ein unbekannter Wert bricht ab, statt still auf etwas anderes zu
+  fallen. Ehrlich dazu: der Sidecar braucht einmalig `sidecars/say/bootstrap.sh` — und **jeder**
+  Startweg nennt genau diesen Befehl, statt auf einen unmöglichen Start zu warten. Bewiesen mit
+  einem echten Turn ohne Cloud-Schlüssel (123.946 Byte WAV, 2,7 s Audio). Piper bleibt optional
+  (eigene Laufzeit, Modelle, GPL-Zustimmung).
+- **Ehrliche Gesundheitsanzeige.** Die Statusanzeige prüfte immer dieselbe Sprachausgabe-Engine,
+  egal welche tatsächlich aktiv war — „alles lokal" konnte grün sein, während die wirklich
+  sprechende Komponente unerreichbar war. Jetzt wird die gewählte Engine geprüft.
+- **Einkaufsliste behält ihre Reihenfolge.** Zwei schnell hintereinander genannte Dinge landeten
+  in derselben Millisekunde und konnten zwischen zwei Abrufen die Reihenfolge tauschen.
+- **Sanfterer Neustart.** Beim Deploy bekommen laufende Gespräche jetzt bis zu 20 Sekunden Zeit,
+  sich zu beenden, statt sofort gekappt zu werden; danach endet der Prozess. *Konfiguriert und
+  plausibel, aber noch nicht durch einen Test an einem echten laufenden Turn bewiesen.*
+- **Never-Speak-Riegel auf allen Wegen.** Die Regel „sprich niemals ein Geheimnis" (Tokens,
+  API-Keys, LAN-IPs, UUIDs) hing nur an einem der beiden Wege, auf denen die Sprachausgabe
+  gebaut wird — die lokalen Engines sprachen den Rohtext. Jetzt gilt sie überall, und der
+  Schalter steht standardmäßig an.
+- **Eine Bauwahrheit für die Sprachausgabe.** Sanitize, Verbalize und Lautstärke-Normalisierung
+  hängen jetzt an genau einer Stelle. Vorher gingen je nach Weg einzelne Stufen still verloren —
+  unter anderem die Lautstärke-Normalisierung nach einem Stimmen-/Engine-Wechsel.
+- **Zahlen werden gesprochen, nicht buchstabiert.** Uhrzeiten und Dezimalzahlen bekommen vor der
+  Synthese eine sprechbare Form (ICU). Standardmäßig aus, bis es einmal angehört wurde.
+- **Mehrsprachigkeit, erste Schicht.** Die Turn-Sprache wird jetzt vom Compiler bis in den
+  Wetter-Block erzwungen; Wetterlagen, Wochentage und der komplette Wetter-Rahmen liegen in fünf
+  Sprachen vor. Im Frontend sind 41 deutsche Reste im englischen Modus verschwunden.
+  **Ehrlich:** große Teile der Backend-Antworten (u.a. Smart-Home-Bestätigungen) sind weiterhin
+  deutsch — das ist der Kern von 0.8.2.
+
+## 0.8.0 — Nagareboshi (eingereicht 2026-07-22)
 
 - **Hexagon-Neubau.** 0.8 ist ein kompletter Neubau auf hexagonaler Architektur
   (Ports & Adapters): ein schlankes Kotlin/Spring-Backend orchestriert

@@ -11,7 +11,7 @@
 #   1. brain_guard_blocks? → abbrechen (exit 4)
 #   2. Brain: classify != OK → start_brain (guard-sicher, Roundtrip-Beweis)
 #   3. Sidecars best-effort: whisper(:9001), knowledge-bridge(:8035),
-#      speaker-id(:9002) — nur wenn Port tot UND Run-Skript existiert.
+#      speaker-id(:9002), say-TTS(:8044) — nur wenn Port tot und startbereit.
 #   4. Status zeigen (doctor-Logik).
 #
 # Exit-Codes:
@@ -105,10 +105,15 @@ if resolve_sidecar_run_script "speaker" "$HOSHI_05_ROOT/tools/hoshi-speakerid-ru
 else
     exit 1
 fi
-# say-TTS: reiner Repo-Sidecar (kein 0.5-Rückweg nötig — neues Feature 19.07),
-# best-effort wie die Geschwister; Offline-Schlussszene des Build-Week-Videos
-# braucht ihn dauerhaft laufend.
-start_sidecar "say-tts" "${HOSHI_SAY_PORT:-8044}" "$REPO_ROOT/sidecars/say/run.sh"
+# say-TTS ist der Fresh-Clone-Default. Sein Python-Webserver braucht einmalig
+# Bootstrap (kein Modell-Download); fehlt das venv, warten wir nicht 20 Sekunden
+# auf einen Prozess, der unmöglich starten kann, sondern nennen den exakten Zug.
+if [ ! -x "$REPO_ROOT/sidecars/say/.venv/bin/python" ]; then
+    warn "say-tts (:${HOSHI_SAY_PORT:-8044}) nicht startbereit: sidecars/say/.venv fehlt."
+    warn "Einmalig ausführen: sidecars/say/bootstrap.sh — bis dahin bleibt Voice ehrlich nicht verfügbar."
+else
+    start_sidecar "say-tts" "${HOSHI_SAY_PORT:-8044}" "$REPO_ROOT/sidecars/say/run.sh"
+fi
 log "voxtral (:$VOXTRAL_PORT) NICHT gestartet — gewollt aus (launchd disabled)."
 echo
 

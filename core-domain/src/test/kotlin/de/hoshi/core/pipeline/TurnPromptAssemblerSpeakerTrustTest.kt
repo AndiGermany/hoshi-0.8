@@ -51,7 +51,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
             entityMemory = entity,
-            grounding = { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = null,
             speakerTrustEnforced = false,
         )
@@ -67,7 +67,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
             entityMemory = entity,
-            grounding = { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = null,
             speakerTrustEnforced = true,
             speakerTrustThreshold = 0.45,
@@ -84,7 +84,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
             entityMemory = entity,
-            grounding = { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = null,
             speakerTrustEnforced = true,
             speakerTrustThreshold = 0.45,
@@ -103,7 +103,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
             entityMemory = { null },
-            grounding = { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = false,
         )
@@ -119,7 +119,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
             entityMemory = { null },
-            grounding = { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = true,
             speakerTrustThreshold = 0.45,
@@ -136,7 +136,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
             entityMemory = { null },
-            grounding = { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = true,
             speakerTrustThreshold = 0.45,
@@ -153,7 +153,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
             entityMemory = { null },
-            grounding = { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = true,
             speakerTrustThreshold = 0.45,
@@ -170,7 +170,7 @@ class TurnPromptAssemblerSpeakerTrustTest {
         val asm = TurnPromptAssembler(
             persona = PersonaService(),
             entityMemory = { null },
-            grounding = { _, _ -> Mono.just("") },
+            grounding = GroundingPort.EMPTY,
             episodicMemory = episodic,
             speakerTrustEnforced = false,
         )

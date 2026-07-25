@@ -98,8 +98,15 @@ class InMemoryListStore : ListPort {
         return entry
     }
 
+    // Zweitschlüssel [ListEntry.id] ist PFLICHT, nicht Kosmetik: `entries` ist eine
+    // ConcurrentHashMap, deren values-Reihenfolge willkürlich ist. `sortedBy` sortiert zwar
+    // stabil — Stabilität bewahrt aber die QUELL-Reihenfolge, und die ist hier undefiniert.
+    // Zwei im selben Millisekunden-Tick angelegte Einträge („Milch", „Butter" schnell
+    // hintereinander) kamen darum mal so, mal so heraus — sichtbar für den Nutzer, nicht nur
+    // im Test. Die id ist eindeutig und stabil ⇒ deterministische Reihenfolge.
     override fun items(listId: String): List<ListEntry> =
-        entries.values.filter { it.listId == listId }.sortedBy { it.addedAtEpochMs }
+        entries.values.filter { it.listId == listId }
+            .sortedWith(compareBy({ it.addedAtEpochMs }, { it.id }))
 
     override fun remove(id: String): Boolean = entries.remove(id) != null
 
@@ -125,8 +132,17 @@ fun ListPort.addWithDedupe(
     nowMs: Long,
     idGen: () -> String,
 ): ListEntry {
-    val existing = items(listId).firstOrNull { it.text.equals(text, ignoreCase = true) }
+    val current = items(listId)
+    val existing = current.firstOrNull { it.text.equals(text, ignoreCase = true) }
+    // Monotonie-Riegel: „Milch" und „Butter" schnell hintereinander gesagt landen im SELBEN
+    // Millisekunden-Tick — dann ist die Reihenfolge allein aus [ListEntry.addedAtEpochMs] nicht
+    // ableitbar, und der Store (ConcurrentHashMap) hat keine eigene. Ergebnis war eine Liste, die
+    // zwischen zwei Abrufen die Reihenfolge wechseln konnte. Jeder neue Eintrag bekommt darum einen
+    // Zeitstempel STRIKT über allen vorhandenen; die Uhr bleibt führend, sie wird nur nie
+    // rückwärts oder gleich vergeben. Abweichung von der echten Zeit: wenige Millisekunden im
+    // Burst — und das Feld ist laut KDoc ohnehin nur fürs Sortieren da.
+    val effectiveNow = maxOf(nowMs, (current.maxOfOrNull { it.addedAtEpochMs } ?: Long.MIN_VALUE) + 1)
     val desired = existing?.copy(quantity = existing.quantity + 1)
-        ?: ListEntry(id = idGen(), listId = listId, text = text, addedAtEpochMs = nowMs)
+        ?: ListEntry(id = idGen(), listId = listId, text = text, addedAtEpochMs = effectiveNow)
     return add(desired)
 }

@@ -160,7 +160,7 @@ export function NightModeDeviceListView({
   const isEmpty = !loading && rows.length === 0;
   return (
     <>
-      {loading && rows.length === 0 && <p className="settings__hint">lädt…</p>}
+      {loading && rows.length === 0 && <p className="settings__hint">{NIGHT_MODE_TEXTS.loading}</p>}
       {error && (
         <p className="settings__hint" role="alert">
           {error}
@@ -168,7 +168,11 @@ export function NightModeDeviceListView({
       )}
 
       {rows.length > 0 && (
-        <div className="settings__nightdevices" role="radiogroup" aria-label="Gerät">
+        <div
+          className="settings__nightdevices"
+          role="radiogroup"
+          aria-label={NIGHT_MODE_TEXTS.deviceGroupAria}
+        >
           {rows.map(({ device, lastSeenLabel }) => {
             const active = device.satelliteId === selectedId;
             const hint = device.connected
@@ -286,7 +290,7 @@ export function NightModeDeviceCard({
       </div>
 
       <div className={`settings__nightdetails ${draft.enabled ? '' : 'is-disabled'}`}>
-        <div className="settings__nightmodes" role="radiogroup" aria-label="Modus">
+        <div className="settings__nightmodes" role="radiogroup" aria-label={NIGHT_MODE_TEXTS.modeGroupAria}>
           <button
             type="button"
             role="radio"

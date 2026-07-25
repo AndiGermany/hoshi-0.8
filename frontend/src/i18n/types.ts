@@ -27,6 +27,14 @@ export interface WeatherLocationStrings {
   seedSuffix: string;
   hint: string;
   saved: (label: string) => string;
+  /** Feld-Label über dem Ortsnamen-Input (Andi-Sweep 24.07: fehlte im Katalog). */
+  label: string;
+  /** Platzhaltertext des leeren Inputs, z. B. „z. B. Duisburg". */
+  placeholder: string;
+  /** Ehrliche „lädt…"-Zeile, solange der Ist-Zustand noch nicht da ist. */
+  loading: string;
+  /** „Aktuell: {Ort}" vor dem Input. */
+  current: (label: string) => string;
 }
 
 /** Ehrliche Texte des Lookup-Modell-Settings (Shape von LOOKUP_MODEL_TEXTS). */
@@ -38,6 +46,8 @@ export interface LookupModelStrings {
   unknown: string;
   failed: string;
   priceSuffix: (cents: number) => string;
+  /** Ehrliche „lädt…"-Zeile, solange der Ist-Zustand noch nicht da ist. */
+  loading: string;
 }
 
 /** Ehrliche Texte des TTS-Engine-Settings (Shape von TTS_ENGINE_TEXTS). */
@@ -52,6 +62,14 @@ export interface TtsEngineStrings {
   active: string;
   available: string;
   notStarted: string;
+  /**
+   * Anzeigenamen der Engines (EN-Sweep 25.07: „macOS say (lokal)" & Co. waren
+   * eine hartkodierte deutsche Modul-Konstante und standen damit auch in der
+   * englischen Oberfläche). Unbekannte Ids rendern weiterhin as-is.
+   */
+  engineLabels: Record<string, string>;
+  /** Ehrliche „lädt…"-Zeile, solange der Ist-Zustand noch nicht da ist. */
+  loading: string;
 }
 
 /** Ehrliche Texte der Stimmen-Sektion (Shape von STIMME_TEXTS). */
@@ -66,6 +84,18 @@ export interface StimmeStrings {
   cloudPrivacy: string;
   localLine: string;
   localPrivacy: string;
+  /** Ehrliche „lädt…"-Zeile, solange der Ist-Zustand noch nicht da ist. */
+  loading: string;
+  /** aria-label des Hörprobe-Knopfs, z. B. „Hörprobe der Stimme X abspielen". */
+  sampleAria: (voice: string) => string;
+  /** title des Hörprobe-Knopfs. */
+  sampleTitle: string;
+  /** Fallback-Hinweis, wenn die aktive Engine (noch) keine Stimmen anbietet. */
+  noVoicesFor: (engine: string) => string;
+  /** „Lizenz: {lizenz}" unter der gewählten Stimme. */
+  licensePrefix: (license: string) => string;
+  /** Leise Fehlzeile, wenn die Hörprobe scheitert (503/Netz/Audio-Decode). */
+  sampleFailed: string;
 }
 
 /** Ehrliche Texte des Brain-Modell-Settings (Shape von BRAIN_MODEL_TEXTS). */
@@ -81,6 +111,12 @@ export interface BrainModelStrings {
   statusOk: string;
   statusLoading: string;
   statusUnreachable: string;
+  /** Ehrliche „lädt…"-Zeile, solange der Ist-Zustand noch nicht da ist. */
+  loading: string;
+  /** Platzhalter-Option im Select, solange kein aktives Modell bekannt ist. */
+  statusReading: string;
+  /** Präfix vor dem Status-Wort, z. B. „Status: läuft". */
+  statusPrefix: string;
 }
 
 /** Ehrliche Notiz-Texte des Lösch-Flows (Shape von PRIVACY_TEXTS). */
@@ -155,6 +191,35 @@ export interface NightModeStrings {
   locked: string;
   invalid: string;
   failed: string;
+  /** Ehrliche „lädt…"-Zeile, solange die Geräteliste noch nicht da ist. */
+  loading: string;
+  /** aria-label der Geräte-Radiogroup (Andi-Sweep 24.07: fehlte im Katalog). */
+  deviceGroupAria: string;
+  /** aria-label der Modus-Radiogroup (Zeitplan/Immer an). */
+  modeGroupAria: string;
+}
+
+/** Die Zukunfts-Skills der Fähigkeiten-Sektion (ehrlich ausgegraut, ohne Toggle). */
+export type FutureSkillId = 'LISTS' | 'MUSIC';
+
+/**
+ * Sichtbare Texte der Skills-Sektion (EN-Sweep 25.07). Die Skill-NAMEN selbst
+ * kommen vom Draht (`labelDe`/`labelEn` der Registry) und bleiben darum
+ * außerhalb des Katalogs; alles, was das Frontend selbst textet — Hinweis,
+ * Lade-Zeile, Badges und die Zukunfts-Skills — steht hier in allen fünf
+ * Sprachen. Vorher waren Hinweis/„lädt…" hartkodiert Deutsch und die Badges
+ * hingen an einer de/en-Sonderlocke, die der CHAT-Sprache folgte.
+ */
+export interface SkillsStrings {
+  hint: string;
+  loading: string;
+  /** Badge eines beim Deploy abgeschalteten Skills (Toggle bleibt gesperrt). */
+  badgeLocked: string;
+  /** Badge eines Skills der Stufe EGRESS (verlässt das Gerät). */
+  badgeEgress: string;
+  /** Badge der Zukunfts-Skills (noch nicht gebaut). */
+  badgeSoon: string;
+  future: Record<FutureSkillId, { label: string; reason: string }>;
 }
 
 /**
@@ -177,6 +242,19 @@ export interface LanguageSettingsStrings {
 export interface FiredToastStrings {
   headline: Record<FiredKind, string>;
   missedNoun: Record<FiredKind, string>;
+  /** title des Quittier-Knopfs (Andi-Sweep 24.07: fehlte im Katalog). */
+  ackTitle: string;
+  /** aria-label des Eskalations-Zahnrads. */
+  gearAria: string;
+  /** title des Eskalations-Zahnrads. */
+  gearTitle: string;
+  /**
+   * Die ganze Verpasst-Zeile (EN-Sweep 25.07: der Satz war in FiredToast.tsx
+   * hartkodiert Deutsch und stand so auch in der englischen Oberfläche). Die
+   * Sprache baut den Satz KOMPLETT selbst — inklusive der Anführungszeichen um
+   * das Label, die je Sprache anders aussehen („…" / "…" / «…»).
+   */
+  missed: (noun: string, label: string | null, time: string) => string;
 }
 
 /** Sichtbare Texte der Aktivitätsansicht. */
@@ -287,6 +365,8 @@ export interface TopNavStrings {
   mainNav: string;
   openSettingsAria: string;
   settingsTitle: string;
+  /** aria-label des Schließen-Knopfs im Settings-Drawer (Andi-Sweep 24.07). */
+  closeSettingsAria: string;
 }
 
 /**
@@ -363,6 +443,10 @@ export interface ChatStrings {
   transcribing: string;
   thinking: string;
   placeholder: string;
+  /** Sichtbares Label + aria-label des Senden-Knopfs (Andi-Sweep 24.07: README-Screenshot-Befund). */
+  send: string;
+  /** title des Senden-Knopfs inkl. Tastatur-Hinweis, z. B. „Senden (Enter)". */
+  sendTitle: string;
 }
 
 /** Status- und Fehlertexte des geteilten Voice-Chat-Hooks. */
@@ -387,6 +471,7 @@ export interface UiStrings {
   speaker: SpeakerStrings;
   nightMode: NightModeStrings;
   language: LanguageSettingsStrings;
+  skills: SkillsStrings;
   firedToast: FiredToastStrings;
   activity: ActivityStrings;
   rooms: RoomsStrings;
@@ -394,6 +479,7 @@ export interface UiStrings {
   chat: ChatStrings;
   voiceChat: VoiceChatStrings;
   turnAnatomy: TurnAnatomyStrings;
+  voiceOrb: VoiceOrbStrings;
 }
 
 /** Denk-Stufen-Zeile über der Antwort (TurnAnatomy) — jede Stufe IST passiert. */
@@ -409,4 +495,35 @@ export interface TurnAnatomyStrings {
   guest: string;
   /** aria-label der Zeile. */
   rowLabel: string;
+  /**
+   * Quelle/Egress-Chip (Andi-Sweep 24.07, README-Screenshot-Befund: „lokal"
+   * blieb hartkodiert Deutsch egal welche UI-Sprache aktiv war): `providerChipText`.
+   */
+  local: string;
+  /** Suffix hinter dem Cloud-Provider-Namen, z. B. " · ging online". */
+  cloudSuffix: string;
+  /** title-Tooltip des Schloss-Chips (blieb lokal). */
+  localTitle: string;
+  /** title-Tooltip des Wolken-Chips (ging online). */
+  cloudTitle: string;
+  /** Label des Grounding-Chips („Wissen gedeckt"). */
+  grounded: string;
+  /** title-Tooltip des Grounding-Chips. */
+  groundedTitle: string;
+}
+
+/** Sichtbare Texte des Home-Orbs (VoiceOrb) — Andi-Sweep 24.07, README-Screenshot-Befund. */
+export interface VoiceOrbStrings {
+  /** aria-label der ganzen Orb-Sektion. */
+  sectionAria: string;
+  /** Hinweistext unter dem Orb im Ruhezustand. */
+  idleHint: string;
+  /** aria-label/title des Orbs im Ruhezustand. */
+  idleTapLabel: string;
+  /** Hinweistext, während das Mikro hört (mit verstrichener Zeit). */
+  listening: (elapsed: string) => string;
+  /** aria-label/title des Orbs, während das Mikro hört. */
+  listeningTapLabel: string;
+  /** aria-label/title des Orbs, während Hoshi spricht (Barge-in-Hinweis). */
+  speakingTapLabel: string;
 }

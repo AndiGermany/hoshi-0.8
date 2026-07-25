@@ -1,5 +1,6 @@
 package de.hoshi.adapters.knowledge
 
+import de.hoshi.core.dto.Language
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -69,17 +70,55 @@ class DayReferenceResolver(
     }
 
     /**
-     * Präzises deutsches Zeilen-Label für einen Offset: 0/1 bleiben „heute"/
-     * „morgen" (wie bisher), ab 2 der Tag beim Namen — „am Donnerstag (in 4
-     * Tagen)" — damit der Brain den gefragten Tag benennen kann.
+     * Präzises Zeilen-Label für einen Offset IN DER TURN-SPRACHE: 0/1 bleiben
+     * „heute"/„morgen" (bzw. „today"/„tomorrow", …), ab 2 der Tag beim Namen —
+     * „am Donnerstag (in 4 Tagen)" / „on Thursday (in 4 days)" — damit der Brain
+     * den gefragten Tag benennen kann.
+     *
+     * **[language] ist Pflicht** (kein Default): dieses Label steht MITTEN in der
+     * Datenzeile des Wetter-Blocks — ein deutsches „heute" in einer englischen
+     * Zeile ist genau der halbe Sprachwechsel, den die Sprach-Naht beseitigt.
+     * DE bleibt zeichengleich zum Stand davor (Pin-Tests).
      */
-    fun dayLabel(offset: Int): String = when (offset) {
-        0 -> "heute"
-        1 -> "morgen"
+    fun dayLabel(offset: Int, language: Language): String = when (offset) {
+        0 -> when (language) {
+            Language.DE -> "heute"
+            Language.EN -> "today"
+            Language.ES -> "hoy"
+            Language.FR -> "aujourd'hui"
+            Language.IT -> "oggi"
+        }
+        1 -> when (language) {
+            Language.DE -> "morgen"
+            Language.EN -> "tomorrow"
+            Language.ES -> "mañana"
+            Language.FR -> "demain"
+            Language.IT -> "domani"
+        }
         else -> {
             val day = LocalDate.now(clock).plusDays(offset.toLong())
-            "am ${WEEKDAYS_DE[day.dayOfWeek.value - 1]} (in $offset Tagen)"
+            val name = weekdayNames(language)[day.dayOfWeek.value - 1]
+            when (language) {
+                Language.DE -> "am $name (in $offset Tagen)"
+                Language.EN -> "on $name (in $offset days)"
+                Language.ES -> "el $name (en $offset días)"
+                Language.FR -> "$name (dans $offset jours)"
+                Language.IT -> "$name (tra $offset giorni)"
+            }
         }
+    }
+
+    /**
+     * Wochentags-Namen (Mo..So, indiziert per `dayOfWeek.value - 1`) je Sprache —
+     * exhaustives `when` OHNE `else`: eine sechste [Language] bricht den Build,
+     * statt still deutsche Wochentage in einen fremdsprachigen Block zu schreiben.
+     */
+    private fun weekdayNames(language: Language): List<String> = when (language) {
+        Language.DE -> WEEKDAYS_DE
+        Language.EN -> WEEKDAYS_EN
+        Language.ES -> WEEKDAYS_ES
+        Language.FR -> WEEKDAYS_FR
+        Language.IT -> WEEKDAYS_IT
     }
 
     /** Nächstes Vorkommen von [target] ab [today] — heute zählt als 0. */
@@ -103,9 +142,32 @@ class DayReferenceResolver(
 
         private const val DAY_AFTER_TOMORROW = "day after tomorrow"
 
-        /** Wochentag DE, indiziert per `dayOfWeek.value - 1` (Mo..So). */
+        /**
+         * Wochentag DE, indiziert per `dayOfWeek.value - 1` (Mo..So) —
+         * BYTE-EINGEFROREN (Pin-Tests des Wetter-Blocks hängen daran).
+         */
         private val WEEKDAYS_DE = listOf(
             "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag",
+        )
+
+        /**
+         * Dieselben sieben Tage in den vier weiteren Turn-Sprachen (Sprach-Naht
+         * 2026-07-25). Bewusst HART hinterlegt statt über `Locale`/CLDR: der
+         * Wetter-Block ist ein Prompt-Baustein, dessen Wortlaut wir kontrollieren
+         * (und dessen DE-Fassung Pin-Tests trägt) — eine JDK-/CLDR-Aktualisierung
+         * darf ihn nie unbemerkt umschreiben.
+         */
+        private val WEEKDAYS_EN = listOf(
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+        )
+        private val WEEKDAYS_ES = listOf(
+            "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo",
+        )
+        private val WEEKDAYS_FR = listOf(
+            "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
+        )
+        private val WEEKDAYS_IT = listOf(
+            "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica",
         )
 
         /** Wochentags-Tokens DE+EN (inkl. „sonnabend") → [DayOfWeek]. */

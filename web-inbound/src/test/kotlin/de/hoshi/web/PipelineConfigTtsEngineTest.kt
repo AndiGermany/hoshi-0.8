@@ -8,38 +8,44 @@ import de.hoshi.core.dto.ChatEvent
 import de.hoshi.core.dto.Language
 import de.hoshi.core.pipeline.TtsStage
 import de.hoshi.core.port.TtsPort
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.time.Duration
 
 /**
- * Beweist die say-Naht in [PipelineConfig.ttsPort]/[PipelineConfig.ttsStage]
- * (Auftrag 19.07, dritte TTS-Engine neben Voxtral/OpenAI):
+ * Beweist die Engine-Wahl in [PipelineConfig.ttsPort]/[PipelineConfig.ttsStage]:
  *
- *  - `HOSHI_TTS=say` verdrahtet [SayTtsAdapter] (statt Voxtral/OpenAI).
- *  - `HOSHI_TTS=piper` verdrahtet [PiperTtsAdapter] (Codex-Sidecar-Übergabe 19.07,
- *    vierte Engine, statt Voxtral/OpenAI/say).
- *  - Der Default (leerer `HOSHI_TTS`) UND jeder unbekannte Wert bleiben
- *    UNVERÄNDERT [VoxtralTtsAdapter] — weder say- noch piper-Naht verschärfen die
- *    bestehende Fallback-Semantik.
+ *  - `HOSHI_TTS=say` verdrahtet [SayTtsAdapter], `=piper` [PiperTtsAdapter],
+ *    `=openai` [OpenAiTtsAdapter], `=voxtral` [VoxtralTtsAdapter] — jeweils
+ *    case-insensitiv.
+ *  - **First-Run-Wahrheit 0.8.1:** leerer `HOSHI_TTS` ergibt [SayTtsAdapter].
+ *    `say` ist auf dem vorausgesetzten macOS lokal, key-/modellfrei und wird von
+ *    `bin/hoshi up` gestartet. Piper bleibt wegen Bootstrap/Modell/GPL explizit.
+ *    Ein unbekannter nicht-leerer Wert bricht ab, statt still eine Ersatz-Engine
+ *    zu wählen. Voxtral bleibt vollwertig, nur eben EXPLIZIT anwählbar.
  *  - Das Telemetrie-Tag ([ChatEvent.TtsAudioStart.provider]) nennt bei
  *    `HOSHI_TTS=say` ehrlich „say" und bei `HOSHI_TTS=piper` ehrlich „piper"
  *    (keine Voxtral-Lüge in der Wire-Telemetrie).
  *
  * Reine Konstruktor-Verdrahtung (kein Spring-Context, kein Netz) — analog
- * [PipelineConfigTtsFastFirstTest].
+ * [PipelineConfigTtsFastFirstTest]. Seit 0.8.1 baut [PipelineConfig.ttsPort] die
+ * Engine nicht mehr selbst, sondern ruft die [TtsEngineFactory] (EINE Bauwahrheit,
+ * s. [TtsBuildPathSingleTruthTest]) — der Test reicht sie deshalb hier direkt hinein,
+ * mit den Boot-Defaults aus den `@Value`-Annotationen von
+ * [TtsRuntimeConfig.ttsEngineFactory].
  */
 class PipelineConfigTtsEngineTest {
 
     private val config = PipelineConfig()
 
-    /** Alle Parameter der `ttsPort`-Bean OHNE Spring — Boot-Defaults 1:1 aus den `@Value`-Annotationen. */
-    private fun buildTtsPort(ttsImpl: String): TtsPort = config.ttsPort(
-        ttsImpl = ttsImpl,
-        baseUrl = "http://localhost:8042",
-        voice = "de_female",
+    /** Die Fabrik mit den Boot-Defaults 1:1 aus [TtsRuntimeConfig.ttsEngineFactory] (alle Hüllen aus). */
+    private fun bootFactory(): TtsEngineFactory = TtsEngineFactory(
+        voxtralBaseUrl = "http://localhost:8042",
+        voxtralVoice = "de_female",
         openaiModel = "gpt-4o-mini-tts",
         openaiVoice = "coral",
         sayBaseUrl = "http://127.0.0.1:8044",
@@ -48,13 +54,12 @@ class PipelineConfigTtsEngineTest {
         piperBaseUrl = "http://127.0.0.1:8045",
         piperVoice = "de_DE-thorsten-medium",
         sanitizeEnabled = false,
-        loudnessEnabled = false,
-        loudnessTargetRmsDb = -18.0,
-        loudnessPeakCeilingDb = -1.0,
-        loudnessMaxGainDb = 12.0,
-        loudnessSilenceFloorDb = -50.0,
         ttsStreamEnabled = false,
     )
+
+    /** Die `ttsPort`-Bean OHNE Spring — genau die Naht, die beim Boot greift. */
+    private fun buildTtsPort(ttsImpl: String): TtsPort =
+        config.ttsPort(ttsEngineFactory = bootFactory(), ttsImpl = ttsImpl)
 
     @Test
     fun `HOSHI_TTS=say verdrahtet den SayTtsAdapter`() {
@@ -69,15 +74,26 @@ class PipelineConfigTtsEngineTest {
     }
 
     @Test
-    fun `leerer HOSHI_TTS (Default) bleibt VoxtralTtsAdapter - unveraendert durch die say-Naht`() {
+    fun `leerer HOSHI_TTS (Default) ist SayTtsAdapter - lokal-first und startbar`() {
         val port = buildTtsPort("")
-        assertTrue(port is VoxtralTtsAdapter, "Default-Naht darf durch say NICHT verschoben werden, war: ${port::class.simpleName}")
+        assertTrue(port is SayTtsAdapter, "leerer HOSHI_TTS muss lokal-first auf say fallen, war: ${port::class.simpleName}")
+        assertTrue(buildTtsPort("   ") is SayTtsAdapter, "reiner Rand-Whitespace ist ebenfalls der leere Default")
     }
 
     @Test
-    fun `unbekannter HOSHI_TTS-Wert faellt weiterhin auf VoxtralTtsAdapter zurueck - Semantik nicht verschaerft`() {
-        val port = buildTtsPort("tippfehler-engine")
-        assertTrue(port is VoxtralTtsAdapter, "unbekannter Wert muss wie vor der say-Naht auf Voxtral fallen, war: ${port::class.simpleName}")
+    fun `unbekannter HOSHI_TTS-Wert bricht hart ab statt eine Ersatz-Engine zu waehlen`() {
+        val error = assertThrows<IllegalArgumentException> { buildTtsPort("tippfehler-engine") }
+        assertTrue(error.message.orEmpty().contains("Unbekannte TTS-Engine"))
+        assertTrue(error.message.orEmpty().contains("Abbruch"))
+    }
+
+    @Test
+    fun `HOSHI_TTS=voxtral bleibt vollwertig anwaehlbar - nur eben EXPLIZIT`() {
+        // Die Default-Umstellung nimmt voxtral NICHT weg; sie nimmt ihm nur den stillen
+        // Auffang-Zweig. Ohne diesen Test wuerde ein spaeterer Umbau das nicht merken.
+        val port = buildTtsPort("voxtral")
+        assertTrue(port is VoxtralTtsAdapter, "HOSHI_TTS=voxtral muss VoxtralTtsAdapter verdrahten, war: ${port::class.simpleName}")
+        assertTrue(buildTtsPort("VOXTRAL") is VoxtralTtsAdapter, "case-insensitiv wie die anderen drei")
     }
 
     @Test
@@ -101,9 +117,13 @@ class PipelineConfigTtsEngineTest {
     }
 
     @Test
-    fun `leerer HOSHI_TTS (Default) bleibt VoxtralTtsAdapter - unveraendert durch die piper-Naht`() {
-        val port = buildTtsPort("")
-        assertTrue(port is VoxtralTtsAdapter, "Default-Naht darf durch piper NICHT verschoben werden, war: ${port::class.simpleName}")
+    fun `der Default ist NIE die Cloud-Engine - lokal-first bleibt lokal-first`() {
+        // Der Default darf sich bewegen, aber NIE in die Cloud:
+        // ohne gesetzte Env darf kein Byte Text die Box verlassen.
+        for (raw in listOf("", "   ")) {
+            val port = buildTtsPort(raw)
+            assertFalse(port is OpenAiTtsAdapter, "HOSHI_TTS='$raw' darf NIEMALS auf die Cloud-Engine fallen")
+        }
     }
 
     @Test

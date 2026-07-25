@@ -1,6 +1,7 @@
 package de.hoshi.adapters.knowledge
 
 import com.sun.net.httpserver.HttpServer
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -103,8 +104,17 @@ class WeatherGroundingProviderTest {
         }
     }
 
-    private fun block(provider: WeatherGroundingProvider, query: String): String =
-        provider.groundingBlock(query, RouteCategory.FACT_SHORT).block(Duration.ofSeconds(5)) ?: ""
+    /**
+     * Ein Grounding-Call in der TURN-Sprache. Default DE — genau die Sprache, in
+     * der die Byte-Pin-Tests dieser Datei ihren Block erwarten; die Sprach-Proben
+     * setzen [language] explizit.
+     */
+    private fun block(
+        provider: WeatherGroundingProvider,
+        query: String,
+        language: Language = Language.DE,
+    ): String =
+        provider.groundingBlock(query, RouteCategory.FACT_SHORT, language).block(Duration.ofSeconds(5)) ?: ""
 
     // ── Bestand: Default-Verhalten (ohne Setting, ohne Tages-Referenz) ─────────
 
@@ -151,7 +161,7 @@ class WeatherGroundingProviderTest {
     fun `Nicht-Wetter-Frage liefert leeren Block und ruft Open-Meteo nicht`() =
         withOpenMeteo(forecastJson) { url, captured, _ ->
             val provider = WeatherGroundingProvider(baseUrl = url)
-            val block = provider.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT)
+            val block = provider.groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5))
             assertEquals("", block, "keine Wetter-Absicht → kein Block")
             assertNull(captured.get(), "Open-Meteo darf ohne Wetter-Absicht nicht angefragt werden")
@@ -162,7 +172,7 @@ class WeatherGroundingProviderTest {
         withOpenMeteo(forecastJson) { url, captured, _ ->
             val provider = WeatherGroundingProvider(baseUrl = url)
             // Wetter-Wort vorhanden, aber Kategorie SMALLTALK → Gate greift.
-            val block = provider.groundingBlock("schönes Wetter heute, oder?", RouteCategory.SMALLTALK)
+            val block = provider.groundingBlock("schönes Wetter heute, oder?", RouteCategory.SMALLTALK, Language.DE)
                 .block(Duration.ofSeconds(5))
             assertEquals("", block)
             assertNull(captured.get(), "Open-Meteo darf bei Nicht-Wissens-Kategorie nicht angefragt werden")
@@ -172,7 +182,7 @@ class WeatherGroundingProviderTest {
     fun `Open-Meteo nicht erreichbar liefert best-effort leeren Block, nie Crash`() {
         // Port, auf dem nichts lauscht → connection refused → leerer Block.
         val provider = WeatherGroundingProvider(baseUrl = "http://127.0.0.1:1", timeout = Duration.ofSeconds(2))
-        val block = provider.groundingBlock("Wie wird das Wetter morgen?", RouteCategory.FACT_SHORT)
+        val block = provider.groundingBlock("Wie wird das Wetter morgen?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(5))
         assertEquals("", block)
     }
@@ -181,7 +191,7 @@ class WeatherGroundingProviderTest {
     fun `Open-Meteo-Fehler (500) liefert leeren Block`() =
         withOpenMeteo("kaputt", status = 500) { url, _, _ ->
             val provider = WeatherGroundingProvider(baseUrl = url)
-            val block = provider.groundingBlock("Regnet es morgen?", RouteCategory.FACT_SHORT)
+            val block = provider.groundingBlock("Regnet es morgen?", RouteCategory.FACT_SHORT, Language.DE)
                 .block(Duration.ofSeconds(5))
             assertEquals("", block)
         }
@@ -200,8 +210,8 @@ class WeatherGroundingProviderTest {
 
     @Test
     fun `WMO-Code zu Text mappt die gaengigen Lagen in DE und EN`() {
-        val de = WeatherGroundingProvider.Lang.DE
-        val en = WeatherGroundingProvider.Lang.EN
+        val de = Language.DE
+        val en = Language.EN
         assertEquals("klar und sonnig", WeatherGroundingProvider.weatherCodeText(0, de))
         assertEquals("clear and sunny", WeatherGroundingProvider.weatherCodeText(0, en))
         assertEquals("teilweise bewölkt", WeatherGroundingProvider.weatherCodeText(2, de))
@@ -215,6 +225,184 @@ class WeatherGroundingProviderTest {
         assertEquals("wechselhaft", WeatherGroundingProvider.weatherCodeText(123, de))
         assertEquals("changeable", WeatherGroundingProvider.weatherCodeText(123, en))
     }
+
+    // ── Neu (Multilingual-Welle 2026-07-24): WMO-Text jetzt in allen 5 Sprachen ─
+
+    @Test
+    fun `DE bleibt nach der Multilingual-Erweiterung WORTGLEICH - Katalog-Stichprobe aller Codes`() {
+        // Direkte Katalog-Stichprobe (ergänzt den ON-Block-Pin-Test): JEDER
+        // bisherige DE-Code liefert EXAKT denselben Text wie vor der ES/FR/IT-
+        // Erweiterung — die Übersetzungs-Arbeit darf DE nicht mal streifen.
+        val de = Language.DE
+        val expectedDe = mapOf(
+            0 to "klar und sonnig",
+            1 to "überwiegend klar",
+            2 to "teilweise bewölkt",
+            3 to "bedeckt",
+            45 to "neblig",
+            48 to "gefrierender Nebel",
+            51 to "leichter Nieselregen",
+            53 to "mäßiger Nieselregen",
+            55 to "starker Nieselregen",
+            56 to "gefrierender Nieselregen",
+            57 to "gefrierender Nieselregen",
+            61 to "leichter Regen",
+            63 to "mäßiger Regen",
+            65 to "starker Regen",
+            66 to "gefrierender Regen",
+            67 to "gefrierender Regen",
+            71 to "leichter Schneefall",
+            73 to "mäßiger Schneefall",
+            75 to "starker Schneefall",
+            77 to "Schneekörner",
+            80 to "leichte Regenschauer",
+            81 to "mäßige Regenschauer",
+            82 to "starke Regenschauer",
+            85 to "leichte Schneeschauer",
+            86 to "starke Schneeschauer",
+            95 to "Gewitter",
+            96 to "Gewitter mit Hagel",
+            99 to "Gewitter mit starkem Hagel",
+            123 to "wechselhaft",
+        )
+        expectedDe.forEach { (code, text) ->
+            assertEquals(text, WeatherGroundingProvider.weatherCodeText(code, de), "DE-Code $code unverändert")
+        }
+    }
+
+    @Test
+    fun `WMO-Code zu Text deckt jetzt auch ES, FR und IT ab`() {
+        val es = Language.ES
+        val fr = Language.FR
+        val it = Language.IT
+        // Je Sprache mindestens eine Stichprobe über klar/Regen/Gewitter/unbekannt.
+        assertEquals("despejado y soleado", WeatherGroundingProvider.weatherCodeText(0, es))
+        assertEquals("lluvia ligera", WeatherGroundingProvider.weatherCodeText(61, es))
+        assertEquals("tormenta", WeatherGroundingProvider.weatherCodeText(95, es))
+        assertEquals("variable", WeatherGroundingProvider.weatherCodeText(123, es))
+
+        assertEquals("ciel clair et ensoleillé", WeatherGroundingProvider.weatherCodeText(0, fr))
+        assertEquals("pluie légère", WeatherGroundingProvider.weatherCodeText(61, fr))
+        assertEquals("orage", WeatherGroundingProvider.weatherCodeText(95, fr))
+        assertEquals("changeant", WeatherGroundingProvider.weatherCodeText(123, fr))
+
+        assertEquals("sereno e soleggiato", WeatherGroundingProvider.weatherCodeText(0, it))
+        assertEquals("pioggia leggera", WeatherGroundingProvider.weatherCodeText(61, it))
+        assertEquals("temporale", WeatherGroundingProvider.weatherCodeText(95, it))
+        assertEquals("variabile", WeatherGroundingProvider.weatherCodeText(123, it))
+    }
+
+    @Test
+    fun `Turn-Sprache-Naht - EIN Provider liefert je nach Turn-Sprache DE oder EN (kein Adapter-Zustand)`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            // EIN Provider, zwei Turns: die Sprache kommt seit 2026-07-25
+            // ausschließlich PRO AUFRUF herein (der Ctor-Sprach-Parameter ist weg,
+            // er war nur noch ein Fallback für die abgeschaffte 2-Arg-Signatur).
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+
+            val deBlock = block(provider, "Wie wird das Wetter?", Language.DE)
+            val enBlock = block(provider, "Wie wird das Wetter?", Language.EN)
+
+            assertTrue(deBlock.contains("leichter Regen"), "DE-Turn: $deBlock")
+            assertFalse(deBlock.contains("light rain"), "DE-Turn bleibt DE: $deBlock")
+            assertTrue(enBlock.contains("light rain"), "EN-Turn wirkt auf die Wetterlage: $enBlock")
+            assertFalse(enBlock.contains("leichter Regen"), "EN ersetzt die DE-Wetterlage: $enBlock")
+        }
+
+    // ── Sprach-Naht 2026-07-25: der ganze RAHMEN folgt der Turn-Sprache ────────
+    // Befund davor: übersetzter Katalog in einem hart deutschen Rahmen — ein
+    // EN-Turn bekam „HINTERGRUND …", „• Wetter … bis … Grad" und eine deutsche
+    // „ANWEISUNG: …" und antwortete darum trotz englischer Persona deutsch.
+
+    @Test
+    fun `EN-Turn liefert einen KOMPLETT englischen Block - kein deutsches Wort im Rahmen`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin", days = fixedDays)
+            val expected = "\n\n---\n" +
+                "BACKGROUND (for you only, do NOT mention it in the conversation):\n" +
+                "• Weather Berlin today: 11 to 19 degrees, light rain, about 3 mm of precipitation.\n" +
+                "• Weather Berlin tomorrow: 13 to 22 degrees, partly cloudy, hardly any precipitation.\n" +
+                "INSTRUCTION: Use this REAL weather data and answer briefly in your own warm style — " +
+                "add nothing you were not given and never mention “the API”, “Open-Meteo” or “the text”."
+            assertEquals(expected, block(provider, "Wie wird das Wetter?", Language.EN))
+        }
+
+    @Test
+    fun `EN-Turn - expliziter Wochentag traegt englischen Tagesbezug und englische Tages-Anweisung`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin", days = fixedDays)
+            val block = block(provider, "How is the weather on Thursday?", Language.EN)
+
+            assertTrue(block.contains("Berlin on Thursday (in 4 days)"), "englischer Tagesbezug: $block")
+            assertFalse(block.contains("Donnerstag"), "kein deutscher Wochentag: $block")
+            assertFalse(block.contains("in 4 Tagen"), "keine deutsche Tages-Klammer: $block")
+            assertTrue(
+                block.contains("Answer for the day that was asked about; name that day explicitly."),
+                "englische Tages-Anweisung: $block",
+            )
+        }
+
+    @Test
+    fun `EN-Turn - Wetter-Vertrag ON ist ebenfalls englisch (Marker bleiben identisch)`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(
+                baseUrl = url,
+                locationLabel = "Berlin",
+                enableWeatherContract = true,
+                days = fixedDays,
+            )
+            val block = block(provider, "Wie wird das Wetter?", Language.EN)
+
+            assertTrue(block.contains("WEATHER CONTRACT:"), "englischer Vertrag: $block")
+            assertFalse(block.contains("WETTER-VERTRAG"), "kein deutscher Vertrag: $block")
+            assertTrue(block.contains("«Berlin»"), "Marker-Vertrag unverändert: $block")
+            assertTrue(block.contains("«today»"), "auch der Tagesbezug wird markiert: $block")
+        }
+
+    @Test
+    fun `EN-Turn - der ehrliche Nicht-gefunden-Hinweis ist englisch, der Ortsname bleibt unuebersetzt`() =
+        withOpenMeteo(forecastJson, geocodeJson = noHitJson) { url, capturedForecast, _ ->
+            val provider = WeatherGroundingProvider(
+                baseUrl = url,
+                locationLabel = "Berlin",
+                geocoding = OpenMeteoGeocodingClient(baseUrl = url),
+                days = fixedDays,
+            )
+            val block = block(provider, "What's the weather in Xyzzyburg?", Language.EN)
+
+            assertTrue(block.contains("WEATHER NOTE"), "englischer Hinweis: $block")
+            assertFalse(block.contains("WETTER-HINWEIS"), "kein deutscher Hinweis: $block")
+            assertTrue(block.contains("“Xyzzyburg”"), "Ortsname unübersetzt: $block")
+            assertFalse(block.contains("Berlin"), "KEIN Heimat-Wetter untergeschoben: $block")
+            assertNull(capturedForecast.get(), "KEIN Forecast-Call")
+        }
+
+    @Test
+    fun `ES, FR und IT tragen ihren eigenen Rahmen (kein deutscher, kein englischer Durchschlag)`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin", days = fixedDays)
+
+            val es = block(provider, "Wie wird das Wetter?", Language.ES)
+            assertTrue(es.contains("CONTEXTO (solo para ti"), "ES-Kopf: $es")
+            assertTrue(es.contains("• Tiempo Berlin hoy: de 11 a 19 grados, lluvia ligera"), "ES-Zeile: $es")
+            assertTrue(es.contains("INSTRUCCIÓN:"), "ES-Anweisung: $es")
+
+            val fr = block(provider, "Wie wird das Wetter?", Language.FR)
+            assertTrue(fr.contains("CONTEXTE (pour toi uniquement"), "FR-Kopf: $fr")
+            assertTrue(fr.contains("• Météo Berlin aujourd'hui : de 11 à 19 degrés, pluie légère"), "FR-Zeile: $fr")
+            assertTrue(fr.contains("INSTRUCTION :"), "FR-Anweisung: $fr")
+
+            val it = block(provider, "Wie wird das Wetter?", Language.IT)
+            assertTrue(it.contains("CONTESTO (solo per te"), "IT-Kopf: $it")
+            assertTrue(it.contains("• Meteo Berlin oggi: da 11 a 19 gradi, pioggia leggera"), "IT-Zeile: $it")
+            assertTrue(it.contains("ISTRUZIONE:"), "IT-Anweisung: $it")
+
+            listOf(es, fr, it).forEach { b ->
+                assertFalse(b.contains("HINTERGRUND"), "kein deutscher Kopf: $b")
+                assertFalse(b.contains("ANWEISUNG"), "keine deutsche Anweisung: $b")
+                assertFalse(b.contains("BACKGROUND"), "kein englischer Durchschlag: $b")
+            }
+        }
 
     // ── Neu: Tages-Szenarien (smarte Injection NUR der gefragten Tage) ─────────
 
@@ -423,7 +611,7 @@ class WeatherGroundingProviderTest {
     // HINTERGRUND-Block frei statt Zahlen/Ort wörtlich zu übernehmen.
 
     @Test
-    fun `WeatherNumberContract ON markiert Ort und Min-Max-Temperatur jeder Tages-Zeile mit Guillemets`() =
+    fun `WeatherNumberContract ON pinnt Tagesbezug Ort und Wetterwerte jeder Tages-Zeile`() =
         withOpenMeteo(forecastJson) { url, _, _ ->
             val provider = WeatherGroundingProvider(
                 baseUrl = url,
@@ -432,11 +620,16 @@ class WeatherGroundingProviderTest {
             )
             val block = block(provider, "Wie wird das Wetter?")
 
-            assertTrue(block.contains("Wetter «Berlin» heute: «11» bis «19» Grad"), "Ort+Min+Max heute markiert: $block")
-            assertTrue(block.contains("Wetter «Berlin» morgen: «13» bis «22» Grad"), "Ort+Min+Max morgen markiert: $block")
-            assertTrue(block.contains("«leichter Regen»"), "Wetterlage markiert: $block")
-            assertTrue(block.contains("WETTER-VERTRAG:"), "Zitier-Instruktion steht im Block: $block")
-            assertTrue(block.contains("gleicher Ortsname, gleiche Ziffern"), "Instruktions-Text: $block")
+            val expectedOn = "\n\n---\n" +
+                "HINTERGRUND (nur für dich, im Gespräch NICHT erwähnen):\n" +
+                "• Wetter «Berlin» «heute»: «11» bis «19» Grad, «leichter Regen», etwa 3 mm Niederschlag.\n" +
+                "• Wetter «Berlin» «morgen»: «13» bis «22» Grad, «teilweise bewölkt», kaum Niederschlag.\n" +
+                "ANWEISUNG: Nutze diese ECHTEN Wetterdaten und antworte knapp im eigenen warmen Stil — " +
+                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“.\n" +
+                "WETTER-VERTRAG: Die Werte in «» oben (Ort, Tag, Temperaturen, Wetterlage) sind exakt. " +
+                "Nenne sie genau so weiter — gleicher Tagesbezug, gleicher Ortsname, gleiche Ziffern, gleiche Einheit — " +
+                "nicht runden, nicht umformulieren, keinen anderen Ort oder Wert erfinden."
+            assertEquals(expectedOn, block, "ON-Block pinnt auch den vom Resolver bestimmten Tagesbezug")
         }
 
     @Test

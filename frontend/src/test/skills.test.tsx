@@ -2,7 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SkillsSection } from '../components/SettingsPanel';
 import { SkillLockedError, fetchSkills, setSkill } from '../api/skills';
-import type { Language, Skill } from '../api/types';
+import { setActiveUiLanguage } from '../i18n';
+import type { Skill } from '../api/types';
 
 /** Gültige Skill-Zeile (togglebarer LOCAL-Skill), per `over` punktuell überschreibbar. */
 const skill = (over: Partial<Skill> = {}): Skill => ({
@@ -17,8 +18,20 @@ const skill = (over: Partial<Skill> = {}): Skill => ({
   ...over,
 });
 
-const render = (skills: Skill[], language: Language = 'de') =>
-  renderToStaticMarkup(<SkillsSection skills={skills} language={language} onToggle={() => {}} />);
+/**
+ * Sprache = die aktive UI-Sprache (EN-Sweep 25.07: vorher steuerte die CHAT-
+ * Sprache per `language`-Prop die Skill-Namen/Badges — s. i18nsweep.test.tsx).
+ * Der Store ist ein Modul-Singleton; jeder Test, der ihn dreht, setzt ihn
+ * zurück (Vitest isoliert ohnehin pro Datei).
+ */
+const render = (skills: Skill[], uiLanguage: 'de' | 'en' = 'de') => {
+  setActiveUiLanguage(uiLanguage);
+  try {
+    return renderToStaticMarkup(<SkillsSection skills={skills} onToggle={() => {}} />);
+  } finally {
+    setActiveUiLanguage('de');
+  }
+};
 
 describe('SkillsSection — Render', () => {
   it('normale Zeile: Switch aktiv (NICHT disabled), spiegelt enabled', () => {
@@ -50,7 +63,7 @@ describe('SkillsSection — Render', () => {
     expect(html).toContain('geht online');
   });
 
-  it('Sprache EN: englische Labels + englische Badges', () => {
+  it('UI-Sprache EN: englische Labels + englische Badges', () => {
     const html = render([skill({ tier: 'EGRESS', locked: true })], 'en');
     expect(html).toContain('Smart home');
     expect(html).toContain('goes online');

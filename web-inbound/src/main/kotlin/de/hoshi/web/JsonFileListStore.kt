@@ -77,9 +77,17 @@ class JsonFileListStore(
         return entry
     }
 
-    /** Alle Einträge EINER Liste (Snapshot), älteste zuerst — reiner Cache-Read, kein I/O. */
+    /**
+     * Alle Einträge EINER Liste (Snapshot), älteste zuerst — reiner Cache-Read, kein I/O.
+     *
+     * Zweitschlüssel [ListEntry.id] ist PFLICHT (identisch in [de.hoshi.core.port.InMemoryListStore]):
+     * `entries` ist eine ConcurrentHashMap mit willkürlicher values-Reihenfolge, und `sortedBy`
+     * bewahrt bei Gleichstand nur diese undefinierte Quell-Reihenfolge. Zwei im selben
+     * Millisekunden-Tick angelegte Einträge kamen dadurch mal so, mal so heraus.
+     */
     override fun items(listId: String): List<ListEntry> =
-        entries.values.filter { it.listId == listId }.sortedBy { it.addedAtEpochMs }
+        entries.values.filter { it.listId == listId }
+            .sortedWith(compareBy({ it.addedAtEpochMs }, { it.id }))
 
     /**
      * Entfernt genau einen Eintrag — persist-then-commit. Unbekannte id ⇒ `false`
@@ -157,7 +165,9 @@ class JsonFileListStore(
     private fun writeSnapshot(active: Collection<ListEntry>) {
         val dir = path.parent ?: throw IOException("Listen-Pfad hat kein Verzeichnis: $path")
         Files.createDirectories(dir)
-        val root = active.sortedBy { it.addedAtEpochMs }.map { entry ->
+        // Gleiche Sortier-Wahrheit wie [items] — sonst driftet die Datei-Reihenfolge gegen die
+        // gelesene Reihenfolge, sobald zwei Einträge dieselbe Millisekunde tragen.
+        val root = active.sortedWith(compareBy({ it.addedAtEpochMs }, { it.id })).map { entry ->
             val node = LinkedHashMap<String, Any>()
             node["id"] = entry.id
             node["listId"] = entry.listId

@@ -24,6 +24,7 @@ export const de: UiStrings = {
     mainNav: 'Hauptnavigation',
     openSettingsAria: 'Einstellungen öffnen',
     settingsTitle: 'Einstellungen',
+    closeSettingsAria: 'Einstellungen schließen',
   },
 
   idleFace: {
@@ -82,6 +83,10 @@ export const de: UiStrings = {
     seedSuffix: ' (Standard aus dem Deploy)',
     hint: 'Der Ort für Wetter-Fragen — gilt für alle Geräte. Für einen anderen Ort frag einfach „Wetter in …?“.',
     saved: (label: string) => `Ort gespeichert: ${label}.`,
+    label: 'Wetter-Ort',
+    placeholder: 'z. B. Duisburg',
+    loading: 'lädt…',
+    current: (label: string) => `Aktuell: ${label}`,
   },
 
   lookupModel: {
@@ -92,6 +97,7 @@ export const de: UiStrings = {
     unknown: 'Unbekanntes Modell.',
     failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
     priceSuffix: (cents: number) => `ca. ${cents.toFixed(2)} ct/Nachschlag`,
+    loading: 'lädt…',
   },
 
   ttsEngine: {
@@ -105,6 +111,13 @@ export const de: UiStrings = {
     active: 'aktiv',
     available: 'verfügbar',
     notStarted: 'nicht gestartet',
+    loading: 'lädt…',
+    engineLabels: {
+      openai: 'OpenAI (Cloud)',
+      say: 'macOS say (lokal)',
+      piper: 'Piper (lokal)',
+      voxtral: 'Voxtral (lokal)',
+    },
   },
 
   stimme: {
@@ -118,6 +131,12 @@ export const de: UiStrings = {
     cloudPrivacy: 'Ehrlich: jede Hörprobe und jede Cloud-Stimme geht zu OpenAI.',
     localLine: 'Hoshis gesprochene Antwort-Stimme — läuft lokal.',
     localPrivacy: 'Verlässt das Gerät nicht.',
+    loading: 'lädt…',
+    sampleAria: (voice: string) => `Hörprobe der Stimme ${voice} abspielen`,
+    sampleTitle: 'Hörprobe abspielen',
+    noVoicesFor: (engine: string) => `Für ${engine} stehen aktuell keine Stimmen zur Auswahl.`,
+    licensePrefix: (license: string) => `Lizenz: ${license}`,
+    sampleFailed: 'Hörprobe grad nicht möglich.',
   },
 
   brainModel: {
@@ -132,6 +151,9 @@ export const de: UiStrings = {
     statusOk: 'läuft',
     statusLoading: 'lädt…',
     statusUnreachable: 'nicht erreichbar',
+    loading: 'lädt…',
+    statusReading: '(Status wird gelesen…)',
+    statusPrefix: 'Status: ',
   },
 
   privacy: {
@@ -203,6 +225,9 @@ export const de: UiStrings = {
     locked: 'Serverseitig noch aus — die Einstellung wird gespeichert, greift aber erst, wenn der Nachtmodus beim Deploy aktiviert ist.',
     invalid: 'Ungültige Eingabe — bitte Werte prüfen.',
     failed: 'Speichern fehlgeschlagen — bitte nochmal versuchen.',
+    loading: 'lädt…',
+    deviceGroupAria: 'Gerät',
+    modeGroupAria: 'Modus',
   },
 
   language: {
@@ -216,6 +241,18 @@ export const de: UiStrings = {
     uiNotice: 'UI-Texte und Gespräch folgen dieser Auswahl — Smart-Home-Befehle bleiben vorerst Deutsch.',
   },
 
+  skills: {
+    hint: 'Schaltet einzelne Fähigkeiten zur Laufzeit ein/aus — serverseitig, gilt für alle Geräte.',
+    loading: 'lädt…',
+    badgeLocked: 'deaktiviert beim Deploy',
+    badgeEgress: 'geht online',
+    badgeSoon: 'kommt noch',
+    future: {
+      LISTS: { label: 'Listen', reason: 'Andi-Gabel offen' },
+      MUSIC: { label: 'Musik', reason: 'Track startet' },
+    },
+  },
+
   firedToast: {
     headline: {
       TIMER: 'Timer ist fertig',
@@ -227,6 +264,11 @@ export const de: UiStrings = {
       ALARM: 'Wecker',
       REMINDER: 'Erinnerung',
     },
+    ackTitle: 'Tippen zum Bestätigen',
+    gearAria: 'Wecker-Eskalation-Einstellungen öffnen (Fähigkeiten)',
+    gearTitle: 'Eskalation ändern',
+    missed: (noun, label, time) =>
+      `${label ? `${noun} „${label}"` : noun} war um ${time} fällig — hab dich nicht erreicht`,
   },
 
   activity: {
@@ -279,6 +321,7 @@ export const de: UiStrings = {
     speakerSettingsAria: 'Sprecher-Einstellungen öffnen (Gedächtnis & Privatsphäre)', manageSpeakers: 'Sprecher verwalten', recordingUnderstood: 'Deine Aufnahme wird verstanden',
     sourcesTitle: 'Quellen dieser Antwort anzeigen', sources: 'Quellen', micAria: 'Mikro — gedrückt halten und sprechen', discardRecording: 'Aufnahme verwerfen', discard: 'Verwerfen (Esc)',
     speaking: 'spricht…', processingRecording: 'Verarbeite deine Aufnahme', transcribing: 'verstehe…', thinking: 'denkt nach…', placeholder: 'Nachricht an Hoshi…',
+    send: 'Senden', sendTitle: 'Senden (Enter)',
   },
 
   voiceChat: {
@@ -290,5 +333,16 @@ export const de: UiStrings = {
     answering: 'antwortet', speaking: 'spricht',
     recognized: (who) => `erkannt: ${who}`,
     guest: 'Gast', rowLabel: 'Was dieser Turn wirklich getan hat',
+    local: 'lokal', cloudSuffix: ' · ging online',
+    localTitle: 'Diese Antwort blieb auf dem Gerät', cloudTitle: 'Diese Antwort kam über einen Cloud-Provider',
+    grounded: 'Wissen gedeckt', groundedTitle: 'Die Antwort war durch geladenes Wissen gedeckt (FactCoverage-Gate)',
+  },
+  voiceOrb: {
+    sectionAria: 'Sprich mit Hoshi',
+    idleHint: 'Tippen zum Sprechen',
+    idleTapLabel: 'Tippen und sprechen',
+    listening: (elapsed) => `hört zu… ${elapsed}`,
+    listeningTapLabel: 'Nochmal tippen zum Senden — oder Esc zum Verwerfen',
+    speakingTapLabel: 'Tippen bricht Hoshis Antwort ab',
   },
 };

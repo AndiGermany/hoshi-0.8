@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getActiveUiLanguage, subscribeActiveUiLanguage } from './activeLanguageStore';
 import { resolveUiStrings } from './catalogs';
-import type { UiStrings } from './types';
+import type { UiLanguage, UiStrings } from './types';
 
 /**
  * Liefert den UI-Text-Katalog der AKTIVEN Sprache (Andi-Auftrag 21.07: „Ich muss
@@ -17,6 +17,21 @@ import type { UiStrings } from './types';
  * greift bei leerem/unbekanntem Code selbst darauf zurück.
  */
 export function useUiStrings(): UiStrings {
+  return resolveUiStrings(useActiveUiLanguage());
+}
+
+/**
+ * Der CODE der aktiven UI-Sprache (statt der Texte) — für die wenigen Stellen,
+ * die eine Sprach-ENTSCHEIDUNG treffen müssen, deren Daten nicht aus dem
+ * Katalog kommen: die Skill-Namen liefert der Server nur als `labelDe`/
+ * `labelEn` (EN-Sweep 25.07 — vorher hing diese Wahl an der CHAT-Sprache und
+ * die Skill-Zeile blieb deutsch, obwohl die UI auf Englisch stand).
+ *
+ * Teilt sich Zustandsführung und Abo mit {@link useUiStrings}: `useState` +
+ * Subscribe-Effekt, damit `renderToStaticMarkup`-Bestandstests (ohne Effekte)
+ * weiterhin genau den Default (de) sehen.
+ */
+export function useActiveUiLanguage(): UiLanguage {
   const [lang, setLang] = useState(() => getActiveUiLanguage());
   useEffect(() => {
     // Resync direkt beim Mount (falls sich der Store zwischen erstem Render und
@@ -24,5 +39,5 @@ export function useUiStrings(): UiStrings {
     setLang(getActiveUiLanguage());
     return subscribeActiveUiLanguage(() => setLang(getActiveUiLanguage()));
   }, []);
-  return resolveUiStrings(lang);
+  return lang;
 }

@@ -1,5 +1,6 @@
 package de.hoshi.adapters.knowledge
 
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import java.time.Duration
 import kotlin.system.exitProcess
@@ -23,7 +24,8 @@ fun main(args: Array<String>) {
     println("[ground-smoke] Bridge : $baseUrl")
     println("[ground-smoke] Query  : $query")
 
-    val block = adapter.groundingBlock(query, RouteCategory.FACT_SHORT)
+    // Sprache explizit (der Port verlangt sie): der Wiki-Index ist deutsch — DE.
+    val block = adapter.groundingBlock(query, RouteCategory.FACT_SHORT, Language.DE)
         .block(Duration.ofSeconds(15)) ?: ""
 
     println("[ground-smoke] ----- Grounding-Block (wörtlich) -----")

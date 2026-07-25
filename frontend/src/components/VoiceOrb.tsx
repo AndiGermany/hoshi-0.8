@@ -4,6 +4,8 @@ import { ThinkingDots } from './ChatView';
 import { StreamingBody } from './StreamingText';
 import { MicGlyph } from './icons';
 import { fmtTime, type MicState, type VoiceChatSession } from '../hooks/useVoiceChatSession';
+import { useUiStrings } from '../i18n';
+import type { ChatStrings, VoiceOrbStrings } from '../i18n/types';
 import '../styles/voicebar.css';
 
 /**
@@ -39,19 +41,26 @@ function orbState(micState: MicState, speaking: boolean): StarState {
   return 'idle';
 }
 
-/** Sichtbarer Hinweistext unter dem Orb — dieselben Worte wie die Compose-Bar. */
-function orbHint(session: VoiceChatSession): string {
+/**
+ * Sichtbarer Hinweistext unter dem Orb — dieselben Worte wie die Compose-Bar
+ * (Andi-Sweep 24.07, README-Screenshot-Befund: „Tippen zum Sprechen" war
+ * hartkodiert Deutsch, egal welche UI-Sprache aktiv war; jetzt aus dem
+ * Katalog — `chat.speaking`/`chat.transcribing`/`chat.thinking` sind BYTE-GLEICH
+ * mit den vorherigen Literalen, `orb.idleHint`/`orb.listening` sind neu).
+ */
+function orbHint(session: VoiceChatSession, chat: ChatStrings, orb: VoiceOrbStrings): string {
   const { micState, speaking, stepLabel, recSecs } = session;
-  if (speaking) return 'spricht…';
-  if (micState === 'listening') return `hört zu… ${fmtTime(recSecs)}`;
-  if (micState === 'transcribing') return stepLabel ?? 'verstehe…';
-  if (micState === 'responding') return stepLabel ?? 'denkt nach…';
-  return 'Tippen zum Sprechen';
+  if (speaking) return chat.speaking;
+  if (micState === 'listening') return orb.listening(fmtTime(recSecs));
+  if (micState === 'transcribing') return stepLabel ?? chat.transcribing;
+  if (micState === 'responding') return stepLabel ?? chat.thinking;
+  return orb.idleHint;
 }
 
 export function VoiceOrb({ session }: { session: VoiceChatSession }) {
   const { turns, busy, micState, speaking, micError, startRecording, stopAndSend, bargeIn, setLevelSink } =
     session;
+  const { chat, voiceOrb: orb } = useUiStrings();
 
   const orbRef = useRef<HTMLSpanElement>(null);
 
@@ -71,7 +80,7 @@ export function VoiceOrb({ session }: { session: VoiceChatSession }) {
   }, [setLevelSink]);
 
   const state = orbState(micState, speaking);
-  const hint = orbHint(session);
+  const hint = orbHint(session, chat, orb);
   // Deckt GENAU die Disabled-Logik von ChatViews Mikro-Knopf (`busy ||
   // micState === 'transcribing'`) plus dessen separaten WaveTap ab: läuft
   // gerade Audio (`speaking`, egal ob der Turn per Stimme oder Tipp-Text kam),
@@ -96,11 +105,11 @@ export function VoiceOrb({ session }: { session: VoiceChatSession }) {
   // Ein ehrliches Label pro echtem Zustand — dieselben Worte wie `hint`, nur
   // als vollständiger Satz fürs Screenreader-/Titel-Attribut.
   const tapLabel = speaking
-    ? 'Tippen bricht Hoshis Antwort ab'
+    ? orb.speakingTapLabel
     : micState === 'listening'
-      ? 'Nochmal tippen zum Senden — oder Esc zum Verwerfen'
+      ? orb.listeningTapLabel
       : micState === 'idle'
-        ? 'Tippen und sprechen'
+        ? orb.idleTapLabel
         : hint; // transcribing/denkt nach — gesperrt, der Hinweistext erklärt warum
 
   // Der letzte Turn (egal ob per Stimme oder getippt entstanden) — kein
@@ -113,7 +122,7 @@ export function VoiceOrb({ session }: { session: VoiceChatSession }) {
   const streamingAnswer = busy && showCard && !lastAssistant?.error;
 
   return (
-    <section className="voiceorb" aria-label="Sprich mit Hoshi">
+    <section className="voiceorb" aria-label={orb.sectionAria}>
       <button
         type="button"
         className="voiceorb__tap"

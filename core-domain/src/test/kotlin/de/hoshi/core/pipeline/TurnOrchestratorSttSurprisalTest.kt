@@ -86,7 +86,7 @@ class TurnOrchestratorSttSurprisalTest {
             promptAssembler = TurnPromptAssembler(
                 persona = persona,
                 entityMemory = { null },
-                grounding = { _, _ -> Mono.just("\n\nHINTERGRUND: 330 Meter.") },
+                grounding = GroundingPort.fixed("\n\nHINTERGRUND: 330 Meter."),
                 episodicMemory = null,
             ),
             persona = persona,

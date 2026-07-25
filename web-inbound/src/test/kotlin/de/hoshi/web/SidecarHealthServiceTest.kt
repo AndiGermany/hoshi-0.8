@@ -58,6 +58,8 @@ class SidecarHealthServiceTest {
         brainUrl = "http://localhost:8041",
         sttUrl = "http://localhost:9001",
         ttsUrl = "http://localhost:8042",
+        sayUrl = "http://localhost:8044",
+        piperUrl = "http://localhost:8045",
         bridgeUrl = "http://localhost:8035",
         speakerUrl = "http://localhost:9002",
         failureThreshold = threshold,
@@ -81,13 +83,13 @@ class SidecarHealthServiceTest {
         val status = svc.current() as OpsStatus
         assertEquals("OK", status.overall)
         assertTrue(status.sidecars.all { it.status == "OK" }, "alle Nähte OK")
-        assertEquals(5, status.sidecars.size, "alle 5 bekannten Sidecars im Report")
+        assertEquals(5, status.sidecars.size, "vier Basis-Sidecars plus gewählte say-TTS")
+        assertEquals("OK", status.sidecar("say-tts").status)
     }
 
     @Test
-    fun `optionale Sidecars (Voxtral, Speaker-ID) DOWN treiben overall NICHT (cry-wolf-Schutz)`() {
+    fun `optionaler Speaker-ID-Sidecar DOWN treibt overall NICHT (cry-wolf-Schutz)`() {
         val probe = ScriptedProbe().apply {
-            responses["voxtral-tts"] = SidecarHealth.down("connection refused (bewusst aus)")
             responses["speaker-id"] = SidecarHealth.down("connection refused (bewusst aus)")
         }
         val svc = service(probe)
@@ -95,8 +97,22 @@ class SidecarHealthServiceTest {
         svc.refresh() // 2. DOWN → roh
         val status = svc.current() as OpsStatus
         assertEquals("OK", status.overall, "off-by-design-Sidecars dürfen die RAM-Pille nicht rot färben")
-        assertEquals("DOWN", status.sidecar("voxtral-tts").status, "im Report bleibt der ehrliche DOWN-Status")
         assertEquals("DOWN", status.sidecar("speaker-id").status)
+        assertFalse(status.sidecars.any { it.name == "voxtral-tts" }, "nicht gewähltes Voxtral wird nicht als aktiver Pfad vorgetäuscht")
+    }
+
+    @Test
+    fun `gewaehlte lokale TTS DOWN treibt overall DOWN und allLocal bleibt false`() {
+        val probe = ScriptedProbe().apply {
+            responses["say-tts"] = SidecarHealth.down("connection refused")
+        }
+        val svc = service(probe, threshold = 1)
+        svc.refresh()
+
+        val status = svc.current() as OpsStatus
+        assertEquals("DOWN", status.overall, "die aktive Ausgabe ist Teil des kritischen Sprechpfads")
+        assertEquals("DOWN", status.sidecar("say-tts").status)
+        assertFalse(status.allLocal, "lokale Engine allein beweist keine erreichbare lokale Ausgabe")
     }
 
     @Test
@@ -275,6 +291,7 @@ class SidecarHealthServiceTest {
 
         val voice = (svc.current() as OpsStatus).voice
         assertEquals(VoiceStatus(engine = "piper", cloud = false), voice, "die gewählte lokale Engine gewinnt gegen den Cloud-Boot-Default")
+        assertTrue((svc.current() as OpsStatus).sidecars.any { it.name == "piper-tts" })
     }
 
     @Test
@@ -291,7 +308,7 @@ class SidecarHealthServiceTest {
         val ttsStore = JsonFileTtsEngineStore(dir.resolve("tts-engine.json")).apply { setEngineId("say") }
         val svc = service(ScriptedProbe(), ttsImpl = "openai", ttsEngineStore = ttsStore, threshold = 1)
         svc.refresh()
-        assertTrue((svc.current() as OpsStatus).allLocal, "STT+Brain OK und Engine 'say' ist lokal ⇒ Schloss")
+        assertTrue((svc.current() as OpsStatus).allLocal, "STT+Brain+gewählte say-TTS sind OK ⇒ Schloss")
     }
 
     @Test
@@ -307,7 +324,7 @@ class SidecarHealthServiceTest {
             setSelectedRepo("mlx-community/gemma-4-e4b-it-4bit")
         }
         val probe = ScriptedProbe().apply { measuredModels["brain"] = "mlx-community/gemma-4-e2b-it-4bit" }
-        val svc = service(probe, brainModelStore = store, threshold = 1) // ttsImpl leer ⇒ voxtral (lokal)
+        val svc = service(probe, brainModelStore = store, threshold = 1) // ttsImpl leer ⇒ say (lokal)
         svc.refresh()
         assertFalse((svc.current() as OpsStatus).allLocal, "Brain-Drift darf das Schloss NICHT grün lassen")
     }

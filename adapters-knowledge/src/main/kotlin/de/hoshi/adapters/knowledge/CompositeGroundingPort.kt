@@ -1,5 +1,6 @@
 package de.hoshi.adapters.knowledge
 
+import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.pipeline.GroundingPort
 import reactor.core.publisher.Mono
@@ -36,19 +37,31 @@ class CompositeGroundingPort(
      * Leer-Stub — ohne explizite dritte Scheibe (z.B. Decke `HOSHI_EXTENDED_THINK_ENABLED`
      * zu) ist die Kette byte-identisch zur alten Zwei-Scheiben-Strategie.
      */
-    private val nachgeschlagen: GroundingPort = GroundingPort { _, _ -> Mono.just("") },
+    private val nachgeschlagen: GroundingPort = GroundingPort.EMPTY,
 ) : GroundingPort {
 
-    override fun groundingBlock(query: String, category: RouteCategory): Mono<String> =
-        weather.groundingBlock(query, category)
+    /**
+     * EIN Körper für die EINE Port-Signatur (entdoppelt 2026-07-25: vorher trug
+     * diese Klasse zwei handkopierte Zwillinge, einen je Overload — der
+     * 2-Arg-Zwilling war toter Prod-Code, den nur Tests noch trafen). Reicht
+     * [language] 1:1 an ALLE drei Scheiben weiter (Wetter/Nachgeschlagen/Wiki) —
+     * jede Scheibe entscheidet selbst, ob sie die Sprache nutzt (aktuell nur
+     * [WeatherGroundingProvider]; die anderen ignorieren sie sichtbar).
+     */
+    override fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String> =
+        weather.groundingBlock(query, category, language)
             .defaultIfEmpty("")
             .flatMap { w ->
-                if (w.isNotBlank()) Mono.just(w) else nachgeschlagen.groundingBlock(query, category).defaultIfEmpty("")
+                if (w.isNotBlank()) {
+                    Mono.just(w)
+                } else {
+                    nachgeschlagen.groundingBlock(query, category, language).defaultIfEmpty("")
+                }
             }
             .flatMap { n ->
-                if (n.isNotBlank()) Mono.just(n) else wiki.groundingBlock(query, category)
+                if (n.isNotBlank()) Mono.just(n) else wiki.groundingBlock(query, category, language)
             }
             // Vordere Scheiben sollten selbst nie werfen (best-effort), aber doppelt
             // genäht: ein Fehler dort fällt sauber zur Wiki-Scheibe durch.
-            .onErrorResume { wiki.groundingBlock(query, category) }
+            .onErrorResume { wiki.groundingBlock(query, category, language) }
 }

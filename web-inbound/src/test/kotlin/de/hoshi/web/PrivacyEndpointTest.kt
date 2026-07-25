@@ -107,11 +107,16 @@ class PrivacyEndpointTest(
     fun `summary ohne Stores - ehrliches Format, entries null statt erfunden`() {
         getSummary().exchange()
             .expectStatus().isOk
-            // voice/sanitize: Boot-Config (kein HOSHI_TTS gesetzt ⇒ voxtral, lokal; Sanitize OFF).
+            // voice/sanitize: Boot-Config (kein HOSHI_TTS gesetzt ⇒ say, lokal;
+            // dieselbe Fresh-Clone-Wahrheit wie Renderer/up/Settings).
+            // Sanitize ON: seit 0.8.1 ist `HOSHI_TTS_SANITIZE_ENABLED` default true
+            // (Sicherheits-Default, s. [PipelineConfigTtsSanitizeTest]) — vorher stand hier
+            // false. Der Privacy-Rand meldet damit ohne gesetzte Env eine SCHARFE Regel,
+            // und das ist die Wahrheit: der Boot-Pfad umhüllt jede lokale Engine.
             .expectBody()
-            .jsonPath("$.voice.engine").isEqualTo("voxtral")
+            .jsonPath("$.voice.engine").isEqualTo("say")
             .jsonPath("$.voice.cloud").isEqualTo(false)
-            .jsonPath("$.sanitize.enabled").isEqualTo(false)
+            .jsonPath("$.sanitize.enabled").isEqualTo(true)
             // Stores: Datei fehlt ⇒ exists=false, entries=null (ehrlich „weiß nicht").
             .jsonPath("$.memory.enabled").isEqualTo(false)
             .jsonPath("$.memory.exists").isEqualTo(false)
@@ -295,6 +300,8 @@ class PrivacyEndpointTest(
             brainUrl = "http://localhost:8041",
             sttUrl = "http://localhost:9001",
             ttsUrl = "http://localhost:8042",
+            sayUrl = "http://localhost:8044",
+            piperUrl = "http://localhost:8045",
             bridgeUrl = "http://localhost:8035",
             speakerUrl = "http://localhost:9002",
             failureThreshold = 1,

@@ -391,13 +391,12 @@ def tts_response(payload: object) -> ApiResponse:
         return _json_api_response(500, {"detail": f"Piper-Synthese fehlgeschlagen: {type(exc).__name__}"})
     rtf = result.synthesis_ms / result.audio_ms if result.audio_ms else 0.0
     log.info(
-        "Piper-Synthese: voice=%s text_len=%d synth_ms=%d audio_ms=%d rtf=%.3f TEXT=%r",
+        "Piper-Synthese: voice=%s text_len=%d synth_ms=%d audio_ms=%d rtf=%.3f",
         voice_id,
         len(text),
         result.synthesis_ms,
         result.audio_ms,
         rtf,
-        text,
     )
     return ApiResponse(
         status=200,

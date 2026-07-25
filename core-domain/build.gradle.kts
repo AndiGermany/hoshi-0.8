@@ -27,6 +27,7 @@ dependencies {
     // StepVerifier für die reaktiven Policy-Tests (RoutingPolicy/TurnPromptAssembler).
     // Test-only — ArchUnit schließt Tests aus, der Spring-freie Kern bleibt unberührt.
     testImplementation("io.projectreactor:reactor-test:3.6.9")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 }
 
 tasks.test {

@@ -8,6 +8,7 @@ import de.hoshi.core.pipeline.lang.deOr
 import de.hoshi.core.port.EscalationPort
 import de.hoshi.core.port.EscalationResult
 import de.hoshi.core.port.EscalationSourceRef
+import de.hoshi.core.port.EscalationUnavailableReason
 import de.hoshi.kernel.EgressDecision
 import de.hoshi.kernel.EgressPort
 import de.hoshi.kernel.SanitizedPayload
@@ -15,9 +16,12 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.web.reactive.function.client.WebClient
+import org.springframework.web.reactive.function.client.WebClientRequestException
+import org.springframework.web.reactive.function.client.WebClientResponseException
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import java.time.Duration
+import java.util.concurrent.TimeoutException
 
 /**
  * **OpenAiEscalationAdapter** — die Cloud-Implementierung des [EscalationPort]
@@ -62,9 +66,11 @@ import java.time.Duration
  * **Key:** [apiKey] kommt vom Aufrufer aus der Env (`OPENAI_API_KEY`, exakt der
  * [de.hoshi.adapters.tts.OpenAiTtsAdapter]-Mechanismus) und wird ausschließlich
  * als `Authorization: Bearer …`-Header verwendet. Kein Key ⇒ best-effort
- * [EscalationResult.Unavailable] + WARN, der Turn läuft weiter. Der Key-Wert
- * wird NIE geloggt; ebenso wird NIE Frage-/Antwort-Klartext geloggt (nur
- * Längen, Kategorien, Kosten).
+ * [EscalationResult.Unavailable] mit klartextfreier Ursache, der Turn läuft
+ * weiter. Die finale WARN-Zeile schreibt bewusst erst der Orchestrationsrand:
+ * dort ist sicher, dass der Nutzer wirklich die Unavailable-Phrase erhaelt,
+ * und Adapter-/Orchestrator-Timeouts erzeugen keine Doppelmeldung. Der Key-Wert
+ * wird NIE geloggt; ebenso wird NIE Frage-/Antwort-Klartext geloggt.
  *
  * **Verbatim-Vertrag:** [EscalationResult.Answer.text] ist die (rekonstruierte)
  * Modell-Antwort ohne die `Quelle:`-Zeile — der Aufrufer spricht sie VERBATIM
@@ -108,11 +114,12 @@ class OpenAiEscalationAdapter(
         .build()
 
     override fun lookup(query: String, groundingSnippets: String, language: Language): Mono<EscalationResult> {
-        if (query.isBlank()) return Mono.just(EscalationResult.Unavailable)
+        if (query.isBlank()) {
+            return Mono.just(EscalationResult.Unavailable(EscalationUnavailableReason.EMPTY_QUERY))
+        }
         val key = apiKey?.trim()
         if (key.isNullOrBlank()) {
-            log.warn("[escalation] kein OPENAI_API_KEY — best-effort Unavailable (Turn läuft lokal weiter)")
-            return Mono.just(EscalationResult.Unavailable)
+            return Mono.just(EscalationResult.Unavailable(EscalationUnavailableReason.MISSING_KEY))
         }
         val spent = spendStore.spentTodayCents()
         if (spent >= dailyCapCents) {
@@ -184,10 +191,9 @@ class OpenAiEscalationAdapter(
             // Buchung + Parse machen Datei-I/O — weg vom Netty-Event-Loop (P0-Lehre).
             .publishOn(Schedulers.boundedElastic())
             .map { raw -> settleAndParse(raw, sanitized.redactions) }
-            // Best-Effort: jeder Fehler (401, Netz, Timeout) ⇒ Unavailable, NIE Crash.
-            // Kein Klartext, kein Key in der Log-Zeile (nur e.message = Status/Ursache).
-            .doOnError { e -> log.warn("[escalation] /v1/chat/completions fehlgeschlagen (best-effort): {}", e.message) }
-            .onErrorReturn(EscalationResult.Unavailable)
+            // Best-Effort: jeder Fehler (401, Netz, Timeout) wird typisiert, NIE
+            // geworfen. Die EINE finale WARN-Zeile lebt am Orchestrationsrand.
+            .onErrorResume { error -> Mono.just(unavailable(error)) }
     }
 
     /**
@@ -264,13 +270,11 @@ class OpenAiEscalationAdapter(
         )
 
         if (root == null) {
-            log.warn("[escalation] Response-Body kein JSON — Unavailable (Kosten sind gebucht)")
-            return EscalationResult.Unavailable
+            return EscalationResult.Unavailable(EscalationUnavailableReason.PARSE)
         }
         val content = root.path("choices").path(0).path("message").path("content").asText("").trim()
         if (content.isEmpty()) {
-            log.warn("[escalation] leere Antwort vom Modell — Unavailable")
-            return EscalationResult.Unavailable
+            return EscalationResult.Unavailable(EscalationUnavailableReason.EMPTY_RESPONSE)
         }
         if (content.uppercase().startsWith(UNCLEAR_MARKER)) {
             return EscalationResult.Unclear
@@ -280,8 +284,7 @@ class OpenAiEscalationAdapter(
         val reconstructed = egress.reconstruct(content, redactions)
         val (answerText, source) = splitSource(reconstructed)
         if (answerText.isBlank()) {
-            log.warn("[escalation] Antwort bestand nur aus einer Quellen-Zeile — Unavailable")
-            return EscalationResult.Unavailable
+            return EscalationResult.Unavailable(EscalationUnavailableReason.EMPTY_RESPONSE)
         }
         return EscalationResult.Answer(text = answerText, source = source, costCents = cost)
     }
@@ -327,8 +330,7 @@ class OpenAiEscalationAdapter(
 
         val output = extractResponsesOutput(root)
         if (output.text.isEmpty()) {
-            log.warn("[escalation] leere Responses-Antwort (web_search) — Unavailable (Kosten sind gebucht)")
-            return EscalationResult.Unavailable
+            return EscalationResult.Unavailable(EscalationUnavailableReason.EMPTY_RESPONSE)
         }
         if (output.text.uppercase().startsWith(UNCLEAR_MARKER)) {
             return EscalationResult.Unclear
@@ -338,8 +340,7 @@ class OpenAiEscalationAdapter(
         val reconstructed = egress.reconstruct(output.text, redactions)
         val (answerText, modelSource) = splitSource(reconstructed)
         if (answerText.isBlank()) {
-            log.warn("[escalation] Antwort bestand nur aus einer Quellen-Zeile — Unavailable")
-            return EscalationResult.Unavailable
+            return EscalationResult.Unavailable(EscalationUnavailableReason.EMPTY_RESPONSE)
         }
         // Echte Quellen VOR der Modell-Selbstauskunft: url_citation-Annotations sind
         // belegbar, eine selbstgeschriebene `Quelle:`-Zeile ist es nicht (Auftrags-
@@ -358,6 +359,28 @@ class OpenAiEscalationAdapter(
 
     /** Rückgabe von [extractResponsesOutput]: sichtbarer Text + strukturierte Quellen. */
     private data class ResponsesOutput(val text: String, val sourceRefs: List<EscalationSourceRef>)
+
+    /**
+     * Reduziert technische Fehler auf einen klartextfreien, stabilen Vertrag.
+     * Keine Exception-Message verlaesst den Adapter: sie kann URLs oder andere
+     * Transportdetails enthalten und ist fuer die eine Betriebszeile unnoetig.
+     */
+    private fun unavailable(error: Throwable): EscalationResult.Unavailable = when (error) {
+        is WebClientResponseException -> EscalationResult.Unavailable(
+            EscalationUnavailableReason.HTTP_STATUS,
+            httpStatus = error.statusCode.value(),
+        )
+        is TimeoutException -> EscalationResult.Unavailable(EscalationUnavailableReason.TIMEOUT)
+        is WebClientRequestException -> {
+            val timedOut = generateSequence<Throwable>(error) { it.cause }
+                .any { it is TimeoutException || it.javaClass.simpleName.contains("Timeout", ignoreCase = true) }
+            EscalationResult.Unavailable(
+                if (timedOut) EscalationUnavailableReason.TIMEOUT else EscalationUnavailableReason.NETWORK,
+            )
+        }
+        is IllegalStateException -> EscalationResult.Unavailable(EscalationUnavailableReason.PARSE)
+        else -> EscalationResult.Unavailable(EscalationUnavailableReason.PORT_ERROR)
+    }
 
     /**
      * Extrahiert den sichtbaren Antwort-Text UND die echten Quellen (`url_citation`-

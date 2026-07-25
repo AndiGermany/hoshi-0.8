@@ -16,11 +16,11 @@ class EscalationPortTest {
     @Test
     fun `NONE liefert immer Unavailable — nie eine Antwort, nie ein Fehler`() {
         StepVerifier.create(EscalationPort.NONE.lookup("Wie hoch ist der Eiffelturm?", "", Language.DE))
-            .expectNext(EscalationResult.Unavailable)
+            .expectNext(EscalationResult.Unavailable(EscalationUnavailableReason.DISABLED))
             .verifyComplete()
 
         StepVerifier.create(EscalationPort.NONE.lookup("", "snippet", Language.EN))
-            .expectNext(EscalationResult.Unavailable)
+            .expectNext(EscalationResult.Unavailable(EscalationUnavailableReason.DISABLED))
             .verifyComplete()
     }
 
@@ -30,7 +30,7 @@ class EscalationPortTest {
             EscalationResult.Answer(text = "330 Meter.", source = "Wikipedia", costCents = 0.05),
             EscalationResult.Unclear,
             EscalationResult.Declined(auditReason = "Memory-Referenz/-Fakt — bleibt strikt lokal"),
-            EscalationResult.Unavailable,
+            EscalationResult.Unavailable(),
             EscalationResult.CapExhausted,
         )
         val labels = results.map { r ->
@@ -38,7 +38,7 @@ class EscalationPortTest {
                 is EscalationResult.Answer -> "answer"
                 EscalationResult.Unclear -> "unclear"
                 is EscalationResult.Declined -> "declined"
-                EscalationResult.Unavailable -> "unavailable"
+                is EscalationResult.Unavailable -> "unavailable"
                 EscalationResult.CapExhausted -> "cap_exhausted"
             }
         }

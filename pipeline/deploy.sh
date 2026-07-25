@@ -364,15 +364,142 @@ remote_health_poll() {
 # mehr in die Unit gerendert — sie landen in der separaten root-only
 # EnvironmentFile (siehe write_remote_secrets_env). Die Unit selbst bleibt frei
 # von Klartext-Secrets, `systemctl cat` zeigt nur noch den Datei-Pfad.
+# Die TTS-Engine wird bevorzugt aus $TTS_ENGINE genommen (remote_deploy löst sie in
+# Schritt 3 auf, damit ein Tippfehler VOR scp/restart auffliegt). Fehlt sie — z.B.
+# beim direkten Funktionsaufruf aus pipeline/test-render-unit.sh — löst render_unit
+# sie selbst auf; ein unbekannter Wert bricht auch hier ab (kein stiller Render).
 render_unit() {
     local out="$1"
+    local tts_engine="${TTS_ENGINE:-}"
+    if [ -z "$tts_engine" ]; then
+        tts_engine="$(resolve_tts_engine)" || return 1
+    fi
     sed -e "s|__REMOTE_DIR__|$REMOTE_DIR|g" \
         -e "s|__REMOTE_PORT__|$REMOTE_PORT|g" \
         -e "s|__MAC_IP__|$MAC_IP|g" \
         -e "s|__SSL_ENABLED__|$SSL_ENABLED_VAL|g" \
         -e "s|__SSL_KEYSTORE_PW__|$SSL_KEYSTORE_PW|g" \
         -e "s|__BRAIN_EXPECTED__|$(resolve_brain_expected)|g" \
-        "$UNIT_TEMPLATE" > "$out"
+        -e "s|__TTS_ENGINE__|$tts_engine|g" \
+        "$UNIT_TEMPLATE" > "$out" || { fail "sed-Rendering fehlgeschlagen (${UNIT_TEMPLATE#$REPO_ROOT/} → $out)"; return 1; }
+    # Riegel direkt nach dem Rendern: eine Unit mit literalem __…__ verlässt diese
+    # Funktion NIE. Die halbfertige Datei wird gelöscht (sie enthält das Keystore-PW).
+    assert_no_placeholders "$out" || { rm -f "$out"; return 1; }
+    return 0
+}
+
+# 🎙️ Bekannte TTS-Engine-IDs — BEWUSSTE, dokumentierte Duplizierung.
+# KANONISCHE QUELLE ist Kotlin:
+#   web-inbound/src/main/kotlin/de/hoshi/web/TtsEngineFactory.kt → object TtsEngineIds.ALL
+# Bash kann Kotlin nicht lesen; statt die Liste still driften zu lassen, steht sie
+# hier EXPLIZIT mit Verweis. Wer dort eine Engine ergänzt/entfernt, MUSS es hier
+# nachziehen — pipeline/test-render-unit.sh prüft die Semantik dieser Liste.
+# Stand 2026-07-25: TtsEngineIds.ALL = listOf(OPENAI, SAY, PIPER, VOXTRAL).
+TTS_ENGINE_IDS=(openai say piper voxtral)
+
+# 🎙️ TTS-Engine (First-Run-Wahrheit, 0.8.1): secrets.json["tts"] ODER "say".
+# `say` ist auf der ohnehin vorausgesetzten macOS-Plattform lokal, key-/modellfrei
+# und wird von `bin/hoshi up` gestartet. Piper bleibt bewusst optional: Bootstrap,
+# Modell-Download und GPL-Opt-in sind keine stillen Fresh-Clone-Defaults.
+# Andis Prod-openai ist OPT-IN: secrets.json["tts"]="openai". Defaultet die Funktion
+# (kein Eintrag), WARNT sie sichtbar auf stderr, damit ein Deploy nie unbemerkt die
+# zuvor gewählte Engine wechselt.
+#
+# VALIDIERUNG (Härtung 2026-07-25 — vorher wurde JEDER Wert wörtlich in die Unit
+# gerendert). WARUM HARTER ABBRUCH statt Fallback bei einem unbekannten Wert:
+#   • Kotlin bricht bei einem unbekannten NICHT-leeren Wert ebenfalls ab
+#     (`TtsEngineIds.canonicalOf`). Shell und Backend folgen damit derselben Regel:
+#     nur LEER bedeutet Fresh-Clone-Default, ein Tippfehler nie.
+#   • Ein Shell-seitiger Fallback auf `say` würde eine bewusste OpenAI-/Piper-Wahl
+#     bei einem Tippfehler STILL ersetzen — „still falsch" ist verboten.
+#   • Die Kosten des Abbruchs sind ~0: der Deploy scheitert VOR jedem scp/restart
+#     (Auflösung passiert in remote_deploy Schritt 3), der laufende Dienst bleibt
+#     unangetastet, Fix = ein Wort in secrets.json + erneuter Aufruf.
+#   • Präzedenzfall im selben Skript: der fail-closed HTTPS-Keystore-Check (exit 3).
+# Rand-Whitespace/Groß-Klein werden wie in `TtsEngineIds.canonicalOf` normalisiert
+# und die kanonische Kleinschreibung gerendert — damit sehen beide Seiten
+# garantiert exakt dieselbe Engine.
+resolve_tts_engine() {
+    local raw eng known
+    if ! raw="$(python3 -c 'import json,sys,os
+path=os.path.expanduser(sys.argv[1])
+if not os.path.exists(path):
+    print("")
+    raise SystemExit(0)
+try:
+    doc=json.load(open(path))
+except Exception:
+    print("secrets.json ist kein gueltiges JSON", file=sys.stderr)
+    raise SystemExit(2)
+if not isinstance(doc, dict):
+    print("secrets.json muss ein JSON-Objekt sein", file=sys.stderr)
+    raise SystemExit(2)
+v=doc.get("tts")
+if v is None or v == "":
+    print("")
+elif not isinstance(v, str):
+    print("secrets.json[\"tts\"] muss ein String sein", file=sys.stderr)
+    raise SystemExit(3)
+else:
+    print(v)' "$SECRETS")"; then
+        fail "TTS-Konfiguration unbrauchbar — erwartet: {\"tts\":\"openai|say|piper|voxtral\"}"
+        fail "ABBRUCH vor scp/Swap/Restart; secrets.json korrigieren und erneut aufrufen."
+        return 1
+    fi
+    if [ -z "$raw" ]; then
+        echo "⚠️  TTS-Engine nicht in secrets.json[\"tts\"] gesetzt → lokal-first Default 'say' (Cloud-TTS: \"tts\":\"openai\", Piper: explizites Opt-in)." >&2
+        printf 'say'
+        return 0
+    fi
+    # Nur RAND-Whitespace normalisieren. Innerer Whitespace und alle sed-relevanten
+    # Sonderzeichen bleiben sichtbar und scheitern an der Allowlist; dadurch kann
+    # `__TTS_ENGINE__` ausschließlich eines von vier sicheren ASCII-Literalen sein.
+    eng="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [ -z "$eng" ]; then
+        echo "⚠️  TTS-Engine besteht nur aus Rand-Whitespace → lokal-first Default 'say' (wie Kotlin)." >&2
+        printf 'say'
+        return 0
+    fi
+    for known in "${TTS_ENGINE_IDS[@]}"; do
+        if [ "$eng" = "$known" ]; then
+            if [ "$raw" != "$eng" ]; then
+                echo "⚠️  TTS-Engine '$raw' normalisiert → '$eng' (Rand-Whitespace/Groß-Klein; wie Kotlin)." >&2
+            fi
+            printf '%s' "$eng"
+            return 0
+        fi
+    done
+    fail "UNBEKANNTE TTS-Engine in secrets.json[\"tts\"]: '$raw'"
+    fail "  Bekannt (Quelle: TtsEngineIds.ALL in web-inbound/.../TtsEngineFactory.kt): ${TTS_ENGINE_IDS[*]}"
+    fail "  ABBRUCH statt stiller Ersatz-Engine; Wert korrigieren und erneut deployen."
+    return 1
+}
+
+# ── 🔎 Platzhalter-Riegel — KEIN ungefülltes __PLACEHOLDER__ darf nach Prod ────
+# Bliebe ein Platzhalter stehen (vergessene sed-Regel in render_unit, Tippfehler im
+# Template), schriebe systemd den ROHTEXT in die Environment-Variable — das fällt
+# erst im Betrieb auf (falsche Engine/Port/URL, im schlimmsten Fall stumm oder
+# unerreichbar). Der Riegel bricht stattdessen sofort ab.
+#   • WIRKSAME Zeilen (kein '#', nicht leer) ⇒ FEHLER, Deploy-Abbruch.
+#   • KOMMENTAR-Zeilen ⇒ nur WARNUNG: zur Laufzeit harmlos, aber ein Doku-Drift-Hinweis
+#     (das Template erklärt einen Platzhalter, den niemand mehr füllt).
+# Gemeldet werden nur die Platzhalter-NAMEN, nie der Zeileninhalt — die gerenderte
+# Unit enthält das Keystore-Passwort.
+assert_no_placeholders() {
+    local file="$1"
+    local effective_hits comment_hits
+    effective_hits="$(grep -vE '^[[:space:]]*(#|$)' "$file" 2>/dev/null | grep -oE '__[A-Z0-9_]+__' | sort -u | tr '\n' ' ')"
+    comment_hits="$(grep -E '^[[:space:]]*#' "$file" 2>/dev/null | grep -oE '__[A-Z0-9_]+__' | sort -u | tr '\n' ' ')"
+    if [ -n "${comment_hits// /}" ]; then
+        warn "Platzhalter-Riegel: ungefüllte Platzhalter in KOMMENTAR-Zeilen: ${comment_hits}(harmlos zur Laufzeit, aber Doku-Drift im Template)"
+    fi
+    if [ -n "${effective_hits// /}" ]; then
+        fail "Platzhalter-Riegel: gerenderte Unit enthält UNGEFÜLLTE Platzhalter: ${effective_hits}"
+        fail "  → entweder fehlt eine sed-Regel in render_unit() oder ${UNIT_TEMPLATE#$REPO_ROOT/} hat einen Tippfehler."
+        fail "  → ABBRUCH: systemd würde den Rohtext '__…__' als Wert durchreichen — der Fehler fiele erst im Betrieb auf."
+        return 1
+    fi
+    return 0
 }
 
 # BOOT-Default-Soll der Ops-Pille aus DERSELBEN Wahl wie der Brain-Start (Zwilling
@@ -621,6 +748,11 @@ remote_deploy() {
     else warn "Wetter-Ort: nicht in secrets.json[weather] → Backend fällt auf Berlin-Default zurück"; fi
     if [ "$MAC_IP" != "127.0.0.1" ]; then ok "Mac-IP (Brain :8041): $MAC_IP"
     else warn "Mac-IP nicht gefunden → Unit bekommt Platzhalter (DHCP-Drift, vgl. /etc/hoshi.env HOSHI_OMNI_URL)"; MAC_IP="REPLACE_WITH_MAC_IP"; fi
+    # TTS-Engine HIER auflösen (nicht erst beim Unit-Render in Schritt 6): ein
+    # unbekannter Wert in secrets.json["tts"] bricht damit ab, BEVOR die Jar per scp
+    # getauscht wird — der laufende Dienst bleibt unangetastet (s. resolve_tts_engine).
+    TTS_ENGINE="$(resolve_tts_engine)" || return 1
+    ok "TTS-Engine: $TTS_ENGINE (gegen TtsEngineIds.ALL validiert)"
 
     # (4) Remote-Verzeichnis sicherstellen + scp .new (atomic-rename-Pattern).
     say "scp → $REMOTE_HOST:$REMOTE_JAR.new"
@@ -664,7 +796,7 @@ remote_deploy() {
     say "systemd-Unit rendern + installieren (Template = Source of Truth): /etc/systemd/system/$REMOTE_UNIT.service"
     local rendered="$PIPELINE_LOG_DIR/$REMOTE_UNIT.service.rendered"
     ensure_log_dir
-    render_unit "$rendered" || { fail "Unit-Rendering (sed) fehlgeschlagen"; return 1; }
+    render_unit "$rendered" || { fail "Unit-Rendering fehlgeschlagen (TTS-Engine oder Platzhalter-Riegel — Grund s.o.)"; return 1; }
     chmod 600 "$rendered"
     if ! scp "${SSH_OPTS[@]}" -q "$rendered" "$REMOTE_HOST:/etc/systemd/system/$REMOTE_UNIT.service.new"; then
         rm -f "$rendered"; fail "scp der Unit fehlgeschlagen (Rechte? root nötig)"; return 1
@@ -926,6 +1058,16 @@ PY
     fail "DEPLOY ROT — $fails Verify-Check(s) fehlgeschlagen (Service läuft evtl. trotzdem)."
     return 1
 }
+
+# ── 🧪 Test-Hook: Funktionen sourcen OHNE zu deployen ────────────────────────
+# pipeline/test-render-unit.sh braucht render_unit/resolve_tts_engine/
+# assert_no_placeholders als Funktionen — ein nacktes `source deploy.sh` würde
+# aber unten in den Argument-Dispatch laufen und einen ECHTEN Deploy starten.
+# HOSHI_DEPLOY_SOURCE_ONLY=1 steigt genau davor aus. Ohne die Variable (jeder
+# normale Aufruf) ist das Verhalten byte-identisch zu vorher.
+if [ "${HOSHI_DEPLOY_SOURCE_ONLY:-}" = "1" ]; then
+    return 0 2>/dev/null || exit 0
+fi
 
 # ── Argument-Dispatch ─────────────────────────────────────────────────────────
 # --https (beliebige Position) = HOSHI_HTTPS_ENABLED=true als CLI-Flag. Nötig, weil

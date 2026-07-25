@@ -87,7 +87,7 @@ class TurnOrchestratorAnaphoraTest {
     private fun assembler(persona: PersonaService) = TurnPromptAssembler(
         persona = persona,
         entityMemory = { null },
-        grounding = { _, _ -> Mono.just("") },
+        grounding = GroundingPort.EMPTY,
         episodicMemory = null,
     )
 
