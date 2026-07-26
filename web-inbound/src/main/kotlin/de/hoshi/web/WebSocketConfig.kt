@@ -122,6 +122,11 @@ class WebSocketConfig {
         // (ChatStreamController): eine Messlatte, kein zweiter driftender Schwellwert.
         @Value("\${HOSHI_SPEAKER_TRUST_ENFORCED:false}") speakerTrustEnforced: Boolean,
         @Value("\${hoshi.speaker.recognition.threshold:0.80}") speakerTrustThreshold: Double,
+        // Auto-Switch-Anker Voice-Seite (Andi-Auftrag „12B für Chat, e4b für Voice",
+        // 2026-07-26) — IMMER als Bean vorhanden (BrainRuntimeConfig.brainAutoSwitchPort),
+        // scharf wird sie erst über das `brainAutoSwitch`-Setting (JsonFileBrainAutoSwitchStore,
+        // Default AUS ⇒ der Port tut nichts, byte-neutral ohne diese Zeile hier anzufassen).
+        brainAutoSwitchPort: BrainAutoSwitchPort,
     ): AudioWebSocketHandler =
         AudioWebSocketHandler(
             stt = stt,
@@ -160,6 +165,10 @@ class WebSocketConfig {
             // die Retry-Wiederholung des Ring-Downlinks. Bei HOSHI_TIMER_RING_DOWNLINK_ENABLED
             // =false ist [TimerRingDownlinkService.onAck] ein reines No-op (byte-neutral).
             onTimerAck = { id -> timerRingDownlinkService.onAck(id) },
+            // Auto-Switch-Anker Voice-Seite: jeder `start`-Frame stösst den (asynchronen,
+            // nie blockierenden) Wechsel aufs Voice-Modell an. `brainAutoSwitch`-Setting AUS
+            // (Default) ⇒ der Port tut nichts ⇒ byte-neutral.
+            onVoiceSessionStart = { brainAutoSwitchPort.onVoiceSessionStart() },
             // S-B: Persona-Fallback-Kette am ws-Rand — explizites Frame-Feld (parsed im Handler)
             // > Server-Store (Andis Wahl) > STANDARD, flag-gegatet im Resolver (HOSHI_PERSONA_ENABLED
             // OFF ⇒ STANDARD). Leerer Store + kein Feld ⇒ STANDARD wie heute (byte-neutral).

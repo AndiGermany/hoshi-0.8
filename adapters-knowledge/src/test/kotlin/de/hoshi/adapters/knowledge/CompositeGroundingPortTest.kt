@@ -239,4 +239,21 @@ class CompositeGroundingPortTest {
                 "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“."
             assertEquals(expected, block, "DE bleibt durch den Composite byte-identisch")
         }
+
+    @Test
+    fun `Prod-Kette verwechselt Sonnensystem nicht mit Wetter und faellt exakt zur Wiki durch`() =
+        withOpenMeteo { url ->
+            val wiki = FakePort("WIKI-BLOCK")
+
+            val block = prodChain(url, wiki)
+                .groundingBlock(
+                    "Wie viele Planeten gibt es in unserem Sonnensystem?",
+                    cat,
+                    Language.DE,
+                )
+                .block(Duration.ofSeconds(5))
+
+            assertEquals("WIKI-BLOCK", block)
+            assertTrue(wiki.called, "die lokale Wiki muss nach dem Wetter-Gate erreichbar bleiben")
+        }
 }

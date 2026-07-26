@@ -40,10 +40,12 @@ export const en: UiStrings = {
       noteEmpty: 'Honestly empty — nothing made up.',
       noteWithData: 'Real numbers from your history today.',
     },
-    geplant: {
-      name: 'Planned',
-      nichtsGeplant: 'Nothing planned',
-      note: 'Real active timers, alarms and reminders.',
+    laeuft: {
+      name: 'Running',
+    },
+    einkauf: {
+      name: 'Shopping',
+      more: (count) => `+${count} more`,
     },
     wetter: {
       name: 'Weather',
@@ -51,8 +53,8 @@ export const en: UiStrings = {
       liveNote: (place) => `Real readings from Open-Meteo for ${place}.`,
       offNote: 'Coming — honestly empty instead of made up. Weather is switched off for this deploy.',
       unreachableNote: "Weather isn't readable right now — nothing made up here.",
-      settingsAria: 'Open weather settings (Location & integrations)',
-      settingsTitle: 'Set weather location',
+      precipSome: (mm) => `${mm} mm rain today`,
+      precipNone: 'dry',
     },
     status: {
       online: 'online',
@@ -88,6 +90,37 @@ export const en: UiStrings = {
     failed: 'Switch failed — please try again.',
     priceSuffix: (cents: number) => `approx. ${cents.toFixed(2)} ct/lookup`,
     loading: 'loading…',
+  },
+
+  extendedThink: {
+    label: "When Hoshi doesn't know something",
+    hint: "Decides what happens when Hoshi's own knowledge isn't enough for a question — applies only to the quick online lookup (Extended Think).",
+    loadError: "Escalation stage isn't readable right now.",
+    switching: 'switching…',
+    unknown: 'Unknown stage.',
+    locked: 'Disabled for this deploy — the choice only takes effect once Extended Think is active.',
+    failed: 'Switch failed — please try again.',
+    recommendedBadge: 'Recommended',
+    loading: 'loading…',
+    modes: {
+      AUS: {
+        title: 'Off',
+        description: 'Honestly declines — Hoshi never goes online for this.',
+      },
+      OFFLINE: {
+        title: 'Offline',
+        description:
+          "Answers from its own knowledge and says honestly that it's unverified — Hoshi never goes online for this.",
+      },
+      ERST_FRAGEN: {
+        title: 'Ask first',
+        description: 'Asks you first, before Hoshi looks it up online.',
+      },
+      AUTOMATISCH: {
+        title: 'Automatic',
+        description: "Looks it up online by itself whenever Hoshi doesn't know something.",
+      },
+    },
   },
 
   ttsEngine: {
@@ -144,6 +177,14 @@ export const en: UiStrings = {
     loading: 'loading…',
     statusReading: '(reading status…)',
     statusPrefix: 'Status: ',
+    autoSwitchNote: 'Automatic model selection is on — your choice here now only sets the CHAT model (typing); speaking keeps the fast model active automatically.',
+  },
+
+  brainAutoSwitch: {
+    label: 'Automatic model selection',
+    hint: 'When typing, the thorough model answers; when speaking, the fast one does.',
+    loadError: "Auto-switch status isn't readable right now.",
+    failed: 'Switch failed — please try again.',
   },
 
   privacy: {
@@ -280,7 +321,7 @@ export const en: UiStrings = {
       REMINDER: 'Reminder',
     },
     ackTitle: 'Tap to confirm',
-    gearAria: 'Open alarm escalation settings (Skills)',
+    gearAria: 'Open alarm escalation settings (Home & integrations)',
     gearTitle: 'Change escalation',
     missed: (noun, label, time) =>
       `${label ? `${noun} "${label}"` : noun} was due at ${time} — I could not reach you`,
@@ -299,6 +340,7 @@ export const en: UiStrings = {
     privacy: 'Privacy by design: the diary deliberately contains no conversation content — only time, category, persona and measurements. That is why no turn text appears here. Each line can be expanded to show the stage breakdown (stt → grounding → brain → tts, remainder = other).',
     healthTitle: 'Health history', healthHint: 'Each line is a real observation of connection status. State changes are recorded, newest first.',
     noObservation: 'No observation yet — the first health response is still pending. (No invented history.)', backendState: (state) => `Backend ${state}`,
+    diagnoseTitle: 'Diagnostics', diagnoseHint: 'Technical status for nerds — moved here from the overview so the home screen belongs to the home.',
   },
   rooms: {
     sketchRoom: 'Room', sketchAria: 'Sketch: Hoshi in the centre, empty room placeholders around it', pickerAria: (name) => `Choose a room for ${name}`,
@@ -315,11 +357,9 @@ export const en: UiStrings = {
   },
   overview: {
     heroUpTitle: 'Hoshi is online', heroUpSub: 'Connection is up.', heroDownTitle: 'Hoshi is offline', heroDownSub: 'Connection is currently down.', heroUnknownTitle: 'Checking status …', heroUnknownSub: 'the first health response is still pending.',
-    sidecarHealthNote: 'Supervisor/sidecar status is not exposed through the API yet. It will appear once the backend provides it.', voiceStatsNote: 'Voice/TTS telemetry (latency, speakers) is not connected yet. Coming later.', devicesNote: 'Device/satellite registry is not wired up yet. It will appear once the route is ready.',
-    backend: 'Backend', sidecarHealth: 'Sidecar health', voiceStats: 'Voice stats', devices: 'Devices', live: 'live', notWired: 'not wired', backendNote: 'Address this interface connects to.', chatTurn: 'Chat turn', liveStreaming: 'Live streaming', chatTurnNote: 'A real answer in real time, not a mock.',
+    backend: 'Backend', live: 'live', backendNote: 'Address this interface connects to.', chatTurn: 'Chat turn', liveStreaming: 'Live streaming', chatTurnNote: 'A real answer in real time, not a mock.',
     authToken: 'Auth token', set: 'set', missing: 'missing', authSetNote: 'Your device is signed in — protected areas are unlocked.', authMissingNote: 'Not signed in — protected areas stay locked.',
-    title: 'Overview', lede: 'Status first: an honest look at your home. What is running comes LIVE from real sources — what is still missing is clearly marked as “not wired”, never coloured green.',
-    lastChecked: (time) => `last checked ${time}`, liveWired: 'Live and wired', notWiredTitle: 'Not wired yet', notWiredHint: 'These cards deliberately show no state — the 0.8 backend does not expose the data yet. No invented green.',
+    lastChecked: (time) => `last checked ${time}`,
   },
   chat: {
     suggestions: ['Turn off the living-room light', 'What will the weather be like tomorrow?', 'How warm is the living room?'], waveTap: 'Tap to stop Hoshi',
@@ -352,11 +392,11 @@ export const en: UiStrings = {
     categories: {
       darstellung: 'Appearance',
       'sprache-stimme': 'Language & voice',
-      persoenlichkeit: 'Personality',
+      'online-nachschlagen': 'Online & lookup',
       'modell-leistung': 'Model & performance',
-      faehigkeiten: 'Skills',
+      persoenlichkeit: 'Personality',
       'gedaechtnis-privatsphaere': 'Memory & privacy',
-      'standort-integrationen': 'Location & integrations',
+      'zuhause-integrationen': 'Home & integrations',
     },
     categoryNavAria: 'Settings categories',
     themeLabel: 'Colour theme',
@@ -378,6 +418,10 @@ export const en: UiStrings = {
         label: 'Yoake',
         hint: 'Daybreak between indigo and coral (夜明け)',
       },
+      amayadori: {
+        label: 'Amayadori',
+        hint: "Outside it keeps falling; in here it's dry, and someone left the light on. (雨宿り)",
+      },
       sora: {
         label: 'Sora',
         hint: "Nagareboshi → Asa → Aoi → Kasumi → Yoru, by this device's clock",
@@ -394,7 +438,7 @@ export const en: UiStrings = {
       },
       stimmung: {
         title: 'Your own mood',
-        note: 'Pictures rather than times of day — these two deliberately ignore the clock.',
+        note: 'Pictures rather than times of day — these three deliberately ignore the clock.',
       },
     },
     themeGlosses: {
@@ -405,6 +449,7 @@ export const en: UiStrings = {
       kasumi: 'haze',
       nagareboshi: 'shooting star',
       yoake: 'daybreak',
+      amayadori: 'sheltering from the rain',
       sora: 'sky',
     },
     themeGlossSuffix: (gloss) => ` · ${gloss}`,
@@ -520,6 +565,7 @@ export const en: UiStrings = {
     toneCritical: 'Ops · critical',
     ramCritical: 'RAM critical',
     ramWarn: 'RAM pressure',
+    memoryCriticalHint: 'Memory is tight — voice replies may feel sluggish right now.',
     title: (overall, level) => `Ops: overall ${overall} · RAM ${level}`,
     titleDetail: (detail) => ` — ${detail}`,
     voiceCloud: 'Voice is currently coming from the cloud (OpenAI)',

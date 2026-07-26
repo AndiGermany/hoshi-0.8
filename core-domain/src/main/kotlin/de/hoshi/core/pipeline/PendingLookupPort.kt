@@ -31,12 +31,21 @@ import java.util.concurrent.ConcurrentHashMap
  * Die Trennung ist strukturell, nicht nur dokumentiert: jeder Einlöse-Pfad prüft
  * das Flag, bevor er [query] anfasst — so kann eine „ja"-Zustimmung nie eine
  * Themen-Rückfrage einlösen und eine Themen-Nachricht nie ein Angebot.
+ *
+ * [retryLocalKnowledge] trennt zusätzlich die HERKUNFT des Angebots: nur ein
+ * [FactCoverageGate]-Deflect hat direkt davor bewiesen, dass der lokale
+ * Wissenspfad die Frage nicht gedeckt hat. Beim Einlösen darf diese Sorte die
+ * Originalfrage deshalb genau einmal gegen die enge, beweisbar lokale
+ * Wiki-Sicht wiederholen, bevor überhaupt eine Online-Eskalation erwogen wird.
+ * Honesty-/Brain-Abstain-Angebote und explizite Online-Bitten behalten den
+ * bisherigen direkten Eskalationspfad (`false` = verhaltensneutraler Default).
  */
 data class PendingLookup(
     val query: String,
     val language: Language,
     val ts: Instant = Instant.now(),
     val awaitsTopic: Boolean = false,
+    val retryLocalKnowledge: Boolean = false,
 )
 
 /**
@@ -152,6 +161,7 @@ object AffirmationRecognizer {
         // DE
         "ja", "ja bitte", "ja gern", "ja gerne", "gern", "gerne",
         "mach das", "mach mal", "schau nach", "schau mal nach",
+        "schau kurz nach", "ja schau nach", "ja schau mal nach", "ja schau kurz nach",
         "ok", "okay", "klar", "bitte",
         // EN
         "yes", "yes please", "sure", "go ahead",

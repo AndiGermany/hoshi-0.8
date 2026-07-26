@@ -1,7 +1,7 @@
 package de.hoshi.core.pipeline
 
 /**
- * **EscalationMode — das Drei-Stufen-Setting von Extended Think (S2).**
+ * **EscalationMode — das Vier-Stufen-Setting von Extended Think (S2).**
  *
  * Steuert, was am [FactCoverageGate.Decision.Deflect]-Zweig des
  * [TurnOrchestrator] passiert, wenn die lokale Wissensdecke nicht reicht:
@@ -15,16 +15,26 @@ package de.hoshi.core.pipeline
  *    ([AffirmationRecognizer]), wird mit der GESPEICHERTEN Frage eskaliert.
  *  - **[AUTOMATISCH]** — der Deflect-Zweig eskaliert direkt über den
  *    [de.hoshi.core.port.EscalationPort], ohne Rückfrage.
+ *  - **[OFFLINE]** (Andi-Auftrag 2026-07-26, „Warum brauchen wir die Wärme
+ *    der Sonne?" blieb ohne Cloud unbeantwortet) — das Gegenstück zu [AUS]:
+ *    ebenfalls KEIN Cloud-Call, aber statt der Ausweich-Phrase antwortet das
+ *    LOKALE Brain aus eigenem Wissen, ehrlich als unbelegt gekennzeichnet
+ *    (die Kennzeichnung reist im [de.hoshi.core.pipeline.lang.LanguagePack],
+ *    s. [FactCoverageGate.offlineDisclaimer]). Kein zweiter Brain-Call: der
+ *    Deflect-Zweig lässt für [OFFLINE] denselben LOCAL-Brain-Call laufen, der
+ *    sonst für [FactCoverageGate.Decision.Proceed] ohnehin passiert wäre.
  *
  * Zwei Stufen der Wahrheit (SettingsController-Muster): die DECKE
  * `HOSHI_EXTENDED_THINK_ENABLED` (Deploy-Zeit, default false ⇒ byte-neutral)
  * muss offen sein, damit der Laufzeit-Mode überhaupt greift — Decke zu ⇒
- * effektiv immer [AUS].
+ * effektiv immer [AUS] (die Wiring-Kaskade in `PipelineConfig` kollabiert
+ * generisch auf den konstanten AUS-Supplier, unabhängig vom gespeicherten Wert).
  */
 enum class EscalationMode {
     AUS,
     ERST_FRAGEN,
     AUTOMATISCH,
+    OFFLINE,
     ;
 
     companion object {

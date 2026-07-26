@@ -68,6 +68,117 @@ data class LanguagePack(
      */
     val honestyBridgeDownRefusals: List<String>,
 
+    /**
+     * **OFFLINE-Kennzeichnung** ([de.hoshi.core.pipeline.FactCoverageGate],
+     * Andi-Auftrag 2026-07-26: „im Offline-Modus antwortet er selbst, sagt
+     * aber dazu, dass es unbelegt ist"). Anders als [honestyBridgeDownRefusals]
+     * & Co. lebt diese Zeile ECHT in allen fünf Sprachen hier (kein DE+EN-
+     * [deOr]-Fallback) — sie geht der eigentlichen Modell-Antwort als kurze,
+     * warme Vorbemerkung VORAUS (EIN [de.hoshi.core.dto.ChatEvent.TextDelta]
+     * vor dem Brain-Stream), darum bewusst mit einem trennenden Doppelpunkt +
+     * Leerzeichen am Ende, damit sie sich mit dem ersten Modell-Satz zu einem
+     * gesprochenen Satz fügt. Einzelstring statt Pool (wie [FactCoverageGate.
+     * deflection]): deterministisch, testbar, kein Anti-Repeat-Ring nötig.
+     */
+    val factCoverageOfflineDisclaimer: String,
+
+    /**
+     * **Lokal-gefunden-Vorspann** (Codex-Wissens-Kette P2, 2026-07-26): steht vor
+     * einer Antwort, die nach einem „ja" auf das Nachschau-Angebot LOKAL gedeckt
+     * werden konnte (Wiki-Treffer, FactCoverage bestanden) — das Gegenstück zum
+     * Online-Vorspann [escalationAnswerFrame]. Vertrag: NIE „online"/„Netz"
+     * behaupten (es war lokal), NIE „unbelegt" (es IST gedeckt), Trennzeichen +
+     * Leerzeichen am Ende. Einzelstring, bewusst kein Pool — der Slot wird von
+     * Codex' Einlöse-Mechanik konsumiert; Streuung wäre ein späterer, gemeinsamer
+     * Schritt beider Lanes.
+     */
+    val localLookupFoundPrefix: String,
+
+    /**
+     * **Deflect-Phrasen-POOL** ([de.hoshi.core.pipeline.FactCoverageGate.deflection],
+     * Andi-Auftrag 2026-07-26 „die Sprüche für Hoshi schaut online nach sind
+     * schlecht" + Nachtrag „nicht immer die gleiche Antwort — gestreut, nicht
+     * statisch"). Ehrliche „das weiß ich grad nicht" + Nachschau-Angebot, KEIN
+     * hartes „ich kann nicht". Gleiche Regel wie [factCoverageOfflineDisclaimer]:
+     * echt in allen fünf Sprachen, kein DE+EN-[deOr]-Fallback für ES/FR/IT mehr
+     * (vorher fielen ES/FR/IT hier auf Englisch zurück).
+     *
+     * **Pool statt Einzelstring** (seit dem Streuungs-Nachtrag): 3–4 idiomatische
+     * Varianten je Sprache, ausgewählt über [de.hoshi.core.pipeline.AntiRepeatPicker]
+     * — EXAKT derselbe Mechanismus wie [de.hoshi.core.pipeline.ResponseFormatter]s
+     * `cloudConsentAccept`-Pool (kein zweites Zufalls-System). **Harte Regel:**
+     * JEDE Variante muss mit der Nachschau-FRAGE enden (z.B. „…soll ich kurz
+     * nachschauen?") — darauf hängt die Consent-Einlösung im Folge-Turn.
+     */
+    val factCoverageDeflect: List<String>,
+
+    /**
+     * **Ergebnis-Vorspann-POOL** vor der VERBATIM-Cloud-Antwort
+     * ([de.hoshi.core.pipeline.TurnOrchestrator.escalationAnswerFrame]) — die
+     * ehrliche Attribution „das kommt von draußen" (WikiNumber-Lehre), OHNE die
+     * Faktenaussage selbst anzufassen. Jede Variante endet bewusst mit einem
+     * trennenden Gedankenstrich + Leerzeichen, damit sich die Cloud-Antwort
+     * nahtlos anschließt. Echt in allen fünf Sprachen (vorher DE+EN-[deOr]-
+     * Fallback).
+     *
+     * **Pool statt Einzelstring** (Streuungs-Nachtrag 2026-07-26): 3–4
+     * idiomatische Varianten je Sprache, ausgewählt über
+     * [de.hoshi.core.pipeline.AntiRepeatPicker] (derselbe Mechanismus wie
+     * [factCoverageDeflect]). **Harte Regel:** JEDE Variante trägt das
+     * Herkunfts-Label (Netz/online/Internet) — das ist Hoshis ehrliche
+     * Quellen-Kennzeichnung und darf in keiner Variante fehlen.
+     */
+    val escalationAnswerFrame: List<String>,
+
+    /**
+     * **Quellen-Zeile** ([de.hoshi.core.pipeline.TurnOrchestrator.escalationSourceNote])
+     * — ehrlich + knapp, nie weggelassen. Template mit dem Platzhalter
+     * `{source}` (vom Aufrufer per `replace` gefüllt, wie [SmartHomeAckPack]s
+     * `{room}`/`{value}`). DE/EN bleiben WORT-FÜR-WORT wie zuvor
+     * (`"Quelle: {source}."` / `"Source: {source}."`) — echt neu sind nur
+     * ES/FR/IT (vorher DE+EN-[deOr]-Fallback, ES/FR/IT sprachen also Englisch).
+     */
+    val escalationSourceTemplate: String,
+
+    /**
+     * **UNAVAILABLE**-Phrase ([de.hoshi.core.pipeline.TurnOrchestrator.escalationUnavailable]):
+     * Nachschlagen ging gerade nicht (kein Key, Netz, Timeout). Ehrlich + warm,
+     * ohne Nachtschicht-Versprechen (Mira/Risiko #3). **Zweiter Code-Pfad für
+     * „ich komm an mein Wissen nicht ran"** neben [honestyBridgeDownRefusals] —
+     * andere Situation (Cloud-Lookup vs. lokale Wissens-Bridge), darum bewusst
+     * ein ANDERER Satz je Sprache, aber jetzt derselbe Ausbau-Stand: echt in
+     * allen fünf Sprachen (vorher DE+EN-[deOr]-Fallback).
+     *
+     * **Bewusst KEIN Pool** (Entscheid der Hand, Streuungs-Nachtrag 2026-07-26):
+     * anders als [factCoverageDeflect]/[escalationAnswerFrame] bleibt dies ein
+     * Einzelstring — eine Fehler-/Ehrlichkeits-Kennzeichnung soll immer gleich
+     * klingen, nicht variieren.
+     */
+    val escalationUnavailable: String,
+
+    // ── EscalationModeFastpath: die vier Stufen-Quittungen ────────────────────
+    // (Andi-Auftrag 2026-07-05 „Stufen auch über die Stimme setzen" + 2026-07-26
+    //  „Multilingualität von A-Z"). Vorher wählte [EscalationModeFastpath.receipt]
+    //  inline über [fallsBackToEnglish] zwischen DE und EN — ES/FR/IT bekamen
+    //  Englisch. Jetzt EIN Feld je Stufe, echt in allen fünf Sprachen.
+    //
+    //  Bewusst KEIN Pool (Entscheid der Hand, Streuungs-Nachtrag 2026-07-26):
+    //  eine Stufen-Quittung bestätigt eine Einstellungs-Änderung — da ist
+    //  Wiedererkennbarkeit ein Feature, kein Manko. Nur die GESPRÄCHS-Sätze
+    //  ([factCoverageDeflect]/[escalationAnswerFrame]) streuen.
+
+    /** Stufen-Quittung [EscalationMode.ERST_FRAGEN] mit Stufen-Echo. */
+    val escalationModeErstFragen: String,
+
+    /** Stufen-Quittung [EscalationMode.AUS] mit Stufen-Echo. */
+    val escalationModeAus: String,
+
+    /** Stufen-Quittung [EscalationMode.AUTOMATISCH] mit Stufen-Echo. */
+    val escalationModeAutomatisch: String,
+
+    /** Stufen-Quittung [EscalationMode.OFFLINE] mit Stufen-Echo. */
+    val escalationModeOffline: String,
+
     // ── Never-Silent-Ränder: der Turn hakt, der Rand macht dicht ──────────────
 
     /**
@@ -368,12 +479,21 @@ data class CapabilityDenyPack(
 
 /**
  * **Die EINE Fallback-Regel** für Deterministik-Bausteine, die (noch) nur eigene
- * DE+EN-Inhalte haben (TurnOrchestrator-Fallbacks, FactCoverageGate-Deflect,
- * AmbientWarmth, OpenAiEscalationAdapter-System-Prompt): ES/FR/IT fallen für GENAU
- * diese vier Bausteine auf [en] zurück, bis ein Folge-Pod eigene Strings liefert —
- * unabhängig davon, dass [LangEs]/[LangFr]/[LangIt] selbst längst echte, übersetzte
- * LanguagePack-Pools tragen (Commit 17363ef, keine TODO-Marker mehr dort). NUR
- * [Language.DE] bekommt [de] — jede andere Sprache (EN eingeschlossen) bekommt
+ * DE+EN-Inhalte haben (die restlichen TurnOrchestrator-Fallbacks — leer/Fehler/
+ * unklar/Cap-erschöpft/abgelehnt/Extended-Think-aus-Hinweis/Lookup-Rückfrage/
+ * Wetter-Ort/agentische Refusals/Tool-Mode-Direktive/Verbatim-Replay-Rahmung —,
+ * AmbientWarmth, OpenAiEscalationAdapter-System-Prompt): ES/FR/IT fallen für diese
+ * Bausteine auf [en] zurück, bis ein Folge-Pod eigene Strings liefert — unabhängig
+ * davon, dass [LangEs]/[LangFr]/[LangIt] selbst längst echte, übersetzte
+ * LanguagePack-Pools tragen (Commit 17363ef, keine TODO-Marker mehr dort).
+ *
+ * **Andi-Auftrag 2026-07-26** („die Sprüche für Hoshi schaut online nach sind
+ * schlecht"): [FactCoverageGate.deflection]/[TurnOrchestrator.escalationAnswerFrame]/
+ * [TurnOrchestrator.escalationSourceNote]/[TurnOrchestrator.escalationUnavailable]
+ * UND die vier [EscalationModeFastpath]-Stufen-Quittungen sind aus dieser Liste
+ * RAUS — sie leben jetzt echt fünfsprachig im [LanguagePack] (s.
+ * [LanguagePack.factCoverageDeflect] & Nachbarfelder), kein [deOr]-Fallback mehr.
+ * NUR [Language.DE] bekommt [de] — jede andere Sprache (EN eingeschlossen) bekommt
  * [en]. Für DE/EN byte-identisch zum vorherigen `when(language){DE->..;EN->..}`;
  * für ES/FR/IT NEU (vorher gar nicht kompilierbar).
  */

@@ -27,16 +27,19 @@ import java.util.concurrent.atomic.AtomicInteger
  * [TurnOrchestratorLookupIntentTest] Fall (1)/(10), NUR mit `language = Language.EN`:
  *
  *  1. **Deflect** ([FactCoverageGate.deflection]): eine ungedeckte FACT_SHORT-Frage
- *     bekommt [FactCoverageGate.DEFLECT_EN] — NICHT die deutsche Phrase — und
- *     registriert dabei implizit das Angebot (die Deflect-Phrase selbst endet als
- *     Frage „…want me to look it up?").
+ *     bekommt eine Variante aus dem
+ *     [de.hoshi.core.pipeline.lang.LanguagePack.factCoverageDeflect]-EN-Pool —
+ *     NICHT die deutsche Phrase — und registriert dabei implizit das Angebot
+ *     (jede Deflect-Variante endet als Frage, z.B. „…want me to look it up
+ *     quickly?").
  *  2. **Angebot einlösen**: „look it up online" ([LookupIntentRecognizer], bereits
  *     DE+EN geteilt) löst das offene Angebot mit der ORIGINAL-Frage ein.
  *  3. **Consent-Brücke** ([ResponseFormatter.cloudConsentAccept]): der englische
  *     [de.hoshi.core.pipeline.lang.LangEn]-Pool liefert die Brücken-Phrase (Event-
  *     Index 1, s. KDoc [TurnOrchestrator.escalationTurn]) — NICHT die deutsche.
- *  4. **Eskalations-Rahmung** ([TurnOrchestrator.escalationAnswerFrame]): „I looked
- *     it up online: " vor der attribuierten Antwort.
+ *  4. **Eskalations-Rahmung** ([TurnOrchestrator.escalationAnswerFrame]): eine
+ *     Variante aus dem EN-Vorspann-Pool (z.B. „So I checked online — ") vor der
+ *     attribuierten Antwort.
  *
  * Beweist: [Language.EN] fließt tatsächlich bis in ALLE drei Phrasen-Kategorien
  * durch — nicht nur theoretisch als Parameter durchgestochen.
@@ -125,14 +128,16 @@ class TurnOrchestratorEnglishConsentChainTest {
         }
         val o = orchestrator(brain, cloud)
 
-        // ── (1) Deflect: die ENGLISCHE Phrase, nicht die deutsche ──
+        // ── (1) Deflect: eine der ENGLISCHEN Pool-Varianten, nicht die deutschen ──
         val deflect = turn(o, question)
-        assertEquals(
-            FactCoverageGate.DEFLECT_EN,
-            joinedText(deflect),
-            "Deflect muss der EN-Phrase folgen, nicht der DE-Konstante",
+        assertTrue(
+            joinedText(deflect) in de.hoshi.core.pipeline.lang.LangEn.PACK.factCoverageDeflect,
+            "Deflect muss aus dem EN-Pool kommen, war: '${joinedText(deflect)}'",
         )
-        assertFalse(joinedText(deflect).contains(FactCoverageGate.DEFLECT_DE), "keine deutsche Deflect-Phrase")
+        assertFalse(
+            joinedText(deflect) in de.hoshi.core.pipeline.lang.LangDe.PACK.factCoverageDeflect,
+            "keine deutsche Deflect-Phrase",
+        )
         assertEquals(0, brain.callCount.get(), "Deflect ist brain-frei")
         assertEquals(0, cloud.queries.size, "ERST_FRAGEN eskaliert nicht ungefragt")
 
@@ -151,12 +156,14 @@ class TurnOrchestratorEnglishConsentChainTest {
             "darf NICHT aus dem deutschen Pool kommen: '$bridge'",
         )
 
-        // ── (4) Eskalations-Rahmung: EN-Frame vor der attribuierten Antwort ──
+        // ── (4) Eskalations-Rahmung: eine EN-Pool-Variante vor der attribuierten Antwort ──
         val full = joinedText(resolved)
+        val enFrame = de.hoshi.core.pipeline.lang.LangEn.PACK.escalationAnswerFrame
+        val deFrame = de.hoshi.core.pipeline.lang.LangDe.PACK.escalationAnswerFrame
         assertTrue(
-            full.contains(TurnOrchestrator.ESCALATION_FRAME_EN + cloudAnswer),
-            "EN-Rahmung + attribuierte Antwort erwartet, war: '$full'",
+            enFrame.any { full.contains(it + cloudAnswer) },
+            "EN-Rahmung (Pool-Variante) + attribuierte Antwort erwartet, war: '$full'",
         )
-        assertFalse(full.contains(TurnOrchestrator.ESCALATION_FRAME_DE), "keine deutsche Rahmung")
+        assertTrue(deFrame.none { full.contains(it) }, "keine deutsche Rahmung")
     }
 }

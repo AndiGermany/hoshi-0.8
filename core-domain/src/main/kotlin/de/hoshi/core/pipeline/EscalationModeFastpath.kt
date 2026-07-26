@@ -1,6 +1,7 @@
 package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.Language
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import de.hoshi.core.pipeline.lang.fallsBackToEnglish
 
 /**
@@ -13,6 +14,8 @@ import de.hoshi.core.pipeline.lang.fallsBackToEnglish
  *    [EscalationMode.AUS]
  *  - „geh automatisch online" / „schau selbstständig nach" ⇒
  *    [EscalationMode.AUTOMATISCH]  (+ EN-Pendants)
+ *  - „geh offline" / „schalte auf offline-modus" / „bleib offline" ⇒
+ *    [EscalationMode.OFFLINE] (Andi-Auftrag 2026-07-26; + EN-Pendants)
  *
  * IN-SITU-Erkennung nach dem [DateFastpath]-Muster (kein eigener Intent-Parser
  * nötig), Wirkung über die schmale [EscalationModeSwitchPort]-Naht — DIESELBE
@@ -57,8 +60,8 @@ class EscalationModeFastpath(
      * Der erkannte Stufen-Wunsch in [text], oder `null` — reine, störungsfreie
      * Erkennung (kein Store-Effekt). Normalisiert (lowercase, Apostrophe/Zeichen
      * weg, wie [DateFastpath]) und prüft konservativ gegen die kuratierten
-     * Muster-Listen; Reihenfolge ERST_FRAGEN → AUS → AUTOMATISCH (die Listen
-     * sind disjunkt, die Ordnung nur Determinismus-Pin).
+     * Muster-Listen; Reihenfolge ERST_FRAGEN → AUS → AUTOMATISCH → OFFLINE
+     * (die Listen sind disjunkt, die Ordnung nur Determinismus-Pin).
      */
     fun match(text: String): EscalationMode? {
         val norm = normalize(text)
@@ -67,23 +70,27 @@ class EscalationModeFastpath(
             ERST_FRAGEN_PATTERNS.any { it.containsMatchIn(norm) } -> EscalationMode.ERST_FRAGEN
             AUS_PATTERNS.any { it.containsMatchIn(norm) } -> EscalationMode.AUS
             AUTOMATISCH_PATTERNS.any { it.containsMatchIn(norm) } -> EscalationMode.AUTOMATISCH
+            OFFLINE_PATTERNS.any { it.containsMatchIn(norm) } -> EscalationMode.OFFLINE
             else -> null
         }
     }
 
-    /** Deterministische, warme Quittung MIT Stufen-Echo (DE+EN) — exakt gepinnt in den Tests. */
+    /**
+     * Deterministische, warme Quittung MIT Stufen-Echo — exakt gepinnt in den Tests.
+     *
+     * **Andi-Auftrag 2026-07-26** („Multilingualität von A-Z"): vorher wählte diese
+     * Funktion inline über [fallsBackToEnglish] nur zwischen DE und EN — ES/FR/IT
+     * bekamen also Englisch. Jetzt ECHT fünfsprachig über die vier
+     * `escalationMode…`-Felder im [de.hoshi.core.pipeline.lang.LanguagePack]; DE/EN
+     * bleiben WORT-FÜR-WORT wie zuvor (Tests unverändert bestehen).
+     */
     private fun receipt(mode: EscalationMode, language: Language): String {
-        val en = language.fallsBackToEnglish
+        val pack = LanguagePackRegistry.forLanguage(language)
         return when (mode) {
-            EscalationMode.ERST_FRAGEN ->
-                if (en) "Okay — from now on I'll ask you first before I look anything up online."
-                else "Okay — ich frag dich ab jetzt erst, bevor ich online nachschaue."
-            EscalationMode.AUS ->
-                if (en) "Okay — online lookups are off. I'll stay fully local."
-                else "Okay — Online-Nachschauen ist aus. Ich bleib komplett lokal."
-            EscalationMode.AUTOMATISCH ->
-                if (en) "Okay — from now on I'll look things up online automatically when I don't know something."
-                else "Okay — ich schau ab jetzt automatisch online nach, wenn ich etwas nicht weiß."
+            EscalationMode.ERST_FRAGEN -> pack.escalationModeErstFragen
+            EscalationMode.AUS -> pack.escalationModeAus
+            EscalationMode.AUTOMATISCH -> pack.escalationModeAutomatisch
+            EscalationMode.OFFLINE -> pack.escalationModeOffline
         }
     }
 
@@ -139,6 +146,23 @@ class EscalationModeFastpath(
             Regex("(?:^| )automatically go online(?: |$)"),
             Regex("(?:^| )go online on your own(?: |$)"),
             Regex("(?:^| )look (?:it|things|stuff) up (?:online )?(?:automatically|on your own)(?: |$)"),
+        )
+
+        /**
+         * OFFLINE: „geh offline" / „Offline-Modus (an)" / „bleib offline" + EN.
+         * Disjunkt zu [AUS_PATTERNS] — die sprechen alle über „online (nicht) gehen/
+         * ausschalten", diese hier tragen alle wörtlich „offline". Bewusst KEIN
+         * nacktes „offline" allein: „bist du offline?" ist eine Frage, kein Befehl.
+         */
+        private val OFFLINE_PATTERNS = listOf(
+            Regex("(?:^| )geh(?:e)?(?: bitte| ab jetzt)? offline(?: |$)"),
+            Regex("(?:^| )bleib(?:e)?(?: bitte)? offline(?: |$)"),
+            Regex("(?:^| )(?:schalte?|mach|stell)(?: bitte)? (?:in )?(?:den )?offline ?modus(?: an| ein)?(?: |$)"),
+            Regex("(?:^| )offline ?modus (?:an|ein|bitte)(?: |$)"),
+            Regex("(?:^| )go offline(?: |$)"),
+            Regex("(?:^| )stay offline(?: |$)"),
+            Regex("(?:^| )(?:switch|go) (?:in)?to offline mode(?: |$)"),
+            Regex("(?:^| )offline mode on(?: |$)"),
         )
     }
 }

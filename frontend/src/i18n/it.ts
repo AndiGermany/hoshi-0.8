@@ -40,10 +40,12 @@ export const it: UiStrings = {
       noteEmpty: 'Onestamente vuoto — niente di inventato.',
       noteWithData: 'Numeri reali dalla tua attività di oggi.',
     },
-    geplant: {
-      name: 'In programma',
-      nichtsGeplant: 'Niente in programma',
-      note: 'Timer, sveglie e promemoria attivi reali.',
+    laeuft: {
+      name: 'In corso',
+    },
+    einkauf: {
+      name: 'Spesa',
+      more: (count) => `+${count} altri`,
     },
     wetter: {
       name: 'Meteo',
@@ -51,8 +53,8 @@ export const it: UiStrings = {
       liveNote: (place) => `Dati reali da Open-Meteo per ${place}.`,
       offNote: 'In arrivo — onestamente vuoto invece di inventato. Il meteo è disattivato per questo deploy.',
       unreachableNote: 'Il meteo non è leggibile al momento — qui non c’è nulla di inventato.',
-      settingsAria: 'Apri le impostazioni meteo (Luogo e integrazioni)',
-      settingsTitle: 'Imposta il luogo meteo',
+      precipSome: (mm) => `${mm} mm di pioggia oggi`,
+      precipNone: 'asciutto',
     },
     status: {
       online: 'online',
@@ -88,6 +90,37 @@ export const it: UiStrings = {
     failed: 'Cambio non riuscito — riprova.',
     priceSuffix: (cents: number) => `circa ${cents.toFixed(2)} ct/ricerca`,
     loading: 'caricamento…',
+  },
+
+  extendedThink: {
+    label: 'Quando Hoshi non sa qualcosa',
+    hint: 'Decide cosa succede quando la conoscenza di Hoshi non basta per una domanda — riguarda solo la ricerca rapida online (Extended Think).',
+    loadError: "Il livello di escalation non è leggibile al momento.",
+    switching: 'cambio in corso…',
+    unknown: 'Livello sconosciuto.',
+    locked: 'Disattivato per questo deploy — la scelta sarà valida solo quando Extended Think sarà attivo.',
+    failed: 'Cambio non riuscito — riprova.',
+    recommendedBadge: 'Consigliato',
+    loading: 'caricamento…',
+    modes: {
+      AUS: {
+        title: 'Disattivato',
+        description: 'Si scansa con onestà — per questo Hoshi non va mai online.',
+      },
+      OFFLINE: {
+        title: 'Offline',
+        description:
+          'Risponde con la propria conoscenza e dice onestamente che non è verificata — per questo Hoshi non va mai online.',
+      },
+      ERST_FRAGEN: {
+        title: 'Chiedi prima',
+        description: 'Ti chiede prima che Hoshi cerchi online.',
+      },
+      AUTOMATISCH: {
+        title: 'Automatico',
+        description: 'Cerca online in autonomia quando Hoshi non sa qualcosa.',
+      },
+    },
   },
 
   ttsEngine: {
@@ -144,6 +177,14 @@ export const it: UiStrings = {
     loading: 'caricamento…',
     statusReading: '(lettura dello stato…)',
     statusPrefix: 'Stato: ',
+    autoSwitchNote: 'La selezione automatica del modello è attiva — la tua scelta qui ora imposta solo il modello di CHAT (digitando); parlando resta attivo automaticamente il modello veloce.',
+  },
+
+  brainAutoSwitch: {
+    label: 'Selezione automatica del modello',
+    hint: 'Quando scrivi risponde il modello più accurato, quando parli quello veloce.',
+    loadError: 'Lo stato della selezione automatica non è leggibile al momento.',
+    failed: 'Cambio non riuscito — riprova.',
   },
 
   privacy: {
@@ -280,7 +321,7 @@ export const it: UiStrings = {
       REMINDER: 'Promemoria',
     },
     ackTitle: 'Tocca per confermare',
-    gearAria: 'Apri le impostazioni di escalation della sveglia (Abilità)',
+    gearAria: 'Apri le impostazioni di escalation della sveglia (Casa e integrazioni)',
     gearTitle: 'Cambia escalation',
     missed: (noun, label, time) =>
       `${label ? `${noun} «${label}»` : noun} scadeva alle ${time} — non sono riuscito a raggiungerti`,
@@ -298,6 +339,7 @@ export const it: UiStrings = {
     privacy: 'Privacy by design: il diario non contiene volutamente alcun contenuto della conversazione, solo orario, categoria, persona e misurazioni. Per questo qui non compare alcun testo dei turni. Ogni riga può essere espansa e mostra la suddivisione delle fasi (stt → grounding → brain → tts, resto = altro).',
     healthTitle: 'Cronologia dello stato', healthHint: 'Ogni riga è un’osservazione reale dello stato della connessione. Vengono registrati i cambi di stato, prima il più recente.',
     noObservation: 'Nessuna osservazione ancora — la prima risposta di stato è ancora in attesa. (Nessuna cronologia inventata.)', backendState: (state) => `Backend ${state}`,
+    diagnoseTitle: 'Diagnostica', diagnoseHint: 'Stato tecnico per curiosi — trasferito qui dalla panoramica perché la home appartenga alla casa.',
   },
   rooms: {
     sketchRoom: 'Stanza', sketchAria: 'Schizzo: Hoshi al centro, con segnaposto di stanze ancora vuoti tutt’intorno', pickerAria: (name) => `Scegli una stanza per ${name}`,
@@ -313,10 +355,9 @@ export const it: UiStrings = {
   },
   overview: {
     heroUpTitle: 'Hoshi è online', heroUpSub: 'La connessione è attiva.', heroDownTitle: 'Hoshi è offline', heroDownSub: 'La connessione non è attiva in questo momento.', heroUnknownTitle: 'Verifica dello stato …', heroUnknownSub: 'la prima risposta di stato è ancora in attesa.',
-    sidecarHealthNote: 'Lo stato del supervisore/sidecar non è ancora esposto tramite API. Apparirà quando il backend lo fornirà.', voiceStatsNote: 'La telemetria voce/TTS (latenza, parlanti) non è ancora collegata. Arriverà più avanti.', devicesNote: 'Il registro di dispositivi/satelliti non è ancora collegato. Apparirà quando il percorso sarà pronto.',
-    backend: 'Backend', sidecarHealth: 'Stato dei sidecar', voiceStats: 'Statistiche vocali', devices: 'Dispositivi', live: 'in diretta', notWired: 'non collegato', backendNote: 'Indirizzo a cui si collega questa interfaccia.', chatTurn: 'Turno chat', liveStreaming: 'Streaming in diretta', chatTurnNote: 'Una risposta reale in tempo reale, non una simulazione.',
+    backend: 'Backend', live: 'in diretta', backendNote: 'Indirizzo a cui si collega questa interfaccia.', chatTurn: 'Turno chat', liveStreaming: 'Streaming in diretta', chatTurnNote: 'Una risposta reale in tempo reale, non una simulazione.',
     authToken: 'Token di accesso', set: 'impostato', missing: 'mancante', authSetNote: 'Il tuo dispositivo ha effettuato l’accesso: le aree protette sono sbloccate.', authMissingNote: 'Non hai effettuato l’accesso: le aree protette restano bloccate.',
-    title: 'Panoramica', lede: 'Prima lo stato: uno sguardo onesto alla tua casa. Ciò che funziona arriva IN DIRETTA da fonti reali; ciò che manca è chiaramente segnato come «non collegato», mai colorato di verde.', lastChecked: (time) => `ultimo controllo ${time}`, liveWired: 'In diretta e collegato', notWiredTitle: 'Non ancora collegato', notWiredHint: 'Queste schede non mostrano volutamente alcuno stato: il backend 0.8 non espone ancora i dati. Niente verde inventato.',
+    lastChecked: (time) => `ultimo controllo ${time}`,
   },
   chat: {
     suggestions: ['Spegni la luce del soggiorno', 'Che tempo farà domani?', 'Che temperatura c’è in soggiorno?'], waveTap: 'Tocca per fermare Hoshi',
@@ -348,11 +389,11 @@ export const it: UiStrings = {
     categories: {
       darstellung: 'Aspetto',
       'sprache-stimme': 'Lingua e voce',
-      persoenlichkeit: 'Personalità',
+      'online-nachschlagen': 'Online e ricerca',
       'modell-leistung': 'Modello e prestazioni',
-      faehigkeiten: 'Abilità',
+      persoenlichkeit: 'Personalità',
       'gedaechtnis-privatsphaere': 'Memoria e privacy',
-      'standort-integrationen': 'Luogo e integrazioni',
+      'zuhause-integrationen': 'Casa e integrazioni',
     },
     categoryNavAria: 'Categorie delle impostazioni',
     themeLabel: 'Tema colore',
@@ -374,6 +415,10 @@ export const it: UiStrings = {
         label: 'Yoake',
         hint: 'Alba tra indaco e corallo (夜明け)',
       },
+      amayadori: {
+        label: 'Amayadori',
+        hint: "Fuori continua a piovere; qui dentro è asciutto e qualcuno ha lasciato la luce accesa. (雨宿り)",
+      },
       sora: {
         label: 'Sora',
         hint: "Nagareboshi → Asa → Aoi → Kasumi → Yoru, secondo l'ora di questo dispositivo",
@@ -390,7 +435,7 @@ export const it: UiStrings = {
       },
       stimmung: {
         title: 'La tua atmosfera',
-        note: "Immagini, non momenti della giornata: questi due ignorano l'orologio di proposito.",
+        note: "Immagini, non momenti della giornata: questi tre ignorano l'orologio di proposito.",
       },
     },
     themeGlosses: {
@@ -401,6 +446,7 @@ export const it: UiStrings = {
       kasumi: 'foschia',
       nagareboshi: 'stella cadente',
       yoake: 'alba',
+      amayadori: 'al riparo dalla pioggia',
       sora: 'cielo',
     },
     themeGlossSuffix: (gloss) => ` · ${gloss}`,
@@ -516,6 +562,7 @@ export const it: UiStrings = {
     toneCritical: 'Ops · critico',
     ramCritical: 'RAM critica',
     ramWarn: 'Pressione RAM',
+    memoryCriticalHint: 'Memoria al limite — la voce potrebbe risultare un po\' lenta in questo momento.',
     title: (overall, level) => `Ops: totale ${overall} · RAM ${level}`,
     titleDetail: (detail) => ` — ${detail}`,
     voiceCloud: 'La voce arriva in questo momento dal cloud (OpenAI)',

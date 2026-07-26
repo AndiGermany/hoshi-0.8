@@ -36,6 +36,19 @@ export interface TurnRoute {
   category: string;
   /** `start.grounded` (FactCoverageGate): Antwort durch Grounding gedeckt. */
   grounded: boolean;
+  /**
+   * `start.escalated` (Andi-Befund 2026-07-26, „lügender lokal-Chip"): lief
+   * dieser Turn über den bezahlten Extended-Think-S2-Eskalationspfad
+   * (`TurnOrchestrator.escalationTurn`)? Dieser Pfad behält `provider="LOCAL"`
+   * (Routing-Sicht) — NUR `escalated` trägt die WAHRE Herkunft. Optional/
+   * fehlend (Alt-Turns, Fastpath/Tool-Starts) ⇒ ehrlich `false`.
+   */
+  escalated?: boolean;
+  /**
+   * `start.escalationProvider` (Muster [escalated]): das Eskalations-Modell-
+   * Label (z. B. `"openai-nano"`) — NUR gesetzt bei `escalated===true`.
+   */
+  escalationProvider?: string;
 }
 
 /**
@@ -100,6 +113,10 @@ export function anatomyOnEvent(prev: TurnAnatomyState, ev: ChatEvent): TurnAnato
           category: ev.category,
           // Additives Wire-Feld: nur ein ECHTES true zählt (fehlt bei Alt-Events).
           grounded: ev.grounded === true,
+          // Additive Wire-Felder (Andi-Befund 2026-07-26): die WAHRE Herkunft
+          // eines eingelösten Eskalations-Turns — s. TurnRoute-KDoc.
+          escalated: ev.escalated === true,
+          escalationProvider: ev.escalationProvider ?? '',
         },
       };
     case 'delta':
@@ -177,6 +194,45 @@ export function providerChipText(
 }
 
 /**
+ * Markenname aus einem `escalationProvider`-Wire-String (z. B. `"openai-nano"`,
+ * `"openai-sol"` — BE-Konvention `EscalationModelCatalog.providerLabel`:
+ * IMMER `"<marke>-<modellname>"`). Best-effort Präfix-Match auf
+ * {@link PROVIDER_LABEL}; ein unbekanntes Präfix bleibt der rohe String (nie
+ * stillschweigend „Cloud" — Tom-Regel).
+ */
+function escalationBrandLabel(escalationProvider: string): string {
+  const prefix = escalationProvider.split('-')[0]?.toUpperCase();
+  return (prefix && PROVIDER_LABEL[prefix]) || escalationProvider;
+}
+
+/**
+ * Text des Quelle/Egress-Chips für eine VOLLE Turn-Route (Andi-Befund
+ * 2026-07-26, „lügender lokal-Chip", Live-Repro: eine per „ja" eingelöste
+ * Extended-Think-S2-Eskalation zeigte den „lokal"-Chip, obwohl die Antwort
+ * über eine bezahlte Cloud-Anfrage kam). Der BE-Eskalationspfad
+ * (`TurnOrchestrator.escalationTurn`) behält `provider="LOCAL"` — das ist die
+ * ROUTING-Sicht (FACT_SHORT wird immer erst lokal geroutet), NICHT die
+ * Herkunft der Antwort. Die WAHRE Herkunft trägt `route.escalated` +
+ * `route.escalationProvider`, seit 2026-07-05 Teil des Wire-Vertrags
+ * ([ChatEvent.Start.escalated]/`.escalationProvider`) — bis zu diesem Fix las
+ * das FE beide Felder nie, darum zeigte der Chip bei JEDER Eskalation
+ * fälschlich „lokal".
+ *
+ * `escalated!==true` (Bestandspfad, byte-identisch) ⇒ fällt zurück auf
+ * {@link providerChipText}(route.provider) — unverändertes Verhalten für
+ * jeden Turn ohne Eskalation.
+ */
+export function originChipText(
+  route: TurnRoute,
+  t: TurnAnatomyStrings = de.turnAnatomy,
+): string {
+  if (route.escalated === true) {
+    return `${escalationBrandLabel(route.escalationProvider || route.provider)}${t.cloudSuffix}`;
+  }
+  return providerChipText(route.provider, t);
+}
+
+/**
  * Die Denk-Stufen-Zeile ÜBER der Antwort: echte Häkchen, still (11.5px,
  * hint-Farbe), wächst live mit den Events. Kein Container, solange noch
  * keine Stufe passiert ist (Text-Turn vor `start`).
@@ -214,7 +270,9 @@ export function TurnChips({ anatomy }: { anatomy: TurnAnatomyState }) {
   const { turnAnatomy } = useUiStrings();
   const route = anatomy.route;
   if (!route) return null;
-  const cloud = route.provider !== 'LOCAL';
+  // Andi-Befund 2026-07-26: `escalated===true` IST online, auch wenn
+  // `provider` (die Routing-Sicht) "LOCAL" bleibt — s. originChipText-KDoc.
+  const cloud = route.escalated === true || route.provider !== 'LOCAL';
   return (
     <div className="turnchips">
       <span
@@ -226,7 +284,7 @@ export function TurnChips({ anatomy }: { anatomy: TurnAnatomyState }) {
         ) : (
           <LockGlyph className="turnchip__ico" />
         )}
-        {providerChipText(route.provider, turnAnatomy)}
+        {originChipText(route, turnAnatomy)}
       </span>
       {route.grounded && (
         <span className="turnchip" title={turnAnatomy.groundedTitle}>

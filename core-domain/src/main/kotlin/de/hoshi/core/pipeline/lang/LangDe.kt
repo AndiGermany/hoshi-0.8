@@ -28,7 +28,7 @@ object LangDe {
             "Da bin ich mir nicht sicher. Darf ich kurz nachsehen?",
             "Genau das weiß ich nicht. Online schauen okay?",
             "Lass mich kurz online checken — passt das?",
-            "Da würde ich kurz das Internet bemühen. Mach ich das?",
+            "Da guck ich am besten online nach. Soll ich?",
             "Online weiß ich's vermutlich. Soll ich?",
         ),
         cloudConsentAskExplicit = listOf(
@@ -37,10 +37,10 @@ object LangDe {
             "Gern, das hol ich von draußen — sag kurz Ja, dann leg ich los.",
         ),
         cloudConsentAccept = listOf(
-            "Klar, einen Moment — ich frag schnell.",
+            "Klar, Moment — ich schau schnell.",
             "Geht klar, kurz schauen…",
             "Mache ich. Moment.",
-            "Okay, einen Augenblick.",
+            "Okay, Sekunde.",
         ),
         cloudConsentDecline = listOf(
             "Okay, dann sag ich dir, was ich selbst weiß.",
@@ -83,6 +83,34 @@ object LangDe {
             "Hm, mein Nachschlagewerk ist im Moment nicht erreichbar. Ich will dir nichts raten — frag mich gleich nochmal, dann schau ich richtig nach.",
             "Da häng ich grad — mein Wissensspeicher antwortet nicht. Gib mir einen Moment, dann kann ich's dir ehrlich sagen.",
         ),
+        factCoverageOfflineDisclaimer = "Ehrlich, dafür hab ich keinen Beleg — aber aus meinem eigenen Wissen: ",
+        localLookupFoundPrefix = "Hab kurz bei mir nachgeschaut — ",
+        // ── Andi-Auftrag 2026-07-26 „die Sprüche für Hoshi schaut online nach
+        //    sind schlecht" — Deflect NEU, die übrigen vier Felder hierher
+        //    verschoben (WORT-FÜR-WORT aus FactCoverageGate/TurnOrchestrator/
+        //    EscalationModeFastpath übernommen, kein Zeichen geändert). Nachtrag
+        //    „gestreut statt statisch": Deflect + Ergebnis-Vorspann sind jetzt
+        //    4er-Pools (AntiRepeatPicker) — jede Deflect-Variante endet mit der
+        //    Nachschau-Frage, jede Vorspann-Variante trägt Netz/Internet/online.
+        factCoverageDeflect = listOf(
+            "Puh, das weiß ich grad nicht auswendig — soll ich kurz nachschauen?",
+            "Hm, das hab ich nicht im Kopf — soll ich kurz gucken?",
+            "Gute Frage — soll ich kurz nachschauen?",
+            "Ehrlich, da bin ich grad überfragt — soll ich schnell nachschauen?",
+        ),
+        escalationAnswerFrame = listOf(
+            "Hab kurz im Netz geschaut — ",
+            "Kurz im Internet geschaut — ",
+            "Hab schnell online geschaut — ",
+            "Kurz online nachgesehen — ",
+        ),
+        escalationSourceTemplate = "Quelle: {source}.",
+        escalationUnavailable = "Ich wollt nachschauen, aber grad komm ich nicht ran — probieren wir's später nochmal.",
+        escalationModeErstFragen = "Okay — ich frag dich ab jetzt erst, bevor ich online nachschaue.",
+        escalationModeAus = "Okay — Online-Nachschauen ist aus. Ich bleib komplett lokal.",
+        escalationModeAutomatisch = "Okay — ich schau ab jetzt automatisch online nach, wenn ich etwas nicht weiß.",
+        escalationModeOffline =
+            "Okay — Offline-Modus. Ich schau nichts online nach; ich antworte aus dem, was ich selbst weiß, und sag das dazu.",
         // ── Never-Silent-Ränder + Fastpath-Quittungen: ebenfalls WORT-FÜR-WORT aus
         //    TurnOrchestrator / AudioWebSocketHandler / BrainAdmissionGate /
         //    DailyNote-/WorkshopNote-/ProbeFastpath verschoben.

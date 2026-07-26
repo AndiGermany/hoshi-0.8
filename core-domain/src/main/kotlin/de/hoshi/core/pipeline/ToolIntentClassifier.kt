@@ -238,6 +238,23 @@ class DeterministicToolIntentClassifier(
                     data = mapOf("area_id" to area, "brightness_pct" to pct.coerceIn(0, 100)),
                 )
             }
+            // (2a-temp) Farbtemperatur-Wort ⇒ `color_temp_kelvin` (HA-Standardattribut,
+            //      bereits in [de.hoshi.kernel.CapabilityPolicy.DEFAULT_PERMITS] als
+            //      erlaubter data-Key mit Range [2000..6500] vorbereitet — nur bisher
+            //      nie befüllt). Live-Befund 2026-07-26: „Schalte das Licht im
+            //      Wohnzimmer auf Warmweiß" fiel VOLLSTÄNDIG durch (kein Licht-Intent,
+            //      keine Farbe erkannt, kein ON/OFF-Partikel ⇒ `null`), während „…auf
+            //      Grün" über [colorName] traf. VOR [colorName] geprüft: das EN-Paar
+            //      „warm white"/„cool white" hat „white" als ZWEITES Token — ohne
+            //      Vorrang würde das bloße Einzel-Token-`COLORS["white"]` zuerst
+            //      greifen und die Farbtemperatur in eine reine „white"-Farbe
+            //      verfälschen.
+            colorTempKelvin(tokens)?.let { kelvin ->
+                return ToolCall(
+                    domain = "light", service = "turn_on", entityId = null,
+                    data = mapOf("area_id" to area, "color_temp_kelvin" to kelvin),
+                )
+            }
             colorName(tokens)?.let { color ->
                 return ToolCall(
                     domain = "light", service = "turn_on", entityId = null,
@@ -454,6 +471,20 @@ class DeterministicToolIntentClassifier(
         return null
     }
 
+    /**
+     * Farbtemperatur-Wort → Kelvin. DE ist ein zusammengeschriebenes Kompositum
+     * (ein Token, „warmweiß"); EN ein Wort-PAAR („warm white", zwei Token) — darum
+     * an JEDER Position zuerst das Token-PAAR geprüft, dann das Einzel-Token
+     * (dasselbe Muster wie [roomOrNull] für Mehrwort-Raum-Aliase). Kein Treffer ⇒ `null`.
+     */
+    private fun colorTempKelvin(tokens: List<String>): Int? {
+        for (i in tokens.indices) {
+            if (i + 1 < tokens.size) COLOR_TEMP_PAIRS["${tokens[i]} ${tokens[i + 1]}"]?.let { return it }
+            COLOR_TEMPS[tokens[i]]?.let { return it }
+        }
+        return null
+    }
+
     private fun percent(raw: String): Int? =
         PERCENT_RX.find(raw)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
@@ -536,6 +567,30 @@ class DeterministicToolIntentClassifier(
             "orange" to "orange",
             "lila" to "purple", "violett" to "purple", "purple" to "purple",
             "rosa" to "pink", "pink" to "pink",
+        )
+
+        /**
+         * Farbtemperatur-Kompositum (DE, EIN Token — deutsche Komposita werden
+         * zusammengeschrieben, „Warmweiß" nicht „warm weiß"). ß/ss-Variante wie bei
+         * [COLORS]. NUR die drei handelsüblich benannten Stufen (Andi-Auftrag
+         * 2026-07-26) — bewusst kein „Tageslichtweiß" o.ä. dazuerfunden.
+         */
+        val COLOR_TEMPS = mapOf(
+            "warmweiß" to 2700, "warmweiss" to 2700,
+            "neutralweiß" to 4000, "neutralweiss" to 4000,
+            "kaltweiß" to 6500, "kaltweiss" to 6500,
+        )
+
+        /**
+         * Farbtemperatur-Wortpaar (EN — „warm white" ist im Englischen ZWEI Tokens,
+         * anders als das deutsche Kompositum). „cold white" UND „cool white" sind
+         * beides gängige EN-Bezeichnungen für dieselbe 6500-K-Stufe.
+         */
+        val COLOR_TEMP_PAIRS = mapOf(
+            "warm white" to 2700,
+            "neutral white" to 4000,
+            "cold white" to 6500,
+            "cool white" to 6500,
         )
     }
 }

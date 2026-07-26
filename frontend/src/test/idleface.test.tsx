@@ -3,35 +3,39 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   ALARM_PROGRESS_WINDOW_MS,
   IdleFace,
+  SHOPPING_VISIBLE_COUNT,
   alarmLineText,
   alarmProgress,
   diaryTodayStats,
   fmtP50,
+  fmtPrecip,
   nextAlarm,
-  planTileValue,
   statusChips,
   todayTileValue,
-  weatherTile,
-  weatherTileValue,
+  weatherCategory,
+  weatherNowContent,
 } from '../components/IdleFace';
 import type { ScheduledItem } from '../hooks/useScheduledItems';
 import type { DiaryTurn } from '../hooks/useDiary';
 import type { WeatherToday, WeatherTodayState } from '../hooks/useWeatherToday';
+import type { ListItem } from '../api/lists';
 
 /* Feste LOKALE Zeitpunkte (kein UTC-String) → TZ-unabhängige Tests:
    Samstag, 4. Juli 2026, 07:04 Ortszeit. */
 const NOW = new Date(2026, 6, 4, 7, 4).getTime();
 const H = 60 * 60 * 1000;
 
-const alarm = (dueAtEpochMs: number, id = 'a1'): ScheduledItem => ({
+const alarm = (dueAtEpochMs: number, id = 'a1', label?: string): ScheduledItem => ({
   id,
   kind: 'ALARM',
   dueAtEpochMs,
+  ...(label ? { label } : {}),
 });
-const timer = (dueAtEpochMs: number, id = 't1'): ScheduledItem => ({
+const timer = (dueAtEpochMs: number, id = 't1', label?: string): ScheduledItem => ({
   id,
   kind: 'TIMER',
   dueAtEpochMs,
+  ...(label ? { label } : {}),
 });
 
 const turnAt = (d: Date, ttftMs: number | null, error: string | null = null): DiaryTurn => ({
@@ -54,6 +58,14 @@ const heute29: WeatherToday = {
 };
 const liveWeather: WeatherTodayState = { kind: 'live', data: heute29 };
 
+const shopItem = (over: Partial<ListItem> = {}): ListItem => ({
+  id: 's-1',
+  text: 'Milch',
+  quantity: 1,
+  addedAtEpochMs: 1,
+  ...over,
+});
+
 const render = (over: Partial<Parameters<typeof IdleFace>[0]> = {}) =>
   renderToStaticMarkup(
     <IdleFace
@@ -61,13 +73,11 @@ const render = (over: Partial<Parameters<typeof IdleFace>[0]> = {}) =>
       health="up"
       voice={null}
       scheduled={[]}
-      turns={[]}
       weather={null}
+      shopping={[]}
       {...over}
     />,
   );
-
-const count = (html: string, needle: string) => html.split(needle).length - 1;
 
 describe('IdleFace-Helfer — pur, ohne DOM', () => {
   it('nextAlarm nimmt den frühesten WECKER, nie Timer/Erinnerungen', () => {
@@ -124,40 +134,63 @@ describe('IdleFace-Helfer — pur, ohne DOM', () => {
     expect(fmtP50(480)).toBe('0,5 s');
   });
 
-  it('planTileValue: kind-ehrliche Zählung, leer = „Nichts geplant"', () => {
-    expect(planTileValue([])).toBe('Nichts geplant');
-    expect(
-      planTileValue([timer(1, 'x'), timer(2, 'y'), alarm(3, 'z')]),
-    ).toBe('2 Timer · 1 Wecker');
-    expect(planTileValue([{ id: 'r', kind: 'REMINDER', dueAtEpochMs: 4 }])).toBe('1 Erinnerung');
+  it('fmtPrecip: ganze mm ohne Nachkommastelle, gebrochene mit Komma (de)', () => {
+    expect(fmtPrecip(3)).toBe('3');
+    expect(fmtPrecip(1.2)).toBe('1,2');
+    expect(fmtPrecip(0.4)).toBe('0,4');
+    expect(fmtPrecip(1.2, 'en-US')).toBe('1.2');
   });
 
-  it('weatherTileValue: „18–29° · bedeckt" — kompakt aus echten Tageswerten', () => {
-    expect(weatherTileValue(heute29)).toBe('18–29° · bedeckt');
-    expect(
-      weatherTileValue({ label: 'Berlin', todayMin: -2, todayMax: 5, codeText: 'leichter Schneefall', precipMm: 1.2 }),
-    ).toBe('-2–5° · leichter Schneefall');
+  it('weatherNowContent: live liefert Lage/Spanne/Regen-Zeile + Icon-Kategorie getrennt', () => {
+    const live = weatherNowContent(liveWeather);
+    expect(live).toEqual({
+      kind: 'live',
+      cond: 'bedeckt',
+      span: '18–29°',
+      precip: 'trocken',
+      category: 'cloudy',
+    });
+
+    const withRain = weatherNowContent({
+      kind: 'live',
+      data: { ...heute29, codeText: 'leichter Regen', precipMm: 3 },
+    });
+    expect(withRain).toEqual({
+      kind: 'live',
+      cond: 'leichter Regen',
+      span: '18–29°',
+      precip: '3 mm Regen heute',
+      category: 'rain',
+    });
   });
 
-  it('weatherTile: vier ehrliche Zustände (live · off · unreachable · lädt)', () => {
-    const live = weatherTile(liveWeather);
-    expect(live.honesty).toBe('live');
-    expect(live.value).toBe('18–29° · bedeckt');
-    expect(live.note).toContain('Duisburg'); // Ort-Label in der Notiz
+  it('weatherCategory: feste Zuordnung gegen die 28 bekannten WMO-Texte + Fallback', () => {
+    expect(weatherCategory('klar und sonnig')).toBe('clear');
+    expect(weatherCategory('überwiegend klar')).toBe('clear');
+    expect(weatherCategory('teilweise bewölkt')).toBe('partly');
+    expect(weatherCategory('bedeckt')).toBe('cloudy');
+    expect(weatherCategory('neblig')).toBe('fog');
+    expect(weatherCategory('gefrierender Nebel')).toBe('fog');
+    expect(weatherCategory('leichter Nieselregen')).toBe('rain');
+    expect(weatherCategory('starker Regen')).toBe('rain');
+    expect(weatherCategory('mäßige Regenschauer')).toBe('rain');
+    expect(weatherCategory('leichter Schneefall')).toBe('snow');
+    expect(weatherCategory('Schneekörner')).toBe('snow');
+    expect(weatherCategory('starke Schneeschauer')).toBe('snow'); // „schauer" enthalten, aber Schnee zuerst geprüft
+    expect(weatherCategory('Gewitter mit Hagel')).toBe('thunder');
+    expect(weatherCategory('wechselhaft')).toBe('cloudy'); // Fallback des Backends
+  });
 
-    const off = weatherTile({ kind: 'off' });
-    expect(off.honesty).toBe('pending'); // gestrichelt wie vor dem Endpoint
-    expect(off.value).toBe('—');
-    expect(off.note).toContain('ehrlich leer statt erfunden');
-
-    const unreachable = weatherTile({ kind: 'unreachable' });
-    expect(unreachable.honesty).toBe('live'); // Muster „Heute"-Kachel bei Diary-Ausfall
-    expect(unreachable.value).toBe('—');
-    expect(unreachable.note).toContain('Wetter grad nicht lesbar');
-
-    const loading = weatherTile(null);
-    expect(loading.honesty).toBe('pending');
-    expect(loading.value).toBe('—');
+  it('weatherNowContent (Gap-Zustände): off/unreachable/lädt liefern je eine ehrliche Lücken-Zeile', () => {
+    expect(weatherNowContent({ kind: 'off' })).toEqual({
+      kind: 'gap',
+      text: 'Kommt — ehrlich leer statt erfunden. Wetter ist bei diesem Deploy ausgeschaltet.',
+    });
+    expect(weatherNowContent({ kind: 'unreachable' })).toEqual({
+      kind: 'gap',
+      text: 'Wetter grad nicht lesbar — hier steht nichts Erfundenes.',
+    });
+    expect(weatherNowContent(null)).toEqual({ kind: 'gap', text: 'Wird gerade gelesen.' });
   });
 
   it('statusChips: Health immer ehrlich, Stimme-Chip NUR mit echtem voice-Feld', () => {
@@ -178,7 +211,7 @@ describe('IdleFace-Helfer — pur, ohne DOM', () => {
   });
 });
 
-describe('IdleFace — das Aoi-„Zuhause"-Layout (Spec §2)', () => {
+describe('IdleFace — das Flur-Display-Layout', () => {
   it('zeigt die Typo-Uhr (echte Zeit) + tageszeitbewussten Gruß', () => {
     const html = render();
     expect(html).toContain('idle__clock');
@@ -207,46 +240,102 @@ describe('IdleFace — das Aoi-„Zuhause"-Layout (Spec §2)', () => {
     expect(html).not.toContain('idle__alarmtrack');
   });
 
-  it('3 Kacheln: ALLE LIVE mit echten Werten, wenn das Wetter Daten liefert', () => {
-    const due = new Date(2026, 6, 4, 9, 0).getTime();
+  it('Jetzt-Band: Wetterlage, Tagesspanne, die Regen-Zeile bei precipMm > 0 — und ein dezentes Lage-Icon', () => {
     const html = render({
-      scheduled: [alarm(due), timer(NOW + H)],
-      turns: [
-        turnAt(new Date(2026, 6, 4, 6, 30), 1800),
-        turnAt(new Date(2026, 6, 4, 7, 0), 2200, 'TTS'),
-      ],
-      weather: liveWeather,
+      weather: { kind: 'live', data: { ...heute29, codeText: 'starker Regen', precipMm: 3 } },
     });
-    expect(count(html, 'data-status="live"')).toBe(3);
-    expect(count(html, 'data-status="pending"')).toBe(0);
-    expect(html).toContain('2 Turns · p50 2,0 s · 1 Aussetzer'); // echte Diary-Zahlen
-    expect(html).toContain('1 Timer · 1 Wecker'); // echte Scheduled-Zahlen
-    expect(html).toContain('18–29° · bedeckt'); // echte Wetter-Werte, kompakt
-    expect(html).toContain('Duisburg'); // Ort-Label in der Wetter-Notiz
+    expect(html).toContain('idle__nowcond');
+    expect(html).toContain('starker Regen');
+    expect(html).toContain('18–29°');
+    expect(html).toContain('3 mm Regen heute');
+    expect(html).toContain('idle__nowicon');
+    expect(html).toContain('glyph--rain-cloud'); // Regenwolke, kein Emoji
   });
 
-  it('Wetter beim Deploy aus (404) ⇒ Kachel bleibt gestrichelt mit ehrlichem Grund', () => {
+  it('Jetzt-Band: das Lage-Icon folgt der Kategorie (Sonne/Wolke+Sonne/Nebel/Schnee/Gewitter)', () => {
+    const withCond = (codeText: string) =>
+      render({ weather: { kind: 'live', data: { ...heute29, codeText } } });
+    expect(withCond('klar und sonnig')).toContain('glyph--sun');
+    expect(withCond('teilweise bewölkt')).toContain('glyph--cloud-sun');
+    expect(withCond('bedeckt')).toContain('glyph--cloud');
+    expect(withCond('neblig')).toContain('glyph--fog');
+    expect(withCond('leichter Schneefall')).toContain('glyph--snow-cloud');
+    expect(withCond('Gewitter')).toContain('glyph--thunder-cloud');
+  });
+
+  it('Jetzt-Band trägt KEIN Settings-Zahnrad mehr (Andi-Korrektur 26.07 — die Top-Nav hat schon eines)', () => {
+    const html = render({ weather: liveWeather });
+    expect(html).not.toContain('ctxgear');
+  });
+
+  it('Jetzt-Band: precipMm === 0 ⇒ „trocken" statt „0 mm"', () => {
+    const html = render({ weather: liveWeather });
+    expect(html).toContain('trocken');
+    expect(html).not.toContain('0 mm');
+  });
+
+  it('Jetzt-Band: Wetter beim Deploy aus (404) ⇒ ehrliche Lücken-Zeile, keine erfundenen Grade', () => {
     const html = render({ weather: { kind: 'off' } });
-    expect(count(html, 'data-status="pending"')).toBe(1); // nur die Wetter-Kachel
+    expect(html).toContain('idle__nowgap');
     expect(html).toContain('ehrlich leer statt erfunden');
-    expect(html).not.toContain('°'); // keine erfundenen Grade
+    expect(html).not.toContain('°');
   });
 
-  it('Wetter nicht lesbar ⇒ „—" + ehrliche Notiz, nie Fake-Grade', () => {
+  it('Jetzt-Band: nicht lesbar ⇒ ehrliche Notiz, nie Fake-Grade', () => {
     const html = render({ weather: { kind: 'unreachable' } });
     expect(html).toContain('Wetter grad nicht lesbar');
     expect(html).not.toContain('°');
   });
 
-  it('Diary nicht erreichbar ⇒ die Kachel sagt das, statt Zahlen zu erfinden', () => {
-    const html = render({ turns: null });
-    expect(html).toContain('Diary nicht erreichbar');
-    expect(html).not.toContain('Aussetzer'); // keine erfundene Statistik
+  it('Jetzt-Band lädt (weather=null) ⇒ „Wird gerade gelesen."', () => {
+    const html = render({ weather: null });
+    expect(html).toContain('Wird gerade gelesen.');
   });
 
-  it('leeres Diary heute ⇒ „Noch kein Turn" (leer ist ehrlich leer)', () => {
-    const html = render({ turns: [turnAt(new Date(2026, 6, 3, 22, 0), 1500)] });
-    expect(html).toContain('Noch kein Turn'); // der gestrige Turn zählt nicht als heute
+  it('„Läuft"-Karte: echte Countdowns mit Labels, sortiert wie vom Hook geliefert', () => {
+    const html = render({
+      scheduled: [
+        alarm(new Date(2026, 6, 4, 12, 4).getTime(), 'nudeln', 'Nudeln'),
+        timer(NOW + 38 * 60_000, 'waesche', 'Wäsche'),
+      ],
+    });
+    expect(html).toContain('idle__cardlist');
+    expect(html).toContain('12:04 Nudeln');
+    expect(html).toContain('38 min Wäsche');
+  });
+
+  it('„Läuft"-Karte VERSCHWINDET, wenn nichts läuft (kein „Nichts geplant"-Text mehr)', () => {
+    const html = render({ scheduled: [] });
+    expect(html).not.toContain('idle__cardlist');
+    expect(html).not.toContain('Nichts geplant');
+  });
+
+  it('Einkaufs-Karte: erste Einträge + „+N weitere", Menge als „2×"', () => {
+    const items: ListItem[] = [
+      shopItem({ id: '1', text: 'Milch', quantity: 2 }),
+      shopItem({ id: '2', text: 'Brot' }),
+      shopItem({ id: '3', text: 'Butter' }),
+      shopItem({ id: '4', text: 'Eier' }),
+      shopItem({ id: '5', text: 'Käse' }),
+    ];
+    const html = render({ shopping: items });
+    expect(html).toContain('2×');
+    expect(html).toContain('Milch');
+    expect(html).toContain('Eier'); // vierter (letzter sichtbarer) Eintrag — Reihenfolge kommt 1:1 vom Client
+    expect(html).not.toContain('Käse'); // fünfter Eintrag ist NICHT mehr direkt sichtbar
+    expect(html).toContain('+1 weitere');
+    expect(items.length - SHOPPING_VISIBLE_COUNT).toBe(1);
+  });
+
+  it('Einkaufs-Karte VERSCHWINDET, wenn die Liste leer ist (kein Fehler-Banner)', () => {
+    const html = render({ shopping: [] });
+    expect(html).not.toContain('idle__cardqty');
+    expect(html).not.toContain('Einkauf');
+  });
+
+  it('beide Haushalts-Karten leer ⇒ kein Karten-Container im Markup', () => {
+    const html = render({ scheduled: [], shopping: [] });
+    expect(html).not.toContain('idle__tiles');
   });
 
   it('stille Text-Chips: Health ehrlich, Stimme nur wenn gemessen (SVG statt Emoji)', () => {
@@ -280,5 +369,15 @@ describe('IdleFace — das Aoi-„Zuhause"-Layout (Spec §2)', () => {
     expect(html).not.toContain('vc-wave');
     expect(html).not.toContain('idle__wave');
     expect(html).not.toContain('<canvas');
+  });
+
+  it('rendert KEINE „Heute"-Turn-Statistik mehr (zog in die Diagnose-Sektion auf Aktivität um)', () => {
+    const html = render({
+      scheduled: [alarm(NOW + H)],
+      weather: liveWeather,
+      shopping: [shopItem()],
+    });
+    expect(html).not.toContain('Aussetzer');
+    expect(html).not.toContain('>Heute<'); // die frühere Kachel-Titel-Zeile
   });
 });

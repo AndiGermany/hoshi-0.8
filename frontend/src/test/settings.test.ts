@@ -148,6 +148,17 @@ describe('useSettings — Persistenz + Defaults', () => {
     });
   });
 
+  it('Amayadori (雨宿り) ist auswählbar, persistiert und als Regenpause beschrieben', () => {
+    vi.stubGlobal('localStorage', memoryStorage());
+    saveSettings({ theme: 'amayadori', language: 'de', persona: 'Standard', voice: 'coral' });
+    expect(loadSettings().theme).toBe('amayadori');
+    expect(THEMES.find((t) => t.id === 'amayadori')).toEqual({
+      id: 'amayadori',
+      label: 'Amayadori',
+      hint: 'Draußen fällt es weiter; hier drinnen ist es trocken und jemand hat Licht gelassen. (雨宿り)',
+    });
+  });
+
   it('ignoriert ungültiges Theme/Sprache/Stimme und kaputtes JSON → Defaults', () => {
     const store = memoryStorage();
     vi.stubGlobal('localStorage', store);

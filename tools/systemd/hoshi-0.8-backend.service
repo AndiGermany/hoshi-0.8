@@ -212,6 +212,10 @@ Environment=HOSHI_WORKING_SESSION_ENABLED=true
 # Bridge lebt auf dem Mac (FTS5/articles.db), ct-106 erreicht sie über die Mac-IP.
 Environment=HOSHI_GROUNDING_ENABLED=true
 Environment=HOSHI_KNOWLEDGE_BRIDGE_BASE_URL=http://__MAC_IP__:8035
+# Knowledge-Pack-v1-Evidence-API (`/v1/search`). Default/Deploy bleibt AUS, bis
+# ein manifestierter Pack den eingefrorenen Recall/FMR/Latenz-Gate bestanden hat.
+# Das ändert weder DB noch Sidecar; der Owner flippt erst nach Offline-Beweis.
+Environment=HOSHI_KNOWLEDGE_PACK_V1_ENABLED=false
 # 🌦️ Weather-Grounding (Parität: 0.5 hatte es, 0.8 nicht): "Wie wird das Wetter?"
 # → echte Open-Meteo-Vorhersage (kein API-Key), read-only, kein Gerät. Ort = Andis
 # HA-Home (Ruhrgebiet). CompositeGroundingPort: Wetter-first, sonst Wiki.

@@ -3,7 +3,7 @@ package de.hoshi.core.pipeline
 import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteProvider
-import de.hoshi.core.pipeline.lang.deOr
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 
 /**
  * **FactCoverageGate — die Anti-Konfabulations-Wand (Kai: „Wand statt Tapete").**
@@ -81,6 +81,21 @@ class FactCoverageGate(
         return lax && queryOnTarget(groundBlock, query)
     }
 
+    /**
+     * Strengere, fail-closed Coverage-Sicht für einen expliziten lokalen
+     * Wissens-Lookup. Anders als [groundingCovered] kennt sie absichtlich KEINE
+     * `non-LOCAL ⇒ true`-Ausnahme und ignoriert [enabled]/[strict]: ein Lookup
+     * gilt nur dann als gedeckt, wenn ein echter Block vorliegt UND mindestens
+     * ein substantielles Query-Token darin vorkommt.
+     *
+     * Eine leere/Filler-only Query ist nicht beweisbar gedeckt und liefert daher
+     * `false`. So kann ein Aufrufer nie durch ein ausgeschaltetes Legacy-Gate
+     * oder fehlende Query-Substanz versehentlich „Wissen vorhanden" behaupten.
+     */
+    fun lookupCovered(groundBlock: String, query: String): Boolean =
+        Companion.groundingCovered(RouteProvider.LOCAL, groundBlock) &&
+            queryOnTarget(groundBlock, query, emptyContentTokensCovered = false)
+
     /** Zweiwertiges Urteil: normal weiter zum Brain, oder ehrlich deflekten (kein Brain). */
     sealed interface Decision {
         /** Normal weiter — den Brain rufen (der Default für alles außer dem Rettungs-Fall). */
@@ -156,11 +171,24 @@ class FactCoverageGate(
          * (die Wärme-Leitplanke [looksLikeKnowledgeQuery] fängt solche Fälle ohnehin).
          */
         fun queryOnTarget(groundBlock: String, query: String): Boolean {
+            return queryOnTarget(groundBlock, query, emptyContentTokensCovered = true)
+        }
+
+        /**
+         * Gemeinsamer Token-Matcher. Der Legacy-Strict-Pfad bleibt bei einer
+         * Filler-only Query konservativ offen; der explizite Lookup setzt
+         * [emptyContentTokensCovered] auf `false` und schließt beweislos.
+         */
+        private fun queryOnTarget(
+            groundBlock: String,
+            query: String,
+            emptyContentTokensCovered: Boolean,
+        ): Boolean {
             val block = groundBlock.lowercase()
             val contentTokens = query.lowercase().split(TOKEN_SPLIT).filter { tok ->
                 tok.length > 3 && tok !in INTERROGATIVES && tok !in STRICT_FILLER
             }
-            if (contentTokens.isEmpty()) return true
+            if (contentTokens.isEmpty()) return emptyContentTokensCovered
             return contentTokens.any { block.contains(it) }
         }
 
@@ -177,6 +205,13 @@ class FactCoverageGate(
             "lang", "alt", "weit", "gibt", "haben", "hatte", "hatten", "sind", "eine",
             "einem", "einen", "einer", "eines", "dieser", "diese", "dieses", "denn",
             "eigentlich", "genau", "bitte", "mal",
+            // DE — Possessivformen tragen keinen Gegenstand der Wissensfrage
+            "mein", "meine", "meiner", "meinem", "meinen", "meines",
+            "dein", "deine", "deiner", "deinem", "deinen", "deines",
+            "sein", "seine", "seiner", "seinem", "seinen", "seines",
+            "ihr", "ihre", "ihrer", "ihrem", "ihren", "ihres",
+            "unser", "unsere", "unserer", "unserem", "unseren", "unseres",
+            "euer", "eure", "eurer", "eurem", "euren", "eures",
             // EN — question scaffold
             "year", "does", "did", "was", "were", "many", "much", "tall", "high", "long",
             "old", "name", "named", "called", "come", "from", "there", "have", "has",
@@ -250,21 +285,54 @@ class FactCoverageGate(
         )
 
         /**
-         * Ehrliche Deflection-Phrase (DE): kein „ich kann nicht", sondern zugewandt +
-         * bietet das Nachschauen an. Deterministisch, keine Zufalls-Streuung nötig.
+         * **Anti-Repeat-Ring für die Deflect-Varianten** (Streuungs-Nachtrag
+         * 2026-07-26, Andi: „nicht immer die gleiche Antwort — gestreut, nicht
+         * statisch"). Companion-scoped ⇒ JVM-weit EIN Ring über die
+         * Prozess-Laufzeit — EXAKT derselbe [AntiRepeatPicker]-Mechanismus wie
+         * [ResponseFormatter]s `cloudConsentAccept`-Pool (kein zweites
+         * Zufalls-System, s. [AntiRepeatPicker]-KDoc).
          */
-        const val DEFLECT_DE: String =
-            "Ehrlich, das hab ich grad nicht sicher parat — soll ich kurz nachschauen?"
-
-        /** Ehrliche Deflection-Phrase (EN), analog. */
-        const val DEFLECT_EN: String =
-            "Honestly, I'm not sure I've got that right now — want me to look it up quickly?"
+        private val deflectPicker = AntiRepeatPicker()
 
         /**
-         * Pure, deterministische Auswahl der Deflection nach Turn-Sprache. ES/FR/IT
-         * fallen auf EN zurück (s. [de.hoshi.core.pipeline.lang.deOr]), bis ein
-         * Übersetzer-Pod eigene Strings liefert.
+         * Wählt eine Deflection-Phrase aus dem
+         * [de.hoshi.core.pipeline.lang.LanguagePack.factCoverageDeflect]-Pool der
+         * Turn-[language] — ECHT fünfsprachig seit dem LanguagePack-Umzug (Andi
+         * 2026-07-26), kein DE+EN-[de.hoshi.core.pipeline.lang.deOr]-Fallback mehr
+         * für ES/FR/IT. Seit dem Streuungs-Nachtrag NICHT mehr deterministisch:
+         * [deflectPicker] wählt eine von 3–4 Varianten je Sprache (Anti-Repeat,
+         * nie zweimal hintereinander dieselbe) — Tests prüfen Pool-Mitgliedschaft
+         * statt Gleichheit (s. [FactCoverageGateTest]).
          */
-        fun deflection(language: Language): String = language.deOr(DEFLECT_DE, DEFLECT_EN)
+        fun deflection(language: Language): String =
+            deflectPicker.pick(
+                "fact_coverage_deflect",
+                LanguagePackRegistry.forLanguage(language).factCoverageDeflect,
+            )
+
+        /**
+         * Alle Deflect-Varianten ALLER Sprachen in einer flachen Menge — NICHT zur
+         * Auswahl (s. [deflection]), sondern zur sprach-unabhängigen ERKENNUNG
+         * „war das ein Deflect-Turn?" (s. [de.hoshi.web.TurnDiaryTap], das vor dem
+         * Streuungs-Nachtrag auf Gleichheit mit genau EINER DE-/EN-Konstante prüfte
+         * — das erkannte nach dem Pooling nur noch ~1-von-4 der echten Deflects,
+         * darum jetzt Mengen-Mitgliedschaft über alle fünf Sprachen).
+         */
+        val ALL_DEFLECT_VARIANTS: Set<String> by lazy {
+            Language.entries.flatMap { LanguagePackRegistry.forLanguage(it).factCoverageDeflect }.toSet()
+        }
+
+        /**
+         * **OFFLINE-Kennzeichnung** ([EscalationMode.OFFLINE], Andi-Auftrag 2026-07-26):
+         * dieselbe Deflect-Situation wie [deflection] (FACT_SHORT, Grounding leer), aber
+         * statt ehrlich auszuweichen antwortet das LOKALE Brain aus eigenem Wissen — diese
+         * kurze, warme Vorbemerkung markiert die folgende Antwort als UNBELEGT. Anders als
+         * [deflection] lebt sie NICHT als Modul-Konstante hier, sondern ECHT in allen fünf
+         * Sprachen im [de.hoshi.core.pipeline.lang.LanguagePack]
+         * ([de.hoshi.core.pipeline.lang.LanguagePack.factCoverageOfflineDisclaimer]) — kein
+         * DE+EN-[deOr]-Fallback für ES/FR/IT.
+         */
+        fun offlineDisclaimer(language: Language): String =
+            LanguagePackRegistry.forLanguage(language).factCoverageOfflineDisclaimer
     }
 }

@@ -56,8 +56,16 @@ class HttpSidecarProbe(
                     SidecarHealth.degraded("status=loading (Warmup, noch nicht bereit)", model)
                 status.isNotBlank() && status != "ok" ->
                     SidecarHealth.degraded("status=$status (nicht 'ok')", model)
-                expected != null && model != null && !model.contains(expected) ->
-                    SidecarHealth.degraded("model='$model' enthält nicht soll='$expected' (Drift)", model)
+                // KEINE Drift-Pruefung mehr (Andi-Entscheid 2026-07-26: „Die Anzeige
+                // soll nicht die Abweichung pruefen — das ist Quatsch"). Seit der
+                // Auto-Modellwahl wechselt das Brain-Modell ABSICHTLICH mehrmals am
+                // Tag — ein einzelnes Soll-Modell als Massstab erzeugt dann Dauer-
+                // Warnungen fuer gewollte Zustaende (heute live: dreimal in einer
+                // Woche, jedes Mal war die „Drift" ein bewusster Wechsel). Die Pille
+                // zeigt jetzt, WAS laeuft; ob es lebt, sagen status/loaded — und
+                // einen HAENGENDEN Wechsel meldet der Sidecar selbst ehrlich ueber
+                // switch_stuck_seconds. Nur ein fehlendes model-Feld bleibt DEGRADED:
+                // ein Brain, das nicht sagen kann, was es ist, ist nicht gesund.
                 expected != null && model == null ->
                     SidecarHealth.degraded("kein .model-Feld (erwartet '$expected')", null)
                 status == "ok" ->

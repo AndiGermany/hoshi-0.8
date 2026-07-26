@@ -156,8 +156,10 @@ class TurnOrchestratorLookupIntentTest {
         assertEquals(listOf(""), cloud.snippets, "Egress-Gesetz: NUR die Frage, Schnipsel leer")
         assertEquals(0, brain.callCount.get(), "der Intent-Turn ist brain-frei")
         assertTrue(
-            joinedText(intent).contains(TurnOrchestrator.ESCALATION_FRAME_DE + cloudAnswer),
-            "attribuierte verbatim-Antwort",
+            de.hoshi.core.pipeline.lang.LangDe.PACK.escalationAnswerFrame.any {
+                joinedText(intent).contains(it + cloudAnswer)
+            },
+            "attribuierte verbatim-Antwort (Pool-Variante), war: '${joinedText(intent)}'",
         )
     }
 
@@ -515,11 +517,24 @@ class TurnOrchestratorLookupIntentTest {
         // Event-für-Event identisch BIS AUF Index 1 (die Cloud-Consent-Floskel,
         // ResponseFormatter.cloudConsentAccept — Anti-Repeat-Zufallsauswahl aus
         // einem Phrasen-Pool, JE Formatter-Instanz unabhängig; hat mit der
-        // Modell-/Port-Wahl dieses Tests nichts zu tun).
+        // Modell-/Port-Wahl dieses Tests nichts zu tun) UND die Eskalations-
+        // Rahmung (TurnOrchestrator.escalationAnswerFrame — seit dem
+        // Streuungs-Nachtrag 2026-07-26 ebenfalls ein Anti-Repeat-Pool, zwei
+        // unabhängige turn()-Calls dürfen legitim verschiedene Varianten
+        // ziehen), darum vor dem Vergleich auf einen festen Marker normalisiert.
+        val framePool = de.hoshi.core.pipeline.lang.LangDe.PACK.escalationAnswerFrame
+        fun normalizeFrame(events: List<ChatEvent>): List<ChatEvent> = events.map { ev ->
+            if (ev is ChatEvent.TextDelta) {
+                val frame = framePool.firstOrNull { ev.text.startsWith(it) }
+                if (frame != null) ev.copy(text = "<FRAME>" + ev.text.removePrefix(frame)) else ev
+            } else {
+                ev
+            }
+        }
         assertEquals(refEvents.size, onEvents.size, "gleiche Event-Anzahl")
         assertEquals(
-            refEvents.filterIndexed { i, _ -> i != 1 },
-            onEvents.filterIndexed { i, _ -> i != 1 },
+            normalizeFrame(refEvents).filterIndexed { i, _ -> i != 1 },
+            normalizeFrame(onEvents).filterIndexed { i, _ -> i != 1 },
             "ohne konfiguriertes Recherche-Modell laufen BEIDE Phrasen byte-identisch über den Standard-Port " +
                 "(Start/Antwort/Quelle/Done — Provider-Label, Kosten, Query-Hash allesamt gleich)",
         )

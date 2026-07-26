@@ -6,19 +6,30 @@ import {
   clockParts,
   dueClock,
   fmtRemaining,
+  runningItemLine,
   useScheduledItems,
   SCHEDULED_TEXTS,
   type ScheduledItem,
-  type ScheduledKind,
 } from '../hooks/useScheduledItems';
-import { useDiary, type DiaryTurn } from '../hooks/useDiary';
+import type { DiaryTurn } from '../hooks/useDiary';
 import {
   useWeatherToday,
   type WeatherToday,
   type WeatherTodayState,
 } from '../hooks/useWeatherToday';
-import { AlarmGlyph, CloudGlyph, GearGlyph, LockGlyph } from './icons';
-import type { SettingsAnchorId, SettingsCategoryId } from './SettingsPanel';
+import { useShoppingList } from '../hooks/useShoppingList';
+import type { ListItem } from '../api/lists';
+import {
+  AlarmGlyph,
+  CloudGlyph,
+  CloudSunGlyph,
+  FogGlyph,
+  LockGlyph,
+  RainCloudGlyph,
+  SnowCloudGlyph,
+  SunGlyph,
+  ThunderCloudGlyph,
+} from './icons';
 import { de } from '../i18n/de';
 import { useUiStrings } from '../i18n';
 import type { IdleFaceStrings, ScheduledStrings } from '../i18n/types';
@@ -26,11 +37,11 @@ import type { IdleFaceStrings, ScheduledStrings } from '../i18n/types';
 /**
  * Sprach-Katalog-Default für die exportierten PUR-Funktionen unten (Muster
  * {@link BRAIN_MODEL_TEXTS} in SettingsPanel.tsx): `idleface.test.tsx` ruft
- * `alarmLineText`/`todayTileValue`/`planTileValue`/`weatherTile`/`statusChips`
- * DIREKT mit der alten Signatur auf (kein Strings-Argument) — der Default
- * `de.idleFace` hält dieses Rendering byte-gleich zum bisherigen Stand. Die
- * echte Komponente {@link IdleFace} reicht stattdessen den LIVE-Katalog
- * (`useUiStrings().idleFace`) durch.
+ * `alarmLineText`/`weatherNowContent`/`statusChips` DIREKT mit der alten
+ * Signatur auf (kein Strings-Argument) — der Default `de.idleFace` hält dieses
+ * Rendering byte-gleich zum bisherigen Stand. Die echte Komponente
+ * {@link IdleFace} reicht stattdessen den LIVE-Katalog (`useUiStrings().idleFace`)
+ * durch.
  */
 const IDLE_FACE_TEXTS = de.idleFace;
 
@@ -43,50 +54,61 @@ const DECIMAL_SEPARATOR: Record<string, string> = {
   'it-IT': ',',
 };
 
+/** Höchstens so viele Einkaufs-Einträge sichtbar, Rest hinter „+N weitere" (Andi-Vorgabe „3-4 Einträge"). */
+export const SHOPPING_VISIBLE_COUNT = 4;
+
 /**
- * **IdleFace** — das Aoi-Idle-/Papier-Gesicht, Andis „Zuhause"-Layout
- * (Cowork-Spec 2026-07-02 §2, von Andi abgenommen). Vier Elemente:
+ * **IdleFace** — das Aoi-Idle-/Papier-Gesicht, Andis Flur-Display-Layout
+ * (ursprünglich Cowork-Spec 2026-07-02 §2; grundlegend neu geschnitten beim
+ * Flur-Display-Umbau, Andi-Auftrag 2026-07-26 — Home lief bei Andi als
+ * iPad-Display im Flur und verschenkte Fläche/Informationen). Fünf Elemente:
  *
- *  1. **Typo-first Uhr**: echte Zeit, tabular-nums, groß/fluid — dazu der
- *     tageszeitbewusste Gruß ({@link dayPartForHour} + `idleFace.greeting`
- *     aus dem UI-Sprach-Katalog) + echtes Datum.
+ *  1. **Kopfzeile**: links die typo-first Uhr + tageszeitbewusster Gruß
+ *     ({@link dayPartForHour} + `idleFace.greeting`) + echtes Datum; RECHTS
+ *     das **Jetzt-Band** — die frühere „Wetter"-Kachel ist keine Kachel mehr,
+ *     sondern läuft prominent neben der Uhr: ein dezentes Lage-Icon
+ *     ({@link weatherCategory}/{@link WeatherGlyph} — feste Zuordnung auf den
+ *     deutschen WMO-Text, kein buntes Wetter-App-Icon) + Wetterlage (groß),
+ *     Tagesspanne, und ENDLICH `precipMm` gerendert (kam im FE an, wurde nie
+ *     gezeigt) als warme Zeile „3 mm Regen heute" / „trocken"
+ *     ({@link weatherNowContent}). KEIN Settings-Zahnrad mehr hier (Andi-
+ *     Korrektur 26.07: das Zahnrad oben rechts in der Top-Nav reicht — ein
+ *     zweites an derselben Stelle war redundant).
  *  2. **Wecker-Zeile**: ⏰ + „Wecker 07:00 · noch X h" + 2px-Fortschritts-
- *     Haarlinie in accent + rechts der Vertrauens-Satz „klingelt auch offline"
- *     (Text ist Teil des Designs — und WAHR: der Wecker lebt im lokalen
- *     Backend-Store, nicht in einer Cloud; er feuert auch ohne Internet).
- *     Kein Wecker gestellt ⇒ die Zeile sagt das ehrlich (kein Fortschritt,
- *     kein Vertrauens-Satz über etwas, das es nicht gibt).
- *  3. **3 ehrliche Kacheln** (die fixierte Designsprache): LIVE = ausgefüllt
- *     mit ECHTEN Werten aus bestehenden Endpoints („Heute" aus
- *     GET /api/v1/diary/recent · „Geplant" aus GET /api/v1/scheduled ·
- *     „Wetter" aus GET /api/v1/weather/today — derselbe Open-Meteo-Datenpfad,
- *     den Hoshi im Gespräch nutzt) — kommend = gestrichelt mit ehrlichem
- *     Grund (Wetter beim Deploy aus ⇒ 404 ⇒ „kommt", wie vor dem Endpoint).
- *     Fehlt ein Datum (Diary/Wetter nicht erreichbar), zeigt die Kachel das
- *     ehrlich — nie Fake-Werte.
- *  4. **Statuszeile als stille Text-Chips** statt lauter Pillen:
- *     `● online · ☁ Stimme: Cloud` bzw. `🔒 Stimme: lokal`. Der Stimme-Chip
- *     erscheint NUR, wenn `/api/v1/ops/status` das voice-Feld ehrlich liefert
- *     (nichts behaupten, was nichts misst). Der aufklappbare Ops-Punkt bleibt
- *     unangetastet in der Top-Nav ({@link OpsStatusPill}).
+ *     Haarlinie in accent + rechts der Vertrauens-Satz „klingelt auch offline".
+ *     Kein Wecker gestellt ⇒ die Zeile sagt das ehrlich.
+ *  3. **„Läuft"-Karte** (ex-„Geplant"): zeigt jetzt ECHTE Countdowns mit Labels
+ *     statt nur einer Zählung („12:04 Nudeln" · „38 min Wäsche",
+ *     {@link runningItemLine} aus `hooks/useScheduledItems.ts` — dieselbe
+ *     Zeit-Logik wie ScheduledPanel.tsx, nur im knappen Flur-Ton statt
+ *     „um"/„noch"). Läuft nichts ⇒ die Karte VERSCHWINDET (kein „Nichts
+ *     geplant"-Platzhalter mehr — Lärm-Vermeidung, Muster ScheduledPanel).
+ *  4. **Einkaufs-Karte** (neu, `GET /api/v1/lists`, Andi-JA 2026-07-08): die
+ *     ersten {@link SHOPPING_VISIBLE_COUNT} Einträge + „+N weitere", Menge als
+ *     „2×". Leere Liste ⇒ Karte weg; Fetch-Fehler liefert still `[]`
+ *     (`api/lists.ts`) ⇒ dieselbe Ehrlichkeits-/Lärm-Achse, kein Fehler-Banner
+ *     im Flur.
+ *  5. **Statuszeile** als stille Text-Chips: `● online · ☁ Stimme: Cloud` bzw.
+ *     `🔒 Stimme: lokal`. Der Stimme-Chip erscheint NUR, wenn `/api/v1/ops/status`
+ *     das voice-Feld ehrlich liefert.
+ *
+ *  UMGEZOGEN (Flur-Display-Umbau): die „Heute"-Turn-Statistik-Kachel lebt jetzt
+ *  in der „Diagnose"-Sektion am Ende von Aktivität
+ *  ({@link ../views/UebersichtView.tsx#DiagnoseSection}) — sie ist Entwickler-
+ *  Diagnostik, kein Flur-Inhalt. `IdleFace` braucht darum kein Diary/`turns`
+ *  mehr.
  *
  *  KEINE Welle hier (Andi-Feedback 2026-07-06 + Cowork-Korrektur
  *  20260706-1729): auf der Übersicht hört Hoshi nichts — also leuchtet auch
- *  nichts (kein synthetisches Atmen, nirgends). Die Welle existiert NUR im
- *  Chat-Voice-Flow, wenn ein Audio-Kanal wirklich offen ist; ihr Erscheinen
- *  dort IST das Signal „jetzt höre ich". Hier: ruhiges Papier.
+ *  nichts. Die Welle existiert NUR im Chat-Voice-Flow bei offenem Audio-Kanal.
  *
  * {@link IdleFace} ist prop-getrieben (kein Netz) und braucht keine DOM-Umgebung
  * → weiter unit-testbar per `renderToStaticMarkup` (test/idleface.test.tsx).
- * Andi-Auftrag 21.07 (UI-Sprache betrifft auch den ersten Bildschirm): die
- * Komponente ruft jetzt `useUiStrings()` (Muster {@link TileCard} in
- * UebersichtView.tsx) — der EINZIGE Hook hier, kein Netz/Fetch. Die
- * exportierten PUR-Helfer (`alarmLineText`, `todayTileValue`, `planTileValue`,
- * `weatherTile`, `statusChips`, `fmtP50`) bleiben hook-frei und nehmen den
- * Katalog optional als Parameter (Default `de.idleFace`/`de.locale` — Muster
- * {@link BRAIN_MODEL_TEXTS} in SettingsPanel.tsx), damit `idleface.test.tsx`
- * unverändert byte-gleich grün bleibt. Die Live-Verdrahtung (Ops/Scheduled/
- * Diary-Hooks + Minuten-Tick) macht {@link IdleFaceLive}.
+ * Die exportierten PUR-Helfer (`alarmLineText`, `weatherNowContent`, `fmtPrecip`,
+ * `statusChips`) bleiben hook-frei und nehmen den Katalog optional als Parameter
+ * (Default `de.idleFace`/`de.locale`), damit `idleface.test.tsx` unverändert
+ * byte-gleich grün bleibt. Die Live-Verdrahtung (Ops/Scheduled/Wetter/Einkauf-
+ * Hooks + Minuten-Tick) macht {@link IdleFaceLive}.
  */
 
 /* ── pure Helfer (exportiert für Tests) ─────────────────────────────────── */
@@ -139,7 +161,12 @@ export interface DiaryTodayStats {
   errors: number;
 }
 
-/** Verdichtet die Diary-Zeilen auf HEUTE (Turns · p50 · Aussetzer). */
+/**
+ * Verdichtet die Diary-Zeilen auf HEUTE (Turns · p50 · Aussetzer). Lebt hier
+ * (statt in AktivitaetView.tsx), weil die Formel unverändert aus der früheren
+ * „Heute"-Kachel dieser Datei stammt — die „Diagnose"-Sektion in
+ * `views/UebersichtView.tsx` importiert sie von hier statt sie zu duplizieren.
+ */
 export function diaryTodayStats(turns: DiaryTurn[], nowMs: number): DiaryTodayStats {
   const now = new Date(nowMs);
   const today = turns.filter((t) => {
@@ -168,8 +195,8 @@ export function fmtP50(ms: number, locale: string = de.locale): string {
 
 /**
  * „14 Turns · p50 1,8 s · 0 Aussetzer" — nur echte Diary-Zahlen. „p50" bleibt
- * über alle Sprachen hinweg unübersetzt (Fachbegriff, Muster: `activity.
- * stageLatencyHint` trägt „p50/p95" auch in en/es/fr/it wörtlich).
+ * über alle Sprachen hinweg unübersetzt (Fachbegriff). Genutzt von der
+ * „Diagnose"-Sektion (die ex-„Heute"-Kachel, s. Datei-KDoc oben).
  */
 export function todayTileValue(
   stats: DiaryTodayStats,
@@ -181,80 +208,94 @@ export function todayTileValue(
   return `${stats.turns} ${word} · p50 ${p50} · ${stats.errors} ${t.heute.outageWord}`;
 }
 
-const PLAN_KINDS: readonly ScheduledKind[] = ['TIMER', 'ALARM', 'REMINDER'];
-
-/**
- * „2 Timer · 1 Wecker" aus den aktiven Items — leer ⇒ „Nichts geplant".
- * Die Timer/Wecker/Erinnerung-Nomen kommen seit dem Langschwanz-Sweep 25.07 aus
- * `scheduled.kindWord` der AKTIVEN Sprache; ohne Argument bleibt es Deutsch.
- */
-export function planTileValue(
-  items: ScheduledItem[],
-  t: IdleFaceStrings = IDLE_FACE_TEXTS,
-  s: ScheduledStrings = SCHEDULED_TEXTS,
-): string {
-  const parts = PLAN_KINDS.flatMap((kind) => {
-    const count = items.filter((i) => i.kind === kind).length;
-    if (count === 0) return [];
-    return [`${count} ${count === 1 ? s.kindWord[kind].one : s.kindWord[kind].many}`];
-  });
-  return parts.length === 0 ? t.geplant.nichtsGeplant : parts.join(' · ');
+/** ms-Niederschlag mit dem Dezimaltrenner der aktiven Sprache: 3 → „3", 1.2 → „1,2" (de) / „1.2" (en). */
+export function fmtPrecip(mm: number, locale: string = de.locale): string {
+  const rounded = Math.round(Math.max(0, mm) * 10) / 10;
+  if (Number.isInteger(rounded)) return String(rounded);
+  const sep = DECIMAL_SEPARATOR[locale] ?? '.';
+  return rounded.toFixed(1).replace('.', sep);
 }
 
-/** „18–29° · bedeckt" — kompakter Kachel-Wert aus den echten Tageswerten. */
-export function weatherTileValue(w: WeatherToday): string {
-  return `${w.todayMin}–${w.todayMax}° · ${w.codeText}`;
-}
+/** Icon-Kategorie einer Wetterlage — s. {@link weatherCategory}. */
+export type WeatherCategory = 'clear' | 'partly' | 'cloudy' | 'fog' | 'rain' | 'snow' | 'thunder';
 
 /**
- * Die Wetter-Kachel aus dem ehrlichen Endpoint-Zustand:
- *  - live-Daten ⇒ LIVE-Kachel mit echtem Wert + Ort-Label in der Notiz.
- *  - `off` (404, Wetter beim Deploy aus) ⇒ gestrichelt „kommt" — exakt die
- *    ehrliche Lücke von früher, nur mit dem echten Grund.
- *  - `unreachable` ⇒ „—" + „Wetter grad nicht lesbar" (Muster „Heute"-Kachel
- *    bei Diary-Ausfall: LIVE-Rahmen, ehrliche Lücke, nie Fake-Werte).
- *  - `null` (erster Fetch läuft) ⇒ gestrichelt, ehrlich „wird gelesen".
- *
- * `weatherTileValue`/`w.codeText` (der WMO-Lagen-Text) kommt vom Backend
- * (`hooks/useWeatherToday.ts`, außerhalb dieser Scheibe) und bleibt darum
- * deutsch, unabhängig von der UI-Sprache — nur Kachel-Titel/Notizen hier
- * folgen dem Katalog.
+ * Ordnet den deutschen WMO-Lagen-Text (`codeText`, IMMER Deutsch — s. KDoc
+ * {@link weatherNowContent}) einer Icon-Kategorie zu (Andi-Auftrag 26.07:
+ * „dezente Regenwolken bei Regen etc."). Feste, erschöpfende Zuordnung gegen
+ * die 28 bekannten Backend-Strings (`WeatherCodeTexts.kt`, WMO-Codes 0–99) +
+ * deren Fallback „wechselhaft"; Reihenfolge ist absichtlich (z. B. „Schnee-
+ * schauer" enthält kein „regen", aber „Regenschauer" enthält „regen" — daher
+ * Schnee VOR Regen geprüft). Unbekannter/neuer Text ⇒ 'cloudy', die
+ * neutralste ehrliche Annäherung statt eines geratenen Sonnen-/Regen-Icons.
  */
-export function weatherTile(
+export function weatherCategory(codeText: string): WeatherCategory {
+  const t = codeText.toLowerCase();
+  if (t.includes('gewitter')) return 'thunder';
+  if (t.includes('schnee')) return 'snow';
+  if (t.includes('neb')) return 'fog'; // „neblig" UND „gefrierender Nebel" (kein gemeinsames „nebel")
+  if (t.includes('regen')) return 'rain'; // Regen, Nieselregen, Regenschauer
+  if (t.includes('klar')) return 'clear'; // klar und sonnig, überwiegend klar
+  if (t.includes('teilweise bewölkt')) return 'partly';
+  return 'cloudy'; // bedeckt, wechselhaft (Fallback), unbekannt
+}
+
+/** Das dezente Lage-Icon je Kategorie — muted stroke-SVGs (components/icons.tsx), kein Emoji/Farb-Icon-Set. */
+function WeatherGlyph({ category, className }: { category: WeatherCategory; className?: string }) {
+  switch (category) {
+    case 'clear':
+      return <SunGlyph className={className} />;
+    case 'partly':
+      return <CloudSunGlyph className={className} />;
+    case 'fog':
+      return <FogGlyph className={className} />;
+    case 'rain':
+      return <RainCloudGlyph className={className} />;
+    case 'snow':
+      return <SnowCloudGlyph className={className} />;
+    case 'thunder':
+      return <ThunderCloudGlyph className={className} />;
+    case 'cloudy':
+      return <CloudGlyph className={className} />;
+  }
+}
+
+/** Der Inhalt des Jetzt-Bands: entweder eine ehrliche Lücke (Text) oder die echten Wetter-Zeilen + Icon-Kategorie. */
+export type WeatherNowContent =
+  | { kind: 'gap'; text: string }
+  | { kind: 'live'; cond: string; span: string; precip: string; category: WeatherCategory };
+
+/**
+ * Leitet den Inhalt des Jetzt-Bands aus dem ehrlichen Wetter-Endpoint-Zustand
+ * ab (ex-`weatherTile`, jetzt kein `.tile` mehr):
+ *  - `null` (erster Fetch läuft) / `off` (404, Wetter beim Deploy aus) /
+ *    `unreachable` (401/5xx/Netz) ⇒ EINE ehrliche Lücken-Zeile — exakt dieselben
+ *    Texte wie die frühere gestrichelte Kachel, nur ohne Kachel-Rahmen.
+ *  - `live` ⇒ Icon-Kategorie ({@link weatherCategory}) + Wetterlage
+ *    (`codeText`), Tagesspanne („18–29°"), und die warme Niederschlags-Zeile
+ *    (`precipMm > 0` ⇒ „3 mm Regen heute" via {@link fmtPrecip}, sonst
+ *    „trocken" — der Wert kam im FE zwar an, wurde vor diesem Umbau aber nie
+ *    gerendert). `codeText` bleibt deutsch, unabhängig von der UI-Sprache
+ *    (kommt vom Backend, s. `hooks/useWeatherToday.ts`) — nur die Icon-
+ *    Zuordnung liest ihn, nichts wird übersetzt.
+ */
+export function weatherNowContent(
   weather: WeatherTodayState | null,
   t: IdleFaceStrings = IDLE_FACE_TEXTS,
-): IdleTile {
-  if (weather === null) {
-    return {
-      name: t.wetter.name,
-      honesty: 'pending',
-      value: '—',
-      note: t.wetter.loadingNote,
-    };
-  }
-  switch (weather.kind) {
-    case 'live':
-      return {
-        name: t.wetter.name,
-        honesty: 'live',
-        value: weatherTileValue(weather.data),
-        note: t.wetter.liveNote(weather.data.label),
-      };
-    case 'off':
-      return {
-        name: t.wetter.name,
-        honesty: 'pending',
-        value: '—',
-        note: t.wetter.offNote,
-      };
-    case 'unreachable':
-      return {
-        name: t.wetter.name,
-        honesty: 'live',
-        value: '—',
-        note: t.wetter.unreachableNote,
-      };
-  }
+  locale: string = de.locale,
+): WeatherNowContent {
+  if (weather === null) return { kind: 'gap', text: t.wetter.loadingNote };
+  if (weather.kind === 'off') return { kind: 'gap', text: t.wetter.offNote };
+  if (weather.kind === 'unreachable') return { kind: 'gap', text: t.wetter.unreachableNote };
+  const w: WeatherToday = weather.data;
+  const precip = w.precipMm > 0 ? t.wetter.precipSome(fmtPrecip(w.precipMm, locale)) : t.wetter.precipNone;
+  return {
+    kind: 'live',
+    cond: w.codeText,
+    span: `${w.todayMin}–${w.todayMax}°`,
+    precip,
+    category: weatherCategory(w.codeText),
+  };
 }
 
 export interface StatusChip {
@@ -296,48 +337,6 @@ function chipGlyph(tone: StatusChip['tone']) {
   return '●';
 }
 
-/* ── Kachel-Baustein (fixierte Designsprache: LIVE gefüllt · kommend gestrichelt) ── */
-
-export interface IdleTile {
-  name: string;
-  honesty: 'live' | 'pending';
-  value: string;
-  note: string;
-}
-
-function IdleTileCard({ tile, onSettings }: { tile: IdleTile; onSettings?: () => void }) {
-  const { idleFace } = useUiStrings();
-  return (
-    <article
-      className={`tile idle__tile tile--${tile.honesty}`}
-      data-status={tile.honesty}
-      aria-disabled={tile.honesty !== 'live'}
-    >
-      <div className="tile__head">
-        <span className="tile__name">{tile.name}</span>
-        <span className="tile__pill">{tile.honesty === 'live' ? idleFace.live : idleFace.pending}</span>
-        {/* Kontextueller Settings-Anker (Cowork-Spec V1): springt in „Standort &
-            Integrationen"/Wetter-Standort — nur an der Wetter-Kachel, wo das
-            Setting wirklich wirkt. Dezent (--text-4, .ctxgear), kein Layout-
-            Sprung — sitzt einfach nach der live/kommt-Pille. */}
-        {onSettings && (
-          <button
-            type="button"
-            className="ctxgear"
-            onClick={onSettings}
-            aria-label={idleFace.wetter.settingsAria}
-            title={idleFace.wetter.settingsTitle}
-          >
-            <GearGlyph className="ctxgear__icon" />
-          </button>
-        )}
-      </div>
-      <div className="tile__value">{tile.value}</div>
-      <p className="tile__note">{tile.note}</p>
-    </article>
-  );
-}
-
 /* ── die Ansicht (rein prop-getrieben) ──────────────────────────────────── */
 
 export interface IdleFaceProps {
@@ -346,32 +345,18 @@ export interface IdleFaceProps {
   health: HealthState;
   /** Aktive TTS-Engine aus /api/v1/ops/status — null = unbekannt (kein Chip). */
   voice: OpsVoice | null;
-  /** Aktive Items aus GET /api/v1/scheduled (Wecker-Zeile + „Geplant"-Kachel). */
+  /** Aktive Items aus GET /api/v1/scheduled (Wecker-Zeile + „Läuft"-Karte). */
   scheduled: ScheduledItem[];
-  /** Diary-Zeilen aus GET /api/v1/diary/recent — null = nicht erreichbar. */
-  turns: DiaryTurn[] | null;
   /**
    * Heutiges Wetter aus GET /api/v1/weather/today — null = erster Fetch läuft;
-   * `off`/`unreachable` sind EHRLICHE Zustände (siehe {@link weatherTile}).
+   * `off`/`unreachable` sind EHRLICHE Zustände (siehe {@link weatherNowContent}).
    */
   weather: WeatherTodayState | null;
-  /**
-   * Öffnet den Settings-Drawer deep-gelinkt (App.tsx `openSettings`). Optional:
-   * fehlt es (z. B. in Tests), rendert die Wetter-Kachel ohne Zahnrad — kein
-   * Bruch, nur ein fehlender Komfort-Anker.
-   */
-  onOpenSettings?: (category: SettingsCategoryId, anchor?: SettingsAnchorId) => void;
+  /** Einkaufsliste aus GET /api/v1/lists — leer = Karte weg (kein Platzhalter). */
+  shopping: ListItem[];
 }
 
-export function IdleFace({
-  nowMs,
-  health,
-  voice,
-  scheduled,
-  turns,
-  weather,
-  onOpenSettings,
-}: IdleFaceProps) {
+export function IdleFace({ nowMs, health, voice, scheduled, weather, shopping }: IdleFaceProps) {
   const { idleFace, locale, scheduled: schedText } = useUiStrings();
   const date = new Date(nowMs);
   const greeting = idleFace.greeting(dayPartForHour(date.getHours()));
@@ -382,49 +367,41 @@ export function IdleFace({
   });
   const alarm = nextAlarm(scheduled);
   const chips = statusChips(health, voice, idleFace);
-
-  // Kachel „Heute": echte Diary-Zahlen — oder die ehrliche Lücke.
-  const stats = turns !== null ? diaryTodayStats(turns, nowMs) : null;
-  const heute: IdleTile = {
-    name: idleFace.heute.name,
-    honesty: 'live',
-    value:
-      stats === null
-        ? '—'
-        : stats.turns === 0
-          ? idleFace.heute.noTurnYet
-          : todayTileValue(stats, idleFace, locale),
-    note:
-      stats === null
-        ? idleFace.heute.noteUnavailable
-        : stats.turns === 0
-          ? idleFace.heute.noteEmpty
-          : idleFace.heute.noteWithData,
-  };
-
-  const geplant: IdleTile = {
-    name: idleFace.geplant.name,
-    honesty: 'live',
-    value: planTileValue(scheduled, idleFace, schedText),
-    note: idleFace.geplant.note,
-  };
-
-  // Kachel „Wetter": echte heutige Vorhersage — oder die ehrliche Lücke
-  // (Deploy-OFF gestrichelt, nicht lesbar „—"). Nie Fake-Grade.
-  const wetter = weatherTile(weather, idleFace);
+  const now = weatherNowContent(weather, idleFace, locale);
+  const hasHouseholdCards = scheduled.length > 0 || shopping.length > 0;
   const clock = clockParts(nowMs, locale);
 
   return (
     <section className="idle" aria-label={idleFace.sectionAria}>
-      {/* 1 · Typo-first Uhr + tageszeitbewusster Gruß (beides echt). */}
+      {/* 1 · Kopfzeile: Uhr + Gruß links, das Jetzt-Band (Wetter) rechts. */}
       <header className="idle__head">
-        <time className="idle__clock" dateTime={date.toISOString()}>
-          {clock.time}
-          {clock.period && <span className="idle__clockperiod">{clock.period}</span>}
-        </time>
-        <p className="idle__greet">
-          {greeting} · {dateLine}
-        </p>
+        <div className="idle__headmain">
+          <time className="idle__clock" dateTime={date.toISOString()}>
+            {clock.time}
+            {clock.period && <span className="idle__clockperiod">{clock.period}</span>}
+          </time>
+          <p className="idle__greet">
+            {greeting} · {dateLine}
+          </p>
+        </div>
+        <div className="idle__now">
+          <span className="sr-only">{idleFace.wetter.name}: </span>
+          {/* Bewusst KEIN Settings-Zahnrad mehr hier (Andi-Korrektur 26.07):
+              die Top-Nav trägt schon eines oben rechts — ein zweites direkt
+              daneben an der Wetterlage war eine unnötige Dopplung. */}
+          {now.kind === 'gap' ? (
+            <span className="idle__nowgap">{now.text}</span>
+          ) : (
+            <>
+              <span className="idle__nowcond">
+                <WeatherGlyph category={now.category} className="idle__nowicon" />
+                {now.cond}
+              </span>
+              <span className="idle__nowspan">{now.span}</span>
+              <span className="idle__nowprecip">{now.precip}</span>
+            </>
+          )}
+        </div>
       </header>
 
       {/* 2 · Wecker-Zeile mit Fortschritts-Haarlinie + Vertrauens-Satz. */}
@@ -456,23 +433,51 @@ export function IdleFace({
         </div>
       )}
 
-      {/* 3 · Drei ehrliche Kacheln: LIVE mit echten Werten — oder gestrichelt mit Grund.
-          Nur die Wetter-Kachel trägt den Settings-Anker (Standort & Integrationen
-          wirkt genau hier — „Heute"/„Geplant" haben keine zugehörige Settings-Sektion). */}
-      <div className="idle__tiles">
-        <IdleTileCard tile={heute} />
-        <IdleTileCard tile={geplant} />
-        <IdleTileCard
-          tile={wetter}
-          onSettings={
-            onOpenSettings
-              ? () => onOpenSettings('standort-integrationen', 'wetter-standort')
-              : undefined
-          }
-        />
-      </div>
+      {/* 3+4 · Die Haushalts-Karten: „Läuft" (echte Timer/Wecker/Erinnerungen mit
+          Label, größter/dringlichster zuerst — die Items kommen aus dem Hook
+          bereits aufsteigend nach Fälligkeit sortiert) und „Einkauf". Beide
+          verschwinden einzeln, wenn sie nichts zu zeigen haben; der ganze Block
+          verschwindet, wenn BEIDE leer sind (kein Lärm, Muster ScheduledPanel). */}
+      {hasHouseholdCards && (
+        <div className="idle__tiles">
+          {scheduled.length > 0 && (
+            <article className="tile idle__tile tile--live" data-status="live">
+              <div className="tile__head">
+                <span className="tile__name">{idleFace.laeuft.name}</span>
+                <span className="tile__pill">{idleFace.live}</span>
+              </div>
+              <ul className="idle__cardlist">
+                {scheduled.map((item) => (
+                  <li key={item.id}>{runningItemLine(item, nowMs, schedText, locale)}</li>
+                ))}
+              </ul>
+            </article>
+          )}
+          {shopping.length > 0 && (
+            <article className="tile idle__tile tile--live" data-status="live">
+              <div className="tile__head">
+                <span className="tile__name">{idleFace.einkauf.name}</span>
+                <span className="tile__pill">{idleFace.live}</span>
+              </div>
+              <ul className="idle__cardlist">
+                {shopping.slice(0, SHOPPING_VISIBLE_COUNT).map((it) => (
+                  <li key={it.id}>
+                    {it.quantity > 1 && <span className="idle__cardqty">{it.quantity}×</span>}{' '}
+                    {it.text}
+                  </li>
+                ))}
+              </ul>
+              {shopping.length > SHOPPING_VISIBLE_COUNT && (
+                <p className="idle__cardmore">
+                  {idleFace.einkauf.more(shopping.length - SHOPPING_VISIBLE_COUNT)}
+                </p>
+              )}
+            </article>
+          )}
+        </div>
+      )}
 
-      {/* 4 · Stille Text-Chips (der aufklappbare Ops-Punkt bleibt in der Nav). */}
+      {/* 5 · Stille Text-Chips (der aufklappbare Ops-Punkt bleibt in der Nav). */}
       <p className="idle__chips" role="status" aria-live="polite">
         {chips.map((c, i) => (
           <Fragment key={c.text}>
@@ -500,23 +505,19 @@ export function IdleFace({
 /* ── Live-Verdrahtung ───────────────────────────────────────────────────── */
 
 /**
- * Verdrahtet die echten Quellen: Ops (~30s), Scheduled (~15s), Diary (einmal
- * beim Mount — wie die Aktivitäts-View, kein Dauerpoll), Wetter (~10 min,
- * Wetter ändert sich langsam) + Minuten-Tick für die Uhr. Health kommt als
- * Prop herein (die Übersicht pollt /api/health bereits — keine zweite
- * Poll-Quelle für denselben Endpoint).
+ * Verdrahtet die echten Quellen: Ops (~30s), Scheduled (~15s), Wetter (~10 min,
+ * Wetter ändert sich langsam), Einkauf (~30s) + Minuten-Tick für die Uhr.
+ * Health kommt als Prop herein (die Übersicht pollt /api/health bereits —
+ * keine zweite Poll-Quelle für denselben Endpoint). KEIN Diary-Hook mehr hier
+ * (Flur-Display-Umbau) — die „Heute"-Kachel lebt jetzt in Aktivität/Diagnose.
+ * KEIN `onOpenSettings` mehr (Andi-Korrektur 26.07) — das Jetzt-Band trug ein
+ * eigenes Settings-Zahnrad, das oben rechts in der Top-Nav schon existiert.
  */
-export function IdleFaceLive({
-  health,
-  onOpenSettings,
-}: {
-  health: HealthState;
-  onOpenSettings?: (category: SettingsCategoryId, anchor?: SettingsAnchorId) => void;
-}) {
+export function IdleFaceLive({ health }: { health: HealthState }) {
   const ops = useOpsStatus();
   const { items } = useScheduledItems();
-  const { turns } = useDiary();
   const weather = useWeatherToday();
+  const shopping = useShoppingList();
 
   // Uhr-Tick: sekündlich schauen, aber nur beim MINUTEN-Wechsel neu rendern
   // (die Uhr zeigt HH:MM; Countdown/Progress sind ohnehin minutengranular).
@@ -539,9 +540,8 @@ export function IdleFaceLive({
       health={health}
       voice={ops?.voice ?? null}
       scheduled={items}
-      turns={turns}
       weather={weather}
-      onOpenSettings={onOpenSettings}
+      shopping={shopping}
     />
   );
 }

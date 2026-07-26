@@ -50,10 +50,12 @@ export const de: UiStrings = {
       noteEmpty: 'Ehrlich leer — nichts erfunden.',
       noteWithData: 'Echte Zahlen aus deinem heutigen Verlauf.',
     },
-    geplant: {
-      name: 'Geplant',
-      nichtsGeplant: 'Nichts geplant',
-      note: 'Echte aktive Timer, Wecker und Erinnerungen.',
+    laeuft: {
+      name: 'Läuft',
+    },
+    einkauf: {
+      name: 'Einkauf',
+      more: (count) => `+${count} weitere`,
     },
     wetter: {
       name: 'Wetter',
@@ -61,8 +63,8 @@ export const de: UiStrings = {
       liveNote: (place) => `Echte Messwerte von Open-Meteo für ${place}.`,
       offNote: 'Kommt — ehrlich leer statt erfunden. Wetter ist bei diesem Deploy ausgeschaltet.',
       unreachableNote: 'Wetter grad nicht lesbar — hier steht nichts Erfundenes.',
-      settingsAria: 'Wetter-Einstellungen öffnen (Standort & Integrationen)',
-      settingsTitle: 'Wetter-Ort einstellen',
+      precipSome: (mm) => `${mm} mm Regen heute`,
+      precipNone: 'trocken',
     },
     status: {
       online: 'online',
@@ -98,6 +100,37 @@ export const de: UiStrings = {
     failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
     priceSuffix: (cents: number) => `ca. ${cents.toFixed(2)} ct/Nachschlag`,
     loading: 'lädt…',
+  },
+
+  extendedThink: {
+    label: 'Wenn Hoshi etwas nicht weiß',
+    hint: 'Entscheidet, was passiert, wenn Hoshis eigenes Wissen für eine Frage nicht reicht — gilt nur für den schnellen Online-Nachschlag (Extended Think).',
+    loadError: 'Eskalations-Stufe grad nicht lesbar.',
+    switching: 'wechselt…',
+    unknown: 'Unbekannte Stufe.',
+    locked: 'Beim Deploy deaktiviert — die Auswahl greift erst, wenn Extended Think aktiv ist.',
+    failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
+    recommendedBadge: 'Empfohlen',
+    loading: 'lädt…',
+    modes: {
+      AUS: {
+        title: 'Aus',
+        description: 'Weicht ehrlich aus — Hoshi geht dabei nie online.',
+      },
+      OFFLINE: {
+        title: 'Offline',
+        description:
+          'Antwortet aus eigenem Wissen und sagt ehrlich dazu, dass es unbelegt ist — Hoshi geht dabei nie online.',
+      },
+      ERST_FRAGEN: {
+        title: 'Erst fragen',
+        description: 'Fragt erst nach, bevor Hoshi online nachschaut.',
+      },
+      AUTOMATISCH: {
+        title: 'Automatisch',
+        description: 'Schaut selbst online nach, wenn Hoshi etwas nicht weiß.',
+      },
+    },
   },
 
   ttsEngine: {
@@ -154,6 +187,14 @@ export const de: UiStrings = {
     loading: 'lädt…',
     statusReading: '(Status wird gelesen…)',
     statusPrefix: 'Status: ',
+    autoSwitchNote: 'Automatische Modellwahl ist an — deine Auswahl hier setzt jetzt nur noch das Chat-Modell (getippt); beim Sprechen bleibt automatisch das schnelle Modell aktiv.',
+  },
+
+  brainAutoSwitch: {
+    label: 'Automatische Modellwahl',
+    hint: 'Beim Tippen antwortet das gründliche Modell, beim Sprechen das schnelle.',
+    loadError: 'Automatik-Status grad nicht lesbar.',
+    failed: 'Umschalten fehlgeschlagen — bitte nochmal versuchen.',
   },
 
   privacy: {
@@ -290,7 +331,7 @@ export const de: UiStrings = {
       REMINDER: 'Erinnerung',
     },
     ackTitle: 'Tippen zum Bestätigen',
-    gearAria: 'Wecker-Eskalation-Einstellungen öffnen (Fähigkeiten)',
+    gearAria: 'Wecker-Eskalation-Einstellungen öffnen (Zuhause & Integrationen)',
     gearTitle: 'Eskalation ändern',
     missed: (noun, label, time) =>
       `${label ? `${noun} „${label}"` : noun} war um ${time} fällig — hab dich nicht erreicht`,
@@ -310,6 +351,7 @@ export const de: UiStrings = {
     privacy: 'Privacy by Design: das Diary trägt bewusst keine Gesprächs-Inhalte — nur Zeitpunkt, Kategorie, Persona und Messwerte. Darum steht hier auch kein Text der Turns. Jede Zeile lässt sich aufklappen und zeigt die Stage-Zerlegung (stt → grounding → brain → tts, Rest = sonstiges).',
     healthTitle: 'Health-Verlauf', healthHint: 'Jede Zeile ist eine reale Beobachtung des Verbindungsstatus. Aufgezeichnet werden Zustands­wechsel, neueste zuerst.',
     noObservation: 'Noch keine Beobachtung — die erste Health-Antwort steht aus. (Kein erfundener Verlauf.)', backendState: (state) => `Backend ${state}`,
+    diagnoseTitle: 'Diagnose', diagnoseHint: 'Technischer Ist-Stand für Nerds — von der Übersicht hierher umgezogen, damit die Startseite dem Zuhause gehört.',
   },
 
   rooms: {
@@ -330,13 +372,10 @@ export const de: UiStrings = {
   overview: {
     heroUpTitle: 'Hoshi ist online', heroUpSub: 'Verbindung steht.', heroDownTitle: 'Hoshi ist offline', heroDownSub: 'Verbindung steht gerade nicht.',
     heroUnknownTitle: 'Status wird geprüft …', heroUnknownSub: 'erste Health-Antwort steht noch aus',
-    sidecarHealthNote: 'Supervisor-/Sidecar-Status ist noch nicht über die API exponiert. Kommt, sobald das Backend ihn liefert.',
-    voiceStatsNote: 'Voice/TTS-Telemetrie (Latenz, Sprecher) ist noch nicht angebunden. Kommt später.',
-    devicesNote: 'Geräte-/Satelliten-Registry ist noch nicht verdrahtet. Kommt, sobald die Route steht.', backend: 'Backend', sidecarHealth: 'Sidecar-Health', voiceStats: 'Sprach-Stats', devices: 'Geräte', live: 'live', notWired: 'nicht verdrahtet',
+    backend: 'Backend', live: 'live',
     backendNote: 'Adresse, mit der sich diese Oberfläche verbindet.', chatTurn: 'Chat-Turn', liveStreaming: 'Live-Streaming', chatTurnNote: 'Echte Antwort in Echtzeit, kein Mock.',
     authToken: 'Auth-Token', set: 'gesetzt', missing: 'fehlt', authSetNote: 'Dein Gerät ist angemeldet — geschützte Bereiche sind freigeschaltet.', authMissingNote: 'Nicht angemeldet — geschützte Bereiche bleiben gesperrt.',
-    title: 'Übersicht', lede: 'Status-first: ein ehrlicher Blick aufs Zuhause. Was läuft, kommt LIVE aus den echten Quellen — was noch fehlt, ist klar als „noch nicht verdrahtet" markiert, nie grün gefärbt.',
-    lastChecked: (time) => `zuletzt geprüft ${time}`, liveWired: 'Live verdrahtet', notWiredTitle: 'Noch nicht verdrahtet', notWiredHint: 'Diese Kacheln zeigen bewusst keinen Zustand — das 0.8-Backend exponiert die Daten noch nicht. Kein erfundenes Grün.',
+    lastChecked: (time) => `zuletzt geprüft ${time}`,
   },
 
   chat: {
@@ -375,11 +414,11 @@ export const de: UiStrings = {
     categories: {
       darstellung: 'Darstellung',
       'sprache-stimme': 'Sprache & Stimme',
-      persoenlichkeit: 'Persönlichkeit',
+      'online-nachschlagen': 'Online & Nachschlagen',
       'modell-leistung': 'Modell & Leistung',
-      faehigkeiten: 'Fähigkeiten',
+      persoenlichkeit: 'Persönlichkeit',
       'gedaechtnis-privatsphaere': 'Gedächtnis & Privatsphäre',
-      'standort-integrationen': 'Standort & Integrationen',
+      'zuhause-integrationen': 'Zuhause & Integrationen',
     },
     categoryNavAria: 'Einstellungs-Kategorien',
     themeLabel: 'Farbthema',
@@ -401,6 +440,10 @@ export const de: UiStrings = {
         label: 'Yoake',
         hint: 'Morgendämmerung zwischen Indigo und Koralle (夜明け)',
       },
+      amayadori: {
+        label: 'Amayadori',
+        hint: 'Draußen fällt es weiter; hier drinnen ist es trocken und jemand hat Licht gelassen. (雨宿り)',
+      },
       sora: {
         // Der Zusatz „(automatisch — folgt dem Tag)" ist in die Gruppen-
         // Überschrift gewandert (themeGroups.automatik) — er stand sonst zweimal
@@ -421,7 +464,7 @@ export const de: UiStrings = {
       },
       stimmung: {
         title: 'Eigene Stimmung',
-        note: 'Bilder statt Tageszeiten — diese beiden folgen der Uhr bewusst nicht.',
+        note: 'Bilder statt Tageszeiten — diese drei folgen der Uhr bewusst nicht.',
       },
     },
     themeGlosses: {
@@ -432,6 +475,7 @@ export const de: UiStrings = {
       kasumi: 'Dunst',
       nagareboshi: 'Sternschnuppe',
       yoake: 'Morgengrauen',
+      amayadori: 'Regenpause',
       sora: 'Himmel',
     },
     themeGlossSuffix: (gloss) => ` · ${gloss}`,
@@ -547,6 +591,7 @@ export const de: UiStrings = {
     toneCritical: 'Ops · kritisch',
     ramCritical: 'RAM kritisch',
     ramWarn: 'RAM-Druck',
+    memoryCriticalHint: 'Speicher knapp — die Stimme kann gerade zäh werden.',
     title: (overall, level) => `Ops: Gesamt ${overall} · RAM ${level}`,
     titleDetail: (detail) => ` — ${detail}`,
     voiceCloud: 'Stimme kommt gerade aus der Cloud (OpenAI)',

@@ -37,18 +37,20 @@ object BrainModelCatalog {
             label = "Gemma-4 E4B (gründlicher, mehr RAM)",
             repo = "mlx-community/gemma-4-e4b-it-4bit",
         ),
-        // LIVE GEMESSEN 25.07 (nicht vermutet): der Wechsel scheitert heute mit
-        // `ValueError: Model type gemma4_unified not supported` — das gepinnte
-        // mlx-lm 0.31.2 kennt die Architektur des dichten 12B nicht. Der Sidecar
-        // entlaedt (16-GB-Wand) VOR dem Laden, ein Klick kostet also das laufende
-        // Brain bis `bin/hoshi heal`. Der Eintrag bleibt trotzdem sichtbar — Andis
-        // System, Andis Entscheidung —, aber das Label sagt die Wahrheit, statt
-        // einen Versuch zu versprechen, der heute sicher fehlschlaegt.
-        // Entsperrt wird er durch das mlx-lm-Upgrade (PREP-mlx-modell-upgrade,
-        // eigenes Brain-Fenster); danach hier nur diesen Text zuruecknehmen.
+        // Das dichte 12B — laeuft seit dem 26.07, aber nur MIT unserem eigenen
+        // mlx-lm-Patch (`sidecars/brain/mlx_patches/gemma4_unified.py`): seine
+        // config.json deklariert `model_type: gemma4_unified`, und dieses
+        // Architektur-Modul bringt KEINE veroeffentlichte mlx-lm-Version mit
+        // (geprueft: 0.31.2 lokal, 0.31.3 auf PyPI, Upstream-Baum). Ohne den
+        // Patch endet jeder Wechsel im Ladefehler — und weil der Sidecar wegen
+        // der 16-GB-Wand VOR dem Laden entlaedt, steht Hoshi dann ohne Brain da.
+        //
+        // LIVE GEMESSEN (gleiche Frage, gleicher Sidecar): 12B 2619/1407 ms,
+        // e4b 828/696 ms — rund doppelt so langsam, Ladezeit 4,3 s. Deshalb
+        // nennt das Label die Kosten, statt nur "gruendlicher" zu versprechen.
         ModelInfo(
             id = "12b",
-            label = "Gemma-4 12B (braucht ein neueres mlx-lm — lädt heute NICHT, Brain muss danach geheilt werden)",
+            label = "Gemma-4 12B (gründlicher, aber rund doppelt so langsam — braucht den mlx-Patch)",
             repo = "mlx-community/gemma-4-12B-it-4bit",
         ),
     )
@@ -60,4 +62,16 @@ object BrainModelCatalog {
     fun byRepo(repo: String?): ModelInfo? = repo?.trim()?.takeIf { it.isNotBlank() }?.let { r ->
         MODELS.firstOrNull { it.repo == r }
     }
+
+    /**
+     * **Das Auto-Switch-Paar (Andi-Auftrag „12B für Chat, e4b für Voice", 2026-07-26)**
+     * — Grundlage eines gemessenen Drei-Modell-Vergleichs: ein Modellwechsel kostet nur
+     * 2,6-4,3s (warm), aber 12B generiert 2-4x langsamer als e4b (11-15s lange Antworten)
+     * — fürs SPRECHEN inakzeptabel, beim TIPPEN egal. [BrainAutoSwitchService] verdrahtet
+     * NUR dieses eine Paar (keine eigene UI dafür in v1, s. [BrainAutoSwitchController]).
+     */
+    val AUTO_SWITCH_VOICE_REPO: String = byId("e4b")!!.repo
+
+    /** Chat-Hälfte des Auto-Switch-Paars — s. [AUTO_SWITCH_VOICE_REPO]-KDoc. */
+    val AUTO_SWITCH_CHAT_REPO: String = byId("12b")!!.repo
 }

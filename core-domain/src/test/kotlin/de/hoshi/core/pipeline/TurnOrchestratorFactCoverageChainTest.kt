@@ -8,6 +8,7 @@ import de.hoshi.core.dto.LlmDelta
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteDecision
 import de.hoshi.core.dto.RouteProvider
+import de.hoshi.core.pipeline.lang.LangDe
 import de.hoshi.core.port.BrainPort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -56,7 +57,11 @@ class TurnOrchestratorFactCoverageChainTest {
     private val waffle = "Der Turm ist ziemlich hoch."
 
     // ── Zählender Fake-Brain (liefert den Live-Schwafel-Satz) ────────────────────
-    private class FakeBrainPort(private val line: String) : BrainPort {
+    private class FakeBrainPort(
+        private val response: () -> Flux<LlmDelta>,
+    ) : BrainPort {
+        constructor(line: String) : this({ Flux.just(LlmDelta(line)) })
+
         val callCount = AtomicInteger(0)
         override fun streamChat(
             prompt: String,
@@ -70,7 +75,7 @@ class TurnOrchestratorFactCoverageChainTest {
             onPrefill: (Long) -> Unit,
         ): Flux<LlmDelta> {
             callCount.incrementAndGet()
-            return Flux.just(LlmDelta(line))
+            return response()
         }
     }
 
@@ -79,6 +84,7 @@ class TurnOrchestratorFactCoverageChainTest {
         brain: FakeBrainPort,
         factCoverage: FactCoverageGate,
         groundBlock: String,
+        escalationMode: () -> EscalationMode = { EscalationMode.AUS },
     ): TurnOrchestrator {
         val persona = PersonaService()
         return TurnOrchestrator(
@@ -111,6 +117,7 @@ class TurnOrchestratorFactCoverageChainTest {
             formatter = ResponseFormatter(),
             brain = brain,
             factCoverage = factCoverage,
+            escalationMode = escalationMode,
         )
     }
 
@@ -130,10 +137,9 @@ class TurnOrchestratorFactCoverageChainTest {
         val events = run(orchestrator(brain, FactCoverageGate(enabled = true, strict = true), offTargetBlock))
 
         assertEquals(0, brain.callCount.get(), "strict: off-target Grounding darf den Brain NIE erreichen")
-        assertEquals(
-            FactCoverageGate.DEFLECT_DE,
-            joinedText(events),
-            "statt Schwafeln kommt die ehrliche Deflection",
+        assertTrue(
+            joinedText(events) in LangDe.PACK.factCoverageDeflect,
+            "statt Schwafeln kommt eine ehrliche Deflection-Pool-Variante, war: '${joinedText(events)}'",
         )
         assertEquals("policy", start(events).model, "Deflect ist eine Policy-Direktantwort")
         assertFalse(start(events).grounded, "strict-Sicht: dieser Turn war NICHT gedeckt")
@@ -171,5 +177,83 @@ class TurnOrchestratorFactCoverageChainTest {
 
         assertEquals(1, brain.callCount.get(), "DISABLED-Gate: byte-neutral, Brain läuft wie heute")
         assertFalse(start(events).grounded, "leerer Block ⇒ grounded=false — ehrlich, nicht hardcoded")
+    }
+
+    // ── OFFLINE (Andi-Auftrag 26.07): statt Ausweichen antwortet das Brain — gekennzeichnet ──
+    @Test
+    fun `OFFLINE - Deflect wird zur gekennzeichneten Eigen-Antwort, genau EIN Brain-Call`() {
+        val brain = FakeBrainPort(waffle)
+        val events = run(
+            orchestrator(
+                brain, FactCoverageGate(enabled = true, strict = true), offTargetBlock,
+                escalationMode = { EscalationMode.OFFLINE },
+            ),
+        )
+
+        assertEquals(1, brain.callCount.get(), "OFFLINE: das Brain antwortet selbst — und GENAU einmal")
+        val text = joinedText(events)
+        assertTrue(
+            text.startsWith(FactCoverageGate.offlineDisclaimer(Language.DE)),
+            "die Unbelegt-Kennzeichnung steht VOR der Antwort — Ehrlichkeit bleibt hörbar",
+        )
+        assertTrue(text.endsWith(waffle), "nach der Kennzeichnung kommt die echte Brain-Antwort")
+        assertTrue(
+            LangDe.PACK.factCoverageDeflect.none { text.contains(it) },
+            "die Ausweich-Phrase fällt weg — OFFLINE ersetzt sie durch die Eigen-Antwort",
+        )
+        assertTrue(events.last() is ChatEvent.Done, "never-silent gilt auch hier")
+    }
+
+    @Test
+    fun `OFFLINE - lokaler Brain bleibt leer - Kennzeichnung ersetzt den Never-Silent-Fallback nicht`() {
+        val brain = FakeBrainPort { Flux.empty() }
+        val events = run(
+            orchestrator(
+                brain, FactCoverageGate(enabled = true, strict = true), offTargetBlock,
+                escalationMode = { EscalationMode.OFFLINE },
+            ),
+        )
+
+        assertEquals(1, brain.callCount.get())
+        assertEquals(
+            FactCoverageGate.offlineDisclaimer(Language.DE) + TurnOrchestrator.EMPTY_FALLBACK_DE,
+            joinedText(events),
+        )
+        assertTrue(events.last() is ChatEvent.Done)
+    }
+
+    @Test
+    fun `OFFLINE - lokaler Brain wirft - Kennzeichnung plus Never-Silent-Fehlerphrase`() {
+        val brain = FakeBrainPort {
+            Flux.error(IllegalStateException("Brain absichtlich kaputt"))
+        }
+        val events = run(
+            orchestrator(
+                brain, FactCoverageGate(enabled = true, strict = true), offTargetBlock,
+                escalationMode = { EscalationMode.OFFLINE },
+            ),
+        )
+
+        assertEquals(1, brain.callCount.get())
+        assertEquals(
+            FactCoverageGate.offlineDisclaimer(Language.DE) + TurnOrchestrator.ERROR_FALLBACK_DE,
+            joinedText(events),
+        )
+        assertTrue(events.last() is ChatEvent.Done)
+    }
+
+    /** Gegen-Test: die drei Bestands-Stufen bleiben byte-identisch — AUS deflektet wie immer. */
+    @Test
+    fun `AUS bleibt unveraendert - Deflect-Phrase, kein Brain-Call (Byte-Identitaets-Pin)`() {
+        val brain = FakeBrainPort(waffle)
+        val events = run(
+            orchestrator(
+                brain, FactCoverageGate(enabled = true, strict = true), offTargetBlock,
+                escalationMode = { EscalationMode.AUS },
+            ),
+        )
+
+        assertEquals(0, brain.callCount.get())
+        assertTrue(joinedText(events) in LangDe.PACK.factCoverageDeflect)
     }
 }

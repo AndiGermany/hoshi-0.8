@@ -81,6 +81,37 @@ object LangFr {
             "Hm, mon ouvrage de référence n'est pas joignable pour l'instant. Je ne veux pas deviner — redemande-moi dans un moment et je regarde comme il faut.",
             "Là, je bloque — ma réserve de savoir ne répond pas. Laisse-moi un moment, et je pourrai te le dire honnêtement.",
         ),
+        factCoverageOfflineDisclaimer = "Honnêtement, je n'ai pas de source pour ça — mais d'après ce que je sais: ",
+        localLookupFoundPrefix = "J'ai regardé dans ce que j'ai ici — ",
+        // ── Andi-Auftrag 2026-07-26 „les phrases de recherche en ligne sont
+        //    mauvaises" — ces cinq champs tombaient jusqu'ici en anglais pour
+        //    ES/FR/IT ; maintenant du vrai français, avec « chercher » plutôt
+        //    qu'un vague « demander ». Complément « pas toujours la même
+        //    réponse » : deflect + rahmung d'intro sont maintenant des pools de
+        //    4 (AntiRepeatPicker) — chaque variante de deflect finit sur la
+        //    question, chaque variante d'intro nomme en ligne/internet.
+        factCoverageDeflect = listOf(
+            "Franchement, ça, je ne le sais pas par cœur comme ça — je vais chercher, vite fait?",
+            "Bonne question — je vais chercher?",
+            "Là, je ne l'ai pas en tête — je regarde vite fait?",
+            "Ça, je ne le sais pas par cœur — tu veux que j'aille chercher?",
+        ),
+        escalationAnswerFrame = listOf(
+            "Alors, j'ai vite cherché en ligne — ",
+            "J'ai vite regardé en ligne — ",
+            "Petit tour sur internet — ",
+            "J'ai jeté un œil en ligne — ",
+        ),
+        escalationSourceTemplate = "Source : {source}.",
+        escalationUnavailable =
+            "J'allais chercher ça en ligne, mais là je n'arrive pas à me connecter — on réessaie plus tard.",
+        escalationModeErstFragen =
+            "D'accord — à partir de maintenant, je te demande d'abord avant d'aller chercher quelque chose en ligne.",
+        escalationModeAus = "D'accord — les recherches en ligne sont désactivées. Je reste entièrement local.",
+        escalationModeAutomatisch =
+            "D'accord — à partir de maintenant, je vais chercher en ligne automatiquement quand je ne sais pas quelque chose.",
+        escalationModeOffline =
+            "D'accord — mode hors ligne. Je ne vais rien chercher en ligne, je réponds avec ce que je sais moi-même et je te le dis.",
         // ── Never-Silent-Ränder + Fastpath-Quittungen ────────────────────────
         warmFallback = "Je t'ai entendu, mais ça coince un instant de mon côté. Tu me le redis tout de suite?",
         audioCapTooLong = "C'était un peu trop long d'un seul coup — dis-le un peu plus court et je suivrai sans faute.",

@@ -14,20 +14,22 @@ import {
   type SettingsAnchorId,
   type SettingsCategoryId,
 } from '../components/SettingsPanel';
-import { IdleFace } from '../components/IdleFace';
 import { FiredToast } from '../components/FiredToast';
 import type { FiredItem } from '../hooks/useFiredItems';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Kontextuelle Settings-Anker (Cowork-Spec cowork-research-2026-07-15/03-
-//  settings-einbettung.md, V1): openSettings(category, anchor?) + drei
-//  verdrahtete Zahnräder (Wetter-Kachel/Sprecher-Chip/Wecker-Banner). Deckt:
+//  settings-einbettung.md, V1): openSettings(category, anchor?) + verdrahtete
+//  Zahnräder (Sprecher-Chip/Wecker-Banner). Deckt:
 //   1. Anker→Kategorie-Mapping (Regressionsschutz gegen Anker-Drift)
 //   2. SettingsPanel: category öffnet die richtige Kategorie, anchor pulst +
 //      räumt sich selbst auf (Timer gemockt) — inkl. Schnell-Schließen-Fix.
-//   3. Die drei Zahnräder selbst: rendern nur mit onOpenSettings, tragen ein
+//   3. Die Zahnräder selbst: rendern nur mit onOpenSettings, tragen ein
 //      aria-label, rufen openSettings mit den korrekten Argumenten, und
 //      bleiben SVG (kein Emoji — emojisweep.test.tsx deckt den Sweep ab).
+//      (Das dritte, ex-IdleFace/Wetter-Kachel, ist Andi-Korrektur 26.07
+//      ERSATZLOS gestrichen: die Top-Nav trägt schon ein Settings-Zahnrad
+//      oben rechts, ein zweites an der Wetterlage war eine Dopplung.)
 // ─────────────────────────────────────────────────────────────────────────────
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -138,10 +140,13 @@ afterEach(async () => {
 
 describe('SETTINGS_ANCHOR_CATEGORY — jeder Anker zeigt auf die richtige Kategorie', () => {
   it('genau die drei verdrahteten Anker, korrekt zugeordnet', () => {
+    // Beide Ziele zeigen seit 26.07 auf 'zuhause-integrationen' (vorher
+    // 'standort-integrationen' bzw. 'faehigkeiten' — die Fähigkeiten-Kategorie
+    // ist aufgelöst, s. settingsnav.test.tsx).
     expect(SETTINGS_ANCHOR_CATEGORY).toEqual({
-      'wetter-standort': 'standort-integrationen',
+      'wetter-standort': 'zuhause-integrationen',
       sprecher: 'gedaechtnis-privatsphaere',
-      'wecker-eskalation': 'faehigkeiten',
+      'wecker-eskalation': 'zuhause-integrationen',
     });
   });
 });
@@ -175,9 +180,9 @@ describe('SettingsPanel — Deep-Link öffnet die richtige Kategorie + pulst den
     container.querySelector(`#settings-panel-${id}`) as HTMLElement;
 
   it('category ohne anchor: springt in die Kategorie, aber pulst nichts', async () => {
-    await mount(<SettingsPanel {...baseProps} category="standort-integrationen" />);
+    await mount(<SettingsPanel {...baseProps} category="zuhause-integrationen" />);
     await flush();
-    expect(panel('standort-integrationen').hidden).toBe(false);
+    expect(panel('zuhause-integrationen').hidden).toBe(false);
     expect(panel('darstellung').hidden).toBe(true);
     expect(container.querySelector('.is-anchor-highlight')).toBeNull();
   });
@@ -186,7 +191,7 @@ describe('SettingsPanel — Deep-Link öffnet die richtige Kategorie + pulst den
     vi.useFakeTimers();
     try {
       await mount(
-        <SettingsPanel {...baseProps} category="standort-integrationen" anchor="wetter-standort" />,
+        <SettingsPanel {...baseProps} category="zuhause-integrationen" anchor="wetter-standort" />,
       );
       const anchorEl = container.querySelector(`#${settingsAnchorId('wetter-standort')}`)!;
       expect(anchorEl.className).toContain('is-anchor-highlight');
@@ -208,7 +213,7 @@ describe('SettingsPanel — Deep-Link öffnet die richtige Kategorie + pulst den
       function Host() {
         const [open, setOpen] = useState(true);
         const [category, setCategory] = useState<SettingsCategoryId | undefined>(
-          'standort-integrationen',
+          'zuhause-integrationen',
         );
         const [anchor, setAnchor] = useState<SettingsAnchorId | undefined>('wetter-standort');
         return (
@@ -260,46 +265,13 @@ describe('SettingsPanel — Deep-Link öffnet die richtige Kategorie + pulst den
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  3) Die drei Zahnräder — Render-Vertrag + Klick-Verdrahtung
+//  3) Die verbliebenen Zahnräder — Render-Vertrag + Klick-Verdrahtung
+//     (IdleFace/Jetzt-Band hatte hier eines — Andi-Korrektur 26.07 hat es
+//     ERSATZLOS gestrichen: die Top-Nav trägt schon ein Settings-Zahnrad oben
+//     rechts, ein zweites an der Wetterlage war eine unnötige Dopplung.)
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe('IdleFace — Zahnrad NUR an der Wetter-Kachel → Standort & Integrationen/Wetter-Standort', () => {
-  const idleProps = {
-    nowMs: Date.now(),
-    health: 'up' as const,
-    voice: null,
-    scheduled: [],
-    turns: [],
-    weather: null,
-  };
-
-  it('ohne onOpenSettings: keine der drei Kacheln trägt ein Zahnrad (kein Bruch)', () => {
-    const html = renderToStaticMarkup(<IdleFace {...idleProps} />);
-    expect(html).not.toContain('ctxgear');
-  });
-
-  it('mit onOpenSettings: GENAU EIN Zahnrad (an der Wetter-Kachel), SVG statt Emoji, mit aria-label', () => {
-    const html = renderToStaticMarkup(<IdleFace {...idleProps} onOpenSettings={() => {}} />);
-    expect((html.match(/class="ctxgear"/g) ?? []).length).toBe(1);
-    expect(html).toContain('glyph--gear');
-    expect(html).toContain('aria-label="Wetter-Einstellungen öffnen (Standort');
-    expect(html).toContain('Integrationen)"');
-  });
-
-  it('Klick ruft onOpenSettings genau mit (standort-integrationen, wetter-standort) auf', async () => {
-    const onOpenSettings = vi.fn();
-    await mount(<IdleFace {...idleProps} onOpenSettings={onOpenSettings} />);
-    const gear = container.querySelector('.ctxgear') as HTMLButtonElement;
-    expect(gear).not.toBeNull();
-    await act(async () => {
-      gear.click();
-    });
-    expect(onOpenSettings).toHaveBeenCalledTimes(1);
-    expect(onOpenSettings).toHaveBeenCalledWith('standort-integrationen', 'wetter-standort');
-  });
-});
-
-describe('FiredToast — Zahnrad am Wecker-/Klingel-Banner → Fähigkeiten/Wecker-Eskalation', () => {
+describe('FiredToast — Zahnrad am Wecker-/Klingel-Banner → Zuhause & Integrationen/Wecker-Eskalation', () => {
   const oneItem: FiredItem[] = [
     { id: 'f-1', kind: 'TIMER', dueAtEpochMs: 1_000, firedAtEpochMs: 1_100, missed: false },
   ];
@@ -316,10 +288,10 @@ describe('FiredToast — Zahnrad am Wecker-/Klingel-Banner → Fähigkeiten/Weck
     );
     expect(html).toContain('fired-toast__gear');
     expect(html).toContain('glyph--gear');
-    expect(html).toMatch(/aria-label="[^"]*Fähigkeiten[^"]*"/);
+    expect(html).toMatch(/aria-label="[^"]*Zuhause[^"]*"/);
   });
 
-  it('Zahnrad-Klick ruft openSettings(faehigkeiten, wecker-eskalation) OHNE den Ack auszulösen', async () => {
+  it('Zahnrad-Klick ruft openSettings(zuhause-integrationen, wecker-eskalation) OHNE den Ack auszulösen', async () => {
     const onAck = vi.fn();
     const onOpenSettings = vi.fn();
     await mount(<FiredToast items={oneItem} onAck={onAck} onOpenSettings={onOpenSettings} />);
@@ -327,7 +299,7 @@ describe('FiredToast — Zahnrad am Wecker-/Klingel-Banner → Fähigkeiten/Weck
     await act(async () => {
       gear.click();
     });
-    expect(onOpenSettings).toHaveBeenCalledWith('faehigkeiten', 'wecker-eskalation');
+    expect(onOpenSettings).toHaveBeenCalledWith('zuhause-integrationen', 'wecker-eskalation');
     expect(onAck).not.toHaveBeenCalled();
   });
 

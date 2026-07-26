@@ -197,16 +197,50 @@ class WeatherGroundingProviderTest {
         }
 
     @Test
-    fun `Wetter-Absichts-Erkennung trennt DE+EN Wetterfragen von Wissensfragen`() {
+    fun `Wetter-Absichts-Erkennung trennt ganze DE+EN Lexeme von fremden Komposita`() {
         val p = WeatherGroundingProvider()
         assertTrue(p.isWeatherIntent("Wie wird das Wetter morgen?"))
         assertTrue(p.isWeatherIntent("Regnet es heute?"))
         assertTrue(p.isWeatherIntent("Wie warm wird es?"))
+        assertTrue(p.isWeatherIntent("Scheint morgen die Sonne?"))
+        assertTrue(p.isWeatherIntent("Gibt es heute Sonnenschein?"))
+        assertTrue(p.isWeatherIntent("Ist das Sonnencreme-Wetter?"))
+        assertTrue(p.isWeatherIntent("Bleibt es bei sonnigem Himmel?"))
+        assertTrue(p.isWeatherIntent("Wie entwickelt sich die Wetterlage?"))
         assertTrue(p.isWeatherIntent("what's the weather tomorrow"))
         assertTrue(p.isWeatherIntent("will it rain"))
-        assertEquals(false, p.isWeatherIntent("Wer war Konrad Adenauer?"))
-        assertEquals(false, p.isWeatherIntent("Wie geht es dir?"))
+        assertTrue(p.isWeatherIntent("is rainfall expected"))
+        assertFalse(p.isWeatherIntent("Wie viele Planeten gibt es in unserem Sonnensystem?"))
+        assertFalse(p.isWeatherIntent("Wann ist die nächste Sonnenfinsternis?"))
+        assertFalse(p.isWeatherIntent("Wie funktioniert ein Sonnenkollektor?"))
+        assertFalse(p.isWeatherIntent("How fast is a train?"))
+        assertFalse(p.isWeatherIntent("Wer war Konrad Adenauer?"))
+        assertFalse(p.isWeatherIntent("Wie geht es dir?"))
     }
+
+    @Test
+    fun `Sonnensystem und Sonnenfinsternis rufen Open-Meteo nicht und liefern keinen Wetterblock`() =
+        withOpenMeteo(forecastJson) { url, captured, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url)
+
+            val solarSystem = block(provider, "Wie viele Planeten gibt es in unserem Sonnensystem?")
+            val eclipse = block(provider, "Wann ist die nächste Sonnenfinsternis?")
+
+            assertEquals("", solarSystem)
+            assertEquals("", eclipse)
+            assertNull(captured.get(), "kein falscher Wettertreffer darf einen Forecast-Call auslösen")
+        }
+
+    @Test
+    fun `echte Wetter-Lexeme behalten den vollstaendigen deutschen Block bytegleich`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val baseline = block(provider, "Wie wird das Wetter?")
+
+            assertEquals(baseline, block(provider, "Scheint die Sonne?"))
+            assertEquals(baseline, block(provider, "Gibt es Sonnenschein?"))
+            assertEquals(baseline, block(provider, "Ist das Sonnencreme-Wetter?"))
+        }
 
     @Test
     fun `WMO-Code zu Text mappt die gaengigen Lagen in DE und EN`() {
@@ -796,5 +830,8 @@ class WeatherGroundingProviderTest {
         assertNull(p.explicitPlace("Wetter in zwei Tagen"), "Zahlwort-Stoppwort ⇒ kein Ort")
         assertNull(p.explicitPlace("wie ist das Wetter in der Zukunft"), "Artikel-Stoppwort ⇒ kein Ort")
         assertNull(p.explicitPlace("Regnet es in einem Urlaub?"), "Stoppwort ⇒ kein Ort")
+        assertNull(p.explicitPlace("Wie viele Planeten gibt es in unserem Sonnensystem?"), "Possessivpronomen ⇒ kein Ort")
+        assertNull(p.explicitPlace("Wie viele Sterne sind in unserer Galaxie?"), "Possessivpronomen ⇒ kein Ort")
+        assertNull(p.explicitPlace("Wie viel Wasser ist in meinem Körper?"), "Possessivpronomen ⇒ kein Ort")
     }
 }

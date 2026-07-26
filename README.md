@@ -433,7 +433,15 @@ Menschen gäbe es keine gute deutsche Sprachausgabe abseits der großen Anbieter
 **Damit Hoshi etwas weiß**
 Der lokale Wissensspeicher ist die **deutschsprachige Wikipedia** (CC BY-SA) — zehntausende
 Freiwillige, deren Arbeit hier offline durchsuchbar ist. Die Attribution ist im Wissens-Sidecar
-fest verdrahtet, nicht nachträglich angeklebt.
+als Quellen-/Lizenzmetadaten fest verdrahtet, nicht nachträglich angeklebt. Ob diese
+Metadaten in Voice und UI für eine öffentliche Weitergabe ausreichend präsentiert
+werden, bleibt trotzdem ein menschliches Release- und Lizenz-Gate. Die große
+Datenbank bleibt ein externes Artefakt.
+[`tools/knowledge-pack`](tools/knowledge-pack/README.md) baut kleine, immutable Release-Packs direkt
+aus einem kryptografisch gebundenen Wikimedia-Dump; der historische DB-Export bleibt ehrlich als
+nicht veröffentlichbarer Forensikpfad markiert. Ob ein Pack tatsächlich besser trifft,
+entscheidet der getrennte [`tools/knowledge-bench`](tools/knowledge-bench/README.md), nicht seine
+Größe oder sein Build-Erfolg.
 
 **Damit Hoshi das Zuhause erreicht**
 [Home Assistant](https://github.com/home-assistant/core) (Apache-2.0) ist die Brücke zu Licht,

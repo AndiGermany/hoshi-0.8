@@ -255,6 +255,29 @@ export function scheduledItemPrimary(
   return t.inRemaining(fmtRemaining(Math.max(0, item.dueAtEpochMs - nowMs), t));
 }
 
+/**
+ * Kompakte Zeile für die „Läuft"-Karte auf der Übersicht (Flur-Display-Umbau,
+ * Andi-Auftrag 2026-07-26 — ex-„Geplant"): „12:04 Nudeln" (ALARM: Weck-Uhrzeit
+ * + Label) bzw. „38 min Wäsche" (TIMER/REMINDER: Restzeit + Label). Bewusst
+ * OHNE die „um"/„noch"-Präfixe von {@link scheduledItemPrimary} (das
+ * Verwaltungs-Panel, ScheduledPanel.tsx) — der knappe Flur-Ton kommt mit
+ * Zahl+Label aus. Reine Ableitung aus denselben Primitiven (`dueClock`/
+ * `fmtRemaining`), keine zweite Zeit-Berechnung — nur der Zeilen-Ton ist neu.
+ */
+export function runningItemLine(
+  item: ScheduledItem,
+  nowMs: number,
+  t: ScheduledStrings = SCHEDULED_TEXTS,
+  locale: string = de.locale,
+): string {
+  const primary =
+    item.kind === 'ALARM'
+      ? dueClock(item.dueAtEpochMs, locale)
+      : fmtRemaining(Math.max(0, item.dueAtEpochMs - nowMs), t);
+  const label = item.label ?? t.kindWord[item.kind].one;
+  return `${primary} ${label}`;
+}
+
 export interface ScheduledItemsState {
   /** Aktive Items, nach Fälligkeit sortiert — leer = keine Zeile. */
   items: ScheduledItem[];

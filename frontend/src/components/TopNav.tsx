@@ -121,7 +121,7 @@ export function TopNav({ tab, onTab, onOpenSettings }: Props) {
           <span className="nav__title" title="Hoshi">
             Hoshi
           </span>
-          <span className="nav__ver">0.8.2 · Suisei</span>
+          <span className="nav__ver">0.8.3 · Suisei</span>
         </div>
 
         <nav className="nav__tabs" aria-label={topNav.mainNav}>

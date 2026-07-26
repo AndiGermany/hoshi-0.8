@@ -144,7 +144,11 @@
 }
 
 /* ruhiger Licht-Kern — immer da; trägt Atmen (idle) bzw. Schimmern (thinking)
-   und wächst beim Hören/Sprechen sanft mit dem Pegel. */
+   und wächst beim Hören/Sprechen sanft mit dem Pegel. FLACH (Andi-Korrektur
+   26.07: „die meisten Orb-Designs sehen 3D aus, ich möchte es flach, ruhig"):
+   eine einfache gefüllte Fläche, kein Blur-Glow (drop-shadow) mehr, der den
+   Kern wie eine beleuchtete Kugel wirken ließ — die Zustands-Lesbarkeit trägt
+   jetzt allein Skalierung/Deckkraft. */
 .vc-orb__core {
   width: var(--orb-core, 8px);
   height: var(--orb-core, 8px);
@@ -152,22 +156,20 @@
   background: var(--accent);
   opacity: 0.6;
   transform: scale(calc(1 + var(--lvl) * 0.4));
-  filter: drop-shadow(
-    0 0 calc(var(--orb-glow-min, 2px) + var(--lvl) * var(--orb-glow, 7px)) var(--accent-glow)
-  );
   transition:
     transform 130ms linear,
-    opacity var(--dur-base) var(--ease-standard),
-    filter 130ms linear;
+    opacity var(--dur-base) var(--ease-standard);
 }
 
-/* weicher Pegel-Bloom: radialer Schein, skaliert + blendet mit dem Pegel. */
+/* weicher Pegel-Bloom: FLACHE Fläche statt radialem Blur-Verlauf (dieselbe
+   Flach-Korrektur wie beim Kern) — trägt weiterhin die Pegel-Reaktivität über
+   Skalierung/Deckkraft, nur ohne die Leucht-Kugel-Optik eines Gradient-Glows. */
 .vc-orb__bloom {
   width: var(--orb-bloom, 24px);
   height: var(--orb-bloom, 24px);
   border-radius: 50%;
-  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 68%);
-  opacity: calc(0.1 + var(--lvl) * 0.6);
+  background: var(--accent-soft);
+  opacity: calc(0.16 + var(--lvl) * 0.7);
   transform: scale(calc(0.6 + var(--lvl) * 1.05));
   transition:
     transform 150ms linear,
@@ -234,11 +236,9 @@
   0%,
   100% {
     opacity: 0.55;
-    filter: drop-shadow(0 0 2px var(--accent-faint));
   }
   50% {
     opacity: 1;
-    filter: drop-shadow(0 0 9px var(--accent-glow));
   }
 }
 @keyframes vc-ring-think {
@@ -276,7 +276,6 @@
   }
   .vc-orb__core {
     opacity: 0.8 !important;
-    filter: drop-shadow(0 0 3px var(--accent-glow)) !important;
   }
   .vc-orb__ring {
     opacity: 0.25 !important;
@@ -396,8 +395,6 @@
   --orb-core: 54px;
   --orb-ring: 116px;
   --orb-bloom: 156px;
-  --orb-glow: 22px;
-  --orb-glow-min: 4px;
   display: grid;
   place-items: center;
   width: var(--orb-w);

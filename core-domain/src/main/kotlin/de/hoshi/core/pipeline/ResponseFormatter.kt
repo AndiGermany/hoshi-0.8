@@ -4,15 +4,14 @@ import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.SmartHomeAction
 import de.hoshi.core.pipeline.lang.LangDe
 import de.hoshi.core.pipeline.lang.LanguagePackRegistry
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.random.Random
 
 /**
  * Smart-Home-Bestätigungs-Pool mit Anti-Repeat-Ring (PORT-Einheit aus dem
  * Hoshi-0.5 brain-streaming-Ledger, dort `IntentResponseFormatter`).
  *
- * Anti-Repeat-Ring mit Tiefe [REPEAT_DEPTH] pro Slot — derselbe Pool gibt nicht
- * zwei (oder drei) Mal hintereinander dieselbe Variante zurück.
+ * Anti-Repeat-Ring mit Tiefe [AntiRepeatPicker.DEFAULT_DEPTH] pro Slot (seit
+ * 2026-07-26 als [AntiRepeatPicker] extrahiert, s. dessen KDoc) — derselbe
+ * Pool gibt nicht zwei (oder drei) Mal hintereinander dieselbe Variante zurück.
  *
  * Acks sind warm/kurz/zustands-eindeutig und **finit + prerender-tauglich**: 2–3
  * explizite Varianten pro Aktion, Räume fix ([ROOMS]) — so kann eine AudioBank
@@ -51,11 +50,13 @@ class ResponseFormatter {
     private fun slot(name: String, language: Language) = "$name:${language.code}"
 
     /**
-     * Anti-Repeat-Tiefe: die letzten N Indizes werden bei der Auswahl
+     * Anti-Repeat-Ring: die letzten N Indizes werden bei der Auswahl
      * ausgeschlossen, damit „Klar — Wohnzimmer." nicht in jeder zweiten
-     * Antwort kommt.
+     * Antwort kommt. Seit 2026-07-26 die extrahierte, wiederverwendbare
+     * [AntiRepeatPicker]-Instanz (s. deren KDoc) — [pick] delegiert nur noch,
+     * Verhalten byte-identisch zum vorherigen Inline-Ring.
      */
-    private val recentIndices = ConcurrentHashMap<String, ArrayDeque<Int>>()
+    private val picker = AntiRepeatPicker()
 
     fun lightOn(room: String?, language: Language = Language.DEFAULT): String =
         if (room != null) format("light_on_room", acks(language).lightOnRoom, language, room = room)
@@ -303,39 +304,12 @@ class ResponseFormatter {
     }
 
     /**
-     * Wählt einen Pool-Eintrag, der **nicht** unter den letzten [REPEAT_DEPTH]
-     * gewählten Indizes ist. Bei Pool-Größen ≤ REPEAT_DEPTH degradiert die Logik
-     * auf „nicht direkt der Letzte" (sonst läuft der Ring leer).
+     * Wählt einen Pool-Eintrag über den [picker] — delegiert an
+     * [AntiRepeatPicker.pick] (Anti-Repeat-Tiefe [AntiRepeatPicker.DEFAULT_DEPTH]).
      */
-    private fun pick(slot: String, pool: List<String>): String {
-        if (pool.isEmpty()) return ""
-        if (pool.size == 1) return pool[0]
-
-        val ring = recentIndices.getOrPut(slot) { ArrayDeque(REPEAT_DEPTH) }
-        val effectiveDepth = minOf(REPEAT_DEPTH, pool.size - 1)
-        val excluded = ring.toSet()
-
-        var idx = Random.nextInt(pool.size)
-        var tries = 0
-        while (idx in excluded && tries < pool.size * 2) {
-            idx = Random.nextInt(pool.size)
-            tries++
-        }
-        if (idx in excluded) {
-            idx = (0 until pool.size).firstOrNull { it !in excluded } ?: 0
-        }
-
-        synchronized(ring) {
-            ring.addLast(idx)
-            while (ring.size > effectiveDepth) ring.removeFirst()
-        }
-        return pool[idx]
-    }
+    private fun pick(slot: String, pool: List<String>): String = picker.pick(slot, pool)
 
     companion object {
-        /** Anti-Repeat-Tiefe — die letzten N Wahl-Indizes werden ausgeschlossen. */
-        const val REPEAT_DEPTH = 3
-
         /** Die festen HA-live-Räume. Quelle der Wahrheit für die endliche Ack-Menge. */
         val ROOMS = listOf(
             "wohnzimmer", "küche", "schlafzimmer", "arbeitszimmer",

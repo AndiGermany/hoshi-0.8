@@ -15,7 +15,7 @@ import { de } from '../i18n/de';
  */
 
 /**
- * Die acht wählbaren Farbthemen. Aoi (青) = der Default seit Andis Design-Adopt
+ * Die neun wählbaren Farbthemen. Aoi (青) = der Default seit Andis Design-Adopt
  * (Cowork-Spec 2026-07-02: „übernehmen wir die Farbe und das Design"). Die
  * bisherigen Themen bleiben wählbar; ein in localStorage gespeichertes Theme
  * wird NICHT überschrieben — nur der Fallback ist jetzt Aoi.
@@ -33,6 +33,7 @@ export type Theme =
   | 'nagareboshi'
   | 'yoake'
   | 'natsunohi'
+  | 'amayadori'
   | 'sora';
 
 /**
@@ -49,7 +50,7 @@ export interface Settings {
   voice: string;
 }
 
-/** Die acht wählbaren Themen in Panel-Reihenfolge (Aoi zuerst = Default). */
+/** Die neun wählbaren Themen in Panel-Reihenfolge (Aoi zuerst = Default). */
 export const THEME_IDS: readonly Theme[] = [
   'aoi',
   'yoru',
@@ -58,6 +59,7 @@ export const THEME_IDS: readonly Theme[] = [
   'kasumi',
   'nagareboshi',
   'yoake',
+  'amayadori',
   'sora',
 ];
 
@@ -321,8 +323,8 @@ export const SORA_ROTATION: readonly SoraTheme[] = ['nagareboshi', 'asa', 'aoi',
 //    2. 'tageszeiten' — die fünf Rotations-Themes in TAGESREIHENFOLGE
 //                       ({@link SORA_ROTATION}), nicht alphabetisch: wer eins
 //                       fest wählt, pinnt damit einen Schritt der Automatik.
-//    3. 'stimmung'    — Yoake + Natsu no Hi. Bilder, keine Tageszeiten; sie
-//                       hängen bewusst NICHT an der Uhr.
+//    3. 'stimmung'    — Yoake, Natsu no Hi + Amayadori. Bilder, keine
+//                       Tageszeiten; sie hängen bewusst NICHT an der Uhr.
 //
 //  Die IDs selbst sind PERSISTIERT (localStorage, {@link SETTINGS_STORAGE_KEY})
 //  und bleiben unangetastet — hier wird ausschließlich die ANZEIGE gruppiert.
@@ -345,14 +347,14 @@ export interface ThemeGroup {
 /**
  * Die Gruppierung des Farbthema-Pickers. Zusammen decken die drei Gruppen
  * exakt {@link THEME_IDS} ab (jede Id genau einmal) — geprüft im Test, damit ein
- * künftiges neuntes Theme nicht still aus dem Panel fällt.
+ * künftiges zehntes Theme nicht still aus dem Panel fällt.
  */
 export const THEME_GROUPS: readonly ThemeGroup[] = [
   { id: 'automatik', themes: ['sora'] },
   // Tages-Reihenfolge, NICHT alphabetisch: der Bogen der Automatik ist die
   // Ordnung, die man beim Wählen im Kopf hat (tiefe Nacht → Morgen → … → Nacht).
   { id: 'tageszeiten', themes: SORA_ROTATION },
-  { id: 'stimmung', themes: ['yoake', 'natsunohi'] },
+  { id: 'stimmung', themes: ['yoake', 'natsunohi', 'amayadori'] },
 ];
 
 /** Bildet eine lokale Uhrzeit auf das Sora-Theme dieses Tagesfensters ab. */

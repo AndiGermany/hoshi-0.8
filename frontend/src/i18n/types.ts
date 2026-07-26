@@ -4,6 +4,7 @@ import type { Persona, Theme, ThemeGroupId } from '../hooks/useSettings';
 import type { Language } from '../api/types';
 import type { PrivacyTarget } from '../api/privacy';
 import type { SettingsCategoryId } from '../components/SettingsPanel';
+import type { EscalationModeWire } from '../api/extendedThink';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  UI-Sprache (Andi-Auftrag 21.07: „Ich muss die Sprache der UI auch in den
@@ -51,6 +52,34 @@ export interface LookupModelStrings {
   unknown: string;
   failed: string;
   priceSuffix: (cents: number) => string;
+  /** Ehrliche „lädt…"-Zeile, solange der Ist-Zustand noch nicht da ist. */
+  loading: string;
+}
+
+/** Titel + EIN erklärender Satz einer Extended-Think-Stufe (Shape der Radio-Karten). */
+export interface EscalationModeEntryStrings {
+  title: string;
+  description: string;
+}
+
+/**
+ * Ehrliche Texte der Extended-Think-Stufenwahl (Andi-Auftrag 26.07: „die
+ * Eskalations-Stufe hat KEIN UI-Element" — vorher nur Backend). Vier
+ * beschriftete Auswahl-Karten, Reihenfolge nach Online-Grad ({@link
+ * ../api/extendedThink.ESCALATION_MODES}).
+ */
+export interface ExtendedThinkStrings {
+  label: string;
+  hint: string;
+  loadError: string;
+  switching: string;
+  unknown: string;
+  /** Ehrlicher Hinweis, wenn die Deploy-Zeit-Decke zu ist (Auswahl bleibt sichtbar, greift aber nicht). */
+  locked: string;
+  failed: string;
+  /** Badge auf der empfohlenen Stufe (ERST_FRAGEN, zugleich der Laufzeit-Default). */
+  recommendedBadge: string;
+  modes: Record<EscalationModeWire, EscalationModeEntryStrings>;
   /** Ehrliche „lädt…"-Zeile, solange der Ist-Zustand noch nicht da ist. */
   loading: string;
 }
@@ -122,6 +151,27 @@ export interface BrainModelStrings {
   statusReading: string;
   /** Präfix vor dem Status-Wort, z. B. „Status: läuft". */
   statusPrefix: string;
+  /**
+   * Ehrlicher Zusatz-Hinweis UNTER dem bestehenden [hint], NUR sichtbar wenn die
+   * automatische Modellwahl an ist (Andi-Auftrag „12B für Chat, e4b für Voice",
+   * 2026-07-26): die manuelle Auswahl hier bleibt funktionsfähig, setzt dann aber
+   * nur noch das CHAT-Modell (Voice bleibt e4b, unabhängig von dieser Auswahl).
+   */
+  autoSwitchNote: string;
+}
+
+/**
+ * Ehrliche Texte des `brainAutoSwitch`-Toggles (Shape von BRAIN_AUTO_SWITCH_TEXTS,
+ * Andi-Auftrag „12B für Chat, e4b für Voice", 2026-07-26): EINE Karte unter der
+ * Brain-Modell-Auswahl in „Modell & Leistung".
+ */
+export interface BrainAutoSwitchStrings {
+  label: string;
+  /** Der erklärende Satz unter dem Schalter — WAS die Automatik tut. */
+  hint: string;
+  loadError: string;
+  /** Fehlzeile, wenn ein Umschalten des Settings selbst fehlschlägt (Netz/5xx). */
+  failed: string;
 }
 
 /** Ehrliche Notiz-Texte des Lösch-Flows (Shape von PRIVACY_TEXTS). */
@@ -420,6 +470,16 @@ export interface OpsStrings {
   toneCritical: string;
   ramCritical: string;
   ramWarn: string;
+  /**
+   * Andi-Auftrag 2026-07-25/26 (Speicherdruck sichtbar statt Auto-Switch): der
+   * warme, user-verständliche Hinweis, zu dem die Pille wird, sobald
+   * `memory.level==="CRITICAL"` — ersetzt dort das technische `ramCritical` als
+   * Pillen-Text (Panel/RAM-Zeile nennt weiterhin den nackten Pegel). Erklärt die
+   * SPÜRBARE Folge (Stimme kann zäh werden) statt nur eine Kennzahl zu nennen —
+   * genau das, was beim realen Vorfall (Whisper 45s stumm bei grünem Health)
+   * gefehlt hat.
+   */
+  memoryCriticalHint: string;
   /** Der title/aria-label-Satz: „Ops: Gesamt OK · RAM WARN". */
   title: (overall: string, level: string) => string;
   /** Anhang mit dem ehrlichen Detail: „ — RAM-Druck steigt.". */
@@ -531,6 +591,14 @@ export interface ActivityStrings {
   healthHint: string;
   noObservation: string;
   backendState: (state: string) => string;
+  /**
+   * Kopf der „Diagnose"-Sektion ans Ende von Aktivität (Andi-Auftrag
+   * 2026-07-26, Flur-Display-Umbau): hierhin zog die komplette Entwickler-
+   * Landing der alten Übersicht (Hero + die drei „Live verdrahtet"-Kacheln +
+   * die „Heute"-Turn-Statistik) — s. `views/UebersichtView.tsx#DiagnoseSection`.
+   */
+  diagnoseTitle: string;
+  diagnoseHint: string;
 }
 
 /** Sichtbare Texte der Raumansicht. */
@@ -560,7 +628,15 @@ export interface RoomsStrings {
   assignFailed: string;
 }
 
-/** Sichtbare Texte der Übersichtsansicht. */
+/**
+ * Sichtbare Texte der ehemaligen Übersichtsansicht — seit dem Flur-Display-
+ * Umbau (Andi-Auftrag 2026-07-26) nur noch die „Diagnose"-Sektion am Ende von
+ * Aktivität ({@link ActivityStrings}, `views/UebersichtView.tsx#DiagnoseSection`).
+ * Die drei „Noch nicht verdrahtet"-Platzhalter (Sidecar-Health/Sprach-Stats/
+ * Geräte) UND der alte Seiten-Titel/Lede sind ERSATZLOS gestrichen: Sidecar-
+ * Health lebt längst als Ops-Pille in der Kopfzeile, die anderen beiden waren
+ * leere Versprechen ohne Datenquelle.
+ */
 export interface OverviewStrings {
   heroUpTitle: string;
   heroUpSub: string;
@@ -568,15 +644,8 @@ export interface OverviewStrings {
   heroDownSub: string;
   heroUnknownTitle: string;
   heroUnknownSub: string;
-  sidecarHealthNote: string;
-  voiceStatsNote: string;
-  devicesNote: string;
   backend: string;
-  sidecarHealth: string;
-  voiceStats: string;
-  devices: string;
   live: string;
-  notWired: string;
   backendNote: string;
   chatTurn: string;
   liveStreaming: string;
@@ -586,12 +655,7 @@ export interface OverviewStrings {
   missing: string;
   authSetNote: string;
   authMissingNote: string;
-  title: string;
-  lede: string;
   lastChecked: (time: string) => string;
-  liveWired: string;
-  notWiredTitle: string;
-  notWiredHint: string;
 }
 
 export type DayPart = 'night' | 'morning' | 'day' | 'evening';
@@ -620,6 +684,12 @@ export interface TopNavStrings {
  * `hooks/useWeatherToday.ts`, vom Backend als deutscher WMO-Lagen-Text
  * geliefert) bleiben außerhalb dieser Scheibe und darum deutsch — siehe
  * Kommentare in IdleFace.tsx.
+ *
+ * `heute` ist seit dem Flur-Display-Umbau (Andi-Auftrag 2026-07-26) NICHT
+ * mehr Teil von IdleFace — die Kachel zog in die „Diagnose"-Sektion von
+ * {@link ActivityStrings} um (s. `views/UebersichtView.tsx#DiagnoseSection`).
+ * Der Katalog-Key bleibt hier stehen (kein Grund, denselben Text an zwei
+ * Stellen zu pflegen); nur die VERWENDUNG wanderte.
  */
 export interface IdleFaceStrings {
   sectionAria: string;
@@ -640,10 +710,15 @@ export interface IdleFaceStrings {
     noteEmpty: string;
     noteWithData: string;
   };
-  geplant: {
+  /** Die „Läuft"-Karte (ex-„Geplant"): echte Timer/Wecker/Erinnerungen mit Label + Countdown. */
+  laeuft: {
     name: string;
-    nichtsGeplant: string;
-    note: string;
+  };
+  /** Die Einkaufs-Karte (neu, GET /api/v1/lists — Andi-JA 2026-07-08). */
+  einkauf: {
+    name: string;
+    /** „+3 weitere" hinter den ersten sichtbaren Einträgen. */
+    more: (count: number) => string;
   };
   wetter: {
     name: string;
@@ -651,8 +726,10 @@ export interface IdleFaceStrings {
     liveNote: (place: string) => string;
     offNote: string;
     unreachableNote: string;
-    settingsAria: string;
-    settingsTitle: string;
+    /** Warme Niederschlags-Zeile im Jetzt-Band: „3 mm Regen heute". */
+    precipSome: (mm: string) => string;
+    /** Niederschlag exakt 0 ⇒ „trocken" statt „0 mm". */
+    precipNone: string;
   };
   status: {
     online: string;
@@ -708,9 +785,11 @@ export interface UiStrings {
   idleFace: IdleFaceStrings;
   weatherLocation: WeatherLocationStrings;
   lookupModel: LookupModelStrings;
+  extendedThink: ExtendedThinkStrings;
   ttsEngine: TtsEngineStrings;
   stimme: StimmeStrings;
   brainModel: BrainModelStrings;
+  brainAutoSwitch: BrainAutoSwitchStrings;
   privacy: PrivacyStrings;
   speaker: SpeakerStrings;
   nightMode: NightModeStrings;

@@ -76,6 +76,7 @@ vi.mock('../audio/earcon', async (importOriginal) => {
 import {
   anatomyOnEvent,
   emptyAnatomy,
+  originChipText,
   providerChipText,
   turnStages,
   TurnChips,
@@ -118,6 +119,8 @@ describe('anatomyOnEvent — faltet NUR echte Wire-Events in die Anatomie', () =
       model: 'gemma',
       category: 'SMART_HOME',
       grounded: true,
+      escalated: false,
+      escalationProvider: '',
     });
   });
 
@@ -129,6 +132,38 @@ describe('anatomyOnEvent — faltet NUR echte Wire-Events in die Anatomie', () =
       category: 'NEEDS_WEB',
     });
     expect(a.route!.grounded).toBe(false);
+  });
+
+  // ── Andi-Befund 2026-07-26 „lügender lokal-Chip": escalated/escalationProvider
+  // sind additive Wire-Felder (BE ChatEvent.Start seit 2026-07-05) — das FE muss
+  // sie jetzt in die Route falten, sonst bleibt ein eingelöster Cloud-Turn
+  // fälschlich als „lokal" markiert.
+  it('escalated/escalationProvider werden ehrlich gefaltet — fehlend heißt false/"" (Alt-Turns)', () => {
+    const escalated = anatomyOnEvent(emptyAnatomy('text'), {
+      event: 'start',
+      provider: 'LOCAL',
+      model: 'policy',
+      category: 'FACT_SHORT',
+      escalated: true,
+      escalationProvider: 'openai-nano',
+    });
+    expect(escalated.route).toEqual({
+      provider: 'LOCAL',
+      model: 'policy',
+      category: 'FACT_SHORT',
+      grounded: false,
+      escalated: true,
+      escalationProvider: 'openai-nano',
+    });
+
+    const legacy = anatomyOnEvent(emptyAnatomy('text'), {
+      event: 'start',
+      provider: 'LOCAL',
+      model: 'gemma',
+      category: 'SMALLTALK',
+    });
+    expect(legacy.route!.escalated).toBe(false);
+    expect(legacy.route!.escalationProvider).toBe('');
   });
 
   it('erstes delta → antwortet; weitere deltas geben die SELBE Referenz zurück', () => {
@@ -246,11 +281,93 @@ describe('providerChipText — lokal bleibt lokal, Cloud heißt ehrlich „ging 
   });
 });
 
+// Andi-Befund 2026-07-26 „lügender lokal-Chip" (Live-Repro: eine per „ja"
+// eingelöste Extended-Think-S2-Eskalation zeigte „lokal", obwohl die Antwort
+// über eine bezahlte Cloud-Anfrage kam): der BE-Eskalationspfad
+// (TurnOrchestrator.escalationTurn) behält provider="LOCAL" (Routing-Sicht) —
+// NUR escalated/escalationProvider tragen die wahre Herkunft. originChipText
+// ist die Reparatur: sie liest diese beiden Felder, providerChipText tut das
+// bewusst NICHT (bleibt der reine Provider→Label-Mapper).
+describe('originChipText — die wahre Herkunft schlägt die Routing-Sicht (Andi-Fix 2026-07-26)', () => {
+  it('escalated=true + provider=LOCAL → das ECHTE Eskalations-Label, nie „lokal"', () => {
+    expect(
+      originChipText({
+        provider: 'LOCAL',
+        model: 'policy',
+        category: 'FACT_SHORT',
+        grounded: false,
+        escalated: true,
+        escalationProvider: 'openai-nano',
+      }),
+    ).toBe('OpenAI · ging online');
+  });
+  it('escalated=true + Recherche-Modell-Label ("openai-sol") → trotzdem OpenAI-Marke', () => {
+    expect(
+      originChipText({
+        provider: 'LOCAL',
+        model: 'policy',
+        category: 'FACT_SHORT',
+        grounded: false,
+        escalated: true,
+        escalationProvider: 'openai-sol',
+      }),
+    ).toBe('OpenAI · ging online');
+  });
+  it('escalated=false (oder fehlend) + provider=LOCAL → unverändert „lokal" (Bestandspfad)', () => {
+    expect(
+      originChipText({ provider: 'LOCAL', model: 'gemma', category: 'SMALLTALK', grounded: false }),
+    ).toBe('lokal');
+    expect(
+      originChipText({
+        provider: 'LOCAL',
+        model: 'gemma',
+        category: 'SMALLTALK',
+        grounded: false,
+        escalated: false,
+        escalationProvider: '',
+      }),
+    ).toBe('lokal');
+  });
+  it('unbekanntes Eskalations-Präfix bleibt as-is + „ging online" (nie stillschweigend lokal)', () => {
+    expect(
+      originChipText({
+        provider: 'LOCAL',
+        model: 'policy',
+        category: 'FACT_SHORT',
+        grounded: false,
+        escalated: true,
+        escalationProvider: 'hedge-custom',
+      }),
+    ).toBe('Hedge · ging online');
+    expect(
+      originChipText({
+        provider: 'LOCAL',
+        model: 'policy',
+        category: 'FACT_SHORT',
+        grounded: false,
+        escalated: true,
+        escalationProvider: 'mystery-model',
+      }),
+    ).toBe('mystery-model · ging online');
+  });
+});
+
 // ── Baustein 4: statische Render-Verträge (SVG-Glyphs, keine Emojis) ─────────
 
-const routed = (provider: string, grounded = false): TurnAnatomyState => ({
+const routed = (
+  provider: string,
+  grounded = false,
+  escalation?: { escalated: boolean; escalationProvider: string },
+): TurnAnatomyState => ({
   ...emptyAnatomy('text'),
-  route: { provider, model: 'm', category: 'FACT_SHORT', grounded },
+  route: {
+    provider,
+    model: 'm',
+    category: 'FACT_SHORT',
+    grounded,
+    escalated: escalation?.escalated ?? false,
+    escalationProvider: escalation?.escalationProvider ?? '',
+  },
   answering: true,
 });
 
@@ -282,6 +399,18 @@ describe('TurnStagesRow/TurnChips — Markup-Vertrag', () => {
     expect(html).toContain('glyph--cloud');
     expect(html).toContain('OpenAI · ging online');
     expect(html).not.toContain('glyph--lock');
+  });
+
+  it('Chips einer eingelösten Eskalation (provider bleibt LOCAL!): Wolke + „OpenAI · ging online", NIE „lokal" (Andi-Fix 2026-07-26)', () => {
+    const html = renderToStaticMarkup(
+      <TurnChips
+        anatomy={routed('LOCAL', false, { escalated: true, escalationProvider: 'openai-nano' })}
+      />,
+    );
+    expect(html).toContain('glyph--cloud');
+    expect(html).toContain('OpenAI · ging online');
+    expect(html).not.toContain('glyph--lock');
+    expect(html).not.toContain('>lokal<');
   });
 
   it('Grounding-Chip NUR bei echtem grounded=true', () => {
@@ -463,6 +592,40 @@ describe('ChatView §4 — die Stufen-Zeile wächst LIVE mit den echten Events',
     expect(chips.textContent).toContain('OpenAI · ging online');
     expect(chips.querySelector('.glyph--cloud')).not.toBeNull();
     expect(chips.textContent).not.toContain('Wissen gedeckt'); // kein grounded=true
+  });
+
+  it('Andi-Live-Repro 2026-07-26: eine per „ja" eingelöste Eskalation zeigt „OpenAI · ging online", NIE „lokal" (der BE-Eskalationspfad behält provider=LOCAL, escalated trägt die Wahrheit)', async () => {
+    await mount();
+    await sendText('ja');
+
+    // Der BE-Eskalationspfad (TurnOrchestrator.escalationTurn) sendet GENAU
+    // dieses Start-Event für einen eingelösten Cloud-Turn: provider bleibt
+    // "LOCAL" (Routing-Sicht, FACT_SHORT routet immer erst lokal),
+    // escalated=true + escalationProvider tragen die WAHRE Herkunft.
+    await feedChat({
+      event: 'start',
+      provider: 'LOCAL',
+      model: 'policy',
+      category: 'FACT_SHORT',
+      escalated: true,
+      escalationProvider: 'openai-nano',
+    });
+    await feedChat({ event: 'delta', text: 'Geht klar, kurz schauen…' });
+    await feedChat({
+      event: 'delta',
+      text: 'Hab schnell online geschaut — Mars hat zwei Monde: Phobos und Deimos.',
+    });
+    await feedChat({ event: 'done', provider: 'LOCAL' });
+    await act(async () => {
+      resolveChat!();
+      await flush();
+    });
+
+    const chips = container.querySelector('.turnchips')!;
+    expect(chips.textContent).toContain('OpenAI · ging online');
+    expect(chips.querySelector('.glyph--cloud')).not.toBeNull();
+    expect(chips.querySelector('.glyph--lock')).toBeNull();
+    expect(chips.textContent).not.toContain('lokal');
   });
 
   it('Fehler-Turn: ✕ an der ECHTEN Stage, KEINE Chips (meta erklärt das Warum)', async () => {

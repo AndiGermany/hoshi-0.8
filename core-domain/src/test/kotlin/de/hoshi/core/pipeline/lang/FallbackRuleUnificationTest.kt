@@ -34,6 +34,13 @@ import java.time.ZoneId
  * galt für die halbe Codebasis ohnehin schon.
  *
  * DE und EN bleiben dabei byte-identisch — nur ES/FR/IT wechseln.
+ *
+ * **Nachtrag 2026-07-26:** die vier [EscalationModeFastpath]-Stufen-QUITTUNGEN
+ * (Erfolgsfall, `receipt`) sind aus dieser Fallback-Regel wieder RAUS — sie
+ * leben jetzt echt fünfsprachig im [LanguagePack] (Andi: „die Sprüche für
+ * Hoshi schaut online nach sind schlecht"). Der Fehlerfall (`failure`, Persist
+ * schlägt fehl) bleibt unverändert bei [fallsBackToEnglish] — s. „Stufen-
+ * Fehlerfall" unten.
  */
 class FallbackRuleUnificationTest {
 
@@ -101,14 +108,23 @@ class FallbackRuleUnificationTest {
     }
 
     // ── Stufen-Fastpath: die Quittung MIT Stufen-Echo ────────────────────────
+    //
+    // **Andi-Auftrag 2026-07-26** („die Sprüche für Hoshi schaut online nach sind
+    // schlecht"): die vier Stufen-Quittungen sind aus dem [deOr]/[fallsBackToEnglish]-
+    // Fallback RAUS und leben jetzt echt fünfsprachig im [LanguagePack] — ES/FR/IT
+    // bekommen seither KEIN Englisch mehr, sondern ihre eigene Übersetzung.
 
     @Test
-    fun `Stufen-Quittung - DE bleibt byte-identisch, ES FR IT bekommen jetzt Englisch`() {
+    fun `Stufen-Quittung - DE und EN bleiben byte-identisch, ES FR IT sprechen jetzt ihre eigene Sprache`() {
         val de = EscalationModeFastpath(AcceptingSwitch()).handle("Geh nicht mehr online.", Language.DE)
         assertEquals("Okay — Online-Nachschauen ist aus. Ich bleib komplett lokal.", de)
-        for (language in listOf(Language.EN, Language.ES, Language.FR, Language.IT)) {
+        val en = EscalationModeFastpath(AcceptingSwitch()).handle("Geh nicht mehr online.", Language.EN)
+        assertEquals("Okay — online lookups are off. I'll stay fully local.", en)
+        for (language in listOf(Language.ES, Language.FR, Language.IT)) {
+            val pack = LanguagePackRegistry.forLanguage(language)
             val phrase = EscalationModeFastpath(AcceptingSwitch()).handle("Geh nicht mehr online.", language)
-            assertEquals("Okay — online lookups are off. I'll stay fully local.", phrase, "$language")
+            assertEquals(pack.escalationModeAus, phrase, "$language")
+            assertNotEquals("Okay — online lookups are off. I'll stay fully local.", phrase, "$language bekam noch Englisch")
         }
     }
 

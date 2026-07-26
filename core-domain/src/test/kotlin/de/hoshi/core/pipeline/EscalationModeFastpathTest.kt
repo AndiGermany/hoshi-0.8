@@ -92,6 +92,26 @@ class EscalationModeFastpathTest {
         assertEquals(EscalationMode.AUTOMATISCH, fp.match("go online on your own"))
     }
 
+    @Test
+    fun `OFFLINE DE-Formulierungen matchen`() {
+        val fp = fastpath()
+        assertEquals(EscalationMode.OFFLINE, fp.match("Geh offline."))
+        assertEquals(EscalationMode.OFFLINE, fp.match("geh ab jetzt offline"))
+        assertEquals(EscalationMode.OFFLINE, fp.match("bleib bitte offline"))
+        assertEquals(EscalationMode.OFFLINE, fp.match("Schalte in den Offline-Modus."))
+        assertEquals(EscalationMode.OFFLINE, fp.match("mach den Offlinemodus an"))
+        assertEquals(EscalationMode.OFFLINE, fp.match("Offline-Modus an"))
+    }
+
+    @Test
+    fun `OFFLINE EN-Pendants matchen`() {
+        val fp = fastpath()
+        assertEquals(EscalationMode.OFFLINE, fp.match("Go offline."))
+        assertEquals(EscalationMode.OFFLINE, fp.match("stay offline"))
+        assertEquals(EscalationMode.OFFLINE, fp.match("switch to offline mode"))
+        assertEquals(EscalationMode.OFFLINE, fp.match("offline mode on"))
+    }
+
     // ── GEGEN-Beispiele: Status-Fragen und Beiläufiges matchen NIE ──────────
 
     @Test
@@ -99,6 +119,10 @@ class EscalationModeFastpathTest {
         val fp = fastpath()
         assertNull(fp.match("Warum bist du nicht online?"), "Status-Frage ist KEIN Settings-Wunsch")
         assertNull(fp.match("bist du online?"))
+        assertNull(fp.match("bist du offline?"), "Status-Frage ist KEIN Offline-Wunsch")
+        assertNull(fp.match("warum bist du offline?"))
+        assertNull(fp.match("offline"), "das nackte Wort allein ist kein Befehl")
+        assertNull(fp.match("ich war heute offline"))
         assertNull(fp.match("warum gehst du nicht online?"))
         assertNull(fp.match("warum gehst du automatisch online?"))
         assertNull(fp.match("geh online"), "ohne Stufen-Wort keine Stufe")

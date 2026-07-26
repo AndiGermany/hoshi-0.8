@@ -1,5 +1,5 @@
 import { VoiceRecorder } from './recorder';
-import { webmBlobToWav } from './wav';
+import { ENROLL_SAMPLE_RATE, webmBlobToWav } from './wav';
 
 // Anlern-Aufnahme: kapselt Mikro-Aufnahme (`VoiceRecorder`, webm/opus) UND die
 // Umwandlung in das **WAV**, das der Enroll-Contract verlangt. Bewusst hinter
@@ -30,7 +30,13 @@ export function createBrowserEnrollCapture(): EnrollCapture {
     start: () => recorder.start(),
     stop: async () => {
       const recorded = await recorder.stop();
-      return webmBlobToWav(recorded);
+      // Anlaut-Fix (Andi-Befund 26.07, s. audio/preRoll.ts): derselbe Ring-Vorlauf
+      // wie im Voice-Turn-Pfad (useVoiceChatSession.ts) — Anlern-Aufnahmen leiden
+      // an genau derselben Beschneidung, wenn man direkt nach dem Tap losspricht.
+      return webmBlobToWav(recorded, ENROLL_SAMPLE_RATE, {
+        samples: recorder.getPreRoll(),
+        sampleRate: recorder.getPreRollSampleRate(),
+      });
     },
     cancel: () => recorder.cancel(),
   };

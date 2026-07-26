@@ -60,5 +60,27 @@ say "verifiziere Kern-Imports (mlx_lm, huggingface_hub, fastapi)"
 "$VENV_PY" -c "import mlx_lm, huggingface_hub, fastapi, uvicorn, pydantic" \
     || fail "Kern-Import fehlgeschlagen trotz 'erfolgreichem' pip install — venv ist NICHT nutzbar. Nicht mit System-Python ausweichen."
 
+# ── mlx-lm-Patches einsetzen (Architekturen, die mlx-lm noch nicht mitbringt) ─
+# WARUM HIER und nicht als pip-Patch: `pip install` legt das models/-Verzeichnis
+# neu an — ein dort abgelegtes Modul waere nach jedem Lauf weg. Die Quelle liegt
+# darum im Repo (mlx_patches/) und wird nach JEDER Installation neu eingesetzt.
+# Ohne den Patch endet `gemma-4-12B-it-4bit` mit
+# "ValueError: Model type gemma4_unified not supported" (s. Kopf der Patch-Datei).
+if [ -d mlx_patches ]; then
+    MODELS_DIR="$("$VENV_PY" -c 'import mlx_lm, os; print(os.path.join(os.path.dirname(mlx_lm.__file__), "models"))' 2>/dev/null)"
+    if [ -n "$MODELS_DIR" ] && [ -d "$MODELS_DIR" ]; then
+        for patch in mlx_patches/*.py; do
+            [ -e "$patch" ] || continue
+            cp "$patch" "$MODELS_DIR/" || fail "Patch $patch liess sich nicht einsetzen"
+            say "Patch eingesetzt: $(basename "$patch") -> ${MODELS_DIR}"
+        done
+        # Trust-but-verify: der Patch muss auch importierbar sein, nicht nur liegen.
+        "$VENV_PY" -c "import mlx_lm.models.gemma4_unified" \
+            || fail "gemma4_unified-Patch liegt, ist aber nicht importierbar"
+    else
+        say "WARNUNG: models/-Verzeichnis von mlx_lm nicht gefunden — Patches NICHT eingesetzt"
+    fi
+fi
+
 say "OK — venv bereit: $VENV_PY"
 say "naechster Schritt: ./run.sh (startet den Brain-Sidecar auf Port 8041)"

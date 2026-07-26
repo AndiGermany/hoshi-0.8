@@ -224,6 +224,19 @@ class AudioWebSocketHandler(
      * Kein Wiring ⇒ ein `timer_ack`-Frame tut schlicht nichts.
      */
     private val onTimerAck: (id: String) -> Unit = {},
+    /**
+     * **Auto-Switch-Hook (Voice-Anker) — Andi-Auftrag „12B für Chat, e4b für Voice"
+     * (2026-07-26), Funktions-Seam (Muster [onTimerAck]/[onDeviceConnected]), Default
+     * No-op ⇒ byte-neutral.** [onStart] ruft ihn NACH dem Parsen des `start`-Frames auf
+     * JEDEM Turn-Start auf — die eigentliche Drossel (schon-richtig-geladen +
+     * Hysterese, `brainAutoSwitch`-Setting AUS ⇒ sofortiges no-op) sitzt im
+     * [BrainAutoSwitchPort] selbst, NICHT hier. Der Hook feuert synchron einen
+     * ASYNCHRONEN Fire-and-forget-Trigger ([BrainAutoSwitchPort.onVoiceSessionStart])
+     * — blockiert NIE den `start`-Frame-Handler, der Nutzer spricht währenddessen
+     * weiter (der Wechsel versteckt sich in der Sprechzeit). [WebSocketConfig] reicht
+     * hier `brainAutoSwitchPort::onVoiceSessionStart` durch.
+     */
+    private val onVoiceSessionStart: () -> Unit = {},
 ) : WebSocketHandler {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -436,6 +449,10 @@ class AudioWebSocketHandler(
     }
 
     private fun onStart(sessionId: String, node: JsonNode) {
+        // Auto-Switch-Anker (Voice-Seite): NOCH VOR dem restlichen Turn-Setup anstossen,
+        // damit der (asynchrone, nie blockierende) Wechsel die maximale Sprechzeit zum
+        // Verstecken hat. No-op-Default ⇒ byte-neutral ohne Wiring/Setting-AN.
+        onVoiceSessionStart()
         buffers[sessionId]?.reset()
         stopHandled.remove(sessionId) // frischer Turn ⇒ stop wieder erlauben
         cappedSessions.remove(sessionId) // frischer Turn ⇒ Audio-Cap-Abbruch zurücksetzen

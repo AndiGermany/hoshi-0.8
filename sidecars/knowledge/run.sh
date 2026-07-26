@@ -28,6 +28,26 @@ say()  { echo "[knowledge-run] $*" >&2; }
 "$VENV_PY" -c "import fastapi, pydantic, uvicorn, zstandard" >/dev/null 2>&1 \
     || fail "venv kann die gepinnten Runtime-Pakete nicht importieren"
 
+# Pack-v1-Preflight. Legacy bleibt startbar, aber ein explizit gefordertes oder
+# vorhandenes Manifest muss VOR dem Port-Bind sauber zu genau dieser DB passen.
+MANIFEST_PATH="${HOSHI_KNOWLEDGE_MANIFEST_PATH:-$(dirname "$DB_PATH")/manifest.json}"
+REQUIRE_MANIFEST="${HOSHI_KNOWLEDGE_REQUIRE_MANIFEST:-false}"
+PACK_VERIFIER="$KNOWLEDGE_DIR/../../tools/knowledge-pack/verify_pack.py"
+MANIFEST_REQUIRED=false
+case "$REQUIRE_MANIFEST" in
+    1|true|TRUE|yes|YES|on|ON) MANIFEST_REQUIRED=true ;;
+esac
+if [ -f "$MANIFEST_PATH" ]; then
+    [ -f "$PACK_VERIFIER" ] || fail "Pack-Verifier fehlt: $PACK_VERIFIER"
+    PYTHONPATH="$KNOWLEDGE_DIR" "$VENV_PY" "$PACK_VERIFIER" "$MANIFEST_PATH" --fast \
+        >/dev/null || fail "Knowledge-Pack-Manifest/Schema unbrauchbar: $MANIFEST_PATH"
+    say "Knowledge-Pack-v1 Fast-Verify: OK ($MANIFEST_PATH)"
+elif [ "$MANIFEST_REQUIRED" = true ]; then
+    fail "Knowledge-Pack-Manifest ist erforderlich, fehlt aber: $MANIFEST_PATH"
+else
+    say "WARN: Legacy-DB ohne Manifest; /v1/health weist legacy-unmanifested aus"
+fi
+
 # Billige Schema-Probe ohne Tabellen-Scan; die eigentliche Bridge oeffnet
 # dieselbe Datei anschliessend weiterhin read-only (`mode=ro`).
 "$VENV_PY" - "$DB_PATH" <<'PY' \

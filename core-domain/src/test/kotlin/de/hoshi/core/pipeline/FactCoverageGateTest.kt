@@ -3,6 +3,7 @@ package de.hoshi.core.pipeline
 import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteProvider
+import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -251,15 +252,46 @@ class FactCoverageGateTest {
         )
     }
 
-    // ── Deflection-Phrasen: sprach-korrekt, nicht leer, DE != EN ─────────────────
+    // ── Deflection-Phrasen: Pool-Mitgliedschaft, sprach-korrekt, nicht leer,
+    //    DE-Pool != EN-Pool (Streuungs-Nachtrag 2026-07-26: kein Einzelstring
+    //    mehr, [FactCoverageGate.deflection] wählt aus einem 3-4er-Pool je
+    //    Sprache — s. [EscalationLanguageTest] für die volle Fünf-Sprachen-
+    //    Streuungs-Probe) ─────────────────────────────────────────────────────
     @Test
-    fun `Deflection-Phrasen sind sprach-korrekt und nicht leer`() {
-        assertEquals(FactCoverageGate.DEFLECT_DE, FactCoverageGate.deflection(Language.DE))
-        assertEquals(FactCoverageGate.DEFLECT_EN, FactCoverageGate.deflection(Language.EN))
+    fun `Deflection-Phrasen kommen aus dem sprach-eigenen Pool und sind nicht leer`() {
+        val de = LanguagePackRegistry.forLanguage(Language.DE).factCoverageDeflect
+        val en = LanguagePackRegistry.forLanguage(Language.EN).factCoverageDeflect
+        assertTrue(FactCoverageGate.deflection(Language.DE) in de, "DE-Auswahl muss aus dem DE-Pool kommen")
+        assertTrue(FactCoverageGate.deflection(Language.EN) in en, "EN-Auswahl muss aus dem EN-Pool kommen")
         assertTrue(FactCoverageGate.deflection(Language.DE).isNotBlank())
         assertTrue(FactCoverageGate.deflection(Language.EN).isNotBlank())
-        assertNotEquals(FactCoverageGate.DEFLECT_DE, FactCoverageGate.DEFLECT_EN)
-        // Die ehrliche Haltung: bietet Nachschauen an, kein hartes "kann ich nicht".
-        assertTrue(FactCoverageGate.DEFLECT_DE.contains("nachschauen"))
+        assertNotEquals(de, en, "DE- und EN-Pool duerfen nicht identisch sein")
+        // Die ehrliche Haltung: JEDE Variante bietet Nachschauen an (endet als
+        // Frage), kein hartes "kann ich nicht".
+        for (phrase in de) {
+            assertTrue(phrase.contains("nachschauen") || phrase.contains("gucken"), "'$phrase' bietet kein Nachschauen an")
+            assertTrue(phrase.endsWith("?"), "'$phrase' muss als Nachschau-Frage enden")
+        }
+    }
+
+    @Test
+    fun `Deflection-Pool je Sprache hat mind 3 distinkte Varianten, alle enden als Frage`() {
+        for (language in Language.entries) {
+            val pool = LanguagePackRegistry.forLanguage(language).factCoverageDeflect
+            assertTrue(pool.size >= 3, "$language: Deflect-Pool zu klein (${pool.size})")
+            assertEquals(pool.size, pool.toSet().size, "$language: Deflect-Pool hat Duplikate")
+            for (phrase in pool) {
+                assertTrue(phrase.isNotBlank(), "$language: leere Deflect-Phrase")
+                assertTrue(phrase.trim().endsWith("?"), "$language: '$phrase' muss als Nachschau-Frage enden")
+            }
+        }
+    }
+
+    @Test
+    fun `Deflection streut wirklich - viele Aufrufe liefern mehrere verschiedene Varianten`() {
+        for (language in Language.entries) {
+            val seen = (1..60).map { FactCoverageGate.deflection(language) }.toSet()
+            assertTrue(seen.size >= 2, "$language: Deflect wiederholt sich (nur ${seen.size} distinct in 60 Aufrufen)")
+        }
     }
 }

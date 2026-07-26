@@ -58,10 +58,10 @@ class TurnOrchestratorExtendedThinkTest {
 
     /** Die 4 Accept-Brücken-Varianten aus [ResponseFormatter.cloudConsentAccept] (Pool, Anti-Repeat). */
     private val acceptPool = setOf(
-        "Klar, einen Moment — ich frag schnell.",
+        "Klar, Moment — ich schau schnell.",
         "Geht klar, kurz schauen…",
         "Mache ich. Moment.",
-        "Okay, einen Augenblick.",
+        "Okay, Sekunde.",
     )
 
     // ── Zählender Fake-Brain ─────────────────────────────────────────────────────
@@ -174,9 +174,13 @@ class TurnOrchestratorExtendedThinkTest {
         }
         val o = orchestrator(brain, cloud, InMemoryPendingLookupStore(), mode = { EscalationMode.ERST_FRAGEN })
 
-        // Turn 1: die Wissensfrage ⇒ ehrliche Deflection (Phrase UNVERÄNDERT — Mira-Veto).
+        // Turn 1: die Wissensfrage ⇒ ehrliche Deflection (Pool-Variante, Mira-Veto:
+        // immer noch eine ehrliche Deflect-Phrase, s. Streuungs-Nachtrag 2026-07-26).
         val deflect = turn(o, question)
-        assertEquals(FactCoverageGate.DEFLECT_DE, joinedText(deflect), "Turn 1 ist die unveränderte Deflection")
+        assertTrue(
+            joinedText(deflect) in de.hoshi.core.pipeline.lang.LangDe.PACK.factCoverageDeflect,
+            "Turn 1 ist eine DE-Deflection-Pool-Variante, war: '${joinedText(deflect)}'",
+        )
         assertEquals(0, brain.callCount.get(), "Deflect ruft den Brain nie")
         assertEquals(0, cloud.queries.size, "ERST_FRAGEN eskaliert NICHT ungefragt")
 
@@ -207,10 +211,10 @@ class TurnOrchestratorExtendedThinkTest {
         assertFalse(start.cacheHit, "ein Eskalations-Turn liest kein Grounding — kein Cache-Hit")
         val accept = (ja[1] as ChatEvent.TextDelta).text
         assertTrue(accept in acceptPool, "die erste TextDelta ist die (endlich benutzte) cloudConsentAccept-Brücke: »$accept«")
-        assertEquals(
-            TurnOrchestrator.ESCALATION_FRAME_DE + cloudAnswer,
-            (ja[2] as ChatEvent.TextDelta).text,
-            "Rahmung + Antwort VERBATIM (String-identisch, keine Umformulierung)",
+        val frameAndAnswer = (ja[2] as ChatEvent.TextDelta).text
+        assertTrue(
+            de.hoshi.core.pipeline.lang.LangDe.PACK.escalationAnswerFrame.any { frameAndAnswer == it + cloudAnswer },
+            "Rahmung (Pool-Variante) + Antwort VERBATIM (String-identisch, keine Umformulierung), war: '$frameAndAnswer'",
         )
         val done = ja[3] as ChatEvent.Done
         assertEquals(
@@ -338,11 +342,34 @@ class TurnOrchestratorExtendedThinkTest {
         assertEquals(listOf(question), cloud.queries, "AUTOMATISCH: genau 1 Lookup, direkt mit der Frage")
         assertEquals(0, brain.callCount.get(), "kein Brain-Call — Kosten UND Konfabulation gespart")
         val text = joinedText(events)
-        assertTrue(FactCoverageGate.DEFLECT_DE !in text, "keine Deflection mehr — der Ausgang ersetzt sie")
-        assertTrue(text.contains(TurnOrchestrator.ESCALATION_FRAME_DE + cloudAnswer), "attribuierte verbatim-Antwort")
+        assertTrue(
+            de.hoshi.core.pipeline.lang.LangDe.PACK.factCoverageDeflect.none { it in text },
+            "keine Deflection mehr — der Ausgang ersetzt sie",
+        )
+        assertTrue(
+            de.hoshi.core.pipeline.lang.LangDe.PACK.escalationAnswerFrame.any { text.contains(it + cloudAnswer) },
+            "attribuierte verbatim-Antwort (Pool-Variante), war: '$text'",
+        )
     }
 
     // ── (6) AUS ⇒ byte-identisch heute + ehrlicher Setting-Hinweis auf „ja" ──────
+
+    /**
+     * Normalisiert eine Deflect-[ChatEvent.TextDelta] auf einen festen Marker,
+     * BEVOR zwei unabhängig erzeugte Event-Ströme verglichen werden — seit dem
+     * Streuungs-Nachtrag (Andi 2026-07-26) wählt [FactCoverageGate.deflection]
+     * NICHT mehr deterministisch aus einem Einzelstring, sondern zufällig (Anti-
+     * Repeat) aus einem Pool; zwei UNABHÄNGIGE Aufrufe (hier: zwei separate
+     * `turn(...)`-Calls) dürfen also legitim VERSCHIEDENE Pool-Varianten
+     * liefern. Alles andere am Event bleibt exakt vergleichbar.
+     */
+    private fun normalizeDeflect(events: List<ChatEvent>): List<ChatEvent> {
+        val pool = de.hoshi.core.pipeline.lang.LangDe.PACK.factCoverageDeflect
+        return events.map { ev ->
+            if (ev is ChatEvent.TextDelta && ev.text in pool) ev.copy(text = "<DEFLECT>") else ev
+        }
+    }
+
     @Test
     fun `AUS - der Deflect-Turn ist byte-identisch zum heutigen Verhalten`() {
         val baselineBrain = FakeBrainPort()
@@ -351,10 +378,21 @@ class TurnOrchestratorExtendedThinkTest {
         val cloud = RecordingEscalationPort { Mono.just(EscalationResult.Answer(cloudAnswer, cloudSource, 0.05)) }
         val o = orchestrator(brain, cloud, InMemoryPendingLookupStore(), mode = { EscalationMode.AUS })
 
+        val baselineEvents = turn(baseline, question)
+        val prodEvents = turn(o, question)
+        assertTrue(
+            joinedText(baselineEvents) in de.hoshi.core.pipeline.lang.LangDe.PACK.factCoverageDeflect,
+            "Baseline muss eine echte Deflect-Pool-Variante sprechen",
+        )
+        assertTrue(
+            joinedText(prodEvents) in de.hoshi.core.pipeline.lang.LangDe.PACK.factCoverageDeflect,
+            "AUS muss eine echte Deflect-Pool-Variante sprechen",
+        )
         assertEquals(
-            turn(baseline, question),
-            turn(o, question),
-            "AUS: die emittierten Events des Deflect-Turns sind byte-identisch zu heute",
+            normalizeDeflect(baselineEvents),
+            normalizeDeflect(prodEvents),
+            "AUS: die emittierten Events des Deflect-Turns sind byte-identisch zu heute (Deflect-Text normalisiert " +
+                "auf Pool-Mitgliedschaft — beides ehrliche Deflect-Varianten, s. Streuungs-Nachtrag)",
         )
         assertEquals(0, cloud.queries.size, "AUS eskaliert nie")
     }

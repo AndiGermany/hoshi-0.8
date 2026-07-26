@@ -79,10 +79,11 @@ describe('resolveSoraTheme — Mapping je Tagesfenster', () => {
     expect(resolveSoraTheme(atLocalTime(6, 0))).toBe('asa');
   });
 
-  it('Yoake und Natsu no Hi bleiben NICHT Teil der Rotation (manuelle Looks)', () => {
+  it('Yoake, Natsu no Hi und Amayadori bleiben NICHT Teil der Rotation (manuelle Looks)', () => {
     expect(SORA_ROTATION).toEqual(['nagareboshi', 'asa', 'aoi', 'kasumi', 'yoru']);
     expect(SORA_ROTATION).not.toContain('yoake');
     expect(SORA_ROTATION).not.toContain('natsunohi');
+    expect(SORA_ROTATION).not.toContain('amayadori');
   });
 });
 
@@ -134,6 +135,7 @@ describe('Persistenz — Sora wird wie jedes andere Theme gespeichert', () => {
       'kasumi',
       'nagareboshi',
       'yoake',
+      'amayadori',
     ] as const) {
       vi.stubGlobal('localStorage', memoryStorage());
       saveSettings({ ...DEFAULT_SETTINGS, theme });
@@ -174,6 +176,14 @@ describe('useResolvedTheme — Auflösung + Grenzwechsel-Timer', () => {
     root = createRoot(container);
     await act(async () => root!.render(<Host theme="yoake" />));
     expect(container.querySelector('[data-testid="resolved"]')?.textContent).toBe('yoake');
+  });
+
+  it('Amayadori bleibt manuell gewählt und wird nicht zeitabhängig aufgelöst', async () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => root!.render(<Host theme="amayadori" />));
+    expect(container.querySelector('[data-testid="resolved"]')?.textContent).toBe('amayadori');
   });
 
   it('sora löst beim Laden korrekt zur aktuellen (gefakten) Uhrzeit auf', async () => {

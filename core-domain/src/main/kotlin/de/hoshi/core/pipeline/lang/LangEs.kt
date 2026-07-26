@@ -84,6 +84,32 @@ object LangEs {
             "Hm, mi libro de consulta no está accesible en este momento. No quiero adivinar — pregúntamelo otra vez en un momento y lo miro como es debido.",
             "Aquí me he quedado colgado — mi archivo de conocimiento no responde. Dame un momento y te lo digo con sinceridad.",
         ),
+        factCoverageOfflineDisclaimer = "Sinceramente, no tengo una fuente para esto — pero por lo que sé yo: ",
+        localLookupFoundPrefix = "He mirado en lo que tengo aquí — ",
+        // ── Andi-Auftrag 2026-07-26 „las frases de buscar online son malas" — hasta
+        //    ahora estos cinco campos caían en inglés para ES/FR/IT; ahora español
+        //    real. Añadido „que no suene siempre igual": deflect + vaso previo son
+        //    ahora pools de 4 (AntiRepeatPicker) — cada variante de deflect termina
+        //    en la pregunta, cada variante del vaso previo nombra internet/en línea.
+        factCoverageDeflect = listOf(
+            "Uy, eso ahora mismo no me lo sé de memoria — ¿lo miro rápido?",
+            "Buena pregunta — ¿lo miro rápido?",
+            "Ahora mismo no lo tengo tan claro — ¿le echo un vistazo?",
+            "Eso no me lo sé de cabeza — ¿quieres que lo mire?",
+        ),
+        escalationAnswerFrame = listOf(
+            "Así que he mirado rápido en internet — ",
+            "He echado un vistazo rápido en internet — ",
+            "Miré rápido en línea — ",
+            "Busqué rápido en internet — ",
+        ),
+        escalationSourceTemplate = "Fuente: {source}.",
+        escalationUnavailable = "Quería mirarlo, pero ahora mismo no consigo conectar — lo intentamos otra vez más tarde.",
+        escalationModeErstFragen = "Vale — a partir de ahora te pregunto primero antes de mirar algo en internet.",
+        escalationModeAus = "Vale — las búsquedas en línea están desactivadas. Me quedo completamente local.",
+        escalationModeAutomatisch = "Vale — a partir de ahora miro en internet automáticamente cuando no sepa algo.",
+        escalationModeOffline =
+            "Vale — modo sin conexión. No miro nada en internet, respondo con lo que sé yo y te lo digo.",
         // ── Never-Silent-Ränder + Fastpath-Quittungen ────────────────────────
         warmFallback = "Te he oído, pero aquí se me ha atascado algo un momento. ¿Me lo repites enseguida?",
         audioCapTooLong = "Eso ha sido demasiado largo de una vez — dímelo un poco más corto y te sigo sin fallar.",

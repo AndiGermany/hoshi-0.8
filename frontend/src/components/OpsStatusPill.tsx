@@ -53,9 +53,17 @@ function toneOf(s: OpsStatus): Tone {
  * Fehlerzustände tragen Text — OK bleibt der stille Punkt. Die Wörter kommen
  * seit dem Langschwanz-Sweep 25.07 aus dem Katalog der AKTIVEN UI-Sprache
  * (vorher hartkodiert Deutsch, auch in der englischen Kopfzeile).
+ *
+ * Andi-Auftrag 2026-07-25/26 (Speicherdruck sichtbar statt Auto-Switch): bei
+ * CRITICAL wird die Pille zu einem warmen, VERSTÄNDLICHEN Hinweis
+ * (`memoryCriticalHint`, z.B. „Speicher knapp — die Stimme kann gerade zäh
+ * werden.") statt nur die technische Kennzahl (`ramCritical`) zu nennen — der
+ * nackte Pegel bleibt in der RAM-Zeile des Panels sichtbar. WARN bleibt beim
+ * bisherigen, kompakten `ramWarn`-Label (die amber Einfärbung TRÄGT den
+ * Warncharakter dort schon).
  */
 function headline(s: OpsStatus, tone: Exclude<Tone, 'ok'>, t: OpsStrings): string {
-  if (s.memory.level === 'CRITICAL') return t.ramCritical;
+  if (s.memory.level === 'CRITICAL') return t.memoryCriticalHint;
   if (s.memory.level === 'WARN') return t.ramWarn;
   return tone === 'critical' ? t.toneCritical : t.toneWarn;
 }

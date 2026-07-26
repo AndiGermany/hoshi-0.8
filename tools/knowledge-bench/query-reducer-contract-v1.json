@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "fts5-head-noun-v1",
+  "productionSource": "adapters-knowledge/src/main/kotlin/de/hoshi/adapters/knowledge/Fts5GroundingAdapter.kt",
+  "productionSourceSha256": "8be4cfcccaa426d30afef8c9edd8d16ef1e98163db1970d180e55afa55ffc453",
+  "productionGitBlob": "7e7ea5f113854ea929ecb43da0574db6c9869aa9",
+  "productionCommit": "71cefdf88d629fd04eab9bd17c62d73e76a4df95",
+  "productionRegionStart": "    // ── Such-Query-Reduktion (portiert aus 0.5 WikiGroundingService) ─────────────\n",
+  "productionRegionSha256": "e4585673a7fd5339d7bf4467f67ca56dbe37316e51c3d58127919aec259105ee",
+  "vectors": [
+    {
+      "query": "Woher kommt der Name Mittwoch?",
+      "searchQuery": "mittwoch"
+    },
+    {
+      "query": "Was bedeutet Photosynthese?",
+      "searchQuery": "photosynthese"
+    },
+    {
+      "query": "Kannst du mir erklären, woher der Name Mittwoch kommt?",
+      "searchQuery": "mittwoch"
+    },
+    {
+      "query": "Weißt du, woher das Wort Kaffee stammt?",
+      "searchQuery": "kaffee"
+    },
+    {
+      "query": "where does the name Wednesday come from",
+      "searchQuery": "wednesday"
+    },
+    {
+      "query": "Can you tell me where does the name Wednesday come from",
+      "searchQuery": "wednesday"
+    },
+    {
+      "query": "Wer war Konrad Adenauer?",
+      "searchQuery": "konrad adenauer"
+    },
+    {
+      "query": "Warum heißt der Mittwoch eigentlich Mittwoch?",
+      "searchQuery": "heißt mittwoch"
+    },
+    {
+      "query": "Was sind Eigentliche Eulen?",
+      "searchQuery": "eigentliche eulen"
+    },
+    {
+      "query": "Was bedeutet das Wort eigentlich?",
+      "searchQuery": "Was bedeutet das Wort eigentlich?"
+    },
+    {
+      "query": "Wie viele Planeten gibt es in unserem Sonnensystem?",
+      "searchQuery": "viele planeten gibt unserem sonnensystem"
+    }
+  ]
+}

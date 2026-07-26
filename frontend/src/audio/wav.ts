@@ -9,9 +9,29 @@
 // `downsampleTo`) sind bewusst DOM-los und deterministisch — im `node`-Vitest
 // ohne echtes Mikro/AudioContext testbar. Nur `webmBlobToWav` braucht einen
 // echten `AudioContext` (Browser) und lebt darum an der dünnsten Naht.
+//
+// PRE-ROLL (Andi-Befund 26.07, s. audio/preRoll.ts + audio/recorder.ts): hier,
+// NACH dem Decodieren des rohen Recorder-Blobs, wird der Ring-Inhalt
+// (`VoiceRecorder.getPreRoll()`) den decodierten PCM-Samples vorangestellt —
+// noch VOR dem Downsampling auf die Ziel-Rate. Beide Pfade laufen durch
+// {@link webmBlobToWav} (Enroll UND Voice-Turn, s. `enrollCapture.ts`/
+// `useVoiceChatSession.ts`), darum reicht EINE Stelle.
+
+import { prependPreRoll } from './preRoll';
 
 /** Ziel-Abtastrate der Enroll-WAV (Backend empfiehlt 16 kHz, resampled eh auf 16k). */
 export const ENROLL_SAMPLE_RATE = 16000;
+
+/**
+ * Rohe Pre-Roll-Samples samt ihrer Aufnahme-Rate — genau das, was
+ * `VoiceRecorder.getPreRoll()`/`getPreRollSampleRate()` liefern. Optionales
+ * Argument für {@link webmBlobToWav}: leer/fehlend ⇒ Verhalten byte-gleich zu
+ * vorher (kein Pre-Roll verfügbar, z. B. altes Fake in Tests).
+ */
+export interface PreRollSamples {
+  samples: Float32Array;
+  sampleRate: number;
+}
 
 /** Vier ASCII-Zeichen in den DataView schreiben (RIFF/WAVE/fmt /data-Marker). */
 function writeString(view: DataView, offset: number, text: string): void {
@@ -129,10 +149,19 @@ interface DecodingAudioContext {
  * Format, das der `/embed`-Sidecar (libsndfile) lesen kann. Browser-Naht: nur
  * hier lebt die `AudioContext`-Abhängigkeit; die eigentliche Arithmetik oben ist
  * rein und getestet. Wirft {@link WavConvertError}, wenn kein Web-Audio da ist.
+ *
+ * `preRoll` (optional): der Ring-Inhalt aus `VoiceRecorder.getPreRoll()` — wird,
+ * falls vorhanden, VOR die decodierten Samples gestellt (Anlaut-Fix, s.
+ * Datei-Kopf). Kommt er in einer ANDEREN Rate an als `audioBuffer.sampleRate`
+ * (in der Praxis fast immer identisch — dieselbe Hardware, derselbe Browser-
+ * Default), wird er über {@link downsampleTo} angeglichen; die Funktion rechnet
+ * bewusst nur herunter, nie hoch (s. deren KDoc) — ein Pre-Roll mit HÖHERER Rate
+ * als die Aufnahme ist praktisch nie der Fall.
  */
 export async function webmBlobToWav(
   blob: Blob,
   targetSampleRate = ENROLL_SAMPLE_RATE,
+  preRoll?: PreRollSamples,
 ): Promise<Blob> {
   const Ctor =
     (globalThis as { AudioContext?: new () => DecodingAudioContext }).AudioContext ??
@@ -144,9 +173,14 @@ export async function webmBlobToWav(
   try {
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
     const mono = mixToMono(audioBuffer);
-    const down = downsampleTo(mono, audioBuffer.sampleRate, targetSampleRate);
+    const preRollAtDecodeRate =
+      preRoll && preRoll.samples.length > 0
+        ? downsampleTo(preRoll.samples, preRoll.sampleRate, audioBuffer.sampleRate)
+        : new Float32Array(0);
+    const withPreRoll = prependPreRoll(preRollAtDecodeRate, mono);
+    const down = downsampleTo(withPreRoll, audioBuffer.sampleRate, targetSampleRate);
     // Nach dem Downsampling trägt die WAV die Zielrate (sonst 16k, falls Quelle < 16k war).
-    const rate = down === mono && audioBuffer.sampleRate < targetSampleRate
+    const rate = down === withPreRoll && audioBuffer.sampleRate < targetSampleRate
       ? audioBuffer.sampleRate
       : targetSampleRate;
     return wavBlobFromPcm(down, rate);
@@ -177,10 +211,16 @@ export async function webmBlobToWav(
  * Fallback statt Fehler: scheitert die Konvertierung (kein Web-Audio/Decode),
  * geht der ROHE Blob raus — STT (ffmpeg) versteht ihn weiterhin, nur der
  * Sprecher-Score leidet. Lieber ein Turn ohne „Wer sprach" als gar kein Turn.
+ * Ehrlich: in DIESEM Fallback fehlt der Pre-Roll (er lebt nur im PCM-Pfad von
+ * {@link webmBlobToWav}) — seltener Randfall (kein Web-Audio überhaupt), der
+ * Anlaut kann dann wieder beschnitten sein.
+ *
+ * `preRoll` (optional): durchgereicht an {@link webmBlobToWav} — der Ring-Inhalt
+ * aus `VoiceRecorder.getPreRoll()`/`getPreRollSampleRate()` (Anlaut-Fix).
  */
-export async function voiceTurnUploadBlob(recorded: Blob): Promise<Blob> {
+export async function voiceTurnUploadBlob(recorded: Blob, preRoll?: PreRollSamples): Promise<Blob> {
   try {
-    return await webmBlobToWav(recorded);
+    return await webmBlobToWav(recorded, ENROLL_SAMPLE_RATE, preRoll);
   } catch {
     return recorded;
   }

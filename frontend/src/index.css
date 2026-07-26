@@ -790,9 +790,20 @@ button.ops__pill {
   border-bottom: 1px solid var(--bg-hairline);
 }
 .idle__head {
+  /* Kopfzeile als Grid (Flur-Display-Umbau 2026-07-26): Uhr+Gruß nehmen den
+     flexiblen Raum, das Jetzt-Band (Wetter) sitzt rechts daneben, unten
+     bündig mit der Uhr. Die EINE Breiten-Media-Query des Projekts (ganz
+     unten in dieser Datei) klappt das auf schmalen Screens untereinander. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 6px 20px;
+}
+.idle__headmain {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 .idle__clock {
   /* Typo-first: groß, fluid, tabular — die Uhr IST das Gesicht. */
@@ -823,6 +834,50 @@ button.ops__pill {
   color: var(--text-3);
 }
 
+/* Jetzt-Band (ex-Wetter-Kachel, Flur-Display-Umbau 2026-07-26): läuft rechts
+   neben Uhr/Gruß statt in einer eigenen Kachel — ein dezentes Lage-Icon +
+   Wetterlage prominent, darunter Tagesspanne + die warme Niederschlags-Zeile
+   (precipMm kam im FE zwar an, wurde vorher nie gerendert). Kein Zahnrad mehr
+   hier (Andi-Korrektur 26.07) — die Top-Nav trägt schon eines. */
+.idle__now {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 2px;
+}
+.idle__nowcond {
+  display: flex;
+  align-items: center;
+  gap: 0.22em;
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--text-1);
+}
+/* Das Lage-Icon ist dezent (--text-3, nicht die Textfarbe) und skaliert mit
+   der Kondition-Schrift mit (em-Maß) statt eine feste Größe zu tragen. */
+.idle__nowicon {
+  width: 0.82em;
+  height: 0.82em;
+  flex: none;
+  color: var(--text-3);
+}
+.idle__nowspan {
+  font-size: 14px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.idle__nowprecip {
+  font-size: 13px;
+  color: var(--text-3);
+}
+.idle__nowgap {
+  font-size: 13px;
+  color: var(--text-4);
+  max-width: 32ch;
+}
+
 /* Wecker-Zeile: Icon | Text | Vertrauens-Satz rechts, darunter die Haarlinie. */
 .idle__alarm {
   display: grid;
@@ -835,7 +890,8 @@ button.ops__pill {
   line-height: 1;
 }
 .idle__alarmtext {
-  font-size: 14px;
+  /* Flur-Lesbarkeit (Andi-Auftrag 2026-07-26): 14 → 18px. */
+  font-size: 18px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
@@ -864,12 +920,17 @@ button.ops__pill {
   color: var(--text-4);
 }
 
-/* Drei Kacheln: nutzt die fixierte .tile-Designsprache (LIVE gefüllt ·
-   kommend gestrichelt); der Aoi-Token --bg-hairline-dashed zeichnet die
-   gestrichelte Kante (Fallback: normale Hairline in Nicht-Aoi-Themen). */
+/* Die Haushalts-Karten „Läuft"/„Einkauf" (Flur-Display-Umbau 2026-07-26, ex-
+   „Geplant"/„Wetter"/„Heute"-Kachelreihe): nutzt weiter die fixierte
+   .tile-Designsprache; der Aoi-Token --bg-hairline-dashed zeichnet die
+   gestrichelte Kante (Fallback: normale Hairline in Nicht-Aoi-Themen).
+   Grid-Fix: `auto-fill` → `auto-fit` (schloss eine Phantom-Spalte, wenn nur
+   eine Karte da ist) UND breiter (200 → 280px) — die Karten tragen jetzt
+   mehrzeilige Listen statt eines einzelnen Kachel-Werts, sie brauchen mehr
+   Raum als die frühere kompakte Drei-Kachel-Reihe. */
 .idle__tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 12px;
 }
 .idle__tile.tile--pending {
@@ -877,6 +938,35 @@ button.ops__pill {
 }
 .idle__tile .tile__value {
   font-variant-numeric: tabular-nums;
+}
+/* Flur-Lesbarkeit (Andi-Auftrag 2026-07-26): Karten-Titel 13 → ~15px. */
+.idle__tile .tile__name {
+  font-size: 15px;
+}
+/* Die Zeilen selbst (Läuft-Countdowns bzw. Einkaufs-Einträge) — Flur-Lesbarkeit
+   14 → ~28px, damit sie über den Flur hinweg lesbar sind. */
+.idle__cardlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.idle__cardlist li {
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+.idle__cardqty {
+  color: var(--text-3);
+}
+.idle__cardmore {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-4);
 }
 
 /* Stille Text-Chips — Text statt Pillen; nur der Health-Punkt trägt Farbe. */
@@ -2250,4 +2340,18 @@ button.ops__pill {
   width: 14px;
   height: 14px;
   flex: none;
+}
+
+/* ---- Erste Breiten-Media-Query des Projekts (Andi-Auftrag 2026-07-26) ----
+   Bewusst MINIMAL gehalten: nur das Jetzt-Band klappt auf schmalen Screens
+   (Handy-Breite) unter die Uhr statt daneben — sonst würde die Wetterlage auf
+   sehr schmalen Screens gegen die Uhr gequetscht. */
+@media (max-width: 560px) {
+  .idle__head {
+    grid-template-columns: 1fr;
+  }
+  .idle__now {
+    align-items: flex-start;
+    text-align: left;
+  }
 }

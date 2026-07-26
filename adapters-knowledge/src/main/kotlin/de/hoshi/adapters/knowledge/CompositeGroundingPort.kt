@@ -64,4 +64,16 @@ class CompositeGroundingPort(
             // Vordere Scheiben sollten selbst nie werfen (best-effort), aber doppelt
             // genäht: ein Fehler dort fällt sauber zur Wiki-Scheibe durch.
             .onErrorResume { wiki.groundingBlock(query, category, language) }
+
+    /**
+     * Enger lokaler Wissenspfad: ausschließlich die Wiki-Scheibe darf liefern.
+     * Wetter ist Zustandswissen, [nachgeschlagen] kann aus einer früheren
+     * Cloud-Eskalation stammen — beides wäre unter dem Label „lokales Wissen"
+     * unehrlich. Der default-deny-Unterport der Wiki entscheidet seinerseits,
+     * ob sie als belegbar lokale Quelle optiert hat.
+     */
+    override fun localKnowledgeBlock(query: String, category: RouteCategory, language: Language): Mono<String> =
+        wiki.localKnowledgeBlock(query, category, language)
+            .defaultIfEmpty("")
+            .onErrorReturn("")
 }

@@ -81,7 +81,7 @@ export default function App() {
   // Panel-Wahl EXPLIZIT in jeden Chat-/Voice-Request (genau wie theme/language
   // ans SettingsPanel), egal ob der Turn im Chat-Reiter oder am Home-Orb startet.
   const views: Record<Tab, ReactNode> = {
-    overview: <UebersichtViewLive onOpenSettings={openSettings} session={session} />,
+    overview: <UebersichtViewLive session={session} />,
     rooms: <RaeumeViewLive />,
     activity: <AktivitaetViewLive />,
     chat: <ChatViewBody session={session} onOpenSettings={openSettings} />,

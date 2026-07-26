@@ -492,7 +492,7 @@ class TurnOrchestrator(
         //    Default (NONE-Store) ⇒ null ⇒ toter Zweig ⇒ byte-neutral.
         val pendingPlace = pendingLocation.consume(key)
         if (pendingThink != null && AffirmationRecognizer.matches(ctx.text)) {
-            return redeemLookup(pendingThink.query, pendingThink.language)
+            return redeemPendingLookup(ctx, pendingThink)
         }
         // ── Naht C (Lookup-Intent, Live-Fix 2026-07-16): eine EXPLIZITE Nachschlag-
         //    Bitte („schau online nach") IST selbst der Consent — sie darf NICHT als
@@ -1157,6 +1157,7 @@ class TurnOrchestrator(
         ctx: TurnPrompt,
         decision: RouteDecision,
         playful: Boolean = false,
+        localLookup: LocalLookupRedemption? = null,
     ): Flux<ChatEvent> {
         val speaker = ctx.speaker ?: SpeakerContext()
         // Working-Session (S1+S2): history-Quelle + Segment-Diary-Felder GENAU EINMAL
@@ -1168,8 +1169,39 @@ class TurnOrchestrator(
         // Spiel-Hinweis (nur im Spiel-Register): „mitspielen, den Faden halten, nichts
         // Erfundenes als Tatsache ausgeben". OFF ⇒ "" ⇒ assemble() schichtet nichts ein.
         val followBlock = if (playful) PlayfulModeDetector.playfulHint(ctx.language) else ""
-        return promptAssembler.assemble(ctx, decision, baseSystemPrompt, followBlock = followBlock)
+        val assembledPrompt =
+            if (localLookup == null) {
+                promptAssembler.assemble(ctx, decision, baseSystemPrompt, followBlock = followBlock)
+            } else {
+                promptAssembler.assembleLocalKnowledge(
+                    ctx,
+                    decision,
+                    baseSystemPrompt,
+                    followBlock = followBlock,
+                )
+            }
+        val guardedAssembly =
+            if (localLookup == null) {
+                assembledPrompt
+            } else {
+                // Nur Fehler des lokalen Grounding-/Assembly-VORVERSUCHS dürfen
+                // zur Cloud fallen. Fehler NACH bestätigtem Wiki-Fund (z.B. ein
+                // synchron kaputter Brain) dürfen diese Grenze nie überschreiten.
+                assembledPrompt.onErrorMap { LocalLookupAssemblyFailure(it) }
+            }
+        return guardedAssembly
             .flatMapMany { assembled ->
+                // Ein eingelöstes FactCoverage-Angebot darf „lokal gefunden" nur
+                // behaupten, wenn die ENGE Wiki-Sicht echten, themenbezogenen
+                // Kontext geliefert hat. Diese Prüfung ist fail-closed und
+                // unabhängig vom normalen FactCoverage-Featureflag/Strict-Modus.
+                // Ein Miss fällt VOR Start/Prefix/Brain in den bestehenden
+                // Eskalations-/Setting-Pfad; damit gibt es nie zwei Brain-Calls.
+                val localLookupCovered =
+                    localLookup?.let { factCoverage.lookupCovered(assembled.groundBlock, ctx.text) }
+                if (localLookup != null && localLookupCovered != true) {
+                    return@flatMapMany localLookup.onMiss(assembled.groundingMs)
+                }
                 // ── Anti-Konfabulations-Wand: FACT_SHORT ohne gedecktes Grounding ⇒ den
                 //    Brain NICHT freestylen lassen (er erfindet dann Falsches), sondern
                 //    ehrlich deflekten. Der Query-Text reist mit: fehl-geroutetes
@@ -1180,18 +1212,34 @@ class TurnOrchestrator(
                 // den optionalen strict-Modus; DISABLED/lax ⇒ byte-identisch zur
                 // Companion-Funktion) — speist die Wand UND ehrlich das Start-Event
                 // ([ChatEvent.Start.grounded] → Diary `groundingUsed`).
-                val grounded = factCoverage.groundingCovered(decision.provider, assembled.groundBlock, ctx.text)
+                val grounded =
+                    localLookupCovered
+                        ?: factCoverage.groundingCovered(decision.provider, assembled.groundBlock, ctx.text)
                 // S4 Diary: „ist DIES ein Cache-Hit aus dem Nachgeschlagen-Store?" — reiner
-                // String-Check des Herkunfts-Markers (geteilte Konstante, s. Companion-KDoc)
-                // im bereits assemblierten groundBlock. Trägt der Block den Marker NICHT
-                // (wiki/weather/kein Treffer), bleibt cacheHit ehrlich false — byte-neutral,
-                // wenn die S3-Cache-Scheibe nie einen Treffer lieferte.
-                val cacheHit = assembled.groundBlock.contains(TurnPromptAssembler.NACHGESCHLAGEN_ORIGIN_MARKER)
+                // String-Check des Herkunfts-Markers DER TURN-SPRACHE (geteilte, exhaustive
+                // Konstanten-Tabelle, s. TurnPromptAssembler.nachgeschlagenOriginMarker-KDoc)
+                // im bereits assemblierten groundBlock. Sprachneutraler Fix der Ehrlichkeits-
+                // Schuld aus v0.8.1-rc1 („die cacheHit-Telemetrie erkennt ihren Herkunfts-
+                // Marker nur auf Deutsch"): vorher wurde IMMER nur der deutsche Marker
+                // geprüft, ein en/es/fr/it-Cache-Hit blieb darum telemetrisch unsichtbar
+                // (Text/Verhalten waren nie betroffen — der Block trug die Herkunfts-
+                // Anweisung schon immer in jeder Sprache). Trägt der Block den Marker
+                // NICHT (wiki/weather/kein Treffer), bleibt cacheHit ehrlich false —
+                // byte-neutral, wenn die S3-Cache-Scheibe nie einen Treffer lieferte.
+                val cacheHit = assembled.groundBlock.contains(TurnPromptAssembler.nachgeschlagenOriginMarker(ctx.language))
                 // H2 Diary: bei einem Cache-Hit steckt die Quelle bereits im gerenderten
                 // groundBlock (NachgeschlagenGroundingProvider.buildBlock schreibt
                 // "Quelle: <note.source>."). Best-effort String-Parse statt eines
                 // zweiten Lese-Pfads auf die Notiz-Datei — kein Verhalten hängt daran.
                 val cacheHitSource = if (cacheHit) parseCacheHitSource(assembled.groundBlock) else null
+                // Naht A (OFFLINE, Andi-Auftrag 2026-07-26): bleibt `null` für alle drei
+                // Bestands-Ausgänge (AUTOMATISCH/ERST_FRAGEN/AUS — die kehren unten alle
+                // per `return@flatMapMany` VOR dem Brain-Call zurück, dieser Wert bleibt
+                // für sie also toter Code). NUR OFFLINE setzt ihn und lässt den Deflect-If
+                // OHNE `return` durchfallen — der LOCAL-Brain-Call weiter unten (derselbe
+                // Call wie am Decision.Proceed-Pfad) läuft dann GENAU EINMAL, die
+                // Kennzeichnung wird ihm als eigene TextDelta vorangestellt (s. unten).
+                var offlineDisclaimer: String? = null
                 if (factCoverage.decide(
                         decision.category,
                         grounded,
@@ -1214,16 +1262,31 @@ class TurnOrchestrator(
                             decision.category.name,
                         )
                     }
-                    pendingLookup.offer(pendingKey(ctx), PendingLookup(query = ctx.text, language = ctx.language))
-                    return@flatMapMany warmDirectAnswer(
-                        decision.provider.name,
-                        decision.category.name,
-                        FactCoverageGate.deflection(ctx.language),
-                        // Perf-Diary: das Grounding LIEF (und fand nichts Deckendes) —
-                        // seine ehrlich gemessene Dauer reist auch am Deflect-Done mit.
-                        stageTimings = assembled.groundingMs?.let { ChatEvent.StageTimings(groundingMs = it) },
-                        language = ctx.language,
-                    )
+                    if (escalationMode() != EscalationMode.OFFLINE) {
+                        pendingLookup.offer(
+                            pendingKey(ctx),
+                            PendingLookup(
+                                query = ctx.text,
+                                language = ctx.language,
+                                retryLocalKnowledge = true,
+                            ),
+                        )
+                        return@flatMapMany warmDirectAnswer(
+                            decision.provider.name,
+                            decision.category.name,
+                            FactCoverageGate.deflection(ctx.language),
+                            // Perf-Diary: das Grounding LIEF (und fand nichts Deckendes) —
+                            // seine ehrlich gemessene Dauer reist auch am Deflect-Done mit.
+                            stageTimings = assembled.groundingMs?.let { ChatEvent.StageTimings(groundingMs = it) },
+                            language = ctx.language,
+                        )
+                    }
+                    // ── OFFLINE (kein `return`!): kein Cloud-Call, keine Ausweich-Phrase —
+                    //    der Brain antwortet unten GENAU EINMAL aus eigenem Wissen (er ist
+                    //    hier ohnehin LOCAL, s. FactCoverageGate.groundingCovered: Deflect
+                    //    setzt provider==LOCAL voraus). Kein Pending-Angebot (es gibt
+                    //    nichts nachzuschauen — OFFLINE geht nie online).
+                    offlineDisclaimer = FactCoverageGate.offlineDisclaimer(ctx.language)
                 }
                 // ── Perf-Diary: Brain-TTFT — Brain-Call-Start (Subscribe) → ERSTE
                 //    TextDelta. −1 = nie eine Delta gesehen ⇒ null (nie ein
@@ -1245,7 +1308,8 @@ class TurnOrchestrator(
                 //    `offer` ⇒ byte-neutral. Reactor serialisiert onNext↔doOnComplete
                 //    pro Subscription (happens-before), der einfache StringBuilder ist
                 //    hier sicher. ──
-                val answerBuf: StringBuilder? = if (lookupIntentEnabled) StringBuilder() else null
+                val answerBuf: StringBuilder? =
+                    if (lookupIntentEnabled && localLookup == null) StringBuilder() else null
                 // ── Naht D Hörbarkeit (Andi-Auftrag 2026-07-20): merkt, ob DIESER Turn
                 //    GENAU JETZT ein Abstain-Pending registriert hat — gesetzt im
                 //    `doOnComplete` unten (VOR der `neverSilent`-Auswertung, happens-
@@ -1309,7 +1373,15 @@ class TurnOrchestrator(
                 neverSilent(
                     brainStream, decision, ctx.language, grounded, cacheHit, session, stageTimings, cacheHitSource,
                     abstainOffer = offeredPendingAudibly::get,
+                    preamble = localLookup?.preamble ?: offlineDisclaimer,
                 )
+            }
+            // Die normale Pipeline behält ihr bestehendes Fehlerverhalten. Nur
+            // der zusätzliche lokale Vorversuch ist best-effort: wir behandeln
+            // einen Assembly-/Port-Fehler wie „nicht lokal gedeckt" und gehen
+            // exakt in denselben erlaubten Cloud-/Setting-Ausgang wie bei leer.
+            .onErrorResume(LocalLookupAssemblyFailure::class.java) {
+                localLookup?.onMiss(null) ?: Flux.error(it)
             }
     }
 
@@ -1515,6 +1587,13 @@ class TurnOrchestrator(
      * Anhang) bleibt dabei byte-identisch, es kommt nur EIN Satz obendrauf.
      * Default `{ false }` ⇒ dieser Zweig bleibt tot ⇒ byte-neutral (Flag OFF,
      * kein Abstain, oder Modus AUS).
+     *
+     * [preamble] ist eine bereits wahrheitsgeprüfte Herkunfts-Kennzeichnung
+     * (lokaler Wiki-Fund oder OFFLINE/unbelegt). Sie steht hörbar zwischen
+     * [ChatEvent.Start] und Antwortkörper, zählt aber bewusst NICHT als
+     * Antworttext für den Never-Silent-Sensor. Ein leerer/fehlernder Brain
+     * bekommt dadurch weiterhin EMPTY-/ERROR-Fallback statt nur eines
+     * inhaltslosen Vorspanns.
      */
     private fun neverSilent(
         stream: Flux<ChatEvent>,
@@ -1526,6 +1605,7 @@ class TurnOrchestrator(
         stageTimings: () -> ChatEvent.StageTimings? = { null },
         cacheHitSource: String? = null,
         abstainOffer: () -> Boolean = { false },
+        preamble: String? = null,
     ): Flux<ChatEvent> {
         val provider = decision.provider.name
         val sawText = AtomicBoolean(false)
@@ -1580,7 +1660,12 @@ class TurnOrchestrator(
                 }
             }
 
-        return Flux.concat(Flux.just(start), body)
+        val preambleStream =
+            preamble
+                ?.takeIf { it.isNotBlank() }
+                ?.let { Flux.just<ChatEvent>(ChatEvent.TextDelta(it, provider = provider)) }
+                ?: Flux.empty()
+        return Flux.concat(Flux.just(start), preambleStream, body)
     }
 
     /**
@@ -1643,30 +1728,95 @@ class TurnOrchestrator(
     }
 
     /**
+     * Interner Vertrag des lokalen Vorversuchs. [onMiss] ist der EINZIGE
+     * Ausgang bei leerem/off-target/kaputtem Wiki-Lookup; [preamble] wird erst
+     * nach bewiesener Deckung gesprochen und von [neverSilent] ausdrücklich
+     * NICHT als Brain-Antwort mitgezählt.
+     */
+    private data class LocalLookupRedemption(
+        val onMiss: (groundingMs: Long?) -> Flux<ChatEvent>,
+        val preamble: String,
+    )
+
+    /** Markiert ausschließlich einen Fehler VOR bestätigter lokaler Deckung. */
+    private class LocalLookupAssemblyFailure(cause: Throwable) : RuntimeException(cause)
+
+    /**
+     * Löst ausschließlich ein gespeichertes Angebot ein. Nur die
+     * FactCoverage-Sorte ([PendingLookup.retryLocalKnowledge]) bekommt vor der
+     * bisherigen Eskalation einen engen Wiki-only-Versuch; alle anderen
+     * Pending-Quellen bleiben bytegleich beim bisherigen [redeemLookup].
+     *
+     * Kein Re-Dispatch durch Routing/Honesty: der würde die Originalfrage
+     * potenziell erneut als Consent-Fall erkennen. Stattdessen bauen wir aus
+     * dem AKTUELLEN Session-/Sprecherkontext einen LOCAL/FACT_SHORT-Turn mit der
+     * GESPEICHERTEN Originalfrage und genau einem Assembly-/Brain-Durchlauf.
+     */
+    private fun redeemPendingLookup(
+        current: TurnPrompt,
+        pending: PendingLookup,
+        research: Boolean = false,
+    ): Flux<ChatEvent> {
+        if (!pending.retryLocalKnowledge) {
+            return redeemLookup(pending.query, pending.language, research)
+        }
+        val original = current.copy(text = pending.query, language = pending.language)
+        val decision = RouteDecision(
+            category = RouteCategory.FACT_SHORT,
+            provider = RouteProvider.LOCAL,
+            reason = LOCAL_LOOKUP_REDEMPTION_REASON,
+        )
+        val localLookup = LocalLookupRedemption(
+            onMiss = { groundingMs ->
+                redeemLookup(
+                    query = pending.query,
+                    language = pending.language,
+                    research = research,
+                    preflightGroundingMs = groundingMs,
+                )
+            },
+            preamble = LanguagePackRegistry.forLanguage(pending.language).localLookupFoundPrefix,
+        )
+        return brainStreamTurn(original, decision, localLookup = localLookup)
+    }
+
+    /**
      * **Einlösung eines Nachschlags** (geteilt von Naht B [Affirmation] und Naht C
      * [Lookup-Intent]): dieselbe modus-gegatete Kaskade, mit der ein Consent heute
-     * eingelöst wird — AUS ⇒ ehrlicher Setting-Hinweis (nie ein stiller Call),
-     * ERST_FRAGEN/AUTOMATISCH ⇒ brain-freier [escalationTurn] mit GENAU dieser
-     * [query] (Egress-Gesetz: NUR die Frage geht raus, nie History/Memory).
-     * Provider/Kategorie fest LOCAL/FACT_SHORT — wie der bestehende Consent-Pfad.
+     * eingelöst wird — AUS/OFFLINE ⇒ ehrlicher Setting-Hinweis (nie ein stiller
+     * Call), ERST_FRAGEN/AUTOMATISCH ⇒ brain-freier [escalationTurn] mit GENAU
+     * dieser [query] (Egress-Gesetz: NUR die Frage geht raus, nie History/Memory).
+     * Provider/Kategorie bleiben LOCAL/FACT_SHORT.
      *
-     * [research] (Default `false`, Andi-Auftrag 2026-07-19): trägt DIESER Turn
-     * einen erkannten Recherche-Imperativ ([ResearchIntentRecognizer])? Reicht
-     * NUR an [escalationChoice] durch, WELCHER Port/Label den Call macht — der
-     * Consent-/Modus-Vertrag oben ist für BEIDE Modelle identisch (der Cap gilt
-     * für beide gemeinsam, s. dessen KDoc).
+     * [preflightGroundingMs] stammt ausschließlich von einem zuvor fehlgeschlagenen
+     * lokalen Wiki-Versuch und reist als gemessene Stage-Latenz weiter. `null`
+     * hält alle bisherigen Einlösungen byte-neutral.
      */
-    private fun redeemLookup(query: String, language: Language, research: Boolean = false): Flux<ChatEvent> =
+    private fun redeemLookup(
+        query: String,
+        language: Language,
+        research: Boolean = false,
+        preflightGroundingMs: Long? = null,
+    ): Flux<ChatEvent> =
         when (escalationMode()) {
-            EscalationMode.AUS -> warmDirectAnswer(
+            EscalationMode.AUS, EscalationMode.OFFLINE -> warmDirectAnswer(
                 RouteProvider.LOCAL.name,
                 RouteCategory.FACT_SHORT.name,
                 extendedThinkOffHint(language),
+                stageTimings = preflightGroundingMs?.let { ChatEvent.StageTimings(groundingMs = it) },
                 language = language,
             )
             EscalationMode.ERST_FRAGEN, EscalationMode.AUTOMATISCH -> {
                 val (port, label) = escalationChoice(research)
-                escalationTurn(query, language, RouteProvider.LOCAL.name, RouteCategory.FACT_SHORT.name, port, label)
+                escalationTurn(
+                    query,
+                    language,
+                    RouteProvider.LOCAL.name,
+                    RouteCategory.FACT_SHORT.name,
+                    port,
+                    label,
+                    preflightGroundingMs,
+                )
             }
         }
 
@@ -1735,7 +1885,7 @@ class TurnOrchestrator(
         topicAskOpen: Boolean = false,
     ): Flux<ChatEvent> {
         if (pendingThink != null) {
-            return redeemLookup(pendingThink.query, pendingThink.language, research)
+            return redeemPendingLookup(ctx, pendingThink, research)
         }
         val inlineQuery = LookupIntentRecognizer.extractInlineQuery(ctx.text)
         if (inlineQuery != null) {
@@ -1866,7 +2016,7 @@ class TurnOrchestrator(
      *
      *  1. [ChatEvent.Start] (model=`policy` — eine Policy-Direktantwort, kein Brain),
      *  2. sofort [ResponseFormatter.cloudConsentAccept] als erste TextDelta (die
-     *     Brücke „Klar, einen Moment — ich frag schnell." — bis S2 ungenutzt),
+     *     Brücke „Klar, Moment — ich schau schnell." — bis S2 ungenutzt),
      *  3. GENAU EIN [EscalationPort.lookup] mit der Original-[query] (v1: NUR die
      *     Frage, groundingSnippets bewusst leer — Tom-freundlichste Auslegung;
      *     NIE finalPrompt/History/Memory),
@@ -1906,6 +2056,7 @@ class TurnOrchestrator(
         category: String,
         escalationPort: EscalationPort = escalation,
         providerLabel: String = LOOKUP_NOTE_PROVIDER,
+        preflightGroundingMs: Long? = null,
     ): Flux<ChatEvent> {
         val head = Flux.just<ChatEvent>(
             ChatEvent.Start(
@@ -1981,6 +2132,9 @@ class TurnOrchestrator(
                     Flux.just<ChatEvent>(
                         ChatEvent.Done(
                             provider = provider,
+                            stageTimings = preflightGroundingMs?.let {
+                                ChatEvent.StageTimings(groundingMs = it)
+                            },
                             escalationCostCents = costCents.get(),
                             escalationQueryHash = queryHash.get(),
                             escalationSource = source.get(),
@@ -2133,6 +2287,9 @@ class TurnOrchestrator(
         /** Start-Kategorie des Probe-Fastpath-Turns (Golden-Utterance #20) — freie Kategorie wie "EMPTY"/"ERROR". */
         const val CATEGORY_PROBE = "PROBE"
 
+        /** Interner Routing-Beleg des Wiki-only-Vorversuchs nach einem eingelösten FactCoverage-Angebot. */
+        private const val LOCAL_LOOKUP_REDEMPTION_REASON = "pending-local-knowledge-retry"
+
         /** [de.hoshi.core.dto.ChatRequest.source]-Fallback eines Alt-Clients ohne Feld: der Text-/Chat-Rand. */
         const val SOURCE_CHAT_DEFAULT = "chat"
 
@@ -2276,19 +2433,45 @@ class TurnOrchestrator(
         const val LOOKUP_NOTE_PROVIDER: String = "openai-nano"
 
         /**
+         * **Anti-Repeat-Ring für die Ergebnis-Vorspann-Varianten** (Streuungs-
+         * Nachtrag 2026-07-26, Andi: „nicht immer die gleiche Antwort — gestreut,
+         * nicht statisch"). Companion-scoped ⇒ JVM-weit EIN Ring über die
+         * Prozess-Laufzeit — EXAKT derselbe [AntiRepeatPicker]-Mechanismus wie
+         * [ResponseFormatter]s `cloudConsentAccept`-Pool UND
+         * [FactCoverageGate]s Deflect-Pool (kein zweites Zufalls-System).
+         */
+        private val escalationFramePicker = AntiRepeatPicker()
+
+        /**
          * **Eskalations-Rahmung** (Extended Think S2): der lokale Prefix vor der
          * VERBATIM-Cloud-Antwort — ehrliche Attribution „das kommt von draußen",
          * ohne die Faktenaussage anzufassen (WikiNumber-Lehre).
+         *
+         * **Andi-Auftrag 2026-07-26** („die Sprüche für Hoshi schaut online nach sind
+         * schlecht"): NEUER Wortlaut in DE+EN (vorher „Ich hab online nachgeschaut: " /
+         * „I looked it up online: "). Wählt seither eine von 3–4 idiomatischen
+         * Varianten je Sprache aus
+         * [de.hoshi.core.pipeline.lang.LanguagePack.escalationAnswerFrame] über
+         * [escalationFramePicker] (Streuungs-Nachtrag) — JEDE Variante trägt das
+         * Herkunfts-Label (Netz/online/Internet). Kein DE+EN-[deOr]-Fallback mehr
+         * für ES/FR/IT.
          */
-        const val ESCALATION_FRAME_DE = "Ich hab online nachgeschaut: "
-        const val ESCALATION_FRAME_EN = "I looked it up online: "
+        fun escalationAnswerFrame(language: Language): String =
+            escalationFramePicker.pick(
+                "escalation_answer_frame",
+                LanguagePackRegistry.forLanguage(language).escalationAnswerFrame,
+            )
 
-        /** Pure, deterministische Auswahl der **Eskalations-Rahmung** nach Turn-Sprache. */
-        fun escalationAnswerFrame(language: Language): String = language.deOr(ESCALATION_FRAME_DE, ESCALATION_FRAME_EN)
-
-        /** Quellen-Nachsatz der Eskalations-Antwort — ehrlich, kurz, nie weggelassen. */
+        /**
+         * Quellen-Nachsatz der Eskalations-Antwort — ehrlich, kurz, nie weggelassen.
+         * DE/EN bleiben WORT-FÜR-WORT wie zuvor („Quelle: …." / „Source: …."); ECHT
+         * fünfsprachig seit dem LanguagePack-Umzug (Andi 2026-07-26) über das
+         * `{source}`-Template in
+         * [de.hoshi.core.pipeline.lang.LanguagePack.escalationSourceTemplate] — kein
+         * DE+EN-[deOr]-Fallback mehr für ES/FR/IT.
+         */
         fun escalationSourceNote(source: String, language: Language): String =
-            language.deOr("Quelle: $source.", "Source: $source.")
+            LanguagePackRegistry.forLanguage(language).escalationSourceTemplate.replace("{source}", source)
 
         /**
          * **Verbatim-Replay-Rahmung** (Andi-Fix 2026-07-16): der warme, ehrliche
@@ -2319,19 +2502,32 @@ class TurnOrchestrator(
         val REPLAY_DATE_FORMAT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneId.of("Europe/Berlin"))
 
-        /** Erkennt die `Quelle: <text>.`-Zeile im Cache-Hit-groundBlock (s. [parseCacheHitSource]). */
-        private val CACHE_HIT_SOURCE_LINE = Regex("""(?m)^Quelle:\s*(.+)\.$""")
+        /**
+         * Erkennt die `<Label>: <text>.`-Zeile im Cache-Hit-groundBlock sprachneutral
+         * (s. [parseCacheHitSource]) — Teil desselben Ehrlichkeits-Schuld-Fixes wie
+         * [TurnPromptAssembler.nachgeschlagenOriginMarker]: vorher NUR das deutsche
+         * Label `Quelle:`, ES/FR/IT-Notizen lieferten darum nie eine
+         * [ChatEvent.Start.escalationSource]. Die vier Label-Wortformen spiegeln
+         * [de.hoshi.adapters.knowledge.NachgeschlagenBlockTexts.sourceLabel] (DE
+         * "Quelle" / EN+FR "Source" / ES "Fuente" / IT "Fonte") — bewusst hier
+         * REPLIZIERT statt importiert, dasselbe Modul-Graph-Argument wie bei
+         * [REPLAY_DATE_FORMAT] (core-domain darf nicht auf `adapters-knowledge`
+         * zeigen). `\s*:\s*` statt `:\s*`, weil Französisch vor den Doppelpunkt ein
+         * Leerzeichen setzt (`"Source : …"`, s. [NachgeschlagenBlockTexts.sourceLine]).
+         */
+        private val CACHE_HIT_SOURCE_LINE = Regex("""(?m)^(?:Quelle|Source|Fuente|Fonte)\s*:\s*(.+)\.$""")
 
         /**
-         * **H2 — Cache-Hit-Quelle aus dem groundBlock lesen (pure, best-effort):**
-         * [de.hoshi.adapters.knowledge.NachgeschlagenGroundingProvider]s `buildBlock`
-         * rendert IMMER exakt eine Zeile `Quelle: ${note.source}.` in den HINTERGRUND-
-         * Block (dasselbe Literal-Muster wie [escalationSourceNote]s DE-Variante).
-         * Diese Funktion liest sie zurück, statt einen zweiten Lese-Pfad auf die
-         * Notiz-Datei zu öffnen (die Note selbst ist am Konsum-Punkt in [brainTurn]
-         * nicht mehr verfügbar, nur ihr bereits gerenderter Text). `null` bei
-         * fehlender/kaputter Zeile — best-effort, kein Verhalten hängt daran außer
-         * dem Diary-Feld `TurnTrace.escalationSource`.
+         * **H2 — Cache-Hit-Quelle aus dem groundBlock lesen (pure, best-effort,
+         * sprachneutral):** [de.hoshi.adapters.knowledge.NachgeschlagenGroundingProvider]s
+         * `buildBlock` rendert IMMER exakt eine `<Label>: ${note.source}.`-Zeile in den
+         * HINTERGRUND-Block, das Label folgt der Turn-Sprache (dasselbe Literal-Muster
+         * wie [escalationSourceNote]s DE-Variante, nur eben nicht mehr DE-exklusiv, s.
+         * [CACHE_HIT_SOURCE_LINE]-KDoc). Diese Funktion liest sie zurück, statt einen
+         * zweiten Lese-Pfad auf die Notiz-Datei zu öffnen (die Note selbst ist am
+         * Konsum-Punkt in [brainTurn] nicht mehr verfügbar, nur ihr bereits gerenderter
+         * Text). `null` bei fehlender/kaputter Zeile — best-effort, kein Verhalten hängt
+         * daran außer dem Diary-Feld `TurnTrace.escalationSource`.
          */
         fun parseCacheHitSource(groundBlock: String): String? =
             CACHE_HIT_SOURCE_LINE.find(groundBlock)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
@@ -2365,9 +2561,20 @@ class TurnOrchestrator(
         const val ESCALATION_UNAVAILABLE_EN =
             "I tried to look it up, but couldn't get through just now — let's try again later."
 
-        /** Pure, deterministische Auswahl der **UNAVAILABLE**-Phrase nach Turn-Sprache. */
+        /**
+         * Pure, deterministische Auswahl der **UNAVAILABLE**-Phrase nach Turn-Sprache
+         * — ECHT fünfsprachig seit dem LanguagePack-Umzug (Andi 2026-07-26): DE/EN
+         * bleiben byte-gleich zu [ESCALATION_UNAVAILABLE_DE]/[ESCALATION_UNAVAILABLE_EN]
+         * (die als DE-/EN-Anker + Test-Referenz bestehen bleiben), ES/FR/IT bekommen
+         * jetzt eigene Phrasen aus
+         * [de.hoshi.core.pipeline.lang.LanguagePack.escalationUnavailable] statt des
+         * bisherigen DE+EN-[deOr]-Fallbacks (der zweite Code-Pfad für „ich komm an
+         * mein Wissen nicht ran" — s. [de.hoshi.core.pipeline.HonestyGate] für den
+         * ersten — zieht damit mit dessen Ausbau-Stand gleich, bleibt aber ein
+         * eigener Satz je Sprache, andere Situation).
+         */
         fun escalationUnavailable(language: Language): String =
-            language.deOr(ESCALATION_UNAVAILABLE_DE, ESCALATION_UNAVAILABLE_EN)
+            LanguagePackRegistry.forLanguage(language).escalationUnavailable
 
         /**
          * **CAP_EXHAUSTED**-Phrase (H3, additiv): das Tages-Budget

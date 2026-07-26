@@ -68,6 +68,17 @@ export type ChatEvent =
   // vollständig, Default false): trug dieser Turn gedecktes Grounding im Sinne
   // des FactCoverageGate? Speist den „Wissen gedeckt"-Chip der Turn-Anatomie
   // (§4) — nur ein echtes `true` zählt, fehlend/undefined heißt ehrlich „nein".
+  //
+  // `escalated`/`escalationProvider` sind ADDITIVE Wire-Felder (BE
+  // `ChatEvent.Start.escalated`/`.escalationProvider`, seit 2026-07-05 Teil des
+  // Vertrags — Andi-Befund 2026-07-26 „lügender lokal-Chip"): ein per Consent
+  // eingelöster Cloud-Turn (Extended-Think-S2-Eskalation, `escalationTurn`)
+  // behält `provider="LOCAL"` (das ist die ROUTING-Sicht, nicht die Herkunft
+  // der Antwort) — die WAHRE Herkunft trägt NUR `escalated`+`escalationProvider`.
+  // Bis zu diesem Fix las das FE diese beiden Felder NIE, darum zeigte der
+  // Egress-Chip bei jeder Eskalation fälschlich „lokal" (s. `TurnAnatomy.tsx`
+  // `originChipText`). Fehlend/undefined ⇒ ehrlich `false`/"" (Alt-Turns ohne
+  // Eskalation, Fastpath/Tool-Starts).
   | {
       event: 'start';
       provider: string;
@@ -75,6 +86,8 @@ export type ChatEvent =
       model: string;
       personaEmotion?: string;
       grounded?: boolean;
+      escalated?: boolean;
+      escalationProvider?: string;
     }
   | { event: 'delta'; text: string; provider?: string }
   | { event: 'audio'; data: string; seq: number }

@@ -5,6 +5,112 @@ Alle nennenswerten Änderungen an Hoshi. Format lose an
 noch keine erste stabile Version, Einträge sind daher grob nach Thema statt
 nach Release sortiert.
 
+## 0.8.3 — Suisei ☄ (2026-07-26)
+
+Ein einziger Tag, aber ein dichter: die Wissens-Kette geht live, die Modelle wählen sich selbst,
+und drei Anzeigen sagen jetzt die Wahrheit, die das System längst kannte.
+
+### Wissen: lokal zuerst
+
+- **Hoshi schaut erst bei sich nach, dann im Netz.** Ein „ja" auf das Nachschau-Angebot versucht
+  die gespeicherte Frage zuerst gegen die lokale Wikipedia — mit erneuter, strenger Deckungsprüfung
+  gegen die *ursprüngliche* Frage, damit kein tangentialer Treffer als Antwort durchgeht. Nur wenn
+  lokal nichts trägt, geht es mit Quelle ins Netz. Hörbar wird die Herkunft am Vorspann: „Hab kurz
+  **bei mir** nachgeschaut — " gegen „Hab kurz **im Netz** geschaut — ".
+- **Zusammengesetzte Wörter narren das Wetter nicht mehr.** „Sonnensystem" und „Sonnenfinsternis"
+  enthalten „Sonne" — und wurden deshalb als Wetterfragen gekapert, worauf die lokale Wikipedia nie
+  gefragt wurde. Die Erkennung arbeitet jetzt an Wortgrenzen; echte Wetterfragen bleiben unverändert.
+- **„ja schau kurz nach" verliert den Faden nicht mehr.** Die natürliche Zustimmung wurde bisher als
+  Smalltalk gelesen und das offene Angebot verfiel; die Kette ist mit dem realen Fall als
+  Regressionstest festgenagelt.
+
+### Modelle: das richtige zur richtigen Zeit
+
+- **Das dichte Gemma-4-12B läuft jetzt wirklich** — über einen eigenen, mitgelieferten
+  Laufzeit-Patch: keine veröffentlichte mlx-lm-Version kennt seine Bauart (`gemma4_unified`),
+  dabei ist sein Textteil fast der des E4B; es fehlte nur ein Modul, das das weiß. Gemessen ist
+  es die menschlichste Antwortqualität im Haus — bei rund doppelter Antwortzeit.
+- **Automatische Modellwahl (abschaltbar, ab Werk aus):** beim Tippen antwortet das gründliche
+  Modell, beim Sprechen das schnelle. Der Wechsel aufs Sprech-Modell startet, während man noch
+  spricht — die drei Sekunden verstecken sich in der eigenen Sprechzeit. Schlägt ein Wechsel fehl,
+  antwortet der Turn mit dem geladenen Modell: nie warten, nie stumm.
+- **Kein „Drift"-Gemecker mehr:** die Betriebsanzeige nennt das Modell, das läuft, statt es an
+  einer gespeicherten Wahl zu messen — seit Modelle absichtlich wechseln, war das nur noch Lärm.
+  Das grüne Schloss misst wieder ausschließlich, was es soll: läuft alles im Haus?
+- **Ein festgefahrener Modellwechsel heilt sich selbst:** die Wechselsperre wartet höchstens zwei
+  Minuten auf eine hängende Generierung und bricht dann ehrlich ab, ohne das geladene Modell
+  anzutasten; ein dauerhaft hängender Wechsel wird im Gesundheitsstatus sichtbar.
+
+### Stimme und Ehrlichkeit
+
+- **Die ersten Millisekunden gehören wieder zum Satz.** Aus „Wie zieht eine Kuh die Hose an"
+  wurde „Zieht eine Kuh eine Hose an", aus „Hose" zeitweise „Rose" — der Anlaut starb am
+  Aufnahme-Start. Zwei Lücken, beide zu: die Anzeige sagt „ich höre zu" erst, wenn wirklich
+  aufgenommen wird, und ein 500-ms-Pufferring fängt den Anfang, bevor der Encoder warm ist.
+  Der Ring lebt nur, solange das Mikrofon offen ist.
+- **Der Herkunfts-Chip liest jetzt die Wahrheit, die das Backend längst sendet:** eine online
+  nachgeschlagene Antwort trug in der Oberfläche „lokal", weil zwei ehrliche Felder drei Wochen
+  lang niemand las. Chip und gesprochener Vorspann erzählen wieder dieselbe Geschichte.
+- **Die Cache-Telemetrie sieht in allen fünf Sprachen** — vorher erkannte sie ihren
+  Herkunfts-Marker nur auf Deutsch (die älteste bekannte Grenze der Release-Notes, jetzt getilgt).
+- **Speicherdruck wird sichtbar, bevor die Stimme erstickt:** der Mac misst frei/Kompressor/Swap
+  ehrlich (als „kritisch" gilt erst wachsender Druck, nicht ein niedriger Messwert — macOS hält
+  „frei" absichtlich klein), und die Oberfläche sagt es warm: „Speicher knapp — die Stimme kann
+  gerade zäh werden." Kein automatisches Umschalten; sehen und entscheiden bleibt Sache des Menschen.
+- **„Warmweiß" ist jetzt eine Lichtfarbe.** Der Befehl tat bisher schlicht nichts — die Kette
+  konnte Farbtemperaturen längst transportieren, nur verstand niemand das Wort. Warmweiß, Neutralweiß
+  und Kaltweiß (deutsch wie englisch) werden auf Kelvin übersetzt; ob eine Lampe sie kann,
+  entscheidet weiterhin Home Assistant.
+
+### Sprache
+
+- **Die Nachschlage-Sätze klingen wie ein Mensch — und nicht immer gleich.** Ausweichen und
+  Ergebnis-Vorspann kommen aus kleinen Pools (je vier Varianten, fünf Sprachen, idiomatisch statt
+  übersetzt); Stufen-Quittungen und die Unbelegt-Kennzeichnung bleiben bewusst fest — eine
+  Unterschrift soll sich gleich anhören. Fünf Kategorien, die für Spanisch, Französisch und
+  Italienisch bisher mitten im Gespräch auf Englisch zurückfielen, sind jetzt echt fünfsprachig.
+- **Offline ist eine vierte Stufe:** kein Nachschlagen, aber statt auszuweichen antwortet das
+  lokale Modell aus eigenem Wissen — hörbar gekennzeichnet: „Ehrlich, dafür hab ich keinen
+  Beleg — aber aus meinem eigenen Wissen: …".
+- **Die Einstellungen sind neu geordnet** — sieben Gruppen, und die Online-Funktion hat erstmals
+  eine eigene: „Online & Nachschlagen" mit den vier Stufen als beschriftete Karten. Vorher war
+  die Stufe ausschließlich per Sprachbefehl schaltbar; wer sie suchte, fand nichts.
+
+- **Der Grundstein der privaten Wissensbibliothek liegt bei** (`tools/knowledge-library/`):
+  eigene Notizen, Rezepte und Texte lassen sich in einen rein lokalen Suchindex bauen — mit
+  Hash-Kette von der Quelle bis zum Index, dem Scope-Modell „geteilt oder pro Person" von Anfang
+  an, und der harten Regel, dass nichts davon je das Haus verlässt. Hoshi selbst benutzt ihn noch
+  nicht; das ist bewusst der erste Stein, nicht das Haus.
+
+### Zum Abschluss: ein Regentag in Japan und ein Flur, der lesen kann
+
+- **Amayadori (雨宿り)** — das neunte Farbthema, der Abschluss-Wunsch dieser Version: *„Draußen
+  fällt es weiter; hier drinnen ist es trocken und jemand hat Licht gelassen."* Nasses Zedernholz,
+  Laternenlicht in Kaki-Persimone, und kaltes Regenblau nur an den Rändern — die Geborgenheit
+  entsteht aus dem Temperatur-Unterschied. Zwei Signaturen: die **Traufe** (ein hauchfeiner
+  Nieselschleier im Seitenraum, der sichtbar an der Kante der Lesespalte aufhört) und der
+  **Pfützen-Orb** (die Sprech-Ringe lesen sich als Regentropfen auf Wasser). Entstanden aus zwei
+  unabhängigen Entwürfen, die ohne Absprache dasselbe Konzept empfahlen.
+- **Die Home-Seite ist jetzt ein Flur-Display.** Sie lief auf einem iPad im Flur und verschenkte
+  dort Fläche und Wissen: ein Grid-Fehler erzeugte eine leere Phantom-Spalte, die Regenmenge kam
+  an und wurde nie angezeigt, und die halbe Seite füllte eine veraltete Entwickler-Sektion. Jetzt:
+  ein **Jetzt-Band** neben der Uhr (Wetterlage groß, Tagesspanne, „3 mm Regen heute" oder
+  „trocken"), echte **Countdowns** statt Timer-Zählern, eine **Einkaufs-Karte** mit den nächsten
+  Einträgen — und leere Karten verschwinden, statt „Nichts geplant" zu behaupten. Die
+  Entwickler-Inhalte zogen als Diagnose-Sektion in die Aktivität; Schriftgrade und Touch-Ziele
+  sind auf Blickabstand ausgelegt.
+
+### Bekannte Grenzen dieser Version
+
+- Die lokale „ja"-Einlösung hat **keinen eigenen Aus-Schalter** — sie hängt an den bestehenden
+  Nachschlage-Flags; der Rückweg ist das Deploy-Rollback.
+- **„Brauche ich heute Sonnencreme?" ist keine Wetterfrage mehr** — der Preis der neuen
+  Wortgrenzen-Präzision. Die Formulierungs-Klasse ist benannt und wird nachgezogen.
+- Die **romanischen Sätze sind nicht muttersprachlich gegengelesen**, die **Oberfläche kennt
+  weiter nur Deutsch und Englisch** als Bediensprache.
+- Das 12B braucht den mitgelieferten mlx-Patch; die Speicherdruck-Messung wird erst mit dem
+  nächsten Neustart des Sprachmodell-Dienstes aktiv.
+
 ## 0.8.2 — Suisei ☄ (2026-07-25)
 
 Neuer Codename: **Suisei** (彗星, der Komet). Nagareboshi — die Sternschnuppe — war der kurze helle
@@ -146,11 +252,18 @@ in dieser Runde endlich die Uhrzeit, in die es gehört.)*
 - Die **Oberfläche lässt sich nur auf Deutsch oder Englisch stellen**, obwohl fünf Sprachpakete
   vorliegen: Spanisch, Französisch und Italienisch sind über „Hoshi spricht" erreichbar, stehen aber
   nicht als eigene Bedien-Sprache zur Wahl.
-- Das **dichte Gemma-4-12B steht zur Wahl, lädt aber noch nicht**: die eingefrorene mlx-lm-Version
-  kennt seine Architektur nicht (`gemma4_unified`). Weil der Sidecar wegen der 16-GB-Grenze das alte
-  Modell *vor* dem Laden entlädt, kostet ein Versuch das laufende Sprachmodell, bis
-  `bin/hoshi heal` es zurückholt — beides steht so im Auswahl-Label. Der Eintrag bleibt sichtbar,
-  weil er nach dem geplanten mlx-lm-Upgrade sofort trägt.
+- Das **dichte Gemma-4-12B ist wählbar — und läuft nur dank eines eigenen Patches.** Seine
+  Konfiguration deklariert die Bauart `gemma4_unified`, und dieses Architektur-Modul bringt **keine**
+  veröffentlichte mlx-lm-Version mit, auch nicht die neueste. Es zeigte sich aber beim Nachmessen,
+  dass der Textteil fast dem E4B entspricht — ein einziger Schalter unterscheidet sie (geteilte
+  Key-/Value-Projektionen), und den beherrscht die vorhandene Implementierung längst. Der Patch
+  (`sidecars/brain/mlx_patches/`) erbt deshalb den bestehenden Mantel und verwirft eine zusätzliche
+  Multimodal-Kopf-Familie; er wird beim Einrichten des Sidecars automatisch eingesetzt, weil eine
+  Neuinstallation ihn sonst löschen würde. **Was es kostet, gemessen an derselben Frage:** rund
+  doppelt so lange Antwortzeiten (2,6 s / 1,4 s gegenüber 0,8 s / 0,7 s), 4,3 Sekunden Ladezeit,
+  6,8 GB Speicher. Und weil der Sidecar wegen der 16-GB-Grenze das alte Modell *vor* dem Laden
+  entlädt, kostet ein fehlgeschlagener Wechsel das laufende Sprachmodell, bis `bin/hoshi heal` es
+  zurückholt.
 - Die **Sprecher-Erkennung ist abgeschaltet**; Anlernen und Profile bleiben, das Erkennen nicht.
 - Der **sanfte Neustart** (bis zu 20 Sekunden für laufende Gespräche) ist konfiguriert und plausibel,
   aber weiterhin **nicht an einem echten laufenden Gespräch bewiesen**.

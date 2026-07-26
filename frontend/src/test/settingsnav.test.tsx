@@ -44,17 +44,21 @@ function memoryStorage(): Storage {
 
 describe('SETTINGS_CATEGORIES — die sieben IA-Kategorien', () => {
   it('genau 7 Kategorien, eindeutige ids, in der dokumentierten Reihenfolge', () => {
-    // 'modell-leistung' ist neu (Andi-Auftrag: Brain-Modell-Umschalter) — der
-    // bisher ABSICHTLICH leere IA-Reiter (vault/tracks/DESIGN-settings-ia-
-    // 2026-06-30.md) ist jetzt gefüllt.
+    // Neuordnung 26.07 (Andi-Auftrag: „die komplette Online-Nachschau-Funktion
+    // soll über die Einstellungen in einer geeigneten Gruppierung einstellbar
+    // sein — überdenke die Anordnung"): 'online-nachschlagen' ist neu (bündelt
+    // die Extended-Think-Stufen + das Nachschlag-Modell); 'faehigkeiten' ist
+    // aufgelöst (Skills + Wecker-Eskalation ziehen in 'zuhause-integrationen',
+    // vorher 'standort-integrationen'); 'persoenlichkeit' und 'modell-leistung'
+    // sind getauscht, damit die drei Online-/Technik-Reiter zusammenstehen.
     expect(SETTINGS_CATEGORIES.map((c) => c.id)).toEqual([
       'darstellung',
       'sprache-stimme',
-      'persoenlichkeit',
+      'online-nachschlagen',
       'modell-leistung',
-      'faehigkeiten',
+      'persoenlichkeit',
       'gedaechtnis-privatsphaere',
-      'standort-integrationen',
+      'zuhause-integrationen',
     ]);
     expect(new Set(SETTINGS_CATEGORIES.map((c) => c.id)).size).toBe(SETTINGS_CATEGORIES.length);
   });
@@ -63,13 +67,15 @@ describe('SETTINGS_CATEGORIES — die sieben IA-Kategorien', () => {
 describe('SettingsCategoryNav — Render-Vertrag (WAI-ARIA-Tabs)', () => {
   it('role="tablist" + ein role="tab" je Kategorie, aktiver trägt aria-selected + tabIndex 0', () => {
     const html = renderToStaticMarkup(
-      <SettingsCategoryNav active="faehigkeiten" onSelect={() => {}} />,
+      <SettingsCategoryNav active="online-nachschlagen" onSelect={() => {}} />,
     );
     expect(html).toContain('role="tablist"');
     expect((html.match(/role="tab"/g) ?? []).length).toBe(SETTINGS_CATEGORIES.length);
     expect(html).toContain('aria-label="Einstellungs-Kategorien"');
-    // der aktive Reiter (Fähigkeiten): selected + im Tab-Fokus erreichbar (tabindex 0).
-    expect(html).toMatch(/id="settings-tab-faehigkeiten"[^>]*aria-selected="true"[^>]*tabindex="0"/);
+    // der aktive Reiter (Online & Nachschlagen): selected + im Tab-Fokus erreichbar (tabindex 0).
+    expect(html).toMatch(
+      /id="settings-tab-online-nachschlagen"[^>]*aria-selected="true"[^>]*tabindex="0"/,
+    );
     // alle Labels stehen drin (& kommt HTML-escaped aus renderToStaticMarkup).
     for (const c of SETTINGS_CATEGORIES) expect(html).toContain(c.label.replace('&', '&amp;'));
   });
@@ -78,7 +84,9 @@ describe('SettingsCategoryNav — Render-Vertrag (WAI-ARIA-Tabs)', () => {
     const html = renderToStaticMarkup(
       <SettingsCategoryNav active="darstellung" onSelect={() => {}} />,
     );
-    expect(html).toMatch(/id="settings-tab-faehigkeiten"[^>]*aria-selected="false"[^>]*tabindex="-1"/);
+    expect(html).toMatch(
+      /id="settings-tab-online-nachschlagen"[^>]*aria-selected="false"[^>]*tabindex="-1"/,
+    );
   });
 });
 
@@ -217,7 +225,7 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
     expect(container.querySelector('label[for="settings-voice"]')).not.toBeNull();
   });
 
-  it('Klick auf „Fähigkeiten" blendet Skills/Wecker-Eskalation ein, Darstellung aus', async () => {
+  it('Klick auf „Online & Nachschlagen" blendet Eskalations-Stufen/Lookup-Modell ein, Darstellung aus', async () => {
     root = createRoot(container);
     await act(async () => {
       root!.render(<SettingsPanel {...baseProps} />);
@@ -225,16 +233,18 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
     await flush();
 
     await act(async () => {
-      tab('faehigkeiten').click();
+      tab('online-nachschlagen').click();
     });
 
-    expect(panel('faehigkeiten').hidden).toBe(false);
+    expect(panel('online-nachschlagen').hidden).toBe(false);
     expect(panel('darstellung').hidden).toBe(true);
-    expect(tab('faehigkeiten').getAttribute('aria-selected')).toBe('true');
+    expect(tab('online-nachschlagen').getAttribute('aria-selected')).toBe('true');
     expect(tab('darstellung').getAttribute('aria-selected')).toBe('false');
-    // Inhalt der Kategorie ist da (Skills-Gruppentitel + Wecker-Eskalation-Feld).
-    expect(panel('faehigkeiten').textContent).toContain('Skills');
-    expect(panel('faehigkeiten').querySelector('#settings-escalation')).not.toBeNull();
+    // Inhalt der Kategorie ist da: die vier Eskalations-Stufen (Andi-Auftrag
+    // 26.07 — vorher hatte diese Einstellung KEIN UI-Element) direkt über dem
+    // Nachschlag-Modell (zog aus der ehemaligen Fähigkeiten-Kategorie hierher).
+    expect(panel('online-nachschlagen').textContent).toContain('Wenn Hoshi etwas nicht weiß');
+    expect(panel('online-nachschlagen').textContent).toContain('Online-Nachschlag');
   });
 
   it('Klick auf „Gedächtnis & Privatsphäre" zeigt Sprecher + Privatsphäre zusammen', async () => {
@@ -254,7 +264,7 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
     expect(p.textContent).toContain('Privatsphäre');
   });
 
-  it('Klick auf „Standort & Integrationen" zeigt Wetter-Ort + Nachtmodus zusammen', async () => {
+  it('Klick auf „Zuhause & Integrationen" zeigt Wetter-Ort + Skills + Wecker-Eskalation + Nachtmodus zusammen', async () => {
     root = createRoot(container);
     await act(async () => {
       root!.render(<SettingsPanel {...baseProps} />);
@@ -262,12 +272,17 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
     await flush();
 
     await act(async () => {
-      tab('standort-integrationen').click();
+      tab('zuhause-integrationen').click();
     });
 
-    const p = panel('standort-integrationen');
+    // Umbenannt + erweitert 26.07: die ehemalige Fähigkeiten-Kategorie ist
+    // aufgelöst, Skills-Toggles + Wecker-Eskalation stehen jetzt hier neben
+    // Wetter-Ort/Nachtmodus (vorher „Standort & Integrationen").
+    const p = panel('zuhause-integrationen');
     expect(p.hidden).toBe(false);
     expect(p.textContent).toContain('Wetter-Ort');
+    expect(p.textContent).toContain('Skills');
+    expect(p.querySelector('#settings-escalation')).not.toBeNull();
     expect(p.textContent).toContain('Nachtmodus');
   });
 

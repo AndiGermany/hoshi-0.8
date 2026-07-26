@@ -43,6 +43,15 @@ import {
   saveLookupModel,
 } from '../api/lookupModel';
 import {
+  type EscalationModeWire,
+  type ExtendedThinkSetting,
+  ESCALATION_MODES,
+  EscalationLockedError,
+  UnknownEscalationModeError,
+  fetchExtendedThink,
+  saveExtendedThinkMode,
+} from '../api/extendedThink';
+import {
   type TtsSetting,
   EngineUnavailableError,
   UnknownEngineError,
@@ -58,6 +67,7 @@ import {
   fetchBrainSettings,
   saveBrainModel,
 } from '../api/brainSettings';
+import { fetchBrainAutoSwitch, saveBrainAutoSwitch } from '../api/brainAutoSwitch';
 import { de } from '../i18n/de';
 import { useActiveUiLanguage, useUiStrings } from '../i18n';
 import type { BrainModelStrings, FutureSkillId, SettingsPanelStrings } from '../i18n/types';
@@ -65,14 +75,23 @@ import { CloudGlyph, LockGlyph, PlayGlyph, WarnGlyph } from './icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Kategorie-Navigation (Andi 15.07: „hier müssen wir zu weit scrollen, daher
-//  organisiere das bitte übersichtlich neu"). IA-Referenz:
-//  vault/tracks/DESIGN-settings-ia-2026-06-30.md — sechs der acht dort skizzierten
-//  Kategorien sind heute im FE mit echtem Inhalt gefüllt (Modell & Leistung /
-//  Hintergrunddienste sind noch komplett NEEDS_ENDPOINT/ANDI_GATED und bekommen
-//  darum bewusst KEINEN leeren Reiter). Zwei Sektionen sind neuer als das Dokument
-//  und wurden sinngemäß eingereiht: Wecker-Eskalation → Fähigkeiten (Timer-/Wecker-
-//  Verhalten, neben den Skills), Nachtmodus → Standort & Integrationen (pro
-//  physischem Gerät/Ort, wie der Wetter-Ort).
+//  organisiere das bitte übersichtlich neu"; IA-Referenz vault/tracks/
+//  DESIGN-settings-ia-2026-06-30.md). NEU sortiert 26.07 (Andi-Auftrag: „die
+//  komplette Online-Nachschau-Funktion soll über die Einstellungen in einer
+//  geeigneten Gruppierung einstellbar sein — überdenke die Anordnung der
+//  kompletten Einstellungen"). Zwei Änderungen gegenüber dem bisherigen Stand:
+//   1. Neue Kategorie 'online-nachschlagen' bündelt ALLES Online-Verhalten an
+//      einem Ort: die vier Extended-Think-Stufen ({@link ExtendedThinkSection},
+//      vorher gar kein UI-Element — nur Backend) + das Nachschlag-Modell
+//      ({@link LookupModelSection}, zieht aus der ehemaligen Fähigkeiten-
+//      Kategorie hierher). Die Cloud-TTS-Engine bleibt bewusst bei „Sprache &
+//      Stimme" — sie ist Stimme, nicht Wissen.
+//   2. Die ehemalige Fähigkeiten-Kategorie ist aufgelöst: das Nachschlag-Modell
+//      zieht wie oben nach 'online-nachschlagen', die Skills-Toggles und die
+//      Wecker-Eskalation ziehen in die umbenannte 'zuhause-integrationen'
+//      (vorher 'standort-integrationen') — beides sind Fähigkeiten IM Zuhause
+//      (Smart-Home/Szenen/Timer neben Wetter-Ort/HA/Wecker). So bleiben es
+//      sieben Kategorien, keine verwaist, keine doppelt.
 //
 //  Bewusst KEIN Unmount pro Kategorie: jede Sektion bleibt immer gemountet, der
 //  Wechsel schaltet nur das native `hidden`-Attribut (kein Kill der laufenden
@@ -83,27 +102,29 @@ import { CloudGlyph, LockGlyph, PlayGlyph, WarnGlyph } from './icons';
 export type SettingsCategoryId =
   | 'darstellung'
   | 'sprache-stimme'
-  | 'persoenlichkeit'
+  | 'online-nachschlagen'
   | 'modell-leistung'
-  | 'faehigkeiten'
+  | 'persoenlichkeit'
   | 'gedaechtnis-privatsphaere'
-  | 'standort-integrationen';
+  | 'zuhause-integrationen';
 
 /**
- * Die Reiter in ihrer dokumentierten REIHENFOLGE. 'modell-leistung' ist neu
- * (Andi-Auftrag): das Backlog-Feld „Modell & Leistung" aus der IA
- * (vault/tracks/DESIGN-settings-ia-2026-06-30.md) war bisher ABSICHTLICH leer
- * (kein Reiter ohne echten Inhalt) — jetzt gefüllt mit dem Brain-Modell-
- * Umschalter (GET/PUT /api/v1/settings/brain).
+ * Die Reiter in ihrer dokumentierten REIHENFOLGE — Online-Grad als Ordnungs-
+ * Prinzip in der Mitte (Darstellung/Sprache zuerst, dann Online & Nachschlagen,
+ * Modell & Leistung, Persönlichkeit, dann die beiden Datenschutz-/Heim-
+ * Kategorien). 'online-nachschlagen' ist neu (Andi-Auftrag 26.07); die alte
+ * Reihenfolge hatte 'persoenlichkeit' vor 'modell-leistung' — bewusst getauscht,
+ * damit die drei Online-/Technik-Kategorien (Sprache & Stimme · Online &
+ * Nachschlagen · Modell & Leistung) zusammenstehen.
  */
 export const SETTINGS_CATEGORY_IDS: readonly SettingsCategoryId[] = [
   'darstellung',
   'sprache-stimme',
-  'persoenlichkeit',
+  'online-nachschlagen',
   'modell-leistung',
-  'faehigkeiten',
+  'persoenlichkeit',
   'gedaechtnis-privatsphaere',
-  'standort-integrationen',
+  'zuhause-integrationen',
 ];
 
 /**
@@ -135,9 +156,9 @@ export type SettingsAnchorId = 'wetter-standort' | 'sprecher' | 'wecker-eskalati
 
 /** Welche Kategorie ein Anker aufschlägt — die einzige Quelle für dieses Mapping. */
 export const SETTINGS_ANCHOR_CATEGORY: Record<SettingsAnchorId, SettingsCategoryId> = {
-  'wetter-standort': 'standort-integrationen',
+  'wetter-standort': 'zuhause-integrationen',
   sprecher: 'gedaechtnis-privatsphaere',
-  'wecker-eskalation': 'faehigkeiten',
+  'wecker-eskalation': 'zuhause-integrationen',
 };
 
 export const settingsAnchorId = (id: SettingsAnchorId): string => `settings-anchor-${id}`;
@@ -288,10 +309,11 @@ interface Props {
 }
 
 /**
- * Einstellungs-Drawer (rechts): sechs Kategorien über eine Reiter-Leiste
+ * Einstellungs-Drawer (rechts): sieben Kategorien über eine Reiter-Leiste
  * ({@link SettingsCategoryNav}) statt einer einzigen langen Scroll-Wand (Andi
  * 15.07: „hier müssen wir zu weit scrollen, daher organisiere das bitte
- * übersichtlich neu"). IA-Referenz: vault/tracks/DESIGN-settings-ia-2026-06-30.md.
+ * übersichtlich neu"; Neuordnung 26.07: „gruppiere sinnig, ordne alles
+ * aufgeräumt"). IA-Referenz: vault/tracks/DESIGN-settings-ia-2026-06-30.md.
  *
  * Bleibt gemountet und blendet über `is-open` ein/aus (sanfter Ein-/Austritt,
  * reduced-motion wird durch die globale Regel in index.css respektiert). Esc und
@@ -448,9 +470,23 @@ export function SettingsPanel({
           <TtsAndVoiceSection voice={voice} onVoice={onVoice} />
         </SettingsCategoryPanel>
 
-        {/* ═══ Modell & Leistung (Andi-Auftrag: Brain-Modell live umschaltbar) ═══ */}
+        {/* ═══ Online & Nachschlagen (Andi-Auftrag 26.07: „die komplette
+            Online-Nachschau-Funktion soll über die Einstellungen in einer
+            geeigneten Gruppierung einstellbar sein") ═══════════════════════
+            Alles Online-Verhalten an einem Ort: erst die vier Extended-
+            Think-Stufen (steuert OB Hoshi online geht), dann das Nachschlag-
+            Modell (steuert WOMIT sie nachschaut, wenn sie es tut). Vorher gab
+            es für die Stufen KEIN UI-Element — nur GET/PUT
+            /api/v1/settings/extended-think im Backend. */}
+        <SettingsCategoryPanel id="online-nachschlagen" active={activeCategory}>
+          <ExtendedThinkSection />
+          <LookupModelSection />
+        </SettingsCategoryPanel>
+
+        {/* ═══ Modell & Leistung (Andi-Auftrag: Brain-Modell live umschaltbar,
+            seit 26.07 + automatische Modellwahl „12B für Chat, e4b für Voice") ═══ */}
         <SettingsCategoryPanel id="modell-leistung" active={activeCategory}>
-          <BrainModelSection />
+          <ModelPerformanceGroup />
         </SettingsCategoryPanel>
 
         {/* ═══ Persönlichkeit ════════════════════════════════════════════ */}
@@ -481,35 +517,6 @@ export function SettingsPanel({
           </section>
         </SettingsCategoryPanel>
 
-        {/* ═══ Fähigkeiten ═══════════════════════════════════════════════
-            Wecker-Eskalation ist neuer als die IA (DESIGN-settings-ia-2026-06-30.md
-            kennt sie noch nicht) — sinngemäß hier eingereiht: sie steuert, wie
-            der Wecker-/Timer-Skill sich über Geräte hinweg verhält. */}
-        <SettingsCategoryPanel id="faehigkeiten" active={activeCategory}>
-          {/* ── Skills (S2.3): Zwei-Stufen-Toggle, serverseitig ─────────── */}
-          <SkillsSection
-            skills={skills}
-            loading={skillsLoading}
-            error={skillsError}
-            busyId={busyId}
-            onToggle={toggle}
-          />
-
-          {/* ── Online-Nachschlag: welches Modell fürs schnelle Lookup ────
-              Andi-Video-Auftrag — reiht sich hier ein (wie „Wikipedia-Wissen"
-              in der IA-Doc: eine Nachschlage-Fähigkeit neben den Skills). */}
-          <LookupModelSection />
-
-          {/* ── Wecker-Eskalation: ab wann auch fremde Geräte bimmeln ─────
-              Anker-Ziel des Zahnrads am Wecker-/Klingel-Banner (FiredToast). */}
-          <SettingsAnchor id="wecker-eskalation" active={highlighted === 'wecker-eskalation'}>
-            <EscalationSection
-              seconds={escalationSeconds}
-              onSeconds={onEscalationSeconds}
-            />
-          </SettingsAnchor>
-        </SettingsCategoryPanel>
-
         {/* ═══ Gedächtnis & Privatsphäre ═════════════════════════════════ */}
         <SettingsCategoryPanel id="gedaechtnis-privatsphaere" active={activeCategory}>
           {/* ── Erkannte Sprecher (S2a): Anlernen + Verwalten (getrennt von HOSHIS Stimme) ──
@@ -522,14 +529,34 @@ export function SettingsPanel({
           <PrivacySection />
         </SettingsCategoryPanel>
 
-        {/* ═══ Standort & Integrationen ══════════════════════════════════
-            Nachtmodus ist neuer als die IA — sinngemäß hier eingereiht: pro
-            physischem Gerät/Ort, wie der Wetter-Ort direkt darüber. */}
-        <SettingsCategoryPanel id="standort-integrationen" active={activeCategory}>
+        {/* ═══ Zuhause & Integrationen (vorher „Standort & Integrationen" —
+            umbenannt + erweitert 26.07: die ehemalige Fähigkeiten-Kategorie
+            ist aufgelöst, ihre zwei verbleibenden Sektionen [Skills-Toggles,
+            Wecker-Eskalation] sind Fähigkeiten IM Zuhause und ziehen darum
+            hierher, neben Wetter-Ort/HA/Nachtmodus) ═══════════════════════ */}
+        <SettingsCategoryPanel id="zuhause-integrationen" active={activeCategory}>
           {/* ── Wetter-Ort: der Standort für Wetter-Fragen, serverseitig ─────
               Anker-Ziel des Zahnrads an der Wetter-Kachel im Idle-Gesicht. */}
           <SettingsAnchor id="wetter-standort" active={highlighted === 'wetter-standort'}>
             <WeatherLocationSection />
+          </SettingsAnchor>
+
+          {/* ── Skills (S2.3): Zwei-Stufen-Toggle, serverseitig ─────────── */}
+          <SkillsSection
+            skills={skills}
+            loading={skillsLoading}
+            error={skillsError}
+            busyId={busyId}
+            onToggle={toggle}
+          />
+
+          {/* ── Wecker-Eskalation: ab wann auch fremde Geräte bimmeln ─────
+              Anker-Ziel des Zahnrads am Wecker-/Klingel-Banner (FiredToast). */}
+          <SettingsAnchor id="wecker-eskalation" active={highlighted === 'wecker-eskalation'}>
+            <EscalationSection
+              seconds={escalationSeconds}
+              onSeconds={onEscalationSeconds}
+            />
           </SettingsAnchor>
 
           {/* ── Nachtmodus (Scheibe 3 von 3): pro Gerät, Nacht-Fenster-Dial ── */}
@@ -876,6 +903,188 @@ export function WeatherLocationSectionView({
       )}
       {note && (
         <p className="settings__hint settings__weathernote" role="status">
+          {note}
+        </p>
+      )}
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Extended-Think-Stufe — was passiert, wenn Hoshis eigenes Wissen nicht reicht
+//  (Andi-Auftrag 26.07: „die Eskalations-Stufe hat KEIN UI-Element" — vorher
+//  nur Backend via GET/PUT /api/v1/settings/extended-think). Vier beschriftete
+//  Auswahl-Karten statt eines nackten Dropdowns, Reihenfolge nach Online-Grad
+//  (Aus → Offline → Erst fragen → Automatisch, s. ESCALATION_MODES); je Karte
+//  EIN Titel + EIN erklärender Satz. „Erst fragen" trägt das Empfohlen-Badge —
+//  der Laufzeit-Default bei offener Decke (EscalationMode.RUNTIME_DEFAULT).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Ehrliche Texte der Extended-Think-Stufenwahl (auch von Tests referenziert) —
+ * Referenz auf den `de`-Katalog in `i18n/de.ts`. Gerendert wird
+ * `useUiStrings().extendedThink`, s. unten.
+ */
+export const EXTENDED_THINK_TEXTS = de.extendedThink;
+
+/**
+ * Container der Extended-Think-Gruppe (Muster {@link BrainModelSection}): lädt
+ * den Ist-Zustand EINMAL beim Mount (Server-Wahrheit, KEIN optimistisches
+ * Grün), schaltet per Karten-Klick um (PUT) und liest danach den
+ * AUTORITATIVEN Server-Zustand zurück (Readback). Decke zu (`current.locked`)
+ * ⇒ die Karten bleiben sichtbar, aber gesperrt + ein ehrlicher Hinweis — kein
+ * Fake-Schalter, der nichts schaltet.
+ */
+export function ExtendedThinkSection() {
+  const t = useUiStrings();
+  const EXTENDED_THINK_TEXTS = t.extendedThink;
+  const [current, setCurrent] = useState<ExtendedThinkSetting | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const next = await fetchExtendedThink(controller.signal);
+        if (aliveRef.current) {
+          setCurrent(next);
+          setError(null);
+        }
+      } catch {
+        if (aliveRef.current) setError(EXTENDED_THINK_TEXTS.loadError);
+      } finally {
+        if (aliveRef.current) setLoading(false);
+      }
+    })();
+    return () => {
+      aliveRef.current = false;
+      controller.abort();
+    };
+  }, []);
+
+  const onSelect = (mode: EscalationModeWire) => {
+    if (busy || !current || current.locked || mode === current.mode) return;
+    setBusy(true);
+    setNote(null);
+    void (async () => {
+      try {
+        const updated = await saveExtendedThinkMode(mode);
+        if (!aliveRef.current) return;
+        setCurrent(updated);
+      } catch (e) {
+        if (!aliveRef.current) return;
+        if (e instanceof UnknownEscalationModeError) setNote(EXTENDED_THINK_TEXTS.unknown);
+        else if (e instanceof EscalationLockedError) setNote(EXTENDED_THINK_TEXTS.locked);
+        else setNote(EXTENDED_THINK_TEXTS.failed);
+        // Ehrlicher Ist-Stand nach einem Fehlschlag neu laden (der Server könnte
+        // sich seit dem letzten GET verändert haben) — best-effort, still
+        // (Muster {@link LookupModelSection}/{@link TtsAndVoiceSection}).
+        try {
+          const next = await fetchExtendedThink();
+          if (aliveRef.current) setCurrent(next);
+        } catch {
+          /* die Notiz steht schon */
+        }
+      } finally {
+        if (aliveRef.current) setBusy(false);
+      }
+    })();
+  };
+
+  return (
+    <ExtendedThinkSectionView
+      current={current}
+      loading={loading}
+      error={error}
+      busy={busy}
+      note={note}
+      onSelect={onSelect}
+    />
+  );
+}
+
+export interface ExtendedThinkSectionViewProps {
+  current: ExtendedThinkSetting | null;
+  loading?: boolean;
+  error?: string | null;
+  busy?: boolean;
+  note?: string | null;
+  onSelect: (mode: EscalationModeWire) => void;
+}
+
+/**
+ * Präsentations-Sektion der Extended-Think-Stufenwahl (prop-getrieben, Muster
+ * {@link BrainModelSectionView} — per `renderToStaticMarkup` testbar). Vier
+ * Radio-Karten in EINER `role="radiogroup"` (Muster {@link ThemeSection}):
+ * Titel + Beschreibung je Karte, die aktive Karte trägt `aria-checked`. Deploy-
+ * Decke zu (`current.locked`) ⇒ jede Karte `disabled` + der ehrliche
+ * Sperr-Hinweis ({@link ExtendedThinkStrings.locked}) statt eines stillen
+ * Nicht-Reagierens.
+ */
+export function ExtendedThinkSectionView({
+  current,
+  loading,
+  error,
+  busy,
+  note,
+  onSelect,
+}: ExtendedThinkSectionViewProps) {
+  const t = useUiStrings();
+  const EXTENDED_THINK_TEXTS = t.extendedThink;
+  const locked = current?.locked ?? false;
+  return (
+    <section className="settings__group">
+      <h3 className="settings__label">{EXTENDED_THINK_TEXTS.label}</h3>
+      <p className="settings__hint">{EXTENDED_THINK_TEXTS.hint}</p>
+      {loading && !current && <p className="settings__hint">{EXTENDED_THINK_TEXTS.loading}</p>}
+      {error && (
+        <p className="settings__hint" role="alert">
+          {error}
+        </p>
+      )}
+      {current && (
+        <div
+          className="settings__thinkmodes"
+          role="radiogroup"
+          aria-label={EXTENDED_THINK_TEXTS.label}
+        >
+          {ESCALATION_MODES.map((mode) => {
+            const entry = EXTENDED_THINK_TEXTS.modes[mode];
+            const isActive = current.mode === mode;
+            const recommended = mode === 'ERST_FRAGEN';
+            return (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                className={`settings__thinkmode ${isActive ? 'is-active' : ''}`}
+                disabled={locked || busy}
+                onClick={() => onSelect(mode)}
+              >
+                <span className="settings__thinkmodehead">
+                  <span className="settings__thinkmodetitle">{entry.title}</span>
+                  {recommended && (
+                    <span className="settings__badge settings__badge--recommended">
+                      {EXTENDED_THINK_TEXTS.recommendedBadge}
+                    </span>
+                  )}
+                </span>
+                <span className="settings__thinkmodedesc">{entry.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {locked && <p className="settings__hint">{EXTENDED_THINK_TEXTS.locked}</p>}
+      {busy && <p className="settings__hint">{EXTENDED_THINK_TEXTS.switching}</p>}
+      {note && (
+        <p className="settings__hint settings__thinkmodenote" role="status">
           {note}
         </p>
       )}
@@ -1470,7 +1679,9 @@ function brainStatusLabel(status: string, texts: BrainModelStrings = BRAIN_MODEL
  * Hinweis, kein endloses stilles Warten). KEIN optimistisches UI: `current`
  * zeigt IMMER den zuletzt vom Server gelesenen Zustand, nie das erhoffte Ziel.
  */
-export function BrainModelSection() {
+export function BrainModelSection({
+  autoSwitchActive = false,
+}: { autoSwitchActive?: boolean } = {}) {
   const t = useUiStrings();
   const BRAIN_MODEL_TEXTS = t.brainModel;
   const [current, setCurrent] = useState<BrainSetting | null>(null);
@@ -1572,6 +1783,7 @@ export function BrainModelSection() {
       pending={pending}
       note={note}
       onSelect={onSelect}
+      autoSwitchActive={autoSwitchActive}
     />
   );
 }
@@ -1583,6 +1795,13 @@ export interface BrainModelSectionViewProps {
   pending?: { id: string; label: string } | null;
   note?: string | null;
   onSelect: (id: string) => void;
+  /**
+   * Ehrlicher Zusatz-Hinweis (Andi-Auftrag „12B für Chat, e4b für Voice",
+   * 2026-07-26): steht die automatische Modellwahl an, sagt ein Zusatz-Satz
+   * unter [BrainModelStrings.hint], dass diese Auswahl jetzt nur noch das
+   * CHAT-Modell setzt. Default `false` ⇒ byte-neutral für Bestandsaufrufer.
+   */
+  autoSwitchActive?: boolean;
 }
 
 /**
@@ -1598,6 +1817,7 @@ export function BrainModelSectionView({
   pending,
   note,
   onSelect,
+  autoSwitchActive,
 }: BrainModelSectionViewProps) {
   const t = useUiStrings();
   const BRAIN_MODEL_TEXTS = t.brainModel;
@@ -1645,12 +1865,165 @@ export function BrainModelSectionView({
         </p>
       )}
       <p className="settings__hint">{BRAIN_MODEL_TEXTS.hint}</p>
+      {autoSwitchActive && <p className="settings__hint">{BRAIN_MODEL_TEXTS.autoSwitchNote}</p>}
       {note && (
         <p className="settings__hint settings__brainmodelnote" role="status">
           {note}
         </p>
       )}
     </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Automatische Modellwahl — „12B für Chat, e4b für Voice" (Andi-Auftrag
+//  2026-07-26): EINE Karte unter der Brain-Modell-Auswahl, Toggle + erklärender
+//  Satz. Steht sie an, setzt die manuelle Auswahl oben (BrainModelSection) nur
+//  noch das CHAT-Modell — der ehrliche Zusatz-Hinweis dort kommt über
+//  [ModelPerformanceGroup], die beide Sektionen zusammenhält.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Container: lädt den Ist-Zustand EINMAL beim Mount, schaltet per Klick um.
+ * `onChange` (optional) meldet JEDEN bekannten Zustand nach oben (initialer
+ * Load + jeder erfolgreiche Toggle) — [ModelPerformanceGroup] nutzt das, um
+ * den ehrlichen Zusatz-Hinweis in der Modell-Auswahl darüber zu steuern, OHNE
+ * dass [BrainModelSection] selbst je etwas von diesem Setting fetchen müsste.
+ */
+export function BrainAutoSwitchSection({
+  onChange,
+}: { onChange?: (enabled: boolean) => void } = {}) {
+  const t = useUiStrings();
+  const TXT = t.brainAutoSwitch;
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const setting = await fetchBrainAutoSwitch(controller.signal);
+        if (!aliveRef.current) return;
+        setEnabled(setting.enabled);
+        onChange?.(setting.enabled);
+        setError(null);
+      } catch {
+        if (aliveRef.current) setError(TXT.loadError);
+      } finally {
+        if (aliveRef.current) setLoading(false);
+      }
+    })();
+    return () => {
+      aliveRef.current = false;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onChange/TXT sind pro Render neu, ein einmaliger Mount-Fetch reicht.
+  }, []);
+
+  const onToggle = () => {
+    if (busy || loading) return;
+    const next = !enabled;
+    setBusy(true);
+    setNote(null);
+    void (async () => {
+      try {
+        const setting = await saveBrainAutoSwitch(next);
+        if (!aliveRef.current) return;
+        setEnabled(setting.enabled);
+        onChange?.(setting.enabled);
+      } catch {
+        if (aliveRef.current) setNote(TXT.failed);
+      } finally {
+        if (aliveRef.current) setBusy(false);
+      }
+    })();
+  };
+
+  return (
+    <BrainAutoSwitchSectionView
+      enabled={enabled}
+      loading={loading}
+      error={error}
+      busy={busy}
+      note={note}
+      onToggle={onToggle}
+    />
+  );
+}
+
+export interface BrainAutoSwitchSectionViewProps {
+  enabled: boolean;
+  loading?: boolean;
+  error?: string | null;
+  busy?: boolean;
+  note?: string | null;
+  onToggle: () => void;
+}
+
+/** Präsentations-Sektion (prop-getrieben, Muster {@link TtsEngineSectionView}): EIN Toggle + Hinweis. */
+export function BrainAutoSwitchSectionView({
+  enabled,
+  loading,
+  error,
+  busy,
+  note,
+  onToggle,
+}: BrainAutoSwitchSectionViewProps) {
+  const t = useUiStrings();
+  const TXT = t.brainAutoSwitch;
+  return (
+    <section className="settings__group">
+      <div className="settings__skill">
+        <div className="settings__skillmeta">
+          <span className="settings__skillname">{TXT.label}</span>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label={TXT.label}
+          className={`settings__toggle ${enabled ? 'is-on' : ''}`}
+          disabled={!!busy || !!loading}
+          onClick={onToggle}
+        >
+          <span className="settings__toggleknob" aria-hidden="true" />
+        </button>
+      </div>
+      <p className="settings__hint">{TXT.hint}</p>
+      {error && (
+        <p className="settings__hint" role="alert">
+          {error}
+        </p>
+      )}
+      {note && (
+        <p className="settings__hint" role="status">
+          {note}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Hält die Brain-Modell-Auswahl UND den Auto-Switch-Toggle zusammen, DAMIT die
+ * Modell-Auswahl den ehrlichen Zusatz-Hinweis zeigen kann, ohne selbst einen
+ * zweiten Fetch für dieses Setting zu brauchen (kein zusätzlicher Netz-Call in
+ * den bestehenden {@link BrainModelSection}-Tests — die rufen die Sektion nach
+ * wie vor ohne Props auf). [BrainAutoSwitchSection] ist die EINE Quelle für den
+ * Zustand, [onChange] reicht ihn hoch.
+ */
+function ModelPerformanceGroup() {
+  const [autoSwitchOn, setAutoSwitchOn] = useState(false);
+  return (
+    <>
+      <BrainModelSection autoSwitchActive={autoSwitchOn} />
+      <BrainAutoSwitchSection onChange={setAutoSwitchOn} />
+    </>
   );
 }
 

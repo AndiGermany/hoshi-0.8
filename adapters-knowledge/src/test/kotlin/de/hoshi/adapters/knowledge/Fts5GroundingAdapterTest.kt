@@ -94,6 +94,52 @@ class Fts5GroundingAdapterTest {
         }
 
     @Test
+    fun `Knowledge-Pack-v1 nutzt versionierten Pfad und parst additive Evidenz`() {
+        val capturedPath = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/v1/search") { ex ->
+            capturedPath.set(ex.requestURI.path)
+            val body = """
+                {
+                  "query":"konrad adenauer",
+                  "totalHits":1,
+                  "pack":{"status":"manifest-valid-metadata-only","packId":"de-core"},
+                  "hits":[{
+                    "articleId":123,
+                    "title":"Konrad Adenauer",
+                    "bm25Score":-68.46,
+                    "extract":"Konrad Adenauer war der erste Bundeskanzler.",
+                    "summary":null,
+                    "facts":[],
+                    "evidence":{
+                      "sourcePageId":123,
+                      "sourceRevisionId":"42",
+                      "sourceUrl":"https://de.wikipedia.org/?curid=123"
+                    }
+                  }]
+                }
+            """.trimIndent().toByteArray()
+            ex.sendResponseHeaders(200, body.size.toLong())
+            ex.responseBody.use { it.write(body) }
+        }
+        server.start()
+        try {
+            val adapter = Fts5GroundingAdapter(
+                baseUrl = "http://127.0.0.1:${server.address.port}",
+                useKnowledgePackV1 = true,
+            )
+            val block = adapter
+                .groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT, Language.DE)
+                .block(Duration.ofSeconds(5)) ?: ""
+
+            assertEquals("/v1/search", capturedPath.get())
+            assertTrue(block.contains("erste Bundeskanzler"))
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun `Bridge down liefert best-effort leeren Block, nie Crash`() {
         // Port, auf dem nichts lauscht → connection refused → leerer Block.
         val adapter = Fts5GroundingAdapter(baseUrl = "http://127.0.0.1:1", timeout = Duration.ofSeconds(2))

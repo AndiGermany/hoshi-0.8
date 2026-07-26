@@ -85,6 +85,34 @@ object LangIt {
             "Hm, il mio libro di consultazione adesso non è raggiungibile. Non voglio tirare a indovinare — richiedimelo tra un attimo e guardo per bene.",
             "Qui mi sono bloccato — il mio archivio di sapere non risponde. Dammi un momento e poi te lo dico onestamente.",
         ),
+        factCoverageOfflineDisclaimer = "Onestamente, non ho una fonte per questo — ma per quel che so io: ",
+        localLookupFoundPrefix = "Ho guardato in quello che ho qui — ",
+        // ── Andi-Auftrag 2026-07-26 „le frasi per Hoshi guarda online sono
+        //    brutte" — questi cinque campi finivano finora in inglese per
+        //    ES/FR/IT; adesso italiano vero, con „guardare" invece di un vago
+        //    „chiedere". Aggiunta „non sempre la stessa risposta": deflect +
+        //    introduzione al risultato sono ora pool da 4 (AntiRepeatPicker) —
+        //    ogni variante di deflect finisce con la domanda, ogni variante
+        //    dell'introduzione nomina online/internet.
+        factCoverageDeflect = listOf(
+            "Uff, questo adesso non lo so a memoria — lo guardo un attimo?",
+            "Bella domanda — lo guardo un attimo?",
+            "Questo non ce l'ho a mente — do un'occhiata?",
+            "Non lo so a memoria adesso — vuoi che controlli?",
+        ),
+        escalationAnswerFrame = listOf(
+            "Allora ho dato un'occhiata veloce online — ",
+            "Ho controllato veloce online — ",
+            "Ho dato un'occhiata su internet — ",
+            "Ho guardato veloce online — ",
+        ),
+        escalationSourceTemplate = "Fonte: {source}.",
+        escalationUnavailable = "Volevo darci un'occhiata online, ma adesso non riesco a collegarmi — riproviamo più tardi.",
+        escalationModeErstFragen = "Va bene — da adesso in poi ti chiedo prima di guardare qualcosa online.",
+        escalationModeAus = "Va bene — le ricerche online sono disattivate. Resto completamente locale.",
+        escalationModeAutomatisch = "Va bene — da adesso in poi guardo online automaticamente quando non so qualcosa.",
+        escalationModeOffline =
+            "Va bene — modalità offline. Non guardo niente online, rispondo con quello che so io e te lo dico.",
         // ── Never-Silent-Ränder + Fastpath-Quittungen ────────────────────────
         warmFallback = "Ti ho sentito, ma qui si è inceppato qualcosa per un attimo. Me lo ridici tra un secondo?",
         audioCapTooLong = "Era un po' troppo lungo tutto d'un fiato — dimmelo un po' più corto e ti seguo senza perdermi.",

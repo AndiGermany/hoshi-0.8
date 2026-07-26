@@ -26,8 +26,11 @@ import type { SettingsAnchorId, SettingsCategoryId } from './SettingsPanel';
  *
  * Kontextueller Settings-Anker (Cowork-Spec 03-settings-einbettung.md V1):
  * ein zweiter, eigenständiger Zahnrad-Knopf („Eskalation ändern") springt in
- * Fähigkeiten/Wecker-Eskalation — bewusst NICHT im Ack-Button verschachtelt
- * (kein Button-in-Button), sondern als Geschwister-Knopf im selben Rahmen.
+ * Zuhause & Integrationen/Wecker-Eskalation (Andi-Auftrag 26.07: „Online-
+ * Nachschau in einer geeigneten Gruppierung" — die Fähigkeiten-Kategorie ist
+ * damit aufgelöst, Wecker-Eskalation zieht ins Home-Bündel) — bewusst NICHT im
+ * Ack-Button verschachtelt (kein Button-in-Button), sondern als Geschwister-
+ * Knopf im selben Rahmen.
  */
 
 /**
@@ -113,7 +116,7 @@ export function FiredToast({
           <button
             type="button"
             className="ctxgear fired-toast__gear"
-            onClick={() => onOpenSettings('faehigkeiten', 'wecker-eskalation')}
+            onClick={() => onOpenSettings('zuhause-integrationen', 'wecker-eskalation')}
             aria-label={t.firedToast.gearAria}
             title={t.firedToast.gearTitle}
           >

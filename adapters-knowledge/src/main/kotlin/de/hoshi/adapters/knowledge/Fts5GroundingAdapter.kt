@@ -55,6 +55,12 @@ class Fts5GroundingAdapter(
      * bleibt es ebenfalls beim heutigen Block (defensiv, nie Crash).
      */
     private val enableNumberContract: Boolean = false,
+    /**
+     * Versionierter Pack-v1-Vertrag mit Provenienzfeldern. Default OFF hält den
+     * bewährten `/search`-Pfad byte-neutral; die Hit-Kernfelder sind in beiden
+     * Antworten identisch, daher bleibt das Prompt-Parsing unverändert.
+     */
+    private val useKnowledgePackV1: Boolean = false,
     private val timeout: Duration = Duration.ofSeconds(5),
     private val mapper: ObjectMapper = jacksonObjectMapper(),
 ) : GroundingPort {
@@ -97,7 +103,7 @@ class Fts5GroundingAdapter(
 
         return client.get()
             .uri { b ->
-                b.path("/search")
+                b.path(if (useKnowledgePackV1) "/v1/search" else "/search")
                     .queryParam("q", headNoun)
                     // Kandidaten-Pool (≥CANDIDATE_POOL), damit der Exact-Title-Boost
                     // einen exakten Titel-Treffer VOR einen stärkeren BM25-Treffer
@@ -124,6 +130,15 @@ class Fts5GroundingAdapter(
                 Mono.just("")
             }
     }
+
+    /**
+     * Explizites Opt-in in den ausschließlich lokalen Wissenspfad: diese Scheibe
+     * liest nur die lokale FTS5-Wikipedia-Bridge. Die Fetch-/Filter-/Blocklogik
+     * bleibt absichtlich in [groundingBlock] zentral, damit normaler und enger
+     * Lookup nicht auseinanderdriften oder doppelt anfragen.
+     */
+    override fun localKnowledgeBlock(query: String, category: RouteCategory, language: Language): Mono<String> =
+        groundingBlock(query, category, language)
 
     /** Ein gefilterter, knapper Treffer (Titel + grounding-tauglicher Text + Zahl-Spans). */
     private data class Hit(

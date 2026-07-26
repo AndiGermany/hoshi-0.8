@@ -50,11 +50,19 @@ class HttpSidecarProbeTest {
         assertEquals(HealthState.DEGRADED, probe.probe(spec(url)).state)
     }
 
+    /**
+     * KEIN Drift-Urteil mehr (Andi-Entscheid 2026-07-26): seit der Auto-Modellwahl
+     * wechselt das Brain-Modell absichtlich — ein abweichendes Modell bei status=ok
+     * ist OK, die Anzeige nennt nur noch, WAS läuft. Vorher stand hier der Gegen-Test
+     * („model-Drift gegen Soll ist DEGRADED").
+     */
     @Test
-    fun `model-Drift gegen Soll ist DEGRADED`() = withServer(
+    fun `abweichendes Modell bei status ok ist OK - kein Drift-Urteil mehr`() = withServer(
         """{"status":"ok","model":"some-other-model"}""",
     ) { url ->
-        assertEquals(HealthState.DEGRADED, probe.probe(spec(url, expectedModel = "gemma-4-e4b-it-4bit")).state)
+        val h = probe.probe(spec(url, expectedModel = "gemma-4-e4b-it-4bit"))
+        assertEquals(HealthState.OK, h.state)
+        assertEquals("some-other-model", h.measuredModel, "die Anzeige nennt das ECHTE Modell")
     }
 
     @Test

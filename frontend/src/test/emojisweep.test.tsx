@@ -78,7 +78,7 @@ import { ScheduledPanel } from '../components/ScheduledPanel';
 import { OpsStatusPill } from '../components/OpsStatusPill';
 import { SpeakerListView } from '../components/SpeakerSection';
 import { CrewOverlay } from '../components/CrewOverlay';
-import { UebersichtView } from '../views/UebersichtView';
+import { DiagnoseSection } from '../views/UebersichtView';
 import { AktivitaetView } from '../views/AktivitaetView';
 import { RaeumeView } from '../views/RaeumeView';
 import type { ScheduledItem } from '../hooks/useScheduledItems';
@@ -321,15 +321,19 @@ describe('Emoji-Sweep — Chrome/Controls emoji-frei (SVG-Glyphs oder gestrichen
   });
 
   it('Übersicht/Aktivität/Räume: 🟢/🔵-Ampel-Emojis gestrichen (Pill+Rahmen sagen es)', () => {
-    const ueber = renderToStaticMarkup(<UebersichtView state="up" lastChecked={null} />);
-    expectClean(ueber, 'UebersichtView');
-    expect(ueber).toContain('nicht verdrahtet'); // die ehrliche Achse bleibt — als Text
+    const diag = renderToStaticMarkup(
+      <DiagnoseSection state="up" lastChecked={null} turns={[]} nowMs={Date.now()} />,
+    );
+    expectClean(diag, 'DiagnoseSection');
+    expect(diag).toContain('live'); // die ehrliche Achse bleibt — als Text (Pill „live")
 
     const aktiv = renderToStaticMarkup(
       <AktivitaetView
         observations={[{ state: 'up', at: Date.now() }]}
         turns={[diaryTurn({ deflected: true }), diaryTurn({ error: 'TTS' })]}
         now={new Date('2026-07-06T09:00:00Z')}
+        state="up"
+        lastChecked={Date.now()}
       />,
     );
     expectClean(aktiv, 'AktivitaetView');

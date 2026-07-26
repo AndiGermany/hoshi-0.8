@@ -436,9 +436,11 @@ class WeatherGroundingProvider(
     // ── Wetter-Absichts-Erkennung ───────────────────────────────────────────────
 
     /**
-     * Erkennt eine WETTER-Absicht in [query] (DE + EN). Bewusst substring-basiert und
-     * knapp gehalten; das Kategorie-Gate (FACT_SHORT/NEEDS_WEB/AMBIG) fängt SMART_HOME-
-     * Komfort-Phrasen vorher ab, sodass die Schlüsselwörter hier nicht überfeuern.
+     * Erkennt eine WETTER-Absicht in [query] (DE + EN). Jedes Signal muss als
+     * vollständiges Lexem vorkommen; sichere Wetter-Komposita/Beugungen stehen
+     * ausdrücklich in der Positivliste. So bleibt „Sonnenschein" Wetter, während
+     * „Sonnensystem"/„Sonnenfinsternis" nicht länger am Teilstring `sonne`
+     * hängenbleiben (englisch entsprechend `rain` vs. `train`).
      * `internal` für die Unit-Tests.
      */
     internal fun isWeatherIntent(query: String): Boolean = weatherIntent(query)
@@ -487,14 +489,17 @@ class WeatherGroundingProvider(
                 category == RouteCategory.AMBIG
 
         /**
-         * Pure companion-Wahrheit der Wetter-Absicht (DE+EN, substring-basiert) —
+         * Pure companion-Wahrheit der Wetter-Absicht (DE+EN, lexem-basiert) —
          * die Instanz-Methode [isWeatherIntent] delegiert hierher, der
-         * [WeatherLocationAskAdapter] liest DIESELBE Liste (nie zwei Wahrheiten).
+         * [WeatherLocationAskAdapter] liest DIESELBE Regex (nie zwei Wahrheiten).
+         *
+         * Die selbst definierten Grenzen prüfen Unicode-Buchstaben/-Marken/
+         * Ziffern/Unterstrich statt Java-`\b`: ein Bindestrich trennt deshalb
+         * korrekt „Sonnencreme-Wetter", ein anschließender Buchstabe schützt aber
+         * „Sonnenfinsternis". Keine Negativliste — neue `sonnen*`-Wörter werden
+         * sicher nicht automatisch zu Wetter.
          */
-        internal fun weatherIntent(query: String): Boolean {
-            val q = query.lowercase()
-            return WEATHER_KEYWORDS.any { q.contains(it) }
-        }
+        internal fun weatherIntent(query: String): Boolean = WEATHER_INTENT_PATTERN.containsMatchIn(query)
 
         /**
          * Pure companion-Wahrheit des EXPLIZITEN Orts in der Frage („in <Wort>",
@@ -534,22 +539,50 @@ class WeatherGroundingProvider(
          */
         private val PLACE_STOPWORDS: Set<String> = setOf(
             "der", "die", "das", "den", "dem", "einer", "einem", "eine", "einen",
+            "mein", "meine", "meinen", "meinem", "meiner", "meines",
+            "dein", "deine", "deinen", "deinem", "deiner", "deines",
+            "sein", "seine", "seinen", "seinem", "seiner", "seines",
+            "ihr", "ihre", "ihren", "ihrem", "ihrer", "ihres",
+            "unser", "unsere", "unseren", "unserem", "unserer", "unseres",
+            "euer", "eure", "euren", "eurem", "eurer", "eures",
+            "dessen", "deren",
             "zwei", "drei", "vier", "fünf", "fuenf",
             "paar", "etwa", "circa", "ca", "ungefähr", "ungefaehr",
             "kurzem", "kürze", "kuerze", "zukunft", "urlaub",
+            "my", "your", "his", "her", "its", "our", "their",
         )
 
         /**
-         * DE + EN Schlüssel für die Wetter-Absicht. Mehrwort-Formen für die sonst
-         * mehrdeutigen „warm/kalt" (nur „wie warm/kalt wird" zählt, nicht bloßes „warm").
+         * DE + EN Lexeme für die Wetter-Absicht. Echte, vormals über Teilstrings
+         * mitgetroffene Beugungen/Komposita stehen einzeln hier; dadurch bleibt
+         * die Positivfläche reviewbar. Mehrwort-Formen für die sonst mehrdeutigen
+         * „warm/kalt" (nur „wie warm/kalt wird" zählt, nicht bloßes „warm").
          */
         private val WEATHER_KEYWORDS: List<String> = listOf(
             // DE
-            "wetter", "regnet", "regen", "sonne", "sonnig", "schnee", "temperatur",
-            "vorhersage", "wie warm wird", "wie kalt wird", "morgen draußen", "morgen draussen",
-            "grad draußen", "grad draussen", "bewölkt", "bewoelkt",
+            "wetter", "wetterbericht", "wettervorhersage", "wetterlage", "wetterlagen",
+            "regnet", "regen", "regenwetter", "regenwahrscheinlichkeit", "regenschauer",
+            "regenfall", "regenfälle", "regenfaelle",
+            "sonne", "sonnig", "sonnige", "sonnigen", "sonniger", "sonniges", "sonnigem",
+            "sonnenschein",
+            "schnee", "schneit", "schneefall", "schneeschauer", "schneesturm",
+            "temperatur", "temperaturen", "vorhersage", "vorhersagen",
+            "wie warm wird", "wie kalt wird", "morgen draußen", "morgen draussen",
+            "grad draußen", "grad draussen",
+            "bewölkt", "bewölkte", "bewölkten", "bewölkter", "bewölktes", "bewölktem",
+            "bewoelkt", "bewoelkte", "bewoelkten", "bewoelkter", "bewoelktes", "bewoelktem",
             // EN
-            "weather", "rain", "forecast", "temperature", "how warm", "how cold", "sunny", "snow",
+            "weather", "rain", "raining", "rainy", "rainfall", "rainfalls", "rainstorm",
+            "rainstorms", "forecast", "forecasts", "forecasting",
+            "temperature", "temperatures", "how warm", "how cold",
+            "sunny", "sunshine", "snow", "snowing", "snowy", "snowfall", "snowstorm",
+        )
+
+        private val WEATHER_INTENT_PATTERN: Regex = Regex(
+            pattern = "(?<![\\p{L}\\p{M}\\p{N}_])(?:" +
+                WEATHER_KEYWORDS.joinToString("|") { Regex.escape(it) } +
+                ")(?![\\p{L}\\p{M}\\p{N}_])",
+            option = RegexOption.IGNORE_CASE,
         )
 
         /**

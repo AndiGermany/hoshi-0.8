@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   pickMimeType,
   rmsLevel,
@@ -6,6 +6,7 @@ import {
   VoiceRecorder,
   VoiceRecorderError,
 } from '../audio/recorder';
+import { PRE_ROLL_MS } from '../audio/preRoll';
 
 // ── pickMimeType (rein, isSupported injizierbar) ───────────────────────────────
 
@@ -127,5 +128,165 @@ describe('VoiceRecorder — Happy-Path', () => {
     expect(blob.type).toBe('audio/webm;codecs=opus'); // pickMimeType-Wahl
     expect(rec.isRecording).toBe(false);
     expect(tracks[0].stop).toHaveBeenCalled(); // Mikro-Track freigegeben
+  });
+});
+
+// ── Pre-Roll (Andi-Befund 26.07, Anlaut-Beschneidung: "Wie zieht eine Kuh die
+// Hose an" → "Zieht eine Kuh eine Hose an") ─────────────────────────────────
+//
+// Die reine Ring-/Prefix-Logik ist in preroll.test.ts geprüft. Hier geht es NUR
+// um die VERKABELUNG in VoiceRecorder: startet der Ring, sobald der Stream
+// steht (vor MediaRecorder.start()), friert er nach PRE_ROLL_MS ein, und stoppt
+// er spätestens beim Stream-Ende (teardown), auch wenn der Timer noch nicht
+// abgelaufen ist? Ein Fake-AudioContext liefert einen kontrollierbaren
+// ScriptProcessor, dessen `onaudioprocess` der Test manuell auslöst — echte
+// Audio-Hardware ist dafür nicht nötig.
+
+interface FakeProcessor {
+  onaudioprocess: ((e: { inputBuffer: { getChannelData: () => Float32Array } }) => void) | null;
+  connect: () => void;
+  disconnect: ReturnType<typeof vi.fn>;
+}
+
+class FakeAudioContext {
+  static instances: FakeAudioContext[] = [];
+  sampleRate = 48000;
+  destination = {};
+  closed = false;
+  processors: FakeProcessor[] = [];
+  constructor() {
+    FakeAudioContext.instances.push(this);
+  }
+  createMediaStreamSource() {
+    return { connect: () => {} };
+  }
+  createScriptProcessor(): FakeProcessor {
+    const p: FakeProcessor = { onaudioprocess: null, connect: () => {}, disconnect: vi.fn() };
+    this.processors.push(p);
+    return p;
+  }
+  createGain() {
+    return { gain: { value: 0 }, connect: () => {} };
+  }
+  createAnalyser() {
+    return { fftSize: 1024, connect: () => {}, getByteTimeDomainData: () => {} };
+  }
+  close() {
+    this.closed = true;
+    return Promise.resolve();
+  }
+}
+
+/** Simuliert einen Audio-Callback: `samples` fließen als EIN Chunk in den Ring. */
+function fireAudioProcess(p: FakeProcessor, samples: number[]): void {
+  p.onaudioprocess?.({ inputBuffer: { getChannelData: () => new Float32Array(samples) } });
+}
+
+describe('VoiceRecorder — Pre-Roll (Ring-Verkabelung)', () => {
+  beforeEach(() => {
+    FakeAudioContext.instances = [];
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** stubMic + AudioContext (anders als die Fehlerpfad-/Happy-Path-Tests oben,
+   * die AudioContext bewusst weglassen — hier ist er der Punkt der Übung). */
+  function stubMicWithAudio(): void {
+    const tracks = [{ stop: vi.fn() }];
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: () => Promise.resolve({ getTracks: () => tracks }) },
+    });
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+  }
+
+  it('Ring läuft, sobald der Stream steht — VOR MediaRecorder.start()', async () => {
+    stubMicWithAudio();
+    const rec = new VoiceRecorder();
+    await rec.start();
+    // GENAU EIN ScriptProcessor wurde angelegt (der Pre-Roll-Ring; der
+    // Pegel-Meter nutzt einen Analyser, keinen ScriptProcessor).
+    const allProcessors = FakeAudioContext.instances.flatMap((c) => c.processors);
+    expect(allProcessors.length).toBe(1);
+    rec.cancel();
+  });
+
+  it('friert den Ring nach PRE_ROLL_MS ein und stellt ihn per getPreRoll() bereit', async () => {
+    stubMicWithAudio();
+    const rec = new VoiceRecorder();
+    await rec.start();
+    const [processor] = FakeAudioContext.instances.flatMap((c) => c.processors);
+
+    fireAudioProcess(processor, [0.1, 0.2]);
+    fireAudioProcess(processor, [0.3]);
+    expect(rec.getPreRoll().length).toBe(0); // noch nicht eingefroren
+
+    vi.advanceTimersByTime(PRE_ROLL_MS);
+
+    expect(rec.getPreRoll()).toEqual(new Float32Array([0.1, 0.2, 0.3]));
+    expect(rec.getPreRollSampleRate()).toBe(48000);
+    expect(processor.disconnect).toHaveBeenCalled(); // Ring hat sich abgehängt
+    rec.cancel();
+  });
+
+  it('Ring stoppt bei Stream-Ende — cancel() VOR Ablauf friert früh ein statt weiterzulaufen', async () => {
+    stubMicWithAudio();
+    const rec = new VoiceRecorder();
+    await rec.start();
+    const [processor] = FakeAudioContext.instances.flatMap((c) => c.processors);
+
+    fireAudioProcess(processor, [0.5]);
+    rec.cancel(); // deutlich vor PRE_ROLL_MS
+
+    expect(processor.disconnect).toHaveBeenCalled(); // sofort abgehängt, nicht erst nach 500ms
+    expect(rec.getPreRoll()).toEqual(new Float32Array([0.5])); // trotzdem: was da war, zählt
+  });
+
+  it('stop() liefert denselben früh eingefrorenen Pre-Roll wie cancel()', async () => {
+    stubMicWithAudio();
+    const rec = new VoiceRecorder();
+    await rec.start();
+    const [processor] = FakeAudioContext.instances.flatMap((c) => c.processors);
+    fireAudioProcess(processor, [0.7, 0.8]);
+
+    await rec.stop();
+
+    expect(rec.getPreRoll()).toEqual(new Float32Array([0.7, 0.8]));
+  });
+
+  it('ein NEUER start() setzt den Pre-Roll der vorigen Aufnahme zurück', async () => {
+    stubMicWithAudio();
+    const rec = new VoiceRecorder();
+
+    await rec.start();
+    const [first] = FakeAudioContext.instances.flatMap((c) => c.processors);
+    fireAudioProcess(first, [0.9]);
+    vi.advanceTimersByTime(PRE_ROLL_MS);
+    expect(rec.getPreRoll().length).toBe(1);
+
+    await rec.stop();
+    await rec.start(); // zweite Aufnahme — frischer Ring, kein Rest vom ersten Turn
+
+    expect(rec.getPreRoll().length).toBe(0);
+    rec.cancel();
+  });
+
+  it('ohne Web-Audio (kein AudioContext) bleibt der Pre-Roll leer — Aufnahme läuft trotzdem', async () => {
+    const tracks = [{ stop: vi.fn() }];
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: () => Promise.resolve({ getTracks: () => tracks }) },
+    });
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    // AudioContext bewusst NICHT gestubbt (wie im bestehenden Happy-Path-Test).
+
+    const rec = new VoiceRecorder();
+    await rec.start();
+    expect(rec.isRecording).toBe(true);
+    expect(rec.getPreRoll().length).toBe(0);
+    expect(rec.getPreRollSampleRate()).toBe(0);
+    await rec.stop();
   });
 });

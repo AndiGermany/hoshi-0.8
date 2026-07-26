@@ -20,8 +20,8 @@ import { de } from '../i18n/de';
 //  Themen übersichtlicher machen kann. Das sind jetzt schon einige.")
 //
 //  Was hier gepinnt wird, ist genau das, was die Übersicht ausmacht:
-//   1. die drei Gruppen decken die acht Themen VOLLSTÄNDIG und ÜBERSCHNEIDUNGS-
-//      FREI ab (ein künftiges neuntes Theme fällt nicht still aus dem Panel),
+//   1. die drei Gruppen decken die neun Themen VOLLSTÄNDIG und ÜBERSCHNEIDUNGS-
+//      FREI ab (ein künftiges zehntes Theme fällt nicht still aus dem Panel),
 //   2. „Tageszeiten" steht in TAGES-Reihenfolge (nicht alphabetisch),
 //   3. Sora zeigt das GERADE aufgelöste Theme — die Regel ist ablesbar, bevor
 //      man sie wählt,
@@ -70,7 +70,7 @@ describe('THEME_GROUPS — drei Gruppen statt einer Liste', () => {
     const grouped = THEME_GROUPS.flatMap((g) => g.themes);
     expect([...grouped].sort()).toEqual([...THEME_IDS].sort());
     expect(new Set(grouped).size).toBe(grouped.length); // keine Id doppelt
-    expect(grouped).toHaveLength(8);
+    expect(grouped).toHaveLength(9);
   });
 
   it('Reihenfolge der Gruppen: Automatik ganz oben, dann Tageszeiten, dann Stimmung', () => {
@@ -89,8 +89,8 @@ describe('THEME_GROUPS — drei Gruppen statt einer Liste', () => {
     expect(THEME_GROUPS[1].themes).not.toEqual([...THEME_GROUPS[1].themes].sort());
   });
 
-  it('Gruppe 3 „Eigene Stimmung" sind die beiden Bilder — bewusst NICHT an der Uhr', () => {
-    expect(THEME_GROUPS[2].themes).toEqual(['yoake', 'natsunohi']);
+  it('Gruppe 3 „Eigene Stimmung" sind die drei Bilder — bewusst NICHT an der Uhr', () => {
+    expect(THEME_GROUPS[2].themes).toEqual(['yoake', 'natsunohi', 'amayadori']);
     for (const id of THEME_GROUPS[2].themes) expect(SORA_ROTATION).not.toContain(id);
   });
 });
@@ -105,6 +105,7 @@ describe('Persistierte Ids — die Gruppierung ändert NICHTS an der gespeichert
       'kasumi',
       'nagareboshi',
       'yoake',
+      'amayadori',
       'sora',
     ]);
   });
@@ -125,7 +126,7 @@ describe('Persistierte Ids — die Gruppierung ändert NICHTS an der gespeichert
 });
 
 describe('ThemeSection — was im Panel wirklich steht', () => {
-  it('alle acht Karten stehen in Gruppen-Reihenfolge im DOM', () => {
+  it('alle neun Karten stehen in Gruppen-Reihenfolge im DOM', () => {
     const doc = render('aoi');
     expect(radios(doc).map((r) => r.getAttribute('aria-label'))).toEqual([
       'Folgt dem Tag: Sora',
@@ -136,6 +137,7 @@ describe('ThemeSection — was im Panel wirklich steht', () => {
       'Tageszeiten: Yoru',
       'Eigene Stimmung: Yoake',
       'Eigene Stimmung: Natsu no Hi',
+      'Eigene Stimmung: Amayadori',
     ]);
   });
 
@@ -167,7 +169,7 @@ describe('ThemeSection — was im Panel wirklich steht', () => {
   it('echte Farbvorschau: jede Karte trägt eine Swatch mit eigenem data-theme + drei Flächen', () => {
     const doc = render('aoi');
     const swatches = Array.from(doc.querySelectorAll('.settings__swatch'));
-    expect(swatches).toHaveLength(8);
+    expect(swatches).toHaveLength(9);
     for (const s of swatches) {
       expect(s.getAttribute('aria-hidden')).toBe('true');
       expect(s.querySelector('.settings__swatchbg')).not.toBeNull();
@@ -183,6 +185,7 @@ describe('ThemeSection — was im Panel wirklich steht', () => {
       'yoru',
       'yoake',
       'natsunohi',
+      'amayadori',
     ]);
   });
 });
@@ -236,6 +239,7 @@ describe('Gepinnte Tageszeit — leiser Hinweis, dass die Automatik gerade pausi
     expect(render('sora').querySelector('.settings__themepinned')).toBeNull();
     expect(render('yoake').querySelector('.settings__themepinned')).toBeNull();
     expect(render('natsunohi').querySelector('.settings__themepinned')).toBeNull();
+    expect(render('amayadori').querySelector('.settings__themepinned')).toBeNull();
   });
 });
 
@@ -251,6 +255,7 @@ describe('Beiworte — schön bleibt schön, aber niemand muss raten', () => {
     expect(text).toContain('Nagareboshi · Sternschnuppe');
     expect(text).toContain('Yoake · Morgengrauen');
     expect(text).toContain('Natsu no Hi · Sommertag');
+    expect(text).toContain('Amayadori · Regenpause');
   });
 
   it('alle fünf Kataloge kennen ein Beiwort für JEDES Theme (kein Loch)', () => {

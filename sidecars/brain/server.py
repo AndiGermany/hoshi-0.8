@@ -101,6 +101,25 @@ _switching = False                     # True waehrend Download ODER Swap laeuft
 _switch_phase: Optional[str] = None    # "downloading" | "loading" | None
 _switch_target: Optional[str] = None   # Ziel-Modell des laufenden Wechsels
 _switch_error: Optional[str] = None    # letzter Fehlertext (ueberlebt bis zum naechsten Versuch)
+# time.time() bei Beginn des GERADE laufenden Wechsels (None = kein Wechsel aktiv).
+# Traegt zwei ehrliche Anzeigen: die Dauer im 409-Text ("seit Xs") und die Dead-Man-
+# Sichtbarkeit in /health (switch_stuck_seconds) — s. _SWITCH_STUCK_THRESHOLD_S unten.
+_switch_started_ts: Optional[float] = None
+# Realer Vorfall (2026-07-25): _do_swap blockierte blind auf _GEN_LOCK.acquire() —
+# eine unter Speicherdruck HAENGENDE Generierung hielt die Sperre fuer immer, /switch-
+# model antwortete minutenlang 409 (phase=loading), /v1/chat lehnte parallel mit 503
+# ab. Kein Timeout, keine Selbstheilung, nur ein Prozess-Kill half. Fix: acquire(timeout=...)
+# statt blind blockieren. 120s bewusst GROSSZUEGIG: eine LEGITIME lange Generierung
+# (12B unter Speicherdruck, gemessen >10s je Antwort) darf nicht abgeschossen werden —
+# 120s ist ein Vielfaches jeder gemessenen Einzel-Antwort-Latenz, aber endlich (kein
+# "fuer immer" mehr). Laeuft der Timeout ab: Wechsel EHRLICH abbrechen (s. _do_swap),
+# GAR NICHTS am geladenen Zustand veraendert (unload() steht erst NACH dem acquire).
+_SWITCH_GEN_LOCK_TIMEOUT_S = 120
+# Dead-Man-Schwelle fuer /health: steht `switching=true` laenger als das an, ist das
+# verdaechtig genug fuer eine SICHTBARE Meldung (switch_stuck_seconds) — aber bewusst
+# KEINE stille Auto-Raeumung des Zustands ohne Beleg (Andi-Vorgabe). Watchdog/heal
+# entscheidet auf Basis dieser Telemetrie, nicht der Server selbst.
+_SWITCH_STUCK_THRESHOLD_S = 5 * 60
 # Revisions-Incident 3.0 (2026-07-20 14:24): ein ungepinnter snapshot_download() hat
 # real refs/main verbogen + .incomplete-Leichen hinterlassen. Downloads via
 # /switch-model laufen deshalb NUR gegen die in models.json gepinnte Revision —
@@ -702,15 +721,37 @@ def _switch_download_progress_bytes(model_id: Optional[str]) -> Optional[int]:
 
 def _do_swap(target: str) -> dict:
     """Der eigentliche Modell-Tausch: laufende Generierungen abwarten/sperren
-    (bestehender _GEN_LOCK), dann ZUERST entladen (16-GB-Wand), DANN laden.
-    Erwartet, dass der Aufrufer _switching/_switch_target bereits gesetzt hat
-    (Zusicherung: kein zweiter Wechsel laeuft parallel — s. _SWITCH_LOCK am
-    Aufrufer). Wird sowohl synchron (Ziel bereits im Cache) als auch aus dem
-    Hintergrund-Download-Thread (Ziel musste erst geladen werden) aufgerufen."""
+    (bestehender _GEN_LOCK, s. _SWITCH_GEN_LOCK_TIMEOUT_S), dann ZUERST entladen
+    (16-GB-Wand), DANN laden. Erwartet, dass der Aufrufer _switching/_switch_target
+    bereits gesetzt hat (Zusicherung: kein zweiter Wechsel laeuft parallel — s.
+    _SWITCH_LOCK am Aufrufer). Wird sowohl synchron (Ziel bereits im Cache) als auch
+    aus dem Hintergrund-Download-Thread (Ziel musste erst geladen werden) aufgerufen.
+
+    Gibt die Sperre die haengende Generierung nicht innerhalb von
+    _SWITCH_GEN_LOCK_TIMEOUT_S frei, wird 503 geworfen und der Wechsel-Zustand
+    komplett zurueckgesetzt — OHNE jemals _unload_model() zu rufen (das steht erst
+    im try-Block NACH dem erfolgreichen acquire)."""
     global _model, _tok, _loaded, MODEL_ID
-    global _switching, _switch_phase, _switch_target, _switch_error
+    global _switching, _switch_phase, _switch_target, _switch_error, _switch_started_ts
     _switch_phase = "loading"  # ab hier lehnt /v1/chat neue Turns mit 503 ab
-    _GEN_LOCK.acquire()  # wartet eine LAUFENDE Generierung ab; neue wurden schon per 503 abgewiesen
+    # _GEN_LOCK.acquire(timeout=...) statt blind blockieren (realer Vorfall s.
+    # _SWITCH_GEN_LOCK_TIMEOUT_S oben): eine haengende Generierung darf den Wechsel
+    # nicht fuer immer blockieren. Timeout abgelaufen -> wir sind hier NIE in den
+    # try-Block unten eingetreten -> _unload_model() wurde NICHT gerufen -> GAR
+    # NICHTS am geladenen Zustand veraendert. Alter/aktueller Zustand bleibt exakt
+    # wie er war, nur der Wechsel-Versuch wird ehrlich als gescheitert markiert.
+    got_lock = _GEN_LOCK.acquire(timeout=_SWITCH_GEN_LOCK_TIMEOUT_S)
+    if not got_lock:
+        _switch_error = (
+            f"Generierung gab die Sperre nicht frei nach {_SWITCH_GEN_LOCK_TIMEOUT_S}s "
+            "— Wechsel abgebrochen, altes Modell bleibt/blieb geladen."
+        )
+        print(f"  [e4b] switch-model: {_switch_error}")
+        _switching = False
+        _switch_phase = None
+        _switch_target = None
+        _switch_started_ts = None
+        raise HTTPException(status_code=503, detail=_switch_error)
     try:
         _unload_model()
         t0 = time.time()
@@ -745,6 +786,7 @@ def _do_swap(target: str) -> dict:
         _switching = False
         _switch_phase = None
         _switch_target = None
+        _switch_started_ts = None
         _GEN_LOCK.release()
 
 
@@ -756,7 +798,7 @@ def _download_and_swap(target: str, pinned_revision: str) -> None:
     genau das ist der Zweck dieses Pfads — es gibt IMMER ein funktionierendes Brain.
     Jeder Fehler hier laesst das alte Modell unangetastet und meldet ehrlich via
     _switch_error (sichtbar in /health)."""
-    global _switching, _switch_phase, _switch_target, _switch_error
+    global _switching, _switch_phase, _switch_target, _switch_error, _switch_started_ts
     try:
         snapshot_download(target, revision=pinned_revision)
     except Exception as e:  # noqa: BLE001
@@ -765,6 +807,7 @@ def _download_and_swap(target: str, pinned_revision: str) -> None:
         _switching = False
         _switch_phase = None
         _switch_target = None
+        _switch_started_ts = None
         return
     if not _model_fully_cached(target):
         _switch_error = ("Download gemeldet abgeschlossen, aber Cache-Check danach "
@@ -773,6 +816,7 @@ def _download_and_swap(target: str, pinned_revision: str) -> None:
         _switching = False
         _switch_phase = None
         _switch_target = None
+        _switch_started_ts = None
         return
     try:
         result = _do_swap(target)
@@ -792,11 +836,12 @@ class SwitchModelRequest(BaseModel):
 def switch_model(req: SwitchModelRequest):
     """Modellwechsel e2b↔e4b im selben Prozess. Whitelist HART (422 sonst).
     Ziel bereits aktiv -> 200 changed:false. Zweiter Aufruf waehrend eines
-    laufenden Wechsels -> 409. Ziel schon vollstaendig im Cache -> synchroner
-    Tausch (entladen->laden, s. _do_swap). Ziel fehlt/unvollstaendig -> NICHT das
-    laufende Brain opfern: Download NUR gegen den models.json-Pin im Hintergrund
-    (202), das ALTE Modell bedient waehrenddessen unveraendert weiter."""
-    global _switching, _switch_phase, _switch_target, _switch_error
+    laufenden Wechsels -> 409 (Text traegt die Dauer "seit Xs", damit man Haengen
+    von normalem Arbeiten unterscheiden kann). Ziel schon vollstaendig im Cache ->
+    synchroner Tausch (entladen->laden, s. _do_swap). Ziel fehlt/unvollstaendig ->
+    NICHT das laufende Brain opfern: Download NUR gegen den models.json-Pin im
+    Hintergrund (202), das ALTE Modell bedient waehrenddessen unveraendert weiter."""
+    global _switching, _switch_phase, _switch_target, _switch_error, _switch_started_ts
     target = req.model
     if target not in ALLOWED_SWITCH_MODELS:
         raise HTTPException(
@@ -807,10 +852,12 @@ def switch_model(req: SwitchModelRequest):
 
     with _SWITCH_LOCK:
         if _switching:
+            elapsed = time.time() - _switch_started_ts if _switch_started_ts is not None else None
+            elapsed_txt = f"seit {int(elapsed)}s" if elapsed is not None else "seit unbekannt"
             raise HTTPException(
                 status_code=409,
                 detail=f"Wechsel laeuft bereits (phase={_switch_phase}, "
-                       f"target={_switch_target}) — bitte abwarten.",
+                       f"target={_switch_target}, {elapsed_txt}) — bitte abwarten.",
             )
         if target == MODEL_ID and _loaded:
             return {"status": "ok", "model": MODEL_ID, "changed": False}
@@ -841,6 +888,7 @@ def switch_model(req: SwitchModelRequest):
         _switch_phase = phase
         _switch_target = target
         _switch_error = None
+        _switch_started_ts = time.time()
 
     if phase == "loading":
         return _do_swap(target)
@@ -873,9 +921,24 @@ def health():
             _switch_download_progress_bytes(_switch_target)
             if _switch_phase == "downloading" else None
         ),
+        # Dead-Man-Sichtbarkeit (KEINE Auto-Raeumung, s. _SWITCH_STUCK_THRESHOLD_S):
+        # nur gesetzt, wenn `switching=true` seit mehr als der Schwelle ansteht —
+        # das ist der ehrliche Beleg fuer Watchdog/heal, dass hier etwas haengt
+        # statt normal zu arbeiten (realer Vorfall 2026-07-25, s. _do_swap).
+        "switch_stuck_seconds": (
+            round(time.time() - _switch_started_ts, 1)
+            if (_switching and _switch_started_ts is not None
+                and (time.time() - _switch_started_ts) > _SWITCH_STUCK_THRESHOLD_S)
+            else None
+        ),
         "engine": "mlx-lm-0.31.2",
         "max_kv": _MAX_KV,  # T137/T172: 0 = unbegrenzt (alt), sonst RotatingKVCache-Cap
         "thinking": False,
+        # Andi-Auftrag 2026-07-25/26: ehrlicher, IMMER aktiver RAM-Druck (vm_stat/
+        # sysctl, gecacht ~5s) — s. _memory_status()-Docstring oben. None, wenn die
+        # Messung fehlschlägt (Feld fehlt statt Lüge). BrainMemoryHeuristic (BE)
+        # liest dieses Feld ZUERST und fällt nur ohne es auf `wired` zurück.
+        "memory": _safe_memory_status(),
         # T170: Residency-Telemetrie für Yukis Peak-Test (wired an/frei + RAM-Level).
         "wired": {
             "want_mb": _wired_want_bytes // 1024 // 1024,
@@ -1290,6 +1353,157 @@ def _read_memorystatus_level() -> int:
         return int(out.stdout.strip())
     except Exception:  # noqa: BLE001
         return -1
+
+
+# ── Andi-Auftrag 2026-07-25/26: ehrliches `memory`-Feld in /health ──────────
+# Realer Vorfall (2×, 25./26.07.): das 12B drückte den Mac auf <500 MB frei +
+# vollen Swap, Whisper transkribierte 45s lang NICHTS bei GRÜNEM Health — der
+# Nutzer erfuhr es erst am Fehler-Chip. Das bestehende `wired.memorystatus_level`
+# (s. _read_memorystatus_level oben) ist NUR live, wenn der T170-Residency-
+# Monitor läuft (HOSHI_E4B_WIRED_MB>0, Default AUS) — im Normalbetrieb bleibt es
+# für immer -1 → BrainMemoryHeuristic (SidecarHealthService.kt) meldet dauerhaft
+# UNKNOWN, obwohl der Mac wirklich unter Druck steht. Dieses `memory`-Feld ist
+# die ECHTE, IMMER aktive Quelle: vm_stat + sysctl vm.swapusage (Subprozesse,
+# KEINE neue Dependency — dasselbe Muster wie _read_memorystatus_level).
+#
+# Schwellen (Andis Vorgabe; reale Vorfalls-Werte als Anker: 477 MB frei /
+# 5,4 GB Swap war 'critical'):
+#   warn:     (frei + inaktiv) < 1,5 GB  ODER  Swap-belegt > 50 %.
+#             (inaktive Seiten sind jederzeit reclaimbarer Datei-Cache — viel
+#             frei+inaktiv heißt "entspannt", auch wenn "frei" allein klein ist.)
+#   critical: frei < 500 MB  UND  der Kompressor wächst GEGENÜBER der letzten
+#             Messung. Der Wachstums-Zusatz verhindert Fehlalarm bei einem
+#             dauerhaft knappen, aber STABILEN Wert (macOS hält "frei" ohnehin
+#             oft niedrig) — critical ist ein echter DRUCK-TREND, kein Dauerzustand.
+# Jeder Mess-/Parse-Fehler (Subprozess fehlt/Timeout, unerwartetes Format) →
+# das Feld FEHLT im /health-JSON (None) statt eine erfundene Zahl zu liefern.
+_MEM_CACHE_S = 5.0                                # /health darf nicht langsamer werden
+_MEM_WARN_FREE_INACTIVE_BYTES = int(1.5 * 1024 ** 3)  # 1,5 GB
+_MEM_CRITICAL_FREE_BYTES = 500 * 1024 ** 2            # 500 MB
+_MEM_WARN_SWAP_PCT = 50.0
+
+_mem_cache: Optional[dict] = None
+_mem_cache_ts = 0.0
+_mem_prev_compressor_pages: Optional[int] = None  # letzte Messung, für den Wachstums-Vergleich
+
+
+def _read_vm_stat_and_swap() -> Optional[dict]:
+    """Rohe macOS-Speicherkennzahlen via `vm_stat` + `sysctl vm.swapusage` (reine
+    Subprozess-Aufrufe, KEINE neue Dependency). `None` bei JEDEM Fehler (Prozess
+    fehlt/Timeout, unerwartetes Format) — der Aufrufer liefert dann ehrlich kein
+    memory-Feld statt eine erfundene Zahl.
+
+    Lokalisierungs-Falle (verifiziert auf diesem Mac, deutsches Locale): `sysctl
+    vm.swapusage` formatiert Dezimalzahlen mit KOMMA ("8192,00M"), NICHT Punkt —
+    `float()` bricht sonst auf jedem nicht-C-Locale-System. `vm_stat`s Pages-Zeilen
+    enden dagegen auf einen literalen Punkt ("3874.") — kein Dezimaltrenner, das
+    bleibt überall gleich.
+    """
+    try:
+        import subprocess
+        vm_out = subprocess.run(
+            ["vm_stat"], capture_output=True, text=True, timeout=3, check=True,
+        ).stdout
+
+        m = re.search(r"page size of (\d+) bytes", vm_out)
+        page_size = int(m.group(1)) if m else 4096
+
+        def _pages(label: str) -> Optional[int]:
+            mm = re.search(rf"{re.escape(label)}:\s+(\d+)\.", vm_out)
+            return int(mm.group(1)) if mm else None
+
+        free_p = _pages("Pages free")
+        inactive_p = _pages("Pages inactive")
+        compressor_p = _pages("Pages occupied by compressor")
+        if free_p is None or inactive_p is None:
+            return None  # unerwartetes vm_stat-Format -> ehrlich nichts liefern
+
+        swap_out = subprocess.run(
+            ["sysctl", "-n", "vm.swapusage"], capture_output=True, text=True,
+            timeout=3, check=True,
+        ).stdout
+        sm = re.search(r"total\s*=\s*([\d.,]+)M\s+used\s*=\s*([\d.,]+)M", swap_out)
+        swap_total_mb = float(sm.group(1).replace(",", ".")) if sm else None
+        swap_used_mb = float(sm.group(2).replace(",", ".")) if sm else None
+
+        return {
+            "free_bytes": free_p * page_size,
+            "inactive_bytes": inactive_p * page_size,
+            "compressor_pages": compressor_p if compressor_p is not None else 0,
+            "swap_total_mb": swap_total_mb,
+            "swap_used_mb": swap_used_mb,
+        }
+    except Exception:  # noqa: BLE001 — jeder Fehler -> None, s. Docstring
+        return None
+
+
+def _classify_memory(raw: dict, compressor_growing: bool) -> dict:
+    """Reine Klassifikation (kein I/O) — von der Subprozess-Messung getrennt testbar.
+    Schwellen/Begründung s. Kommentar-Block oben bei _MEM_CACHE_S."""
+    free_b = raw["free_bytes"]
+    free_inactive_b = free_b + raw["inactive_bytes"]
+    swap_total = raw.get("swap_total_mb")
+    swap_used = raw.get("swap_used_mb")
+    swap_pct = (swap_used / swap_total * 100.0) if swap_total else None
+
+    free_mb = free_b / 1024 / 1024
+    free_inactive_mb = free_inactive_b / 1024 / 1024
+
+    if free_b < _MEM_CRITICAL_FREE_BYTES and compressor_growing:
+        level = "critical"
+        detail = (
+            f"Kritischer RAM-Druck: nur {free_mb:.0f} MB frei, Kompressor wächst weiter"
+            + (f" (Swap {swap_used:.0f}/{swap_total:.0f} MB belegt)." if swap_pct is not None else ".")
+        )
+    elif free_inactive_b < _MEM_WARN_FREE_INACTIVE_BYTES or (swap_pct is not None and swap_pct > _MEM_WARN_SWAP_PCT):
+        level = "warn"
+        detail = (
+            f"RAM wird knapp: {free_inactive_mb:.0f} MB frei+inaktiv"
+            + (f", Swap {swap_pct:.0f}% belegt." if swap_pct is not None else ".")
+        )
+    else:
+        level = "ok"
+        detail = f"RAM entspannt: {free_inactive_mb:.0f} MB frei+inaktiv."
+
+    return {
+        "level": level,
+        "detail": detail,
+        "free_mb": round(free_mb, 1),
+        "free_inactive_mb": round(free_inactive_mb, 1),
+        "swap_used_pct": round(swap_pct, 1) if swap_pct is not None else None,
+        "compressor_growing": compressor_growing,
+    }
+
+
+def _memory_status() -> Optional[dict]:
+    """Gecacht (~_MEM_CACHE_S=5s): vm_stat/sysctl sind Subprozess-Aufrufe — /health darf
+    durch die Messung nicht langsamer werden. `None` bei jedem Mess-Fehler (Feld fehlt
+    im /health-JSON statt eine erfundene Zahl zu liefern)."""
+    global _mem_cache, _mem_cache_ts, _mem_prev_compressor_pages
+    now = time.time()
+    if _mem_cache is not None and (now - _mem_cache_ts) < _MEM_CACHE_S:
+        return _mem_cache
+    raw = _read_vm_stat_and_swap()
+    if raw is None:
+        _mem_cache = None
+        _mem_cache_ts = now
+        return None
+    prev = _mem_prev_compressor_pages
+    growing = prev is not None and raw["compressor_pages"] > prev
+    _mem_prev_compressor_pages = raw["compressor_pages"]
+    _mem_cache = _classify_memory(raw, growing)
+    _mem_cache_ts = now
+    return _mem_cache
+
+
+def _safe_memory_status() -> Optional[dict]:
+    """/health-Aufrufer: jeder unerwartete Fehler in der Mess-/Klassifikationskette darf
+    /health NIE crashen lassen (gleiches defensives Muster wie der Rest der Datei)."""
+    try:
+        return _memory_status()
+    except Exception as e:  # noqa: BLE001
+        print(f"  [e4b] memory-status fehlgeschlagen ({e}) → Feld fehlt in /health")
+        return None
 
 
 def _residency_monitor() -> None:

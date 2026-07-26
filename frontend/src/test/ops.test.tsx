@@ -149,6 +149,21 @@ describe('OpsStatusPill — Render', () => {
     expect(html).toContain('ops__sc--down');
     expect(html).toContain('ops__sc--degraded');
   });
+
+  // Andi-Auftrag 2026-07-25/26 (Speicherdruck sichtbar statt Auto-Switch): CRITICAL
+  // zeigt einen WARMEN, verständlichen Hinweis statt nur der technischen Kennzahl —
+  // die Pille selbst wird zum Hinweis (der nackte Pegel bleibt zusätzlich im Panel).
+  it('CRITICAL → die Pille-Kopfzeile trägt den warmen Speicher-Hinweis, nicht nur "RAM kritisch"', () => {
+    const html = render(
+      sample({
+        overall: 'DOWN',
+        memory: { level: 'CRITICAL', source: 'brain-health', detail: 'RAM kritisch — Swap aktiv.' },
+      }),
+    );
+    expect(html).toContain('Speicher knapp — die Stimme kann gerade zäh werden.');
+    // KEINE Modal-/Toast-Kaskade: genau EIN Panel, keine zweite Warn-Fläche.
+    expect(html.match(/ops__panel/g)?.length).toBe(1);
+  });
 });
 
 describe('OpsStatusPill — WARN/CRITICAL klickbar (Panel = das WARUM)', () => {

@@ -26,6 +26,31 @@ class LanguagePackRegistryTest {
     }
 
     @Test
+    fun `lokaler Fund hat in jeder Sprache einen ehrlichen vom Netz getrennten Vorspann`() {
+        val approved = mapOf(
+            Language.DE to "Hab kurz bei mir nachgeschaut — ",
+            Language.EN to "Had a quick look at what I've got here — ",
+            Language.ES to "He mirado en lo que tengo aquí — ",
+            Language.FR to "J'ai regardé dans ce que j'ai ici — ",
+            Language.IT to "Ho guardato in quello che ho qui — ",
+        )
+        for (language in Language.entries) {
+            val phrase = LanguagePackRegistry.forLanguage(language).localLookupFoundPrefix
+            val normalized = phrase.lowercase()
+
+            assertEquals(approved.getValue(language), phrase, "$language: nur freigegebener Slottext")
+            assertTrue(phrase.isNotBlank(), "$language: lokaler Fund darf nicht stumm sein")
+            assertTrue(phrase.endsWith(" "), "$language: Vorspann braucht ein trennendes Suffix")
+            assertTrue(
+                listOf("online", "internet", "netz", "web", "offline", "unbeleg").none {
+                    normalized.contains(it)
+                },
+                "$language: lokaler Fund darf weder Cloud noch Unbelegtheit behaupten: '$phrase'",
+            )
+        }
+    }
+
+    @Test
     fun `DE-Pack ist byte-identisch zum bisherigen ResponseFormatter-Bestand`() {
         val de = LangDe.PACK
         assertEquals(
@@ -34,17 +59,17 @@ class LanguagePackRegistryTest {
                 "Da bin ich mir nicht sicher. Darf ich kurz nachsehen?",
                 "Genau das weiß ich nicht. Online schauen okay?",
                 "Lass mich kurz online checken — passt das?",
-                "Da würde ich kurz das Internet bemühen. Mach ich das?",
+                "Da guck ich am besten online nach. Soll ich?",
                 "Online weiß ich's vermutlich. Soll ich?",
             ),
             de.cloudConsentAsk,
         )
         assertEquals(
             listOf(
-                "Klar, einen Moment — ich frag schnell.",
+                "Klar, Moment — ich schau schnell.",
                 "Geht klar, kurz schauen…",
                 "Mache ich. Moment.",
-                "Okay, einen Augenblick.",
+                "Okay, Sekunde.",
             ),
             de.cloudConsentAccept,
         )

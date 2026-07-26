@@ -10,8 +10,9 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * **ExtendedThinkController** — der Settings-Rand des Extended-Think-Drei-Stufen-
- * Settings (S2), nach EXAKT dem [SettingsController]-Muster: ein schlanker
+ * **ExtendedThinkController** — der Settings-Rand des Extended-Think-Vier-Stufen-
+ * Settings (S2; AUS/OFFLINE/ERST_FRAGEN/AUTOMATISCH, s. [EscalationMode]), nach
+ * EXAKT dem [SettingsController]-Muster: ein schlanker
  * `@RestController` hinter der [PerimeterWebFilter]-Wand (alle Pfade unter
  * `/api/v1` sind token-geschützt — ohne gültigen Token ⇒ 401).
  *
@@ -26,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController
  *
  * Endpoints:
  *  - GET /api/v1/settings/extended-think → {mode, ceilingOpen, locked, effectiveMode}.
- *  - PUT /api/v1/settings/extended-think → Body {mode:"AUS"|"ERST_FRAGEN"|"AUTOMATISCH"}.
+ *  - PUT /api/v1/settings/extended-think → Body {mode:"AUS"|"OFFLINE"|"ERST_FRAGEN"|"AUTOMATISCH"}.
  *    Unbekannte Stufe ⇒ 400; Decke zu ⇒ 409 (deploy-disabled); Persist
  *    fehlgeschlagen ⇒ 500 (ehrlich, KEIN fake-200); sonst 200 + neuer Zustand.
  */

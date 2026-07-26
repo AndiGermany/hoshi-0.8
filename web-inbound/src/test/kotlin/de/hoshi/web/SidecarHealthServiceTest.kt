@@ -35,12 +35,10 @@ class SidecarHealthServiceTest {
             specsSeen[sidecar.name] = sidecar
             responses[sidecar.name]?.let { return it }
             val measured = measuredModels[sidecar.name] ?: return SidecarHealth.ok("status=ok (fake)")
-            val expected = sidecar.expectedModel
-            return if (expected != null && !measured.contains(expected)) {
-                SidecarHealth.degraded("model='$measured' enthält nicht soll='$expected' (Drift)", measured)
-            } else {
-                SidecarHealth.ok("status=ok model='$measured'", measured)
-            }
+            // Spiegelt die ECHTE Probe seit dem Andi-Entscheid 2026-07-26: KEIN
+            // Drift-Urteil mehr — ein abweichendes Modell bei status=ok ist OK,
+            // die Anzeige nennt nur, was läuft (Auto-Modellwahl wechselt gewollt).
+            return SidecarHealth.ok("status=ok model='$measured'", measured)
         }
     }
 
@@ -210,6 +208,78 @@ class SidecarHealthServiceTest {
         assertEquals("DEGRADED", status.overall, "RAM-Druck CRITICAL hebt das Gesamt-Signal an")
     }
 
+    // ── Direktes memory-Feld (Andi-Auftrag 2026-07-25/26): IMMER aktive Primärquelle ─
+    //
+    // sidecars/brain/server.py misst RAM-Druck jetzt selbst (vm_stat/sysctl) und
+    // liefert ein eigenes `memory`-Feld — anders als `wired.memorystatus_level` ist
+    // das NICHT vom Residency-Monitor abhängig (der im Normalbetrieb aus ist, s.
+    // BrainMemoryHeuristic-KDoc). Diese Quelle hat Vorrang; die wired-Ableitung
+    // bleibt NUR der Fallback für ältere Sidecar-Stände ohne das neue Feld.
+
+    @Test
+    fun `memory-Feld direkt vom Sidecar hat Vorrang vor wired (OK)`() {
+        val m = BrainMemoryHeuristic.classify(
+            directHealth(level = "ok", detail = "RAM entspannt: 4000 MB frei+inaktiv."),
+        )
+        assertEquals("OK", m.level)
+        assertEquals("brain-memory", m.source)
+        assertEquals("RAM entspannt: 4000 MB frei+inaktiv.", m.detail)
+    }
+
+    @Test
+    fun `memory-Feld direkt WARN`() {
+        val m = BrainMemoryHeuristic.classify(
+            directHealth(level = "warn", detail = "RAM wird knapp: 900 MB frei+inaktiv."),
+        )
+        assertEquals("WARN", m.level)
+        assertEquals("brain-memory", m.source)
+    }
+
+    @Test
+    fun `memory-Feld direkt CRITICAL`() {
+        val m = BrainMemoryHeuristic.classify(
+            directHealth(level = "critical", detail = "Kritischer RAM-Druck: nur 477 MB frei, Kompressor wächst weiter."),
+        )
+        assertEquals("CRITICAL", m.level)
+        assertEquals("brain-memory", m.source)
+    }
+
+    @Test
+    fun `memory-Feld ohne detail bekommt einen ehrlichen Fallback-Text statt leerem String`() {
+        val body = """{"status":"ok","model":"gemma","memory":{"level":"warn"}}"""
+        val m = BrainMemoryHeuristic.classify(body)
+        assertEquals("WARN", m.level)
+        assertTrue(m.detail.isNotBlank(), "kein leerer Detail-Text, auch ohne geliefertes detail-Feld")
+    }
+
+    @Test
+    fun `unbekannter level-Wert im memory-Feld faellt auf die wired-Ableitung zurueck`() {
+        val body = """{"status":"ok","model":"gemma","memory":{"level":"banana"},"wired":{"memorystatus_level":60,"release_lvl":25,"reapply_lvl":40}}"""
+        val m = BrainMemoryHeuristic.classify(body)
+        assertEquals("OK", m.level)
+        assertEquals("brain-health", m.source, "unbekannter Direkt-Level -> Fallback auf die alte wired-Quelle")
+    }
+
+    @Test
+    fun `memory-Feld fehlt komplett (aelterer Sidecar-Stand) - Abwaertskompatibilitaet ueber wired`() {
+        // OK_HEALTH/health() (companion) tragen bewusst KEIN memory-Feld — genau der
+        // Alt-Sidecar-Fall, den classify() ohne Funktionsverlust auf die wired-
+        // Ableitung zurückfallen lassen muss (kein Sidecar-Redeploy erzwungen).
+        val m = BrainMemoryHeuristic.classify(OK_HEALTH)
+        assertEquals("OK", m.level)
+        assertEquals("brain-health", m.source, "alter Sidecar ohne memory-Feld -> weiterhin die wired-Quelle")
+    }
+
+    @Test
+    fun `memory CRITICAL direkt vom Sidecar hebt overall auf DEGRADED (wie beim alten wired-Pfad)`() {
+        val svc = service(ScriptedProbe(), brainBody = directHealth(level = "critical", detail = "Kritischer RAM-Druck."))
+        svc.refresh()
+        val status = svc.current() as OpsStatus
+        assertEquals("CRITICAL", status.memory.level)
+        assertEquals("brain-memory", status.memory.source)
+        assertEquals("DEGRADED", status.overall, "RAM-Druck CRITICAL hebt das Gesamt-Signal an, unabhängig von der Quelle")
+    }
+
     // ── Drift-Soll folgt dem GEWÄHLTEN Brain-Modell (Andi-Befund 2026-07-20) ─────
     //
     // Vorher verglich die Drift-Prüfung IMMER gegen das per-Deploy fixierte
@@ -221,23 +291,24 @@ class SidecarHealthServiceTest {
     // solange nie umgeschaltet wurde.
 
     @Test
-    fun `Boot-Default-Fall (nie umgeschaltet) - Soll bleibt das Deploy-Literal, Drift wenn Ist abweicht`(
+    fun `Boot-Default-Fall (nie umgeschaltet) - Soll wird durchgereicht, aber NICHT mehr be-urteilt`(
         @TempDir dir: Path,
     ) {
         val store = JsonFileBrainModelStore(dir.resolve("brain-model.json")) // nie gesetzt
         val probe = ScriptedProbe().apply {
             measuredModels["brain"] = "mlx-community/gemma-4-e4b-it-4bit" // läuft e4b …
         }
-        // … aber das Deploy-Literal (Boot-Default) nennt weiter e2b als Soll.
+        // … das Deploy-Literal nennt e2b — seit dem Andi-Entscheid 2026-07-26 ist das
+        // nur noch Info (kein model-Feld-Fallback-Text), KEIN Drift-Urteil mehr:
+        // die Auto-Modellwahl wechselt Modelle gewollt, ein Soll-Vergleich in der
+        // Anzeige erzeugte Dauer-Warnungen für gewünschte Zustände.
         val svc = service(probe, brainExpectedModel = "gemma-4-e2b-it-4bit", brainModelStore = store, threshold = 1)
         svc.refresh()
 
-        assertEquals("gemma-4-e2b-it-4bit", probe.specsSeen["brain"]?.expectedModel, "ohne Runtime-Switch gilt der Boot-Default")
-        assertEquals("DEGRADED", (svc.current() as OpsStatus).sidecar("brain").status)
-        assertTrue(
-            (svc.current() as OpsStatus).sidecar("brain").detail.contains("Drift"),
-            "Ist (e4b) weicht vom Boot-Default-Soll (e2b) ab ⇒ ehrlich Drift",
-        )
+        assertEquals("gemma-4-e2b-it-4bit", probe.specsSeen["brain"]?.expectedModel, "ohne Runtime-Switch wird weiterhin der Boot-Default durchgereicht")
+        val brain = (svc.current() as OpsStatus).sidecar("brain")
+        assertEquals("OK", brain.status, "abweichendes Modell bei status=ok ist OK — kein Drift-Urteil")
+        assertTrue(brain.detail.contains("gemma-4-e4b"), "die Anzeige nennt das ECHTE Modell")
     }
 
     @Test
@@ -263,21 +334,24 @@ class SidecarHealthServiceTest {
     }
 
     @Test
-    fun `gewaehlt != laufend (Runtime-Switch auf e4b, Brain haengt noch auf e2b) - Drift ehrlich gemeldet`(
+    fun `gewaehlt != laufend - KEIN Urteil mehr, die Anzeige nennt das echte Modell`(
         @TempDir dir: Path,
     ) {
+        // Andi-Entscheid 2026-07-26: seit der Auto-Modellwahl wechselt das Modell
+        // GEWOLLT — gewählt != laufend ist ein Normalzustand, kein Befund. Ob ein
+        // WECHSEL hängt, meldet der Sidecar selbst (switch_stuck_seconds).
         val store = JsonFileBrainModelStore(dir.resolve("brain-model.json")).apply {
-            setSelectedRepo("mlx-community/gemma-4-e4b-it-4bit") // Andi will e4b …
+            setSelectedRepo("mlx-community/gemma-4-e4b-it-4bit") // gewählt: e4b …
         }
         val probe = ScriptedProbe().apply {
-            measuredModels["brain"] = "mlx-community/gemma-4-e2b-it-4bit" // … aber es läuft noch e2b
+            measuredModels["brain"] = "mlx-community/gemma-4-e2b-it-4bit" // … es läuft e2b
         }
         val svc = service(probe, brainExpectedModel = "", brainModelStore = store, threshold = 1)
         svc.refresh()
 
         val status = svc.current() as OpsStatus
-        assertEquals("DEGRADED", status.sidecar("brain").status, "gewählt != laufend bleibt ein ehrlicher Drift-Befund")
-        assertTrue(status.sidecar("brain").detail.contains("Drift"))
+        assertEquals("OK", status.sidecar("brain").status, "laufendes lokales Modell bei status=ok ⇒ OK")
+        assertTrue(status.sidecar("brain").detail.contains("gemma-4-e2b"), "die Anzeige nennt, was WIRKLICH läuft")
     }
 
     // ── Voice folgt der GEWÄHLTEN TTS-Engine (dieselbe Wahrheit wie Settings, b4844d0) ──
@@ -319,14 +393,17 @@ class SidecarHealthServiceTest {
     }
 
     @Test
-    fun `allLocal ist false, wenn Brain DEGRADED ist (Drift), selbst bei lokaler Engine`(@TempDir dir: Path) {
+    fun `allLocal bleibt true bei abweichendem LOKALEM Modell - das Schloss misst Privatsphaere, nicht Modell-Identitaet`(@TempDir dir: Path) {
+        // Vorher zog die Drift-Meldung das Schloss auf false — aber e2b statt e4b ist
+        // BEIDES lokal. Seit dem Andi-Entscheid 2026-07-26 (kein Drift-Urteil) sagt
+        // das Schloss wieder nur, was es sagen soll: läuft alles im Haus?
         val store = JsonFileBrainModelStore(dir.resolve("brain-model.json")).apply {
             setSelectedRepo("mlx-community/gemma-4-e4b-it-4bit")
         }
         val probe = ScriptedProbe().apply { measuredModels["brain"] = "mlx-community/gemma-4-e2b-it-4bit" }
         val svc = service(probe, brainModelStore = store, threshold = 1) // ttsImpl leer ⇒ say (lokal)
         svc.refresh()
-        assertFalse((svc.current() as OpsStatus).allLocal, "Brain-Drift darf das Schloss NICHT grün lassen")
+        assertTrue((svc.current() as OpsStatus).allLocal, "lokales Modell + lokale Engine ⇒ Schloss grün, egal welches lokale Modell")
     }
 
     @Test
@@ -383,5 +460,11 @@ class SidecarHealthServiceTest {
         /** Brain-`/health`-Body mit gesetztem `wired.memorystatus_level`. */
         private fun health(level: Int): String =
             """{"status":"ok","model":"gemma","wired":{"memorystatus_level":$level,"release_lvl":25,"reapply_lvl":40}}"""
+
+        /** Brain-`/health`-Body mit dem NEUEN, direkten `memory`-Feld (Primärquelle). */
+        private fun directHealth(level: String, detail: String? = null): String {
+            val detailPart = if (detail != null) ",\"detail\":\"$detail\"" else ""
+            return """{"status":"ok","model":"gemma","memory":{"level":"$level"$detailPart}}"""
+        }
     }
 }

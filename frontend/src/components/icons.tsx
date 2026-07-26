@@ -119,11 +119,94 @@ export function BellGlyph({ className }: GlyphProps) {
   );
 }
 
-/** Wolke — ersetzt ☁️ (Cloud-Egress: TTS/Privacy-Zeilen, Ops-Banner, Idle-Chip). */
+/** Wolke — ersetzt ☁️ (Cloud-Egress: TTS/Privacy-Zeilen, Ops-Banner, Idle-Chip; auch „bedeckt"/„wechselhaft" im Jetzt-Band). */
 export function CloudGlyph({ className }: GlyphProps) {
   return (
     <Svg name="cloud" className={className}>
       <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+    </Svg>
+  );
+}
+
+/* ---- Wetter-Glyphen fürs Jetzt-Band (IdleFace, Andi-Auftrag 26.07) ----
+   Dezente, dem Rest der Datei treue Linien-Icons je Lagen-Kategorie
+   ({@link ../components/IdleFace.tsx#weatherCategory}) — kein buntes
+   Wetter-App-Icon-Set, sondern dieselbe muted stroke-Sprache wie AlarmGlyph/
+   ClockGlyph. Die Kategorie kommt aus dem deutschen WMO-Lagen-Text des
+   Backends (WeatherCodeTexts.kt), IMMER Deutsch, unabhängig von der UI-Sprache. */
+
+/** Sonne — „klar und sonnig"/„überwiegend klar". */
+export function SunGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="sun" className={className}>
+      <circle cx="12" cy="12" r="4.3" />
+      <line x1="12" y1="2.3" x2="12" y2="4.6" />
+      <line x1="12" y1="19.4" x2="12" y2="21.7" />
+      <line x1="2.3" y1="12" x2="4.6" y2="12" />
+      <line x1="19.4" y1="12" x2="21.7" y2="12" />
+      <line x1="5.1" y1="5.1" x2="6.7" y2="6.7" />
+      <line x1="17.3" y1="17.3" x2="18.9" y2="18.9" />
+      <line x1="5.1" y1="18.9" x2="6.7" y2="17.3" />
+      <line x1="17.3" y1="6.7" x2="18.9" y2="5.1" />
+    </Svg>
+  );
+}
+
+/** Sonne hinter Wolke — „teilweise bewölkt". */
+export function CloudSunGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="cloud-sun" className={className}>
+      <circle cx="7.8" cy="7.3" r="2.7" />
+      <line x1="7.8" y1="2.3" x2="7.8" y2="3.6" />
+      <line x1="2.8" y1="7.3" x2="4.1" y2="7.3" />
+      <line x1="4.1" y1="3.6" x2="5" y2="4.5" />
+      <path d="M17.5 20H9a4.3 4.3 0 0 1-.6-8.55A5.6 5.6 0 0 1 19 12.4a3.8 3.8 0 0 1-1.5 7.6z" />
+    </Svg>
+  );
+}
+
+/** Regenwolke — „Regen"/„Nieselregen"/„Regenschauer". */
+export function RainCloudGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="rain-cloud" className={className}>
+      <path d="M18 10.3h-1.05A6.3 6.3 0 1 0 8.1 16.7h9.9a3.85 3.85 0 0 0 0-7.7z" />
+      <line x1="9" y1="19.2" x2="8.1" y2="21.7" />
+      <line x1="13" y1="19.2" x2="12.1" y2="21.7" />
+      <line x1="17" y1="19.2" x2="16.1" y2="21.7" />
+    </Svg>
+  );
+}
+
+/** Schneewolke — „Schneefall"/„Schneekörner"/„Schneeschauer". */
+export function SnowCloudGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="snow-cloud" className={className}>
+      <path d="M18 10.3h-1.05A6.3 6.3 0 1 0 8.1 16.7h9.9a3.85 3.85 0 0 0 0-7.7z" />
+      <line x1="9" y1="18.8" x2="9" y2="21.8" />
+      <line x1="7.5" y1="20.3" x2="10.5" y2="20.3" />
+      <line x1="15" y1="18.8" x2="15" y2="21.8" />
+      <line x1="13.5" y1="20.3" x2="16.5" y2="20.3" />
+    </Svg>
+  );
+}
+
+/** Gewitterwolke — „Gewitter"/„Gewitter mit Hagel". */
+export function ThunderCloudGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="thunder-cloud" className={className}>
+      <path d="M17.5 9.8h-1.05A6.3 6.3 0 1 0 8.6 16h8a3.8 3.8 0 0 0 0.9-6.2z" />
+      <path d="M13 15.3 10.3 19h2.6l-1.6 3.4" />
+    </Svg>
+  );
+}
+
+/** Nebel — „neblig"/„gefrierender Nebel": ruhige, gestaffelte Schichten. */
+export function FogGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="fog" className={className}>
+      <line x1="3" y1="8.5" x2="21" y2="8.5" />
+      <line x1="5.5" y1="12" x2="18.5" y2="12" />
+      <line x1="3" y1="15.5" x2="21" y2="15.5" />
     </Svg>
   );
 }

@@ -1,53 +1,46 @@
 import { API_BASE, hasToken } from '../api/config';
 import { useHealth, type HealthState } from '../hooks/useHealth';
-import { IdleFaceLive } from '../components/IdleFace';
+import { IdleFaceLive, diaryTodayStats, todayTileValue } from '../components/IdleFace';
 import { VoiceOrb } from '../components/VoiceOrb';
 import type { VoiceChatSession } from '../hooks/useVoiceChatSession';
-import type { SettingsAnchorId, SettingsCategoryId } from '../components/SettingsPanel';
+import type { DiaryTurn } from '../hooks/useDiary';
 import { useUiStrings } from '../i18n';
 
 /**
- * Status-first Landing — Andis „vom Chat zum Zuhause".
+ * Home — Andis Flur-Display (iPad im Flur). Bis 2026-07-26 war dieser Reiter
+ * IdleFaceLive → VoiceOrb → eine komplette Entwickler-Landing (Hero + „Live
+ * verdrahtet"/„Noch nicht verdrahtet"-Kacheln) — die Landing füllte die halbe
+ * Seitenhöhe und war für einen Flur-Blick irrelevant. Andi-Auftrag 2026-07-26
+ * (Flur-Display-Umbau): die Landing zog komplett um in {@link DiagnoseSection}
+ * ans Ende von Aktivität (`views/AktivitaetView.tsx`) — Home besteht jetzt NUR
+ * noch aus dem Idle-Gesicht + dem Sprach-Orb, s. {@link UebersichtViewLive}.
  *
- * Ehrlichkeits-Achse, strikt:
- *  - 🟢 `live`    = echt verdrahtet, der Wert kommt aus einem realen Endpoint.
- *                  (Ein echter Wert darf auch „schlecht" sein — offline/fehlt.)
- *  - 🔵 `pending` = ehrlicher Platzhalter. Das 0.8-Backend liefert die Daten
- *                  NOCH NICHT. Solche Kacheln zeigen bewusst KEINEN Zustand
- *                  („—"), nie erfundenes Grün.
- *
- * Diese Komponente ist rein prop-getrieben (kein Hook, kein Netz) und dadurch
- * ohne DOM/Fetch unit-testbar. Den echten Health-Hook verdrahtet
- * {@link UebersichtViewLive}.
+ * Diese Datei behält den Namen (Reiter „Übersicht"/Home), trägt aber keine
+ * eigene Seiten-Ansicht mehr — nur noch {@link DiagnoseSection} (die
+ * umgezogene Landing, jetzt IMMER live: die drei „Noch nicht verdrahtet"-
+ * Platzhalter sind ERSATZLOS gestrichen, Sidecar-Health lebt längst als
+ * Ops-Pille, die anderen beiden waren leere Versprechen) + die
+ * `UebersichtViewLive`-Verdrahtung des Home-Reiters.
  */
-
-export type Honesty = 'live' | 'pending';
-
-interface Tile {
-  name: string;
-  honesty: Honesty;
-  /** live: echter Wert · pending: bewusst „—" (kein Fake). */
-  value: string;
-  note: string;
-}
 
 function fmtTime(ts: number | null, locale: string): string {
   return ts ? new Date(ts).toLocaleTimeString(locale) : '—';
 }
 
-/**
- * Bewusst OHNE 🟢/🔵-Emoji-Icon (Emoji-Sweep 2026-07-06): das `tile__pill`
- * („live"/„nicht verdrahtet") + der gestrichelte tile--pending-Rahmen sagen den
- * Zustand schon — das Emoji war ein Zustands-Duplikat (Muster: IdleTileCard).
- */
-function TileCard({ tile }: { tile: Tile }) {
+interface DiagTile {
+  name: string;
+  value: string;
+  note: string;
+}
+
+/** Eine Diagnose-Kachel — anders als die frühere `TileCard` gibt es hier nur noch „live" (kein Honesty-Wechsel mehr nötig). */
+function DiagTileCard({ tile }: { tile: DiagTile }) {
   const { overview } = useUiStrings();
-  const live = tile.honesty === 'live';
   return (
-    <article className={`tile tile--${tile.honesty}`} data-status={tile.honesty} aria-disabled={!live}>
+    <article className="tile tile--live" data-status="live">
       <div className="tile__head">
         <span className="tile__name">{tile.name}</span>
-        <span className="tile__pill">{tile.honesty === 'live' ? overview.live : overview.notWired}</span>
+        <span className="tile__pill">{overview.live}</span>
       </div>
       <div className="tile__value">{tile.value}</div>
       <p className="tile__note">{tile.note}</p>
@@ -55,13 +48,25 @@ function TileCard({ tile }: { tile: Tile }) {
   );
 }
 
-export interface UebersichtViewProps {
+export interface DiagnoseSectionProps {
   state: HealthState;
   lastChecked: number | null;
+  /** Diary-Zeilen für die ex-„Heute"-Kachel (aus IdleFace hierher umgezogen) — `null` = nicht erreichbar. */
+  turns: DiaryTurn[] | null;
+  nowMs: number;
 }
 
-export function UebersichtView({ state, lastChecked }: UebersichtViewProps) {
-  const { overview, locale } = useUiStrings();
+/**
+ * **Diagnose** — die umgezogene Entwickler-Landing, jetzt am Ende von
+ * Aktivität statt auf Home: Verbindungs-Hero + vier echte Kacheln (Backend,
+ * Chat-Turn, Auth-Token — alle drei byte-gleich zur früheren Übersicht — plus
+ * „Heute" (echte Turn-Statistik, zog aus IdleFace hierher). Rein prop-getrieben
+ * → ohne DOM/Fetch testbar; verdrahtet wird sie in {@link ../views/AktivitaetView.tsx#AktivitaetViewLive}
+ * mit `useHealth()` (bereits dort für den Health-Verlauf verdrahtet — keine
+ * zweite Poll-Quelle).
+ */
+export function DiagnoseSection({ state, lastChecked, turns, nowMs }: DiagnoseSectionProps) {
+  const { overview, activity, idleFace, locale } = useUiStrings();
   const heroByState: Record<HealthState, { title: string; sub: string }> = {
     up: { title: overview.heroUpTitle, sub: overview.heroUpSub },
     down: { title: overview.heroDownTitle, sub: overview.heroDownSub },
@@ -69,37 +74,38 @@ export function UebersichtView({ state, lastChecked }: UebersichtViewProps) {
   };
   const hero = heroByState[state];
 
-  // 🟢 Echt verdrahtete Kacheln — Werte stammen aus realen Endpoints/Config.
-  const live: Tile[] = [
-    {
-      name: overview.backend,
-      honesty: 'live',
-      value: API_BASE,
-      note: overview.backendNote,
-    },
-    {
-      name: overview.chatTurn,
-      honesty: 'live',
-      value: overview.liveStreaming,
-      note: overview.chatTurnNote,
-    },
+  const stats = turns !== null ? diaryTodayStats(turns, nowMs) : null;
+  const heute: DiagTile = {
+    name: idleFace.heute.name,
+    value:
+      stats === null
+        ? '—'
+        : stats.turns === 0
+          ? idleFace.heute.noTurnYet
+          : todayTileValue(stats, idleFace, locale),
+    note:
+      stats === null
+        ? idleFace.heute.noteUnavailable
+        : stats.turns === 0
+          ? idleFace.heute.noteEmpty
+          : idleFace.heute.noteWithData,
+  };
+
+  const tiles: DiagTile[] = [
+    { name: overview.backend, value: API_BASE, note: overview.backendNote },
+    { name: overview.chatTurn, value: overview.liveStreaming, note: overview.chatTurnNote },
     {
       name: overview.authToken,
-      honesty: 'live',
       value: hasToken() ? overview.set : overview.missing,
-      note: hasToken()
-        ? overview.authSetNote
-        : overview.authMissingNote,
+      note: hasToken() ? overview.authSetNote : overview.authMissingNote,
     },
+    heute,
   ];
 
   return (
-    <section className="ueber">
-      <header className="ueber__head">
-        <h1 className="ueber__title">{overview.title}</h1>
-        <p className="ueber__lede">{overview.lede}</p>
-      </header>
-
+    <>
+      <h2 className="ueber__sec">{activity.diagnoseTitle}</h2>
+      <p className="ueber__sechint">{activity.diagnoseHint}</p>
       <div className={`hero hero--${state}`} data-health={state} role="status" aria-live="polite">
         <span className="hero__dot" aria-hidden="true" />
         <div className="hero__text">
@@ -111,57 +117,40 @@ export function UebersichtView({ state, lastChecked }: UebersichtViewProps) {
           <span className="hero__time">{overview.lastChecked(fmtTime(lastChecked, locale))}</span>
         </div>
       </div>
-
-      <h2 className="ueber__sec">{overview.liveWired}</h2>
       <div className="tiles">
-        {live.map((t) => (
-          <TileCard key={t.name} tile={t} />
+        {tiles.map((t) => (
+          <DiagTileCard key={t.name} tile={t} />
         ))}
       </div>
-
-      <h2 className="ueber__sec">{overview.notWiredTitle}</h2>
-      <p className="ueber__sechint">{overview.notWiredHint}</p>
-      <div className="tiles">
-        {[
-          { name: overview.sidecarHealth, honesty: 'pending' as const, value: '—', note: overview.sidecarHealthNote },
-          { name: overview.voiceStats, honesty: 'pending' as const, value: '—', note: overview.voiceStatsNote },
-          { name: overview.devices, honesty: 'pending' as const, value: '—', note: overview.devicesNote },
-        ].map((t) => (
-          <TileCard key={t.name} tile={t} />
-        ))}
-      </div>
-    </section>
+    </>
   );
 }
 
 /**
- * Live-Container: das Aoi-Idle-Gesicht (Spec §2, „Zuhause"-Layout) oben, dann
- * der Sprach-Orb (Andi-Auftrag 19.07 — Übersicht ist jetzt Reiter 1/Start-
- * Ansicht, der Orb macht sie zum stimmig integrierten Sprach-Einstieg),
- * darunter die ehrliche Status-Landing. EIN Health-Poller für beide (health
- * als Prop ans Idle-Gesicht — keine zweite Poll-Quelle).
+ * Live-Container des Home-Reiters: das Aoi-Idle-Gesicht + der Sprach-Orb —
+ * seit dem Flur-Display-Umbau (2026-07-26) sonst NICHTS mehr (die frühere
+ * Entwickler-Landing lebt jetzt in {@link DiagnoseSection} auf Aktivität).
+ * EIN Health-Poller fürs Idle-Gesicht (health als Prop — keine zweite
+ * Poll-Quelle). KEIN `onOpenSettings` mehr (Andi-Korrektur 26.07): das
+ * Idle-Gesicht trug ein eigenes Settings-Zahnrad an der Wetterlage, das die
+ * Top-Nav oben rechts schon abdeckt — die Dopplung ist weg.
  */
 export function UebersichtViewLive({
-  onOpenSettings,
   session,
 }: {
-  /** Deep-Link in den Settings-Drawer (App.tsx `openSettings`) — reicht an die
-   * Wetter-Kachel im Idle-Gesicht durch, wo der Standort-Anker sitzt. */
-  onOpenSettings?: (category: SettingsCategoryId, anchor?: SettingsAnchorId) => void;
   /**
    * Die geteilte Voice-Chat-Session aus App.tsx (dieselbe, die auch der
    * Chat-Reiter rendert — kein zweiter Verlauf). Optional: fehlt sie (z. B.
-   * in Tests, die nur `UebersichtView` isoliert prüfen), rendert diese Live-
-   * Ansicht schlicht ohne Orb statt zu crashen.
+   * in Tests, die nur `UebersichtViewLive` isoliert prüfen), rendert diese
+   * Live-Ansicht schlicht ohne Orb statt zu crashen.
    */
   session?: VoiceChatSession;
 } = {}) {
-  const { state, lastChecked } = useHealth();
+  const { state } = useHealth();
   return (
     <>
-      <IdleFaceLive health={state} onOpenSettings={onOpenSettings} />
+      <IdleFaceLive health={state} />
       {session && <VoiceOrb session={session} />}
-      <UebersichtView state={state} lastChecked={lastChecked} />
     </>
   );
 }

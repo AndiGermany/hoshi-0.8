@@ -79,6 +79,16 @@ fun interface EntityMemoryWriter {
 interface GroundingPort {
     fun groundingBlock(query: String, category: RouteCategory, language: Language): Mono<String>
 
+    /**
+     * Enger, ausschließlich lokaler Wissens-Lookup. Der Port ist bewusst
+     * **default-deny**: bestehende Grounding-Implementierungen dürfen nicht
+     * versehentlich Wetter, Cloud-Antworten oder cloudstämmige Caches in einen
+     * als lokal behaupteten Wissenspfad einspeisen. Nur Adapter mit belegbar
+     * lokaler Quelle überschreiben diese Methode explizit.
+     */
+    fun localKnowledgeBlock(query: String, category: RouteCategory, language: Language): Mono<String> =
+        Mono.just("")
+
     companion object {
         /**
          * Port mit KONSTANTEM Block — sprach-unabhängig, weil an einem festen
@@ -282,6 +292,51 @@ class TurnPromptAssembler(
         systemPrompt: String,
         followBlock: String,
         groundingQuery: String? = null,
+    ): Mono<AssembledPrompt> =
+        assembleWith(
+            ctx = ctx,
+            decision = decision,
+            systemPrompt = systemPrompt,
+            followBlock = followBlock,
+            groundingQuery = groundingQuery,
+            groundingLookup = grounding::groundingBlock,
+        )
+
+    /**
+     * Dieselbe Prompt-Assembly wie [assemble], aber über die default-deny
+     * [GroundingPort.localKnowledgeBlock]-Naht. Damit bleiben Reihenfolge,
+     * Episodic-Parallelisierung, Sentinel-Behandlung und Messpunkt identisch;
+     * lediglich die zulässige Grounding-Quelle ist enger.
+     */
+    fun assembleLocalKnowledge(
+        ctx: TurnPrompt,
+        decision: RouteDecision,
+        systemPrompt: String,
+        followBlock: String,
+        groundingQuery: String? = null,
+    ): Mono<AssembledPrompt> =
+        assembleWith(
+            ctx = ctx,
+            decision = decision,
+            systemPrompt = systemPrompt,
+            followBlock = followBlock,
+            groundingQuery = groundingQuery,
+            groundingLookup = grounding::localKnowledgeBlock,
+        )
+
+    /**
+     * Einziger Assembly-Kern für den normalen und den eng lokalen Grounding-Pfad.
+     * [groundingLookup] wird bei LOCAL+Wiki-ON genau einmal innerhalb von
+     * [Mono.defer] aufgerufen; damit misst [AssembledPrompt.groundingMs] in beiden
+     * Pfaden dieselbe echte Operation.
+     */
+    private fun assembleWith(
+        ctx: TurnPrompt,
+        decision: RouteDecision,
+        systemPrompt: String,
+        followBlock: String,
+        groundingQuery: String?,
+        groundingLookup: (String, RouteCategory, Language) -> Mono<String>,
     ): Mono<AssembledPrompt> {
         val promptWithFollow =
             if (followBlock.isNotEmpty()) systemPrompt + followBlock else systemPrompt
@@ -297,7 +352,7 @@ class TurnPromptAssembler(
                     // Turn-Sprache durchreichen (Multilingual-Welle 2026-07-24): der
                     // Grounding-Block muss der SPRACHE DES TURNS folgen (siehe
                     // [GroundingPort]-KDoc), nicht einer separaten Anzeigesprache.
-                    grounding.groundingBlock(groundingQuery ?: ctx.text, decision.category, ctx.language)
+                    groundingLookup(groundingQuery ?: ctx.text, decision.category, ctx.language)
                         .defaultIfEmpty("")
                         .doOnNext { groundingElapsedMs.set((nanoTime() - t0) / 1_000_000) }
                 }
@@ -364,8 +419,56 @@ class TurnPromptAssembler(
          * Import wäre ein verbotener Rückwärts-Pfeil im Modul-Graph. Der Provider
          * IMPORTIERT diese Konstante beim Bauen seines Blocks — „eine Wahrheit,
          * zwei Ränder" (dasselbe Muster wie [BRIDGE_DOWN_SENTINEL] und
-         * [FactCoverageGate.DEFLECT_DE]).
+         * [de.hoshi.core.pipeline.lang.LanguagePack.factCoverageDeflect]).
          */
         const val NACHGESCHLAGEN_ORIGIN_MARKER = "neulich nachgeschlagen"
+
+        /**
+         * **Sprachneutrale Fortsetzung des Herkunfts-Markers (Ehrlichkeits-Schuld-Fix,
+         * seit v0.8.1-rc1 in den Release-Notes: „die cacheHit-Telemetrie erkennt ihren
+         * Herkunfts-Marker nur auf Deutsch"):** [NACHGESCHLAGEN_ORIGIN_MARKER] deckte
+         * bislang NUR die deutsche Blockfassung. Diese vier Konstanten sind das EN/ES/
+         * FR/IT-Gegenstück — je ein eindeutiger Substring, der EXAKT in der jeweiligen
+         * Sprachfassung von
+         * [de.hoshi.adapters.knowledge.NachgeschlagenBlockTexts.plainInstruction]/
+         * [de.hoshi.adapters.knowledge.NachgeschlagenBlockTexts.fencedInstruction]
+         * vorkommt (verifiziert gegen den heutigen Wortlaut, s.
+         * [de.hoshi.core.pipeline.TurnOrchestratorCacheHitLanguageTest]).
+         *
+         * **Bewusst hier REPLIZIERT statt importiert, wie [NACHGESCHLAGEN_ORIGIN_MARKER]
+         * selbst:** core-domain darf nicht auf `adapters-knowledge` zeigen (Modul-Graph,
+         * `adapters-knowledge` hängt VON `core-domain` ab, nicht umgekehrt) — anders als
+         * beim deutschen Marker kann der Provider die EN/ES/FR/IT-Sätze also nicht aus
+         * diesen Konstanten zusammensetzen (die Sätze sind dort frei formuliert, der
+         * Marker ist nur ein Teil-String davon). Drift-Schutz kommt darum aus dem Test,
+         * nicht aus dem Compiler: [de.hoshi.core.pipeline.TurnOrchestratorCacheHitLanguageTest]
+         * UND `NachgeschlagenGroundingLanguageTest` (adapters-knowledge) prüfen denselben
+         * Wortlaut von zwei Seiten.
+         */
+        const val NACHGESCHLAGEN_ORIGIN_MARKER_EN = "looked this up recently"
+
+        /** s. [NACHGESCHLAGEN_ORIGIN_MARKER_EN]-KDoc — die spanische Fassung. */
+        const val NACHGESCHLAGEN_ORIGIN_MARKER_ES = "consulté hace poco"
+
+        /** s. [NACHGESCHLAGEN_ORIGIN_MARKER_EN]-KDoc — die französische Fassung. */
+        const val NACHGESCHLAGEN_ORIGIN_MARKER_FR = "cherché cela récemment"
+
+        /** s. [NACHGESCHLAGEN_ORIGIN_MARKER_EN]-KDoc — die italienische Fassung. */
+        const val NACHGESCHLAGEN_ORIGIN_MARKER_IT = "cercato di recente"
+
+        /**
+         * **Exhaustiv über [Language]: der Herkunfts-Marker DIESER Turn-Sprache.**
+         * Der [de.hoshi.core.pipeline.TurnOrchestrator] prüft NACH [assemble] den
+         * [AssembledPrompt.groundBlock] NUR auf DIESEN EINEN, sprachgenauen Marker
+         * (statt sicherheitshalber alle fünf durchzuprobieren) — der Block wurde ja
+         * bereits FÜR [ctx.language] gebaut, s. [de.hoshi.core.dto.TurnPrompt.language].
+         */
+        fun nachgeschlagenOriginMarker(language: Language): String = when (language) {
+            Language.DE -> NACHGESCHLAGEN_ORIGIN_MARKER
+            Language.EN -> NACHGESCHLAGEN_ORIGIN_MARKER_EN
+            Language.ES -> NACHGESCHLAGEN_ORIGIN_MARKER_ES
+            Language.FR -> NACHGESCHLAGEN_ORIGIN_MARKER_FR
+            Language.IT -> NACHGESCHLAGEN_ORIGIN_MARKER_IT
+        }
     }
 }

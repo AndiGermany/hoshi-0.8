@@ -4,6 +4,25 @@
 // (0..1 RMS) für das Pegel-Meter. Die reinen, unit-testbaren Teile
 // (`pickMimeType`, `rmsLevel`) sind bewusst frei von DOM/Hardware, damit sie
 // ohne echtes Mikrofon getestet werden können.
+//
+// PRE-ROLL (Andi-Befund 26.07, Anlaut-Beschneidung — s. audio/preRoll.ts für die
+// volle Herleitung): PARALLEL zum MediaRecorder läuft ab dem Moment, in dem der
+// Mikro-Stream steht, eine zweite, rohe PCM-Sammlung in einen kleinen Ring
+// (`setupPreRoll`). Nach `PRE_ROLL_MS` wird der Ring eingefroren — sein Inhalt
+// ({@link VoiceRecorder.getPreRoll}) deckt genau das Fenster ab, in dem
+// MediaRecorders eigener Encoder-Anlauf (Opus-Priming, AGC/NS-Einschwingzeit)
+// Audio verschlucken oder dämpfen kann. `wav.ts` stellt ihn der eigentlichen
+// Aufnahme voran, bevor daraus das Upload-WAV entsteht.
+
+import { PRE_ROLL_MS, createPreRollRing, drainPreRoll, pushPreRoll, type PreRollRing } from './preRoll';
+
+/**
+ * Chunk-Größe des Pre-Roll-`ScriptProcessorNode` in Samples (Web-Audio-Vorgabe:
+ * Zweierpotenz 256..16384). 2048 ≈ 43-46ms bei 44.1/48kHz — fein genug, um
+ * innerhalb von {@link PRE_ROLL_MS} mehrfach zu feuern, grob genug für wenig
+ * Overhead.
+ */
+const PRE_ROLL_CHUNK_SAMPLES = 2048;
 
 /** Worüber eine Aufnahme scheitern kann — die UI zeigt je Fall eine warme Zeile. */
 export type VoiceRecorderErrorKind =
@@ -134,6 +153,16 @@ export class VoiceRecorder {
   private levelTimer: ReturnType<typeof setInterval> | null = null;
   private level = 0;
 
+  // Pre-Roll-Kette (ebenfalls best-effort, s. Datei-Kopf + preRoll.ts): eigener,
+  // kurzlebiger AudioContext + ScriptProcessorNode, der NUR bis zum Einfrieren
+  // (`finalizePreRoll`, spätestens `teardown()`) läuft — „Stream zu ⇒ Ring weg".
+  private preRollCtx: AudioContext | null = null;
+  private preRollProcessor: ScriptProcessorNode | null = null;
+  private preRollRing: PreRollRing | null = null;
+  private preRollTimer: ReturnType<typeof setTimeout> | null = null;
+  private capturedPreRoll: Float32Array = new Float32Array(0);
+  private preRollSampleRate = 0;
+
   constructor(opts: VoiceRecorderOptions = {}) {
     this.opts = opts;
   }
@@ -146,6 +175,22 @@ export class VoiceRecorder {
   /** Letzter gemessener Pegel (0..1) — auch ohne `onLevel`-Callback abfragbar. */
   getLevel(): number {
     return this.level;
+  }
+
+  /**
+   * Die im Pre-Roll-Fenster eingefangenen rohen Mono-PCM-Samples (Rate s.
+   * {@link getPreRollSampleRate}) — leer, wenn kein Web Audio verfügbar war oder
+   * (noch) nichts eingefangen wurde. Bleibt nach `stop()`/`cancel()` gültig
+   * abfragbar (erst der NÄCHSTE `start()` setzt zurück), damit der Aufrufer sie
+   * in Ruhe der eigentlichen Aufnahme voranstellen kann (s. `wav.ts`).
+   */
+  getPreRoll(): Float32Array {
+    return this.capturedPreRoll;
+  }
+
+  /** Sample-Rate der Pre-Roll-Samples — 0, wenn keine eingefangen wurden. */
+  getPreRollSampleRate(): number {
+    return this.preRollSampleRate;
   }
 
   /**
@@ -173,6 +218,12 @@ export class VoiceRecorder {
       throw mapGetUserMediaError(err);
     }
     this.stream = stream;
+
+    // Frischer Pre-Roll pro Aufnahme + SOFORT starten — „sobald der Mikro-Stream
+    // steht" (s. Datei-Kopf), nicht erst nach MediaRecorder-Setup/-Start.
+    this.capturedPreRoll = new Float32Array(0);
+    this.preRollSampleRate = 0;
+    this.setupPreRoll(stream);
 
     if (typeof globalThis.MediaRecorder === 'undefined') {
       this.teardown();
@@ -255,8 +306,85 @@ export class VoiceRecorder {
     }
   }
 
+  /**
+   * Pre-Roll-Aufnahme starten (s. Datei-Kopf + preRoll.ts). Best-effort wie
+   * {@link setupLevelMeter}: kein Web Audio → einfach kein Pre-Roll, die
+   * eigentliche Aufnahme ist davon unberührt. EIGENER `AudioContext` (nicht der
+   * vom Pegel-Meter geteilt) — er lebt nur bis {@link finalizePreRoll}, während
+   * der Pegel-Meter-Context die ganze Aufnahme über läuft; zwei unabhängige
+   * `MediaStreamSource`-Abgriffe auf denselben Track stören sich nicht.
+   */
+  private setupPreRoll(stream: MediaStream): void {
+    try {
+      const Ctor =
+        globalThis.AudioContext ??
+        (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return;
+      const ctx = new Ctor();
+      const source = ctx.createMediaStreamSource(stream);
+      const processor = ctx.createScriptProcessor(PRE_ROLL_CHUNK_SAMPLES, 1, 1);
+      const ring = createPreRollRing(ctx.sampleRate, PRE_ROLL_MS);
+      processor.onaudioprocess = (e: AudioProcessingEvent) => {
+        pushPreRoll(ring, e.inputBuffer.getChannelData(0).slice());
+      };
+      // ScriptProcessorNode zieht nur Daten, wenn er an ein Ziel angeschlossen
+      // ist — über einen Null-Gain, damit nichts hörbar zurückgespiegelt wird
+      // (kein Echo/Feedback fürs Mikro selbst).
+      const silence = ctx.createGain();
+      silence.gain.value = 0;
+      source.connect(processor);
+      processor.connect(silence);
+      silence.connect(ctx.destination);
+      this.preRollCtx = ctx;
+      this.preRollProcessor = processor;
+      this.preRollRing = ring;
+      this.preRollTimer = setTimeout(() => this.finalizePreRoll(), PRE_ROLL_MS);
+    } catch {
+      /* Pre-Roll ist Beiwerk — Aufnahme läuft auch ohne weiter (Anlaut evtl. beschnitten). */
+    }
+  }
+
+  /**
+   * Friert den Ring EINMAL ein: entweder regulär nach `PRE_ROLL_MS` (Timer) oder
+   * früher, wenn `teardown()` (stop/cancel) vor Ablauf kommt — eine sehr kurze
+   * Aufnahme bekommt dann eben einen kürzeren, aber ehrlichen Pre-Roll statt gar
+   * keinen. Idempotent: ein zweiter Aufruf (Timer UND teardown) findet
+   * `preRollRing === null` und tut nichts mehr.
+   */
+  private finalizePreRoll(): void {
+    if (this.preRollRing) {
+      this.capturedPreRoll = drainPreRoll(this.preRollRing);
+      this.preRollSampleRate = this.preRollRing.sampleRate;
+      this.preRollRing = null;
+    }
+    if (this.preRollTimer) {
+      clearTimeout(this.preRollTimer);
+      this.preRollTimer = null;
+    }
+    if (this.preRollProcessor) {
+      try {
+        this.preRollProcessor.disconnect();
+      } catch {
+        /* ignore */
+      }
+      this.preRollProcessor = null;
+    }
+    if (this.preRollCtx) {
+      try {
+        void this.preRollCtx.close();
+      } catch {
+        /* ignore */
+      }
+      this.preRollCtx = null;
+    }
+  }
+
   /** Alles freigeben: Timer, Pegel-Context, Mikro-Tracks. Idempotent. */
   private teardown(): void {
+    // Ring stoppt spätestens hier — „Stream zu ⇒ Ring weg" (s. preRoll.ts). Bei
+    // einer sehr kurzen Aufnahme friert das den Ring VOR Ablauf von PRE_ROLL_MS
+    // ein (finalizePreRoll ist idempotent, der reguläre Timer tut dann nichts mehr).
+    this.finalizePreRoll();
     if (this.levelTimer) {
       clearInterval(this.levelTimer);
       this.levelTimer = null;

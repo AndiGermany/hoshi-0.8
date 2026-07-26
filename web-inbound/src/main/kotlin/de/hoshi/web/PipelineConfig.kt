@@ -566,6 +566,10 @@ class PipelineConfig {
         // fact_query an die Bridge + hängt die «»-Verbatim-Zahl-Spans + Zitier-Instruktion an
         // den Grounding-Block (verhindert, dass das Modell Jahreszahlen/Mengen verwässert).
         @Value("\${HOSHI_WIKINUMBER_CONTRACT_ENABLED:false}") numberContractEnabled: Boolean = false,
+        // Knowledge-Pack-v1-Provenienzvertrag. Default OFF: bestehendes `/search`
+        // bleibt byte-neutral; ON nutzt `/v1/search` mit identischen Kern-Hits plus
+        // Pack-/Quellen-Evidenz. Ein Runtime-Flip bleibt Owner-Gate.
+        @Value("\${HOSHI_KNOWLEDGE_PACK_V1_ENABLED:false}") knowledgePackV1Enabled: Boolean = false,
         @Value("\${HOSHI_WEATHER_ENABLED:false}") weatherEnabled: Boolean,
         @Value("\${hoshi.weather.base-url:https://api.open-meteo.com}") weatherBaseUrl: String,
         @Value("\${hoshi.weather.lat:\${HOSHI_WEATHER_LAT:52.52}}") weatherLat: Double,
@@ -590,7 +594,15 @@ class PipelineConfig {
         @Value("\${HOSHI_LOOKUP_QUOTE_FENCE_ENABLED:true}") quoteFenceEnabled: Boolean,
     ): GroundingPort {
         val wiki: GroundingPort =
-            if (groundingEnabled) Fts5GroundingAdapter(baseUrl = bridgeBaseUrl, enableNumberContract = numberContractEnabled) else GroundingStubAdapter()
+            if (groundingEnabled) {
+                Fts5GroundingAdapter(
+                    baseUrl = bridgeBaseUrl,
+                    enableNumberContract = numberContractEnabled,
+                    useKnowledgePackV1 = knowledgePackV1Enabled,
+                )
+            } else {
+                GroundingStubAdapter()
+            }
         val nachgeschlagen: GroundingPort =
             if (extendedThinkEnabled) {
                 NachgeschlagenGroundingProvider(

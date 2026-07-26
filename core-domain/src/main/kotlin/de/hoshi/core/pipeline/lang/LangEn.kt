@@ -78,6 +78,34 @@ object LangEn {
             "Hm, my reference shelf isn't reachable at the moment. I don't want to guess at you — ask me again in a bit and I'll look it up properly.",
             "I'm stuck for a second here — my knowledge store isn't answering. Give me a moment, then I can tell you honestly.",
         ),
+        factCoverageOfflineDisclaimer = "Honestly, I don't have a source for this — but from what I know: ",
+        localLookupFoundPrefix = "Had a quick look at what I've got here — ",
+        // ── Andi-Auftrag 2026-07-26 „the online-lookup lines are bad" — the EN
+        //    deflect anchor line stays unchanged (it was already good), the answer
+        //    frame is redrawn ("So I checked online — "), the rest moved here
+        //    word-for-word. Follow-up "spread it out, don't repeat" — deflect +
+        //    answer frame are now 4-entry pools (AntiRepeatPicker); every deflect
+        //    variant still ends on the lookup question, every frame variant still
+        //    names online/the internet/the web.
+        factCoverageDeflect = listOf(
+            "Honestly, I'm not sure I've got that right now — want me to look it up quickly?",
+            "Hm, that's not off the top of my head — want me to check?",
+            "Good question — should I look that up?",
+            "I don't have that memorized right now — want me to take a quick look?",
+        ),
+        escalationAnswerFrame = listOf(
+            "So I checked online — ",
+            "Quick look online — ",
+            "I looked that up on the web — ",
+            "Checked the internet real quick — ",
+        ),
+        escalationSourceTemplate = "Source: {source}.",
+        escalationUnavailable = "I tried to look it up, but couldn't get through just now — let's try again later.",
+        escalationModeErstFragen = "Okay — from now on I'll ask you first before I look anything up online.",
+        escalationModeAus = "Okay — online lookups are off. I'll stay fully local.",
+        escalationModeAutomatisch = "Okay — from now on I'll look things up online automatically when I don't know something.",
+        escalationModeOffline =
+            "Okay — offline mode. I won't look anything up online; I'll answer from what I know myself and say so.",
         // ── Never-Silent-Ränder + Fastpath-Quittungen ────────────────────────
         warmFallback = "I heard you, but something's snagging on my end for a second. Say it again in a moment?",
         audioCapTooLong = "That was a bit too long in one go — say it a little shorter and I'll catch it reliably.",

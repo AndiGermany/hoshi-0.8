@@ -105,6 +105,8 @@ class PendingLookupPortTest {
         listOf(
             "ja", "Ja!", "Ja, bitte.", "ja gerne", "gern", "Gerne",
             "mach das", "Mach mal", "schau nach", "Schau mal nach",
+            "schau kurz nach", "ja schau nach", "ja schau mal nach",
+            "ja schau kurz nach",
             "ok", "Okay", "klar", "Bitte",
             "yes", "Yes, please", "sure", "Go ahead",
         ).forEach { text ->

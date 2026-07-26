@@ -91,34 +91,42 @@ class HttpBrainHealthSource(
 
 /**
  * **BrainMemoryHeuristic** — die REINE Ableitung des Mac-RAM-Drucks aus der
- * Brain-Health. Auf ct-106 (Linux) ist `vm_stat`/[de.hoshi.adapters.supervision.MacMemorySnapshot]
- * blind für den Mac — der Mac-Druck kommt darum aus dem Feld, das der Brain-Sidecar
- * (`server_e4b.py`) ohnehin im `/health`-JSON exponiert:
+ * Brain-Health.
+ *
+ * **Primärquelle seit dem Andi-Auftrag 2026-07-25/26** ([classifyDirect]): der Brain-
+ * Sidecar (`sidecars/brain/server.py`, `_memory_status()`) misst RAM-Druck IMMER aktiv
+ * über `vm_stat`/`sysctl vm.swapusage` und liefert ein eigenes, gecachtes `memory`-Feld:
  *
  * ```
- * "wired": { "want_mb":…, "active":bool, "memorystatus_level":int,
- *            "release_lvl":int, "reapply_lvl":int }
+ * "memory": { "level": "ok"|"warn"|"critical", "detail": "…" }
  * ```
  *
- * `memorystatus_level` ist `sysctl kern.memorystatus_level` (0..100, **höher = mehr
- * freier RAM**, `-1` = nicht gemessen). Die Schwellen kommen aus DEMSELBEN Health-JSON
- * (`release_lvl`/`reapply_lvl`, Default 25/40) und spiegeln exakt die Hysterese, mit
- * der der Sidecar seinen wired-Pin freigibt/re-pinnt:
- *  - `level < release_lvl`  → **CRITICAL** (akuter Druck: der Sidecar gibt gepinnte
- *    Pages frei, damit ein Voice-Peak STT+TTS nicht erstickt).
- *  - `level < reapply_lvl`  → **WARN** (Hysterese-Band: knapp, noch nicht erholt).
- *  - `level ≥ reapply_lvl`  → **OK** (reichlich frei).
- *  - `level < 0` / kein `wired`-Feld / Brain unerreichbar → **UNKNOWN** (ehrlich, kein Fake).
+ * Realer Vorfall (2×, 25./26.07.): das 12B drückte den Mac auf <500 MB frei + vollen
+ * Swap, Whisper transkribierte 45s lang nichts bei GRÜNEM Health — der Nutzer erfuhr
+ * es erst am Fehler-Chip. Grund: die ALTE Quelle (`wired.memorystatus_level`, s.
+ * [classifyFromWired]) ist nur LIVE, wenn der Residency-Monitor des Brains läuft
+ * (`HOSHI_E4B_WIRED_MB>0`, Default AUS) — im Normalbetrieb blieb sie für immer `-1`
+ * ⇒ dauerhaft UNKNOWN, obwohl der Mac wirklich unter Druck stand.
  *
- * **Annahme:** `memorystatus_level` ist nur LIVE, wenn der Residency-Monitor des
- * Brains läuft (`HOSHI_E4B_WIRED_MB>0`). Sonst bleibt es bei `-1` ⇒ UNKNOWN — das ist
- * der ehrliche „weiß ich nicht"-Zustand, kein falsches Grün.
+ * **Abwärtskompatibilität:** fehlt das `memory`-Feld (älterer Sidecar-Stand ohne
+ * dieses Feld) oder trägt es keinen bekannten `level`-Wert, fällt [classify] auf die
+ * ALTE `wired.memorystatus_level`-Ableitung zurück ([classifyFromWired]) — Sidecars,
+ * die noch nicht auf den neuen Stand deployt sind, verlieren dadurch NICHTS.
  */
 object BrainMemoryHeuristic {
     const val SOURCE = "brain-health"
+
+    /**
+     * Quelle, wenn der Sidecar das ehrliche `memory`-Feld direkt liefert (Primärpfad,
+     * s. Objekt-KDoc). Getrennt von [SOURCE] (der alten `wired`-Ableitung), damit im
+     * Wire-JSON/Logs sichtbar bleibt, WELCHER Pfad geliefert hat.
+     */
+    const val DIRECT_SOURCE = "brain-memory"
+
     private const val DEFAULT_RELEASE = 25
     private const val DEFAULT_REAPPLY = 40
     private val mapper = jacksonObjectMapper()
+    private val DIRECT_LEVELS = mapOf("ok" to "OK", "warn" to "WARN", "critical" to "CRITICAL")
 
     /** Klassifiziert aus dem rohen `/health`-Body (null/leer/unparsebar → UNKNOWN). */
     fun classify(healthBody: String?): MemoryStatus {
@@ -130,8 +138,40 @@ object BrainMemoryHeuristic {
         return classify(node)
     }
 
-    /** Klassifiziert aus dem bereits geparsten `/health`-Knoten. */
-    fun classify(node: JsonNode): MemoryStatus {
+    /**
+     * Klassifiziert aus dem bereits geparsten `/health`-Knoten: ZUERST das neue,
+     * direkte `memory`-Feld ([classifyDirect]); nur wenn das fehlt/unbekannt ist,
+     * die alte `wired`-Ableitung ([classifyFromWired]).
+     */
+    fun classify(node: JsonNode): MemoryStatus = classifyDirect(node) ?: classifyFromWired(node)
+
+    /**
+     * NEU (Primärpfad): liest `memory.level`/`memory.detail`, wie sie
+     * `sidecars/brain/server.py` (`_memory_status()`) liefert. `null` ⇒ das Feld
+     * fehlt ODER trägt keinen der drei bekannten Level-Werte — der Aufrufer fällt
+     * dann auf [classifyFromWired] zurück (Abwärtskompatibilität für ältere Sidecars).
+     */
+    private fun classifyDirect(node: JsonNode): MemoryStatus? {
+        val mem = node.path("memory")
+        if (mem.isMissingNode || mem.isNull) return null
+        val levelNode = mem.path("level")
+        if (!levelNode.isTextual) return null
+        val level = DIRECT_LEVELS[levelNode.asText().lowercase()] ?: return null
+        val detailNode = mem.path("detail")
+        val detail = if (detailNode.isTextual) detailNode.asText() else
+            "RAM-Pegel $level (Sidecar-Direktmessung, kein Detailtext geliefert)."
+        return MemoryStatus(level, DIRECT_SOURCE, detail)
+    }
+
+    /**
+     * ALT (Fallback): Ableitung aus `wired.memorystatus_level` — lebt nur, solange
+     * der Residency-Monitor läuft (`HOSHI_E4B_WIRED_MB>0`). `memorystatus_level` ist
+     * `sysctl kern.memorystatus_level` (0..100, **höher = mehr freier RAM**, `-1` =
+     * nicht gemessen). Die Schwellen kommen aus DEMSELBEN Health-JSON
+     * (`release_lvl`/`reapply_lvl`, Default 25/40) und spiegeln exakt die Hysterese,
+     * mit der der Sidecar seinen wired-Pin freigibt/re-pinnt.
+     */
+    private fun classifyFromWired(node: JsonNode): MemoryStatus {
         val wired = node.path("wired")
         if (wired.isMissingNode || wired.isNull) {
             return unknown("Brain liefert kein wired-Feld — RAM-Druck am Mac unbekannt.")

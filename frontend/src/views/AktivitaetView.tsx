@@ -5,6 +5,7 @@ import { aggregateToday, stageSegments, stageSparkSeries, STAGES } from '../comp
 import { StageSparkline, isP95Elevated } from '../components/StageSparkline';
 import { MutedGlyph, WarnGlyph } from '../components/icons';
 import { useUiStrings } from '../i18n';
+import { DiagnoseSection } from './UebersichtView';
 
 /**
  * Aktivität — der verdichtete Feed des Zuhauses.
@@ -22,6 +23,11 @@ import { useUiStrings } from '../i18n';
  * Die Ansicht ist rein prop-getrieben (kein Hook, kein Netz) und dadurch ohne
  * DOM/Fetch testbar. Live-Verdrahtung (Health-Hook + Diary-Load beim Öffnen +
  * Refresh-Knopf, bewusst kein Dauerpoll): {@link AktivitaetViewLive}.
+ *
+ * Trägt seit dem Flur-Display-Umbau (Andi-Auftrag 2026-07-26) am ENDE zusätzlich
+ * die „Diagnose"-Sektion ({@link DiagnoseSection}) — die von Home umgezogene
+ * Entwickler-Landing (Hero + Backend/Chat-Turn/Auth-Token/Heute-Kacheln). Home
+ * ist jetzt reines Flur-Display (nur IdleFace + Orb); Diagnostik lebt hier.
  */
 
 export interface HealthObservation {
@@ -150,9 +156,20 @@ export interface AktivitaetViewProps {
   onRefresh?: () => void;
   /** „Heute"-Referenz der Stage-Zusammenfassung (injizierbar für Tests). */
   now?: Date;
+  /** Aktueller Health-Zustand für die Diagnose-Sektion (Hero-Banner am Ende). */
+  state: HealthState;
+  /** Letzter Health-Check-Zeitpunkt für die Diagnose-Sektion; `null` = noch nie geprüft. */
+  lastChecked: number | null;
 }
 
-export function AktivitaetView({ observations, turns, onRefresh, now }: AktivitaetViewProps) {
+export function AktivitaetView({
+  observations,
+  turns,
+  onRefresh,
+  now,
+  state,
+  lastChecked,
+}: AktivitaetViewProps) {
   const { activity, locale } = useUiStrings();
   const stateLabel: Record<HealthState, string> = {
     up: activity.stateOnline,
@@ -255,6 +272,10 @@ export function AktivitaetView({ observations, turns, onRefresh, now }: Aktivita
           ))
         )}
       </ol>
+
+      {/* Diagnose (Flur-Display-Umbau 2026-07-26): die umgezogene Entwickler-
+          Landing von Home — Hero + Backend/Chat-Turn/Auth-Token/Heute. */}
+      <DiagnoseSection state={state} lastChecked={lastChecked} turns={turns} nowMs={(now ?? new Date()).getTime()} />
     </section>
   );
 }
@@ -279,5 +300,13 @@ export function AktivitaetViewLive() {
     setLog((prev) => [{ state, at: lastChecked }, ...prev].slice(0, 12));
   }, [state, lastChecked]);
 
-  return <AktivitaetView observations={log} turns={turns} onRefresh={refresh} />;
+  return (
+    <AktivitaetView
+      observations={log}
+      turns={turns}
+      onRefresh={refresh}
+      state={state}
+      lastChecked={lastChecked}
+    />
+  );
 }

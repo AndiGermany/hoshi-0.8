@@ -17,6 +17,13 @@ liefert deshalb fuer Treffer explizit `attribution: "Aus Wikipedia, CC-BY-SA"`.
 Wer eine abgeleitete Datenbank verteilt, muss deren eigene Lizenz- und
 Attributionspflichten separat erfuellen.
 
+Der Releasepfad unter [`tools/knowledge-pack`](../../tools/knowledge-pack/README.md)
+erzeugt deshalb pro Pack ein `NOTICE.md` mit CC BY-SA 4.0, Attribution,
+Kennzeichnung der Transformation und ShareAlike-Hinweis. Jede Artikelzeile
+bewahrt eine permanente Wikipedia-`oldid`-URL. Der historische Export aus einer
+lokalen DB bleibt ausdrücklich `forensic-non-release`, weil diese DB den
+ursprünglichen Dump-Hash nicht bewahrt.
+
 Das optionale extraktive Summary kann einen bereits separat laufenden
 Ollama-/EmbeddingGemma-Endpunkt aufrufen. Weder Ollama noch Modellgewichte
 werden hier gebuendelt oder heruntergeladen; deren jeweilige Bedingungen sind

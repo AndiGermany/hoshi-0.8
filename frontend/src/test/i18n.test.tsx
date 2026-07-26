@@ -154,7 +154,7 @@ describe('i18n — ein Sprachwechsel rendert die andere Sprache', () => {
     expect(en.activity.rest).toBe('other');
     expect(en.locale).toBe('en-US');
     expect(en.rooms.title).toBe('Rooms');
-    expect(en.overview.title).toBe('Overview');
+    expect(en.overview.backend).toBe('Backend');
     expect(en.chat.placeholder).toBe('Message Hoshi…');
     expect(en.chat.greeting('morning')).toBe('Good morning — what can I do for you?');
     expect(en.chat.greeting('morning')).not.toContain('Guten Morgen');
@@ -216,17 +216,19 @@ describe('i18n — IdleFace/TopNav (Video-Tag-Befund 21.07): deutsches Rendering
   it('IdleFace rendert im Default (de) exakt den bisherigen deutschen Text', () => {
     expect(getActiveUiLanguage()).toBe('de');
     const html = renderToStaticMarkup(
-      <IdleFace nowMs={IDLE_NOW} health="up" voice={null} scheduled={[]} turns={[]} weather={null} />,
+      <IdleFace
+        nowMs={IDLE_NOW}
+        health="up"
+        voice={null}
+        scheduled={[]}
+        weather={null}
+        shopping={[]}
+      />,
     );
     expect(html).toContain('Guten Morgen'); // Tageszeit-Gruß
     expect(html).toContain('Dienstag, 21. Juli'); // Datum folgt de-DE
     expect(html).toContain('Kein Wecker gestellt');
-    expect(html).toContain('Heute');
-    expect(html).toContain('Geplant');
-    expect(html).toContain('Wetter');
-    expect(html).toContain('Nichts geplant');
-    expect(html).toContain('Echte aktive Timer, Wecker und Erinnerungen.');
-    expect(html).toContain('Wird gerade gelesen.'); // Wetter: erster Fetch läuft (weather=null)
+    expect(html).toContain('Wird gerade gelesen.'); // Jetzt-Band: erster Fetch läuft (weather=null)
     expect(html).toContain('Zuhause'); // section aria-label
     expect(html).toContain('online'); // Status-Chip
   });
@@ -248,15 +250,18 @@ describe('i18n — setActiveUiLanguage("en") macht den ersten Bildschirm wirklic
   it('IdleFace: Gruß, Wochentag und alle Kachel-/Statustexte werden englisch', () => {
     setActiveUiLanguage('en');
     const html = renderToStaticMarkup(
-      <IdleFace nowMs={IDLE_NOW} health="up" voice={null} scheduled={[]} turns={[]} weather={null} />,
+      <IdleFace
+        nowMs={IDLE_NOW}
+        health="up"
+        voice={null}
+        scheduled={[]}
+        weather={null}
+        shopping={[]}
+      />,
     );
     expect(html).toContain('Good morning');
     expect(html).toContain('Tuesday, July 21'); // Wochentag „Dienstag" → „Tuesday" (Punkt c des Auftrags)
     expect(html).toContain('No alarm set');
-    expect(html).toContain('Today');
-    expect(html).toContain('Planned');
-    expect(html).toContain('Weather');
-    expect(html).toContain('Nothing planned');
     expect(html).toContain('Reading now.');
     expect(html).toContain('Home'); // section aria-label
     expect(html).not.toContain('Guten Morgen');

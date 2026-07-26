@@ -24,6 +24,7 @@ Quelle:
 - wiki/welt-update-2026-05-19.md These IV
 """
 import argparse
+import hashlib
 import json
 import logging
 import math
@@ -32,6 +33,7 @@ import re
 import sqlite3
 import sys
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Optional
@@ -39,6 +41,27 @@ from typing import Optional
 import zstandard as zstd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+import pack_manifest as _pack_manifest_module
+from pack_manifest import ManifestError, load_pack_state
+
+if Path(_pack_manifest_module.__file__).resolve() != (
+    Path(__file__).resolve().with_name("pack_manifest.py")
+):
+    raise RuntimeError("pack_manifest wurde nicht aus sidecars/knowledge geladen")
+
+
+def _source_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+RUNTIME_CODE = {
+    "attestation": "self-reported-source-sha256-v1",
+    "serverSha256": _source_sha256(Path(__file__).resolve()),
+    "packManifestSha256": _source_sha256(
+        Path(_pack_manifest_module.__file__).resolve()
+    ),
+}
 
 # ── Logging ─────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -66,7 +89,18 @@ if not DB_PATH.exists():
     log.error("articles.db nicht gefunden: %s", DB_PATH)
     sys.exit(1)
 
+try:
+    PACK_STATE = load_pack_state(DB_PATH)
+except ManifestError as exc:
+    log.error("Knowledge-Pack-Manifest unbrauchbar: %s", exc)
+    sys.exit(1)
+
 log.info("DB: %s (%.1f GB)", DB_PATH, DB_PATH.stat().st_size / 1e9)
+log.info(
+    "Knowledge-Pack: status=%s packId=%s",
+    PACK_STATE.status,
+    PACK_STATE.pack_id or "(legacy)",
+)
 
 
 # ── SQLite-Connection-Pool ──────────────────────────────────────────────────
@@ -74,9 +108,24 @@ log.info("DB: %s (%.1f GB)", DB_PATH, DB_PATH.stat().st_size / 1e9)
 # Wir öffnen eine Connection on-demand pro Request (cheap, file is mmap'd by OS).
 
 def open_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=5.0)
-    conn.row_factory = sqlite3.Row
-    return conn
+    PACK_STATE.assert_database_unchanged(DB_PATH)
+    query = "mode=ro"
+    if PACK_STATE.content_sha256_verified:
+        query += "&immutable=1"
+    uri = (
+        "file:"
+        + urllib.parse.quote(str(DB_PATH.absolute()), safe="/")
+        + "?"
+        + query
+    )
+    conn = sqlite3.connect(uri, uri=True, timeout=5.0)
+    try:
+        PACK_STATE.assert_database_unchanged(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except Exception:
+        conn.close()
+        raise
 
 
 # ── zstd-Decompressor ───────────────────────────────────────────────────────
@@ -1559,6 +1608,57 @@ def health() -> HealthResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/v1/health")
+def health_v1() -> dict:
+    """Pack-bewusster Health-Vertrag ohne lokalen Dateipfad.
+
+    Der historische ``/health``-Vertrag bleibt unverändert. Der versionierte
+    Endpunkt macht dagegen sichtbar, ob eine sauber manifestierte Distribution
+    oder die lokale Legacy-Datenbank läuft.
+    """
+    try:
+        with open_conn() as conn:
+            conn.execute("SELECT 1").fetchone()
+        article_count = _article_count()
+        manifest = PACK_STATE.manifest
+        if manifest is not None and manifest.article_count != article_count:
+            raise RuntimeError(
+                "Manifest-Artikelzahl passt nicht zur DB: "
+                f"{manifest.article_count} != {article_count}"
+            )
+        return {
+            "status": "ok",
+            "articleCount": article_count,
+            "dbSizeBytes": DB_PATH.stat().st_size,
+            "pack": PACK_STATE.public_summary(),
+            "runtimeCode": RUNTIME_CODE,
+        }
+    except Exception as e:
+        log.exception("v1 health failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/v1/manifest")
+def manifest_v1() -> dict:
+    """Öffentliche Pack-Provenienz; Legacy liefert ehrlich 404 statt Erfindung."""
+    if PACK_STATE.manifest is None:
+        raise HTTPException(
+            status_code=404,
+            detail="legacy-unmanifested: diese Knowledge-DB besitzt kein Pack-Manifest",
+        )
+    try:
+        PACK_STATE.assert_database_unchanged(DB_PATH)
+    except ManifestError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=f"knowledge-pack-drift: {exc}",
+        ) from exc
+    return {
+        **PACK_STATE.public_summary(),
+        "runtimeCode": RUNTIME_CODE,
+    }
+
+
 # ── Task #54 (Iter-97): Hauptnomen-Titel-Boost gegen BM25-OR-Lärm ────────────
 # Andi-Bug „Haben Meerschweinchen einen Schwanz" → grounded mit „Baumschliefer".
 # Wurzel: Die reine OR-FTS über die Klassifikations-Aliase gewichtet jedes Token
@@ -2377,6 +2477,112 @@ def search(
         totalHits=len(sorted_hits),
         hits=sorted_hits,
     )
+
+
+def _source_evidence(article_ids: list[int]) -> dict[int, dict[str, Optional[str]]]:
+    """Optionale per-Artikel-Provenienz aus einem Pack-v1 lesen.
+
+    Legacy-Datenbanken besitzen ``article_sources`` nicht. Dann bleibt die
+    Revisions-ID ehrlich unbekannt; die stabile Wikipedia-Page-ID erlaubt
+    immerhin eine kanonische ``curid``-URL ohne Titel-Slug-Raten.
+    """
+    evidence: dict[int, dict[str, Optional[str]]] = {
+        aid: {
+            "sourceUrl": f"https://de.wikipedia.org/?curid={aid}",
+            "sourceRevisionId": None,
+        }
+        for aid in article_ids
+    }
+    if not article_ids:
+        return evidence
+    try:
+        with open_conn() as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type='table' AND name='article_sources'"
+            ).fetchone()
+            if exists is None:
+                return evidence
+            placeholders = ",".join("?" for _ in article_ids)
+            rows = conn.execute(
+                "SELECT article_id, source_url, source_revision_id "
+                f"FROM article_sources WHERE article_id IN ({placeholders})",
+                tuple(article_ids),
+            ).fetchall()
+        for row in rows:
+            evidence[row["article_id"]] = {
+                "sourceUrl": row["source_url"],
+                "sourceRevisionId": row["source_revision_id"],
+            }
+    except sqlite3.OperationalError as exc:
+        # Evidenz ist additiv; Retrieval bleibt verfügbar, aber die Lücke wird
+        # geloggt und nicht mit einer geratenen Revision kaschiert.
+        log.warning("Pack-Evidenz nicht lesbar: %s", exc)
+    return evidence
+
+
+@app.get("/v1/search")
+def search_v1(
+    q: str,
+    limit: int = 5,
+    extract_max_chars: int = 1500,
+    dedupe: bool = True,
+    passage_rag: bool = True,
+    summary_sentences: int = 0,
+    summary_query: str = "",
+    summary_scan: int = 0,
+    fact_query: str = "",
+) -> dict:
+    """Versionierter Suchvertrag mit Pack- und Quellenprovenienz.
+
+    Die Retrieval-Implementierung bleibt exakt die bewährte ``/search``-
+    Funktion. Nur die Antwort wird additiv um ein ``evidence``-Objekt je Treffer
+    und den sichtbaren Pack-Zustand ergänzt.
+    """
+    if PACK_STATE.manifest is None:
+        raise HTTPException(
+            status_code=409,
+            detail="knowledge-pack-required: Legacy-DB bitte über /search abfragen",
+        )
+    response = search(
+        q=q,
+        limit=limit,
+        extract_max_chars=extract_max_chars,
+        dedupe=dedupe,
+        passage_rag=passage_rag,
+        summary_sentences=summary_sentences,
+        summary_query=summary_query,
+        summary_scan=summary_scan,
+        fact_query=fact_query,
+    )
+    article_ids = [hit.articleId for hit in response.hits]
+    sources = _source_evidence(article_ids)
+    manifest = PACK_STATE.manifest
+    hits: list[dict] = []
+    for hit in response.hits:
+        item = hit.model_dump()
+        source = sources[hit.articleId]
+        item["evidence"] = {
+            "packId": manifest.pack_id if manifest else None,
+            "packStatus": PACK_STATE.status,
+            "sourcePageId": hit.articleId,
+            "sourceRevisionId": source["sourceRevisionId"],
+            "sourceUrl": source["sourceUrl"],
+            "license": manifest.license_spdx if manifest else None,
+            "retrievalMethod": (
+                manifest.retrieval_method
+                if manifest
+                else "legacy-classification-fts+title-index"
+            ),
+        }
+        hits.append(item)
+    return {
+        "query": response.query,
+        "durationMs": response.durationMs,
+        "totalHits": response.totalHits,
+        "pack": PACK_STATE.public_summary(),
+        "hits": hits,
+    }
 
 
 @app.get("/article/{article_id}", response_model=ArticleResponse)

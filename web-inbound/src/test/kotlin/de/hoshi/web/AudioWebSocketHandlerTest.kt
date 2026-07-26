@@ -761,6 +761,61 @@ class AudioWebSocketHandlerTest {
         sub.dispose() // kein Crash ist der Beweis
     }
 
+    // ── Auto-Switch-Anker Voice-Seite (Andi-Auftrag „12B für Chat, e4b für Voice", 2026-07-26) ──
+
+    @Test
+    fun `start-Frame ruft den onVoiceSessionStart-Hook auf`() {
+        val calls = java.util.concurrent.atomic.AtomicInteger(0)
+        val h = AudioWebSocketHandler(
+            stt = SttPort { _, _ -> Mono.just("hallo") },
+            ttsStage = ttsStage, perimeter = perimeter, objectMapper = mapper,
+            runTurn = { Flux.empty() },
+            onVoiceSessionStart = { calls.incrementAndGet() },
+        )
+        val session = FakeWebSocketSession(loopback = true)
+        val sub = h.handle(session).subscribe()
+        session.pushText("""{"type":"start","turnId":"t1"}""")
+        session.completeInbound()
+
+        assertEquals(1, calls.get(), "jeder start-Frame stösst den Voice-Anker genau einmal an")
+        sub.dispose()
+    }
+
+    @Test
+    fun `zwei start-Frames (Folge-Turns derselben Session) rufen den Hook zweimal`() {
+        val calls = java.util.concurrent.atomic.AtomicInteger(0)
+        val h = AudioWebSocketHandler(
+            stt = SttPort { _, _ -> Mono.just("hallo") },
+            ttsStage = ttsStage, perimeter = perimeter, objectMapper = mapper,
+            runTurn = { Flux.just(ChatEvent.Done(provider = "LOCAL")) },
+            onVoiceSessionStart = { calls.incrementAndGet() },
+        )
+        val session = FakeWebSocketSession(loopback = true)
+        val sub = h.handle(session).subscribe()
+        session.pushText("""{"type":"start","turnId":"t1"}""")
+        session.pushBinary(ByteArray(10))
+        session.pushText("""{"type":"stop"}""")
+        session.pushText("""{"type":"start","turnId":"t2"}""")
+        session.pushBinary(ByteArray(10))
+        session.pushText("""{"type":"stop"}""")
+        session.completeInbound()
+
+        // Die Drossel (schon-richtig-geladen/Hysterese) sitzt bewusst NICHT im Handler,
+        // sondern im BrainAutoSwitchPort selbst — der Handler feuert den Hook ehrlich pro Turn.
+        assertEquals(2, calls.get())
+        sub.dispose()
+    }
+
+    @Test
+    fun `onVoiceSessionStart ohne Wiring (No-op-Default) crasht nicht`() {
+        val h = handler(SttPort { _, _ -> Mono.just("hallo") })
+        val session = FakeWebSocketSession(loopback = true)
+        val sub = h.handle(session).subscribe()
+        session.pushText("""{"type":"start","turnId":"t1"}""")
+        session.completeInbound()
+        sub.dispose() // kein Crash ist der Beweis
+    }
+
     // ── C: Sprecher-Erkennung am ws-Rand ─────────────────────────────────────────
 
     @Test

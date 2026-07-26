@@ -11,10 +11,20 @@ erfunden. Die 0.5-Kopie bleibt bis zum bewiesenen Cutover der Rueckweg.
 - `GET /health` → Status, Artikelzahl und DB-Metadaten
 - `GET /search?q=...&limit=5&extract_max_chars=1500` → `WikiSearchResponse`
 - `GET /article/{id}?max_chars=2000` → einzelner Artikel-Extract
+- `GET /v1/health` → Pack-Status und Runtime-Source-Hashes ohne lokalen Maschinenpfad
+- `GET /v1/manifest` → veröffentlichbare Pack-Provenienz oder ehrliches 404
+- `GET /v1/search?...` → bestehende Hits plus Quellen-/Pack-Evidenz
 
 Die Datenbank wird ausschliesslich mit SQLite `mode=ro` geoeffnet. Der
 optionale Summary-Pfad nutzt den vorhandenen lokalen Ollama-Endpunkt; faellt er
 aus, bleibt der volle Extract erhalten.
+
+Ohne `manifest.json` startet die heutige externe DB weiter, wird in `/v1/health`
+aber sichtbar als `legacy-unmanifested` ausgewiesen. Ein vorhandenes, kaputtes
+Manifest ist fatal. Mit `HOSHI_KNOWLEDGE_REQUIRE_MANIFEST=true` ist auch ein
+fehlendes Manifest fatal. `/v1/search` verweigert eine Legacy-DB mit HTTP 409;
+für sie bleibt ausschließlich der unveränderte `/search`-Pfad. Bau, Vertrag und Full-Verify:
+[`tools/knowledge-pack`](../../tools/knowledge-pack/README.md).
 
 ## Bootstrap und Start
 
@@ -34,6 +44,15 @@ die Runtime-Imports sowie SQLite-FTS5. Es laedt weder Datenbank noch Modelle.
 | `HOSHI_KNOWLEDGE_HOST` | `0.0.0.0` | Bind-Adresse |
 | `HOSHI_KNOWLEDGE_PORT` | `HOSHI_BRIDGE_PORT` bzw. `8035` | HTTP-Port |
 | `HOSHI_LOG_DIR` | `$HOME/.hoshi/logs` | Log-Ablage |
+| `HOSHI_KNOWLEDGE_MANIFEST_PATH` | neben der DB: `manifest.json` | explizites Pack-Manifest |
+| `HOSHI_KNOWLEDGE_REQUIRE_MANIFEST` | `false` | Legacy-DB verweigern |
+| `HOSHI_KNOWLEDGE_VERIFY_CONTENT_AT_START` | `false` | vor READY tatsächliche Pack-DB vollständig hashen und spätere Dateidrift fail-closed verweigern |
+
+`/v1/manifest` nennt bei content-verifiziertem Start den tatsächlich gemessenen
+DB-Hash und eine pfadfreie Selbstauskunft über die geladenen
+`server.py`-/`pack_manifest.py`-Bytes. Das bindet einen lokalen A/B-Lauf
+reproduzierbar an diese Quellen; es ist keine kryptografische
+Prozess-Attestation gegen einen bösartigen lokalen Dienst.
 
 ## Tests
 

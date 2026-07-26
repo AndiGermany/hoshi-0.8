@@ -561,9 +561,16 @@ export function useVoiceChatSession({
       },
     });
     recorderRef.current = rec;
-    setMic('listening');
     try {
       await rec.start();
+      // ERST NACH bewiesenem Start auf 'listening' — nicht davor (Andi-Befund
+      // 26.07: „die ersten Millisekunden sind weg"). Vorher stand die Zeile VOR
+      // dem await: die UI sagte „ich höre zu", während getUserMedia noch mit dem
+      // Mikrofon verhandelte — wer sofort lossprach, sprach ins Leere, und kein
+      // Pre-Roll kann puffern, was vor dem Stream liegt (grün ≠ lebt, auch hier).
+      // Der Pre-Roll-Ring (preRoll.ts) deckt die Encoder-Warmup-Lücke NACH dem
+      // Stream-Start; diese Umstellung deckt die Verhandlungs-Lücke DAVOR.
+      setMic('listening');
     } catch (err) {
       recorderRef.current = null;
       displayLevelRef.current = 0;
@@ -596,7 +603,17 @@ export function useVoiceChatSession({
       setMicError(voiceChat.noAudioHeard);
       return;
     }
-    await runVoiceTurn(await voiceTurnUploadBlob(blob));
+    // Anlaut-Fix (Andi-Befund 26.07, s. audio/preRoll.ts): den vor dem
+    // MediaRecorder-Anlauf eingefangenen Ring-Vorlauf voranstellen — `rec` bleibt
+    // nach `stop()` gültig abfragbar (s. VoiceRecorder.getPreRoll-KDoc).
+    // Optional-Chaining: Test-Doubles (`vi.mock('../audio/recorder')` in mehreren
+    // Tests) faken oft nur start/stop/cancel — ein fehlender Pre-Roll-Getter ist
+    // dann kein Crash, sondern schlicht „kein Pre-Roll" (wie ohne Web Audio).
+    const preRoll = {
+      samples: rec.getPreRoll?.() ?? new Float32Array(0),
+      sampleRate: rec.getPreRollSampleRate?.() ?? 0,
+    };
+    await runVoiceTurn(await voiceTurnUploadBlob(blob, preRoll));
   };
   stopAndSendRef.current = () => { void stopAndSend(); };
 

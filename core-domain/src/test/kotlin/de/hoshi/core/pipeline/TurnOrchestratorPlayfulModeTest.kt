@@ -303,7 +303,7 @@ class TurnOrchestratorPlayfulModeTest {
             ChatRequest(text = "Wie hoch ist der Eiffelturm?"),
         )
         assertEquals(0, brainA.callCount.get(), "die Wand bleibt für echte Fragen unverändert scharf")
-        assertEquals(FactCoverageGate.DEFLECT_DE, joinedText(a))
+        assertTrue(joinedText(a) in de.hoshi.core.pipeline.lang.LangDe.PACK.factCoverageDeflect)
 
         // (b) Spiel-Turn ⇒ NIE Deflect (die Wand bewacht Fakten, nicht Fantasie).
         val brainB = FakeBrainPort("Hinten zuerst, sonst verheddert sie sich.")

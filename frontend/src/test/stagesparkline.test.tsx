@@ -318,7 +318,7 @@ describe('AktivitaetView — Sparkline-Einbau in der Stage-Kachel', () => {
 
   it('mit heutigen Messwerten erscheint die Sparkline in der Kachel', () => {
     const out = renderToStaticMarkup(
-      <AktivitaetView observations={[]} turns={[turn(), turn({ ts: todayTs(9) }), turn({ ts: todayTs(10) })]} onRefresh={() => {}} now={NOW} />,
+      <AktivitaetView observations={[]} turns={[turn(), turn({ ts: todayTs(9) }), turn({ ts: todayTs(10) })]} onRefresh={() => {}} now={NOW} state="up" lastChecked={null} />,
     );
     expect(out).toContain('stagespark');
   });
@@ -330,6 +330,8 @@ describe('AktivitaetView — Sparkline-Einbau in der Stage-Kachel', () => {
         turns={[turn({ ts: '2026-07-01T08:00:00.000Z' })]}
         onRefresh={() => {}}
         now={NOW}
+        state="up"
+        lastChecked={null}
       />,
     );
     expect(out).not.toContain('stagespark');
@@ -343,7 +345,7 @@ describe('AktivitaetView — Sparkline-Einbau in der Stage-Kachel', () => {
       turn({ ts: todayTs(10), stages: { sttMs: 500, groundingMs: null, brainTtftMs: null, ttsFirstAudioMs: null, admissionWaitMs: null } }),
     ];
     const out = renderToStaticMarkup(
-      <AktivitaetView observations={[]} turns={turns} onRefresh={() => {}} now={NOW} />,
+      <AktivitaetView observations={[]} turns={turns} onRefresh={() => {}} now={NOW} state="up" lastChecked={null} />,
     );
     expect(out).toContain('stagesum__p95--warn');
   });

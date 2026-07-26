@@ -1,11 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AktivitaetView, type HealthObservation } from '../views/AktivitaetView';
+import { DiagnoseSection } from '../views/UebersichtView';
 import { parseDiaryTurns, type DiaryTurn } from '../hooks/useDiary';
+import type { HealthState } from '../hooks/useHealth';
+import { hasToken } from '../api/config';
 
-const render = (observations: HealthObservation[], turns: DiaryTurn[] | null = []) =>
+const render = (
+  observations: HealthObservation[],
+  turns: DiaryTurn[] | null = [],
+  state: HealthState = 'up',
+  lastChecked: number | null = null,
+) =>
   renderToStaticMarkup(
-    <AktivitaetView observations={observations} turns={turns} onRefresh={() => {}} />,
+    <AktivitaetView
+      observations={observations}
+      turns={turns}
+      onRefresh={() => {}}
+      state={state}
+      lastChecked={lastChecked}
+    />,
   );
 const count = (s: string, needle: string) => s.split(needle).length - 1;
 
@@ -163,5 +177,91 @@ describe('AktivitaetView — der Turn-Feed lebt (Render-Vertrag)', () => {
     expect(out).toContain('feed__row--down');
     expect(out).toContain('Backend online');
     expect(out).toContain('Backend offline');
+  });
+
+  it('trägt am Ende die Diagnose-Sektion (Flur-Display-Umbau 2026-07-26: die von Home umgezogene Landing)', () => {
+    const out = render([], [turn()], 'up', Date.now());
+    expect(out).toContain('Diagnose');
+    expect(out).toContain('Hoshi ist online');
+    expect(out).toContain('Backend');
+    expect(out).toContain('Auth-Token');
+    expect(out).toContain('Heute'); // die ex-„Heute"-Kachel aus IdleFace
+  });
+});
+
+/**
+ * **DiagnoseSection** — die umgezogene Entwickler-Landing (ex-`UebersichtView`,
+ * s. `uebersicht.test.tsx`-Vorgänger vor dem Flur-Display-Umbau 2026-07-26).
+ * Rein prop-getrieben, direkt hier statt in einer eigenen Datei getestet, weil
+ * sie inhaltlich zu Aktivität gehört (rendert nur noch dort, am Sektionsende).
+ */
+describe('DiagnoseSection — die umgezogene Entwickler-Landing, jetzt IMMER live', () => {
+  const renderDiag = (
+    state: HealthState = 'up',
+    lastChecked: number | null = null,
+    turns: DiaryTurn[] | null = [],
+  ) =>
+    renderToStaticMarkup(
+      <DiagnoseSection state={state} lastChecked={lastChecked} turns={turns} nowMs={Date.now()} />,
+    );
+
+  it('spiegelt jeden Health-Zustand wahrheitsgemäß im Hero', () => {
+    const up = renderDiag('up', Date.now());
+    expect(up).toContain('data-health="up"');
+    expect(up).toContain('Hoshi ist online');
+
+    const down = renderDiag('down');
+    expect(down).toContain('data-health="down"');
+    expect(down).toContain('Hoshi ist offline');
+
+    const unknown = renderDiag('unknown');
+    expect(unknown).toContain('data-health="unknown"');
+    expect(unknown).toContain('Status wird geprüft');
+    // unbekannt darf NIE als online (Fake-grün) erscheinen:
+    expect(unknown).not.toContain('Hoshi ist online');
+  });
+
+  it('zeigt fehlende lastChecked als „—" statt einer erfundenen Zeit', () => {
+    expect(renderDiag('unknown', null)).toContain('zuletzt geprüft —');
+  });
+
+  it('die drei „Noch nicht verdrahtet"-Platzhalter sind ERSATZLOS gestrichen (Sidecar-Health/Sprach-Stats/Geräte)', () => {
+    const html = renderDiag('up', Date.now());
+    for (const name of ['Sidecar-Health', 'Sprach-Stats', 'Geräte']) {
+      expect(html).not.toContain(name);
+    }
+    expect(html).not.toContain('nicht verdrahtet');
+  });
+
+  it('zeigt die vier echten Kacheln als live: Backend, Chat-Turn, Auth-Token, Heute', () => {
+    const html = renderDiag('up', Date.now());
+    expect(count(html, 'data-status="live"')).toBe(4);
+    expect(html).toContain('Live-Streaming'); // echte Chat-Verbindung, kein Mock
+    expect(html).toContain('tile--live');
+    expect(html).not.toContain('tile--pending'); // keine Pending-Kacheln mehr
+  });
+
+  it('reflektiert den echten Token-Zustand ehrlich — folgt `hasToken()`, nie hart „fehlt" behauptet', () => {
+    // Bewusst GEGEN die echte `hasToken()` geprüft statt hart „fehlt" erwartet:
+    // ein lokales `.env.local` mit VITE_TOKEN (Dev-Setup gegen ein echtes
+    // Backend) macht „fehlt" sonst zu einem Env-abhängigen Fake-Befund.
+    const html = renderDiag('up');
+    expect(html).toContain('Auth-Token');
+    expect(html).toContain(hasToken() ? 'gesetzt' : 'fehlt');
+  });
+
+  it('„Heute": echte Diary-Zahlen, oder die ehrliche Lücke bei fehlendem/leerem Diary', () => {
+    // Eigener Turn MIT heutigem ts (die Datei-weite `turn()`-Fixture ist fix auf
+    // 2026-07-01 datiert — für die Turn-Feed-Tests egal, hier würde sie gegen
+    // das echte `Date.now()` als „gestern" zählen und stats.turns bliebe 0).
+    const todayTurn: DiaryTurn = { ...turn(), ts: new Date().toISOString() };
+    const withData = renderDiag('up', Date.now(), [todayTurn]);
+    expect(withData).toContain('1 Turn · p50 0,4 s · 0 Aussetzer');
+
+    const empty = renderDiag('up', Date.now(), []);
+    expect(empty).toContain('Noch kein Turn');
+
+    const unavailable = renderDiag('up', Date.now(), null);
+    expect(unavailable).toContain('Diary nicht erreichbar');
   });
 });

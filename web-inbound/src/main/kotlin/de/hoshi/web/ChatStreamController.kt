@@ -133,6 +133,17 @@ class ChatStreamController(
      */
     private val speakerProfileStoreProvider: ObjectProvider<SpeakerProfileStore> =
         SpeakerDisplayNameResolver.providerOf(null),
+    /**
+     * **Auto-Switch-Anker Chat-Seite (Andi-Auftrag „12B für Chat, e4b für Voice",
+     * 2026-07-26)** — Default [BrainAutoSwitchPort.NOOP] ⇒ byte-neutral ohne Wiring
+     * (Muster [turnTrace]). Läuft VOR dem eigentlichen Turn-Bau: bei aktivem
+     * `brainAutoSwitch`-Setting UND nicht schon geladenem Chat-Modell stösst
+     * [BrainAutoSwitchPort.ensureChatModel] den Wechsel an UND wartet ihn ab (ein
+     * paar Sekunden Aufpreis sind beim Tippen okay); scheitert der Wechsel, läuft
+     * der Turn trotzdem mit dem GERADE geladenen Modell weiter (Never-Silent,
+     * s. Port-KDoc — [ensureChatModel] wirft nie und blockiert nie unbegrenzt).
+     */
+    private val brainAutoSwitch: BrainAutoSwitchPort = BrainAutoSwitchPort.NOOP,
 ) {
     /** Baut [SpeakerContext.displayName] best-effort aus dem Enroll-Store nach — s. Ctor-KDoc. */
     private val speakerDisplayNameResolver = SpeakerDisplayNameResolver(
@@ -144,35 +155,40 @@ class ChatStreamController(
         "/api/v1/chat/stream",
         produces = [MediaType.TEXT_EVENT_STREAM_VALUE],
     )
-    fun stream(@RequestBody request: ChatRequest): Flux<ChatEvent> {
-        // Policy -> EINE konkrete Sprache (AUTO/DE/EN/Legacy), VOR Orchestrator UND TTS.
-        // Flag OFF: AUTO->DE, Legacy/explizit unverändert ⇒ byte-identisch zu heute.
-        val effective = languageResolver.resolve(request)
-        // Persona -> effektiver Charakter (Flag OFF: ALLE -> STANDARD, byte-neutral), ebenfalls VOR dem Orchestrator.
-        val effectivePersona = personaResolver.resolve(request)
-        // Text-Chat kennt nie einen displayName (nur die behauptete speakerId) — best-effort
-        // aus dem enrollten Profil auflösen (Flag OFF/kein Treffer/schon gesetzt ⇒ unverändert).
-        val resolvedSpeaker = speakerDisplayNameResolver.resolve(request.speakerContext)
-        val resolved = request.copy(language = effective, persona = effectivePersona, speakerContext = resolvedSpeaker)
-        // Brain-Turn durchs globale Admission-Gate (OFF ⇒ Passthrough ⇒ byte-neutral).
-        val gated = admissionGate.gate(effective) { orchestrator.handle(resolved) }
-        // D7: Slop-Filter VOR Memory-Store + TTS (Slop wird weder gespeichert noch gesprochen).
-        val deslopped = slopKill.transform(gated)
-        val turn = rememberAfter(resolved, deslopped)
-        val out = if (resolved.speak) ttsStage.transform(turn, effective, resolved.voice) else turn
-        // Diary-Tap um den ÄUSSERSTEN Event-Strom (nach TTS) — die geteilte Logik
-        // lebt in [TurnDiaryTap] (derselbe Tap wie am Voice-Rand); NOOP ⇒ ungehüllt
-        // zurück (null Overhead, byte-neutral).
-        return TurnDiaryTap.traced(
-            turnTrace = turnTrace,
-            stream = out,
-            source = TurnDiaryTap.SOURCE_CHAT,
-            chatId = resolved.chatId ?: "",
-            persona = resolved.persona.name,
-            language = resolved.language.name,
-            speak = resolved.speak,
-        )
-    }
+    fun stream(@RequestBody request: ChatRequest): Flux<ChatEvent> =
+        // Auto-Switch-Anker Chat-Seite: VOR dem restlichen Turn-Bau anstossen + abwarten
+        // (NOOP-Default/Setting-AUS ⇒ Mono.just(Unit) ohne I/O ⇒ byte-neutral). Never-Silent:
+        // [BrainAutoSwitchPort.ensureChatModel] wirft nie — ein fehlgeschlagener/hängender
+        // Wechsel verzögert diesen Turn NIE länger als sein eigener, bereits bounded Versuch.
+        brainAutoSwitch.ensureChatModel().flatMapMany {
+            // Policy -> EINE konkrete Sprache (AUTO/DE/EN/Legacy), VOR Orchestrator UND TTS.
+            // Flag OFF: AUTO->DE, Legacy/explizit unverändert ⇒ byte-identisch zu heute.
+            val effective = languageResolver.resolve(request)
+            // Persona -> effektiver Charakter (Flag OFF: ALLE -> STANDARD, byte-neutral), ebenfalls VOR dem Orchestrator.
+            val effectivePersona = personaResolver.resolve(request)
+            // Text-Chat kennt nie einen displayName (nur die behauptete speakerId) — best-effort
+            // aus dem enrollten Profil auflösen (Flag OFF/kein Treffer/schon gesetzt ⇒ unverändert).
+            val resolvedSpeaker = speakerDisplayNameResolver.resolve(request.speakerContext)
+            val resolved = request.copy(language = effective, persona = effectivePersona, speakerContext = resolvedSpeaker)
+            // Brain-Turn durchs globale Admission-Gate (OFF ⇒ Passthrough ⇒ byte-neutral).
+            val gated = admissionGate.gate(effective) { orchestrator.handle(resolved) }
+            // D7: Slop-Filter VOR Memory-Store + TTS (Slop wird weder gespeichert noch gesprochen).
+            val deslopped = slopKill.transform(gated)
+            val turn = rememberAfter(resolved, deslopped)
+            val out = if (resolved.speak) ttsStage.transform(turn, effective, resolved.voice) else turn
+            // Diary-Tap um den ÄUSSERSTEN Event-Strom (nach TTS) — die geteilte Logik
+            // lebt in [TurnDiaryTap] (derselbe Tap wie am Voice-Rand); NOOP ⇒ ungehüllt
+            // zurück (null Overhead, byte-neutral).
+            TurnDiaryTap.traced(
+                turnTrace = turnTrace,
+                stream = out,
+                source = TurnDiaryTap.SOURCE_CHAT,
+                chatId = resolved.chatId ?: "",
+                persona = resolved.persona.name,
+                language = resolved.language.name,
+                speak = resolved.speak,
+            )
+        }
 
     /**
      * Der Gedächtnis-SCHREIB-Hook ans Ende des Turns — die Logik lebt seit dem ws-Rand-

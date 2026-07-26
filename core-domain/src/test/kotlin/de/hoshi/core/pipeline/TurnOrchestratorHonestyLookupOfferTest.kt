@@ -147,6 +147,24 @@ class TurnOrchestratorHonestyLookupOfferTest {
     }
 
     @Test
+    fun `Live-Fall Blumenkohl plus ja schau kurz nach behaelt die Originalfrage`() {
+        val brain = Brain()
+        val cloud = Cloud()
+        val pending = RecordingPending(InMemoryPendingLookupStore())
+        val orchestrator = orchestrator(Kind.RECIPE, available = true, brain, cloud, pending)
+        val question = "Nenn ein Rezept, wie du Blumenkohl besonders gerne isst."
+
+        val offer = turn(orchestrator, question)
+        assertTrue(text(offer) in LangDe.PACK.cloudConsentAsk)
+        assertEquals(listOf(question), pending.offered.map { it.query })
+
+        turn(orchestrator, "ja schau kurz nach")
+
+        assertEquals(listOf(question), cloud.queries, "nie den Zustimmungssatz als neue Frage behandeln")
+        assertEquals(0, brain.calls.get(), "weder Angebot noch Einlösung fallen als Smalltalk zum Brain")
+    }
+
+    @Test
     fun `Existenz-Claim und unbekannter Eigenname erhalten dasselbe einloesbare Angebot`() {
         for ((kind, question) in listOf(
             Kind.EXISTENCE to "Gibt es einen 11-Euro-Schein?",

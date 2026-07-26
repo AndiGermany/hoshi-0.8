@@ -102,6 +102,13 @@ class WeatherLocationAskAdapterTest {
     @Test
     fun `needsLocation - keine Wetter-Absicht - false`() {
         assertFalse(adapter().needsLocation("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT))
+        assertFalse(
+            adapter().needsLocation(
+                "Wie viele Planeten gibt es in unserem Sonnensystem?",
+                RouteCategory.FACT_SHORT,
+            ),
+        )
+        assertFalse(adapter().needsLocation("Wann ist die nächste Sonnenfinsternis?", RouteCategory.FACT_SHORT))
     }
 
     @Test

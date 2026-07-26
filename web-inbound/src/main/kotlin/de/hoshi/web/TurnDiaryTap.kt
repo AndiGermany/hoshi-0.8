@@ -197,8 +197,13 @@ internal object TurnDiaryTap {
                 // best-effort: der Adapter ist non-throwing + async; ein Diary-Fehler
                 // darf den Turn nie berühren (zusätzlich defensiv gefangen).
                 runCatching {
+                    // Seit dem Streuungs-Nachtrag (Andi 2026-07-26, „nicht immer die
+                    // gleiche Antwort") ist der Deflect KEIN Einzelstring je Sprache
+                    // mehr, sondern ein 3-4er-Pool — Mitgliedschaft in der flachen
+                    // Menge ALLER Varianten ALLER Sprachen statt Gleichheit mit genau
+                    // EINER DE-/EN-Konstante (s. [FactCoverageGate.ALL_DEFLECT_VARIANTS]).
                     val deflected = model.get() == "policy" &&
-                        (firstDelta.get() == FactCoverageGate.DEFLECT_DE || firstDelta.get() == FactCoverageGate.DEFLECT_EN)
+                        firstDelta.get() in FactCoverageGate.ALL_DEFLECT_VARIANTS
                     turnTrace.record(
                         TurnTrace(
                             ts = Instant.now(),

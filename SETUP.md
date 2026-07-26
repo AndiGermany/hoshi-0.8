@@ -114,10 +114,15 @@ jeweiligen Sidecar-Ordner):
   *Ehrlich: die Sprecher-**Erkennung** ist im Backend abgeschaltet (siehe Abschnitt 8) —
   der Sidecar wird gebraucht, seine Antwort aber nicht zur Identifikation benutzt.*
 - **Knowledge-Bridge** (`sidecars/knowledge`): `GET /health`, `GET /search`,
-  `GET /article/{id}`. `bootstrap.sh` lädt **keine Datenbank** — `run.sh` bricht ab, wenn
+  `GET /article/{id}` sowie der versionierte Pack-Vertrag unter `/v1/health`,
+  `/v1/manifest` und `/v1/search`. `bootstrap.sh` lädt **keine Datenbank** — `run.sh` bricht ab, wenn
   unter `HOSHI_WIKI_DB_PATH` (Default `~/.hoshi/knowledge/wiki-de/articles.db`) keine
   lesbare Wikipedia-DB liegt. Ohne sie läuft der Rest weiter, Antworten fallen ehrlich auf
-  „ohne Wiki-Grounding" zurück.
+  „ohne Wiki-Grounding" zurück. Ein kleiner, rein öffentlicher und vollständig
+  verifizierbarer Pack lässt sich mit
+  [`tools/knowledge-pack`](tools/knowledge-pack/README.md) bauen; die Auswahl ist
+  erst nach dem getrennten [`tools/knowledge-bench`](tools/knowledge-bench/README.md)
+  ein Produktkandidat.
 
 Piper (`sidecars/piper`) ist die **optionale** zweite lokale Sprachausgabe. Sein
 `bootstrap.sh` lädt Laufzeit und Stimm-Modelle erst nach einer bewussten Entscheidung —
@@ -203,6 +208,7 @@ für lokale Entwicklung reichen die Defaults. `HOSHI_API_TOKEN` musst du selbst 
 - **Die Wikipedia-Datenbank ist nicht Teil dieses Repos.** Der Knowledge-Sidecar liegt hier
   (`sidecars/knowledge`), die DB nicht — ohne sie fallen Grounding-Antworten ehrlich auf
   „ohne Wiki-Grounding" zurück (siehe `pipeline/ground.sh`), der Rest läuft weiter.
+  Knowledge-Pack v1 ist ein Builder-/Manifest-Vertrag, kein mitgelieferter Korpus.
 - Der **Legacy-Voxtral-Pfad** ist gewollt abgeschaltet und als einziger noch nicht aus dem
   privaten Vorgänger-Checkout portiert.
 - Dieses Setup ist auf **einer** konkreten Maschine gehärtet (ein Apple-Silicon-Mac);

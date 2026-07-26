@@ -44,7 +44,7 @@ const turn = (over: Partial<DiaryTurn> = {}): DiaryTurn => ({
 
 const render = (turns: DiaryTurn[] | null) =>
   renderToStaticMarkup(
-    <AktivitaetView observations={[]} turns={turns} onRefresh={() => {}} now={NOW} />,
+    <AktivitaetView observations={[]} turns={turns} onRefresh={() => {}} now={NOW} state="up" lastChecked={null} />,
   );
 
 describe('parseDiaryTurns — Stage-Felder: Key fehlt (Alt) vs. Key null (nicht gemessen)', () => {

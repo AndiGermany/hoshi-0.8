@@ -344,7 +344,7 @@ describe('EN-Sweep — FiredToast (frisch + verpasst)', () => {
       'Alarm is ringing',
       'title="Tap to confirm"',
       'was due at 07:00 — I could not reach you',
-      'aria-label="Open alarm escalation settings (Skills)"',
+      'aria-label="Open alarm escalation settings (Home &amp; integrations)"',
       'title="Change escalation"',
     ]);
   });
@@ -711,8 +711,13 @@ describe('EN-Sweep — SettingsPanel: Dialograhmen + der lang-Bug im vollen Pane
       // Kategorie-Reiter (waren eine deutsche Modul-Konstante):
       '>Appearance<',
       '>Language &amp; voice<',
+      '>Online &amp; lookup<',
+      '>Model &amp; performance<',
       '>Personality<',
       '>Memory &amp; privacy<',
+      '>Home &amp; integrations<',
+      // Extended-Think-Stufenwahl (Andi-Auftrag 26.07 — vorher KEIN UI-Element):
+      'applies only to the quick online lookup (Extended Think)',
       // Farbthema / Sprache / Persönlichkeit (THEMES/LANGUAGES/PERSONAS):
       'Colour theme',
       'Morning blue on ink',
@@ -744,8 +749,13 @@ describe('EN-Sweep — SettingsPanel: Dialograhmen + der lang-Bug im vollen Pane
       'aria-label="Einstellungs-Kategorien"',
       '>Darstellung<',
       '>Sprache &amp; Stimme<',
+      '>Online &amp; Nachschlagen<',
+      '>Modell &amp; Leistung<',
       '>Persönlichkeit<',
       '>Gedächtnis &amp; Privatsphäre<',
+      '>Zuhause &amp; Integrationen<',
+      // Extended-Think-Stufenwahl (Andi-Auftrag 26.07 — vorher KEIN UI-Element):
+      'gilt nur für den schnellen Online-Nachschlag (Extended Think)',
       'Farbthema',
       'Morgenblau auf Tinte',
       '>Folgt dem Tag<',
@@ -816,11 +826,14 @@ const PANEL_LONGTAIL_GERMAN = [
   'Einstellungs-Kategorien',
   'Darstellung',
   'Sprache &amp; Stimme',
+  'Online &amp; Nachschlagen',
   'Persönlichkeit',
   'Modell &amp; Leistung',
-  'Fähigkeiten',
   'Gedächtnis &amp; Privatsphäre',
-  'Standort &amp; Integrationen',
+  'Zuhause &amp; Integrationen',
+  // Extended-Think-Stufenwahl (Andi-Auftrag 26.07 — vorher KEIN UI-Element):
+  'Wenn Hoshi etwas nicht weiß',
+  'gilt nur für den schnellen Online-Nachschlag',
   'Farbthema',
   'Morgenblau auf Tinte',
   'folgt dem Tag',
@@ -854,7 +867,7 @@ const PANEL_LONGTAIL_GERMAN = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('EN-Sweep — SettingsCategoryNav (Reiter-Leiste)', () => {
-  const nav = <SettingsCategoryNav active="faehigkeiten" onSelect={() => {}} />;
+  const nav = <SettingsCategoryNav active="online-nachschlagen" onSelect={() => {}} />;
 
   it('englisch: aria-label und alle sieben Reiter-Labels sind Englisch', () => {
     const html = renderIn('en', nav);
@@ -863,11 +876,11 @@ describe('EN-Sweep — SettingsCategoryNav (Reiter-Leiste)', () => {
       'aria-label="Settings categories"',
       '>Appearance<',
       '>Language &amp; voice<',
-      '>Personality<',
+      '>Online &amp; lookup<',
       '>Model &amp; performance<',
-      '>Skills<',
+      '>Personality<',
       '>Memory &amp; privacy<',
-      '>Location &amp; integrations<',
+      '>Home &amp; integrations<',
     ]);
   });
 
@@ -876,11 +889,11 @@ describe('EN-Sweep — SettingsCategoryNav (Reiter-Leiste)', () => {
       'aria-label="Einstellungs-Kategorien"',
       '>Darstellung<',
       '>Sprache &amp; Stimme<',
-      '>Persönlichkeit<',
+      '>Online &amp; Nachschlagen<',
       '>Modell &amp; Leistung<',
-      '>Fähigkeiten<',
+      '>Persönlichkeit<',
       '>Gedächtnis &amp; Privatsphäre<',
-      '>Standort &amp; Integrationen<',
+      '>Zuhause &amp; Integrationen<',
     ]);
   });
 });
@@ -1153,6 +1166,11 @@ const OPS_GERMAN = [
   'verlässt das Gerät nicht',
   'Alles lokal',
   'deiner Freigabe',
+  // Andi-Auftrag 2026-07-25/26: der warme CRITICAL-Hinweis, der jetzt die
+  // Pillen-Kopfzeile trägt (ersetzt dort "RAM kritisch") — darf im EN-Render
+  // genauso wenig auftauchen wie die alten Wörter oben.
+  'Speicher knapp',
+  'zäh werden',
 ];
 
 describe('EN-Sweep — OpsStatusPill (Kopfzeile)', () => {
@@ -1181,7 +1199,10 @@ describe('EN-Sweep — OpsStatusPill (Kopfzeile)', () => {
     const critHtml = renderIn('en', criticalLocal);
     expectNoGerman(critHtml, 'OpsStatusPill (CRITICAL/lokal)', OPS_GERMAN);
     expectAll(critHtml, 'OpsStatusPill (CRITICAL/lokal)', [
-      'RAM critical',
+      // Andi-Auftrag 2026-07-25/26: die Pille wird bei CRITICAL zum warmen
+      // Hinweis (ersetzt "RAM critical" als Kopfzeilen-Text; der nackte Pegel
+      // bleibt zusätzlich im Panel, s. ops.test.tsx).
+      'Memory is tight — voice replies may feel sluggish right now.',
       'Voice (piper): runs locally — never leaves the device.',
       'All local — your voice never leaves the device.',
     ]);
@@ -1194,7 +1215,7 @@ describe('EN-Sweep — OpsStatusPill (Kopfzeile)', () => {
       'Stimme kommt gerade aus der Cloud (OpenAI)',
     ]);
     expectAll(renderIn('de', criticalLocal), 'OpsStatusPill (CRITICAL/lokal)', [
-      'RAM kritisch',
+      'Speicher knapp — die Stimme kann gerade zäh werden.',
       'Stimme (piper): läuft lokal — verlässt das Gerät nicht.',
       'Alles lokal — deine Stimme verlässt das Gerät nicht. Online-Recherche nur nach deiner Freigabe.',
     ]);

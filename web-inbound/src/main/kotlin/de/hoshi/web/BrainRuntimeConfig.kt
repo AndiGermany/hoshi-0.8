@@ -42,7 +42,37 @@ class BrainRuntimeConfig {
         @Value("\${hoshi.brain-model.path:\${HOSHI_BRAIN_MODEL_PATH:}}") settingsPath: String,
     ): JsonFileBrainModelStore = JsonFileBrainModelStore(resolvePath(settingsPath))
 
+    /**
+     * **Auto-Switch-Settings-Store** (Andi-Auftrag „12B für Chat, e4b für Voice",
+     * 2026-07-26) — Muster [brainModelStore]/[JsonFileEscalationModeStore], eigene
+     * Datei (`~/.hoshi/brain-auto-switch.json`), Default AUS.
+     */
+    @Bean
+    fun brainAutoSwitchStore(
+        @Value("\${hoshi.brain-auto-switch.path:\${HOSHI_BRAIN_AUTO_SWITCH_PATH:}}") settingsPath: String,
+    ): JsonFileBrainAutoSwitchStore = JsonFileBrainAutoSwitchStore(resolveAutoSwitchPath(settingsPath))
+
+    /**
+     * **Der echte [BrainAutoSwitchPort]** — verdrahtet AUSSCHLIESSLICH bestehende Beans
+     * ([brainSwitchModelPort]/[brainHealthProbe], oben) + den neuen Settings-Store; KEIN
+     * zweiter HTTP-Client (Andi-Vorgabe: den bestehenden `switchPort` wiederverwenden).
+     */
+    @Bean
+    fun brainAutoSwitchPort(
+        brainAutoSwitchStore: JsonFileBrainAutoSwitchStore,
+        brainSwitchModelPort: BrainSwitchModelPort,
+        brainHealthProbe: BrainHealthProbe,
+    ): BrainAutoSwitchPort = BrainAutoSwitchService(
+        store = brainAutoSwitchStore,
+        switchPort = brainSwitchModelPort,
+        healthProbe = brainHealthProbe,
+    )
+
     private fun resolvePath(explicit: String): Path =
         if (explicit.isNotBlank()) Paths.get(explicit.trim())
         else Paths.get(System.getProperty("user.home"), ".hoshi", "brain-model.json")
+
+    private fun resolveAutoSwitchPath(explicit: String): Path =
+        if (explicit.isNotBlank()) Paths.get(explicit.trim())
+        else Paths.get(System.getProperty("user.home"), ".hoshi", "brain-auto-switch.json")
 }
