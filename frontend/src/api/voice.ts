@@ -62,16 +62,24 @@ export async function streamVoice(audio: Blob, opts: StreamVoiceOptions): Promis
   const settings = loadSettings();
 
   // Sprach-Wahl → Query, gespiegelt zum Text-Chat: `languagePolicy` trägt die Wahl
-  // (AUTO/DE/EN, Backend erkennt bei AUTO), `language` bleibt KONKRET (DE/EN) als
-  // Legacy-Fallback — 'auto' fällt auf DE. fromCode() ist case-tolerant; GROSS.
+  // (AUTO/DE/EN, Backend erkennt bei AUTO), `language` bleibt KONKRET (DE/EN/ES/
+  // FR/IT) als Legacy-Fallback — 'auto' fällt auf DE. fromCode() ist case-
+  // tolerant; GROSS.
+  //
+  // Andi-Auftrag 2026-07-27 („fünf Sprachen ohne Sternchen"): für es/fr/it lassen
+  // wir `languagePolicy` bewusst WEG — s. ausführliches KDoc in api/chat.ts. Das
+  // Backend-Enum `LanguagePolicy` kennt nur AUTO/DE/EN; ein unbekannter Wert
+  // würde die ganze Anfrage per Jackson-Deserialisierung scheitern lassen. Ohne
+  // den Query-Param verhält sich der Turn wie ein Legacy-Client und liest direkt
+  // das konkrete `language`-Feld (voller 5-Sprachen-Enum).
   const langChoice = opts.language ?? settings.language;
+  const isPolicyLanguage = langChoice === 'auto' || langChoice === 'de' || langChoice === 'en';
   const concreteLanguage = (langChoice === 'auto' ? 'de' : langChoice).toUpperCase();
 
   // persona → Query-Param, gespiegelt zum Text-Chat (dort im JSON-Body). Explizite
   // opts schlagen die persistierten Settings; unbekannte Query-Params ignoriert
   // Spring folgenlos. Ohne dies liefe JEDER Sprach-Turn als STANDARD (Feld fehlte ganz).
   const params = new URLSearchParams({
-    languagePolicy: langChoice.toUpperCase(),
     language: concreteLanguage,
     speak: String(opts.speak ?? true),
     persona: opts.persona ?? settings.persona,
@@ -82,6 +90,11 @@ export async function streamVoice(audio: Blob, opts: StreamVoiceOptions): Promis
     // Id fürs Wecker-Ursprungs-Urteil. Unbekannte Params ignoriert Spring folgenlos.
     deviceId: opts.deviceId ?? getDeviceId(),
   });
+  // languagePolicy NUR für auto/de/en anhängen (s. KDoc oben) — für es/fr/it bleibt
+  // der Query-Param ganz weg (kein "languagePolicy=undefined").
+  if (isPolicyLanguage) {
+    params.set('languagePolicy', langChoice.toUpperCase());
+  }
 
   const res = await fetch(`${API_BASE}/api/v1/voice?${params.toString()}`, {
     method: 'POST',

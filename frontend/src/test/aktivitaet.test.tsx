@@ -1,10 +1,15 @@
-import { describe, it, expect } from 'vitest';
+/** @vitest-environment jsdom */
+import { describe, it, expect, vi } from 'vitest';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AktivitaetView, type HealthObservation } from '../views/AktivitaetView';
 import { DiagnoseSection } from '../views/UebersichtView';
 import { parseDiaryTurns, type DiaryTurn } from '../hooks/useDiary';
 import type { HealthState } from '../hooks/useHealth';
 import { hasToken } from '../api/config';
+
+(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 const render = (
   observations: HealthObservation[],
@@ -186,6 +191,138 @@ describe('AktivitaetView — der Turn-Feed lebt (Render-Vertrag)', () => {
     expect(out).toContain('Backend');
     expect(out).toContain('Auth-Token');
     expect(out).toContain('Heute'); // die ex-„Heute"-Kachel aus IdleFace
+  });
+});
+
+/**
+ * Turn-Feed — Cap+Tages-Trenner+Nachladen (Andi-Befund 2026-07-27: „das listet
+ * sich alle Turns — das bringt nichts, wenn die Liste einfach nur wächst").
+ */
+describe('Turn-Feed — Tages-Trenner („Heute"/„Gestern"/Datum)', () => {
+  it('ordnet drei Turns korrekt Heute/Gestern/Datum zu, in Feed-Reihenfolge', () => {
+    const now = new Date(2026, 6, 27, 10, 0);
+    const turns = [
+      turn({ ts: new Date(2026, 6, 27, 9, 0).toISOString() }),
+      turn({ ts: new Date(2026, 6, 26, 20, 0).toISOString() }),
+      turn({ ts: new Date(2026, 6, 25, 11, 0).toISOString() }),
+    ];
+    const html = renderToStaticMarkup(
+      <AktivitaetView
+        observations={[]}
+        turns={turns}
+        onRefresh={() => {}}
+        state="up"
+        lastChecked={null}
+        now={now}
+      />,
+    );
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const labels = Array.from(container.querySelectorAll('.feed__daysep')).map((el) => el.textContent);
+    expect(labels).toEqual(['Heute', 'Gestern', new Date(2026, 6, 25, 11, 0).toLocaleDateString('de-DE')]);
+  });
+
+  it('unlesbares ts bekommt ein ehrliches „Datum unbekannt"-Segment, NIE „Heute"', () => {
+    const html = renderToStaticMarkup(
+      <AktivitaetView
+        observations={[]}
+        turns={[turn({ ts: 'kaputt' })]}
+        onRefresh={() => {}}
+        state="up"
+        lastChecked={null}
+      />,
+    );
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const labels = Array.from(container.querySelectorAll('.feed__daysep')).map((el) => el.textContent);
+    expect(labels).toEqual(['Datum unbekannt']);
+  });
+
+  it('ohne onLoadMore/hasMoreOlder bleibt „Frühere laden" ohne Grund unsichtbar (reiner Prop-Vertrag)', () => {
+    const out = render([], [turn(), turn({ ts: '2026-07-01T08:06:00Z' })]);
+    expect(out).not.toContain('feed__loadmore');
+  });
+});
+
+describe('Turn-Feed — Cap+Nachladen (Standard-Cap 25, „Frühere laden" +25, kein Endlos-Scroll)', () => {
+  /** `n` Turns desselben Tages, absteigend (neueste zuerst), Minuten-Abstand. */
+  function manyTurns(n: number): DiaryTurn[] {
+    const base = new Date(2026, 6, 27, 12, 0, 0, 0).getTime();
+    return Array.from({ length: n }, (_, i) => turn({ ts: new Date(base - i * 60_000).toISOString() }));
+  }
+
+  async function mount(turns: DiaryTurn[], onLoadMore: () => void, hasMoreOlder: boolean) {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root: Root = createRoot(container);
+    await act(async () =>
+      root.render(
+        <AktivitaetView
+          observations={[]}
+          turns={turns}
+          onRefresh={() => {}}
+          onLoadMore={onLoadMore}
+          hasMoreOlder={hasMoreOlder}
+          state="up"
+          lastChecked={null}
+        />,
+      ),
+    );
+    return { container, root };
+  }
+
+  it('zeigt zuerst genau 25 Turns; „Frühere laden" gibt zunächst den bereits geladenen Puffer frei (kein Netz nötig)', async () => {
+    const onLoadMore = vi.fn();
+    const { container, root } = await mount(manyTurns(60), onLoadMore, false);
+    try {
+      expect(container.querySelectorAll('.feed__item').length).toBe(25);
+
+      const firstClick = container.querySelector<HTMLButtonElement>('.feed__loadmore');
+      expect(firstClick).not.toBeNull();
+      await act(async () => firstClick!.click());
+      expect(container.querySelectorAll('.feed__item').length).toBe(50);
+      expect(onLoadMore).not.toHaveBeenCalled(); // reiner Puffer-Reveal, kein Netz-Request
+
+      // Zweiter Klick: 60 Turns sind geladen, 50 gezeigt — der Puffer reicht
+      // nicht für +25 weitere ⇒ jetzt wird tatsächlich nachgeladen.
+      const secondClick = container.querySelector<HTMLButtonElement>('.feed__loadmore');
+      expect(secondClick).not.toBeNull();
+      await act(async () => secondClick!.click());
+      expect(container.querySelectorAll('.feed__item').length).toBe(60); // alle 60 sichtbar (Cap deckelt selbst)
+      expect(onLoadMore).toHaveBeenCalledTimes(1);
+      // hasMoreOlder=false UND Puffer jetzt komplett gezeigt ⇒ ehrlich kein Knopf mehr.
+      expect(container.querySelector('.feed__loadmore')).toBeNull();
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+
+  it('hasMoreOlder=true (unbekannt): der Knopf bleibt sichtbar, auch wenn der Puffer schon komplett gezeigt wird — Klick löst Nachladen aus', async () => {
+    const onLoadMore = vi.fn();
+    const { container, root } = await mount(manyTurns(10), onLoadMore, true);
+    try {
+      expect(container.querySelectorAll('.feed__item').length).toBe(10); // Puffer kleiner als der Cap
+      const button = container.querySelector<HTMLButtonElement>('.feed__loadmore');
+      expect(button).not.toBeNull(); // ehrlich „unbekannt, ob mehr da ist" statt stillschweigend verstecken
+      await act(async () => button!.click());
+      expect(onLoadMore).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+
+  it('hasMoreOlder=false und Puffer < Cap: kein Knopf — ehrlich „das war\'s"', async () => {
+    const onLoadMore = vi.fn();
+    const { container, root } = await mount(manyTurns(5), onLoadMore, false);
+    try {
+      expect(container.querySelectorAll('.feed__item').length).toBe(5);
+      expect(container.querySelector('.feed__loadmore')).toBeNull();
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
   });
 });
 

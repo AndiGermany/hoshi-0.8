@@ -523,6 +523,36 @@ describe('EnrollDialog — geführter 3-Sitzungen-Anlern-Flow (9 Sätze)', () =>
 
     expect(enroll).toHaveBeenLastCalledWith(expect.any(String), expect.anything(), 5);
   });
+
+  it('lockName ("Weiter anlernen"): Namensfeld ist von ANFANG AN vorausgefüllt+gesperrt + Solo-Anlern-Hinweis sichtbar', async () => {
+    const capture = makeCapture();
+    const enroll = vi.fn().mockResolvedValue({ name: 'andi', enrolledAt: 42, samples: 4 });
+
+    await mount(
+      <EnrollDialog
+        onClose={() => {}}
+        onEnrolled={() => {}}
+        enroll={enroll}
+        removeProfile={vi.fn()}
+        createCapture={() => capture}
+        support={() => ({ ok: true })}
+        defaultName="andi"
+        lockName
+        samplesForName={() => 3} // Fortsetzungs-Index: 3 Sätze schon da ⇒ Satz 4
+      />,
+    );
+
+    // Ruhiger, fester Hinweis (Kreuz-Kontaminations-Vorfall 07.08).
+    expect(container.textContent).toContain(SPEAKER_TEXTS.soloEnrollHint);
+
+    const nameInput = container.querySelector<HTMLInputElement>('#enroll-name')!;
+    expect(nameInput.value).toBe('andi');
+    expect(nameInput.disabled).toBe(true); // gesperrt VOR dem ersten gespeicherten Satz — anders als der normale Flow
+
+    // Der Fortsetzungs-Index folgt automatisch der bestehenden Startindex-Logik (kein sample=1).
+    await recordOneSentence(1);
+    expect(enroll).toHaveBeenCalledWith('andi', expect.anything(), 4);
+  });
 });
 
 describe('enrollStartIndex — Startindex einer neuen Anlern-Sitzung', () => {

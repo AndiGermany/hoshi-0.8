@@ -1,4 +1,6 @@
 import { API_BASE, TOKEN } from './config';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 
 /**
  * Typisierter Client für den Privatsphäre-Rand, Spiegel von
@@ -106,8 +108,8 @@ export async function fetchPrivacySummary(signal?: AbortSignal): Promise<Privacy
     headers: authHeaders(),
     signal,
   });
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   return toSummary(await res.json());
 }
 
@@ -126,8 +128,8 @@ export async function deletePrivacyData(
     signal,
   });
   if (res.status === 501) throw new PrivacyNotYetError(target);
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   return {
     target,

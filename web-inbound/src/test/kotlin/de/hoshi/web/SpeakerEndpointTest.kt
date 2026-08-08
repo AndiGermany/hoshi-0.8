@@ -473,6 +473,106 @@ class SpeakerEndpointTest(
             .expectStatus().isNotFound
     }
 
+    // ── Einzel-Aufnahme-Loeschung (Reparatur-Naht, Vorfall 07.08) ────────────
+
+    @Test
+    fun `delete sample ohne Token - 401`() {
+        client.delete().uri("/api/v1/speakers/andi/samples/0")
+            .exchange()
+            .expectStatus().isUnauthorized
+    }
+
+    @Test
+    fun `delete sample - entfernt genau eine Aufnahme, Rest bleibt - 204`() {
+        for (i in 1..3) {
+            client.post().uri("/api/v1/speakers/enroll?name=andi&sample=$i")
+                .header(bearer().first, bearer().second)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(multipart(ByteArray(2000)))
+                .exchange()
+                .expectStatus().isOk
+        }
+
+        client.delete().uri("/api/v1/speakers/andi/samples/1")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isNoContent
+
+        val p = store.get("andi")!!
+        org.junit.jupiter.api.Assertions.assertEquals(2, p.samples.size, "genau ein Sample weg")
+
+        client.get().uri("/api/v1/speakers")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$[0].samples").isEqualTo(2)
+    }
+
+    @Test
+    fun `delete sample - letzte Aufnahme eines Profils - 409, Profil bleibt mit 1 Sample`() {
+        client.post().uri("/api/v1/speakers/enroll?name=andi")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(ByteArray(2000)))
+            .exchange()
+            .expectStatus().isOk
+
+        client.delete().uri("/api/v1/speakers/andi/samples/0")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isEqualTo(409)
+            .expectBody()
+            .jsonPath("$.error").exists()
+
+        // Kein leeres Profil mit kaputtem Zentroid — das eine Sample ist noch da.
+        client.get().uri("/api/v1/speakers")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$[0].samples").isEqualTo(1)
+    }
+
+    @Test
+    fun `delete sample - unbekanntes Profil - 404`() {
+        client.delete().uri("/api/v1/speakers/gibtsnicht/samples/0")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isNotFound
+    }
+
+    @Test
+    fun `delete sample - Index ausserhalb - 400`() {
+        client.post().uri("/api/v1/speakers/enroll?name=andi")
+            .header(bearer().first, bearer().second)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(multipart(ByteArray(2000)))
+            .exchange()
+            .expectStatus().isOk
+
+        client.delete().uri("/api/v1/speakers/andi/samples/5")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isBadRequest
+    }
+
+    @Test
+    fun `delete sample - ungueltiger Name - 400`() {
+        client.delete().uri("/api/v1/speakers/%2E%2E%2Fx/samples/0") // "../x"
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isBadRequest
+    }
+
+    @Test
+    fun `delete sample - Index kein Zahlwert (Junk) - 400`() {
+        client.delete().uri("/api/v1/speakers/andi/samples/abc")
+            .header(bearer().first, bearer().second)
+            .exchange()
+            .expectStatus().isBadRequest
+    }
+
     companion object {
         /** Fake-CAM++-Sidecar: liefert fuer jedes /embed ein kleines kanned Embedding. */
         private val fakeSidecar: HttpServer =

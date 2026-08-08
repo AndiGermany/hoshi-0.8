@@ -3,6 +3,7 @@ import {
   fetchHomeRegistry,
   type HomeRegistryArea,
   type HomeRegistryEntity,
+  type HomeRegistrySnapshot,
   type HomeRegistryState,
 } from '../api/homeRegistry';
 import {
@@ -11,42 +12,39 @@ import {
   HomeEditLockedError,
   HomeEditValidationError,
 } from '../api/homeEdit';
-import { DomainGlyph } from '../components/domainGlyphs';
 import { WarnGlyph } from '../components/icons';
+import { RoomDeviceRow } from '../components/RoomDeviceRow';
+import { RoomsToolbar } from '../components/RoomsToolbar';
+import { InboxCard } from '../components/RoomsInbox';
+import { matchesDomainFilter, matchesRoomSearch, type DomainFilter } from '../components/roomsFilter';
 import { useUiStrings } from '../i18n';
 
-/** Eine Raum-Option im Picker (aus dem Registry-Snapshot abgeleitet). */
-export interface AreaOption {
-  areaId: string;
-  label: string;
-}
-
 /**
- * Der Edit-Vertrag von Scheibe 2 (SCHREIBEN), den {@link RaeumeView} prop-getrieben
- * bekommt — der Reiter selbst bleibt so ohne Hook/Netz testbar (die Live-Naht sitzt
- * in {@link RaeumeViewLive}). `enabled:false`/`undefined` ⇒ KEIN Picker (Flag zu,
- * byte-neutral). KEIN optimistisches UI: `onAssign` löst PUT + Registry-Reload aus,
- * die Karte wandert erst mit dem frischen Read.
+ * Der Edit-Vertrag von Scheibe 2 (SCHREIBEN) lebt jetzt in `components/
+ * roomsEdit.ts` (kein Zirkel-Import zwischen dieser View und den neuen
+ * Scheibe-1-Komponenten `RoomsInbox`/`RoomsToolbar`) — hier nur re-exportiert,
+ * damit bestehende Importe (`import type { RaeumeEdit } from '../views/
+ * RaeumeView'`) unverändert gültig bleiben.
  */
-export interface RaeumeEdit {
-  enabled: boolean;
-  areas: AreaOption[];
-  onAssign: (entityId: string, areaId: string) => void;
-  /** Die Entity, deren Zuordnung gerade läuft (Picker disabled) — sonst `null`. */
-  busyEntityId?: string | null;
-  /** Die Entity mit dem letzten Fehler (ehrliche Meldung an der Zeile) — sonst `null`. */
-  errorEntityId?: string | null;
-  errorMessage?: string | null;
-}
+export type { AreaOption, RaeumeEdit } from '../components/roomsEdit';
+import type { RaeumeEdit } from '../components/roomsEdit';
 
 /**
  * Räume — Andis „vom Chat zum Zuhause", die räumliche Achse.
  *
  * Scheibe 1 des Geräte-Zuordnungs-Konzepts (`.orch-bus/ctx/cowork-research-2026-07-15/
- * 11-geraete-zuordnung-konzept.md`) macht diesen Reiter READ-ONLY echt:
- * `GET /api/v1/home/registry` liefert die echten HA-Areas mit ihren Geräten —
- * „HA bleibt die eine Wahrheit, Hoshi wird ihr freundlicher Editor". Diese
- * Scheibe editiert NICHTS (kein Schreib-Endpoint) — nur Ansicht.
+ * 11-geraete-zuordnung-konzept.md`) machte diesen Reiter READ-ONLY echt:
+ * `GET /api/v1/home/registry` liefert die echten HA-Areas mit ihren Geräten.
+ *
+ * Scheibe 1 des RÄUME-VERWALTUNGS-Konzepts (`.orch-bus/inbox/20260727-2223-
+ * cowork-raeume-verwaltung-konzept.md`, §6) baut das bei 200 Entitäten
+ * übersichtlich: Kopfzeile mit der echten Zuordnungs-Wahrheit ({@link
+ * RoomsToolbar}), Suche + vier Domänen-Chips als Filter (Raum bleibt die
+ * einzige Gruppierungs-Achse — Domäne ist NUR ein Filter, kein zweiter
+ * Baum), und die alte „Nicht zugeordnet"-Karte wird zur „Braucht dich"-Inbox
+ * ({@link InboxCard}) — vorbelegter Raum-Vorschlag, aber NIE automatisch
+ * geschrieben. Läuft komplett auf den bestehenden Endpoints (`GET /home/
+ * registry` + `PUT …/area`), KEINE neue Naht.
  *
  * Ehrlichkeit, strikt (wie {@link UebersichtView}) — VIER Zustände, nie erfunden:
  *  - `null` (erster Fetch läuft) — dieselbe gestrichelte Leerkarte wie `off`,
@@ -57,11 +55,14 @@ export interface RaeumeEdit {
  *  - `unreachable` (401/502/5xx/Netz) — die Naht ist verdrahtet, aber HA
  *    antwortet gerade nicht: „gerade nicht erreichbar", nie Fake-Räume.
  *  - `live` — echte Raum-Karten (Name, Geräte-Liste mit Domain-Glyph) +
- *    IMMER eine „Nicht zugeordnet"-Karte zuletzt — genau die Entities OHNE
- *    HA-Area sichtbar statt versteckt (die „tado-Lücke").
+ *    IMMER eine „Braucht dich"-Inbox ZUERST (Reihenfolge nach Wiederkehr,
+ *    Konzept §2) — genau die Entities OHNE HA-Area sichtbar statt versteckt
+ *    (die „tado-Lücke").
  *
- * Rein prop-getrieben (kein Hook, kein Netz) → via renderToStaticMarkup ohne
- * DOM/Fetch testbar. Live-Verdrahtung (der Poll-Hook): {@link RaeumeViewLive}.
+ * Rein prop-getrieben (kein Netz) → via renderToStaticMarkup ohne DOM/Fetch
+ * testbar (Suche/Filter/Einklapp-Zustand sind lokaler UI-State, der
+ * renderToStaticMarkup nicht stört — es wird nur der Startwert gerendert).
+ * Live-Verdrahtung (der Poll-Hook): {@link RaeumeViewLive}.
  */
 
 /** Die Skizzen-Knoten sind bewusst KONZEPT, kein Bestand. Nie als „da" gelabelt. */
@@ -119,141 +120,59 @@ function HoshiSketch() {
   );
 }
 
-/**
- * Ein dezenter Raum-Picker (Select mit Areas, SVG-frei, Yoru-Tokens) — nur
- * gerendert, wenn der Edit-Flag an ist. `onChange` löst `onAssign` aus; während
- * der Zuweisung ist er disabled (kein zweiter Klick, kein optimistisches Wandern).
- *
- * **Controlled, nicht uncontrolled** (bewusst KEIN `defaultValue`): der Select
- * setzt sich SOFORT im `onChange` selbst auf den Platzhalter zurück, statt den
- * gewählten Wert hängen zu lassen. Grund: ein natives `<select>` feuert `change`
- * nur, wenn sich der gewählte Index wirklich ändert — bliebe die zuletzt
- * gewählte Area sichtbar ausgewählt (uncontrolled Default-Verhalten), würde ein
- * ERNEUTES Wählen DERSELBEN Area nach einem fehlgeschlagenen Write STUMM
- * bleiben (kein zweites `change`-Event, kein Retry-PUT) — genau der Fall, den
- * ein Nutzer nach einem Fehler zuerst versucht.
- */
-function RoomPicker({ entity, edit }: { entity: HomeRegistryEntity; edit: RaeumeEdit }) {
-  const { rooms } = useUiStrings();
-  const busy = edit.busyEntityId === entity.entityId;
-  const [value, setValue] = useState('');
-  return (
-    <span className="room__picker">
-      <select
-        className="room__pickerselect"
-        value={value}
-        disabled={busy}
-        aria-label={rooms.pickerAria(entity.name)}
-        onChange={(e) => {
-          const areaId = e.currentTarget.value;
-          setValue(''); // sofort zurück auf den Platzhalter (s. KDoc) — vor dem Assign-Aufruf.
-          if (areaId) edit.onAssign(entity.entityId, areaId);
-        }}
-      >
-        <option value="" disabled>
-          {busy ? rooms.assigning : rooms.chooseRoom}
-        </option>
-        {edit.areas.map((a) => (
-          <option key={a.areaId} value={a.areaId}>
-            {a.label}
-          </option>
-        ))}
-      </select>
-    </span>
-  );
-}
+/** Ab dieser Zeilenzahl klappt eine Raum-Karte den Rest ein (Konzept §6 S1, Andi-Vorgabe „ab 8 Zeilen"). */
+const ROOM_COLLAPSE_AT = 8;
 
 /**
- * Eine Geräte-Zeile: Domain-Glyph · Name · Domain-Beschriftung · Label-Chips.
- * `assignable` + aktiver Edit-Flag ⇒ zusätzlich ein {@link RoomPicker}; ein
- * Zeilen-Fehler (letzter fehlgeschlagener Write dieser Entity) erscheint ehrlich
- * als `role="alert"` unter der Zeile.
+ * Eine Raum-Karte: Name, Geräte-Anzahl-Pille (die des AKTUELL SICHTBAREN,
+ * also gefilterten Bestands — ohne aktiven Filter ist das identisch zur
+ * vollen Liste), Geräte-Liste (oder ehrlich „noch keine Geräte"). Ab
+ * {@link ROOM_COLLAPSE_AT} sichtbaren Zeilen bleibt der Rest eingeklappt,
+ * bis Andi „die übrigen n zeigen" antippt (Muster `ScheduledPanel`-Toggle:
+ * `aria-expanded` + Chevron-Glyph in eigenem `aria-hidden`-Span).
  */
-function DeviceRow({
-  entity,
-  edit,
-  assignable = false,
-}: {
-  entity: HomeRegistryEntity;
-  edit?: RaeumeEdit;
-  assignable?: boolean;
-}) {
-  const showPicker = assignable && edit?.enabled === true;
-  const rowError = edit && edit.errorEntityId === entity.entityId ? edit.errorMessage : null;
-  return (
-    <li className="room__device">
-      <DomainGlyph domain={entity.domain} className="room__deviceicon" />
-      <span className="room__devicename">{entity.name}</span>
-      <span className="room__devicedomain">{entity.domain}</span>
-      {entity.labels.length > 0 && (
-        <span className="room__devicelabels">
-          {entity.labels.map((l) => (
-            <span className="room__labelchip" key={l}>
-              {l}
-            </span>
-          ))}
-        </span>
-      )}
-      {showPicker && edit && <RoomPicker entity={entity} edit={edit} />}
-      {rowError && (
-        <p className="room__pickererror" role="alert">
-          {rowError}
-        </p>
-      )}
-    </li>
-  );
-}
-
-/** Eine Raum-Karte: Name, Geräte-Anzahl-Pille, Geräte-Liste (oder ehrlich „noch keine Geräte"). */
-function RoomCard({ area }: { area: HomeRegistryArea }) {
+function RoomCard({ area, visibleEntities }: { area: HomeRegistryArea; visibleEntities: HomeRegistryEntity[] }) {
   const { rooms } = useUiStrings();
+  const [expanded, setExpanded] = useState(false);
+  const showAll = expanded || visibleEntities.length <= ROOM_COLLAPSE_AT;
+  const shown = showAll ? visibleEntities : visibleEntities.slice(0, ROOM_COLLAPSE_AT);
+  const hiddenCount = visibleEntities.length - shown.length;
   return (
     <article className="tile room tile--live" data-status="live">
       <div className="tile__head">
         <span className="tile__name">{area.label}</span>
-        <span className="tile__pill">{rooms.deviceCount(area.entities.length)}</span>
+        <span className="tile__pill">{rooms.deviceCount(visibleEntities.length)}</span>
       </div>
-      {area.entities.length === 0 ? (
+      {visibleEntities.length === 0 ? (
         <p className="room__empty">{rooms.roomEmpty}</p>
       ) : (
-        <ul className="room__devices">
-          {area.entities.map((e) => (
-            <DeviceRow entity={e} key={e.entityId} />
-          ))}
-        </ul>
-      )}
-    </article>
-  );
-}
-
-/**
- * Die „Nicht zugeordnet"-Karte — IMMER zuletzt, IMMER sichtbar (auch bei 0
- * Einträgen): sie macht die HA-Zuordnungs-Lücke ehrlich sichtbar statt sie zu
- * verstecken, und bestätigt ehrlich, wenn es gerade keine Lücke gibt.
- */
-function UnassignedCard({ entities, edit }: { entities: HomeRegistryEntity[]; edit?: RaeumeEdit }) {
-  const { rooms } = useUiStrings();
-  const hint =
-    entities.length === 0
-      ? rooms.allAssigned
-      : edit?.enabled
-        ? rooms.unassignedEditable
-        : rooms.unassignedReadOnly;
-  return (
-    <article className="tile room room--unassigned tile--live" data-status="live">
-      <div className="tile__head">
-        {/* Amber NUR bei einer echten Lücke (Mockup 11b, Andi-abgenommen) — ohne
-            Lücke bleibt der Titel neutral, sonst wäre „aufmerksam" ein Dauerzustand. */}
-        <span className={`tile__name${entities.length > 0 ? ' room__name--gap' : ''}`}>{rooms.unassigned}</span>
-        <span className="tile__pill">{entities.length}</span>
-      </div>
-      <p className="room__hint">{hint}</p>
-      {entities.length > 0 && (
-        <ul className="room__devices">
-          {entities.map((e) => (
-            <DeviceRow entity={e} key={e.entityId} edit={edit} assignable />
-          ))}
-        </ul>
+        <>
+          <ul className="room__devices">
+            {shown.map((e) => (
+              <RoomDeviceRow entity={e} key={e.entityId} />
+            ))}
+          </ul>
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              className="room__more"
+              aria-expanded={false}
+              onClick={() => setExpanded(true)}
+            >
+              <span aria-hidden="true">▸</span> {rooms.roomShowMore(hiddenCount)}
+            </button>
+          )}
+          {expanded && visibleEntities.length > ROOM_COLLAPSE_AT && (
+            <button
+              type="button"
+              className="room__more"
+              aria-expanded={true}
+              onClick={() => setExpanded(false)}
+            >
+              <span aria-hidden="true">▾</span> {rooms.roomShowLess}
+            </button>
+          )}
+        </>
       )}
     </article>
   );
@@ -291,6 +210,74 @@ function UnreachableCard() {
   );
 }
 
+/**
+ * Der ganze „live"-Leib: Kopfzeile-Wahrheit + Suche/Chips ({@link RoomsToolbar}),
+ * darüber die „Braucht dich"-Inbox ({@link InboxCard}), darunter die Raum-Karten.
+ * Eigene Komponente (statt inline in `RaeumeView`) aus zwei Gründen: (1) Suche
+ * + Domain-Filter sind lokaler UI-State, der nur hier gebraucht wird, (2) ein
+ * `snapshot: HomeRegistrySnapshot`-Prop lässt TS den `live`-Fall an der
+ * JSX-Aufrufstelle sauber verengen, statt sich auf Narrowing quer durch eine
+ * verschachtelte Closure zu verlassen.
+ *
+ * Domäne ist NUR ein Filter (Andi-Vorgabe, Konzept §2.1) — Raum bleibt die
+ * einzige Gruppierungs-Achse, es gibt keinen zweiten, umschaltbaren Baum. Die
+ * Kopfzeilen-Wahrheit (Zuordnungs-Zahl + Raum-Zahl) ist IMMER der volle
+ * Snapshot, nie vom aktiven Filter verändert — sonst würde Suchen/Filtern die
+ * ehrliche Zahl selbst verfälschen.
+ */
+function LiveRoomsSection({ snapshot, edit }: { snapshot: HomeRegistrySnapshot; edit?: RaeumeEdit }) {
+  const { rooms } = useUiStrings();
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<DomainFilter>('alle');
+
+  const assignedCount = snapshot.areas.reduce((acc, a) => acc + a.entities.length, 0);
+  const totalCount = assignedCount + snapshot.unassigned.length;
+  const filterActive = query.trim() !== '' || filter !== 'alle';
+
+  const visibleAreas = snapshot.areas.map((area) => ({
+    area,
+    visible: area.entities.filter(
+      (e) => matchesDomainFilter(e.domain, filter) && matchesRoomSearch(e, area.label, query),
+    ),
+  }));
+  const visibleUnassigned = snapshot.unassigned.filter(
+    (e) => matchesDomainFilter(e.domain, filter) && matchesRoomSearch(e, null, query),
+  );
+  const totalVisible = visibleAreas.reduce((acc, r) => acc + r.visible.length, 0) + visibleUnassigned.length;
+  const nothingMatches = filterActive && totalVisible === 0;
+
+  return (
+    <>
+      <RoomsToolbar
+        assignedCount={assignedCount}
+        totalCount={totalCount}
+        roomCount={snapshot.areas.length}
+        query={query}
+        onQuery={setQuery}
+        filter={filter}
+        onFilter={setFilter}
+      />
+      {nothingMatches ? (
+        <p className="rooms__nomatch">{rooms.noMatches(query)}</p>
+      ) : (
+        <div className="tiles rooms">
+          <InboxCard
+            realCount={snapshot.unassigned.length}
+            visible={visibleUnassigned}
+            query={query}
+            edit={edit}
+          />
+          {visibleAreas
+            .filter(({ visible }) => visible.length > 0 || !filterActive)
+            .map(({ area, visible }) => (
+              <RoomCard area={area} visibleEntities={visible} key={area.areaId} />
+            ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 export interface RaeumeViewProps {
   /** `null` = erster Fetch läuft; sonst der ehrliche Zustand des Registry-Reads. */
   state: HomeRegistryState | null;
@@ -300,15 +287,15 @@ export interface RaeumeViewProps {
 
 export function RaeumeView({ state, edit }: RaeumeViewProps) {
   const { rooms } = useUiStrings();
+  const isLive = state !== null && state.kind === 'live';
+
   return (
     <section className="ueber">
       <header className="ueber__head">
         <h1 className="ueber__title">{rooms.title}</h1>
-        <p className="ueber__lede">
-          {edit?.enabled
-            ? rooms.ledeEditable
-            : rooms.ledeReadOnly}
-        </p>
+        {!isLive && (
+          <p className="ueber__lede">{edit?.enabled ? rooms.ledeEditable : rooms.ledeReadOnly}</p>
+        )}
       </header>
 
       {state === null && <PendingCard note={rooms.loading} />}
@@ -326,14 +313,7 @@ export function RaeumeView({ state, edit }: RaeumeViewProps) {
 
       {state !== null && state.kind === 'unreachable' && <UnreachableCard />}
 
-      {state !== null && state.kind === 'live' && (
-        <div className="tiles rooms">
-          {state.data.areas.map((area) => (
-            <RoomCard area={area} key={area.areaId} />
-          ))}
-          <UnassignedCard entities={state.data.unassigned} edit={edit} />
-        </div>
-      )}
+      {state !== null && state.kind === 'live' && <LiveRoomsSection snapshot={state.data} edit={edit} />}
     </section>
   );
 }

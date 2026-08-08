@@ -89,28 +89,29 @@ describe('RaeumeView — live: echte Raum-Karten aus GET /api/v1/home/registry',
     expect(out).toContain('Noch keine Geräte in diesem Raum.');
   });
 
-  it('„Nicht zugeordnet" ist die LETZTE Karte und listet Entities ohne Area (die tado-Lücke)', () => {
+  it('„Braucht dich" (die neue Inbox, ex-„Nicht zugeordnet") ist die ERSTE Karte und listet Entities ohne Area (die tado-Lücke)', () => {
     const out = html({ state: { kind: 'live', data: snapshot() } });
-    const unassignedIdx = out.indexOf('Nicht zugeordnet');
-    expect(unassignedIdx).toBeGreaterThan(-1);
-    // Die "Nicht zugeordnet"-Überschrift kommt NACH allen Raum-Karten-Inhalten.
-    expect(out.indexOf('Wohnzimmer')).toBeLessThan(unassignedIdx);
-    expect(out.indexOf('Schlafzimmer')).toBeLessThan(unassignedIdx);
+    const inboxIdx = out.indexOf('Braucht dich');
+    expect(inboxIdx).toBeGreaterThan(-1);
+    // Die Inbox kommt jetzt VOR allen Raum-Karten (Reihenfolge nach Wiederkehr, Konzept §2).
+    expect(inboxIdx).toBeLessThan(out.indexOf('Wohnzimmer'));
+    expect(inboxIdx).toBeLessThan(out.indexOf('Schlafzimmer'));
     expect(out).toContain('Tado Wohnzimmer');
     expect(out).toContain('glyph--domain-climate');
   });
 
-  it('„Nicht zugeordnet" bestätigt ehrlich, wenn es aktuell keine Lücke gibt', () => {
+  it('„Braucht dich" bestätigt ehrlich, wenn es aktuell keine Lücke gibt: „Nichts zu tun."', () => {
     const out = html({ state: { kind: 'live', data: snapshot({ unassigned: [] }) } });
-    expect(out).toContain('Aktuell hat jedes gemeldete Gerät einen Raum in Home Assistant.');
+    expect(out).toContain('Nichts zu tun.');
+    expect(out).not.toContain('room__name--gap');
   });
 
   it('Leerzustand: HA meldet weder Areas noch Geräte — ehrlich leer statt Fehler', () => {
     const out = html({ state: { kind: 'live', data: { areas: [], unassigned: [] } } });
     expect(out).toContain('data-status="live"');
-    expect(out).toContain('Nicht zugeordnet');
-    expect(out).toContain('Aktuell hat jedes gemeldete Gerät einen Raum in Home Assistant.');
-    // Nur die eine Unassigned-Karte, keine einzige Raum-Karte (areas ist leer).
+    expect(out).toContain('Braucht dich');
+    expect(out).toContain('Nichts zu tun.');
+    // Nur die eine Inbox-Karte, keine einzige Raum-Karte (areas ist leer).
     expect(count(out, 'tile--live')).toBe(1);
   });
 });

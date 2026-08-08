@@ -96,7 +96,7 @@ def test_switch_model_already_active_is_a_noop_200():
 def test_switch_model_second_call_while_switching_is_409():
     def check(client):
         server._switching = True
-        server._switch_phase = "downloading"
+        server._switch_phase = "verifying"
         server._switch_target = "mlx-community/gemma-4-e2b-it-4bit"
         response = client.post("/switch-model", json={"model": "mlx-community/gemma-4-e2b-it-4bit"})
         assert response.status_code == 409, response.text
@@ -120,14 +120,14 @@ def test_switch_model_409_includes_elapsed_duration():
     _with_active_model(check)
 
 
-# ── Ziel fehlt im Cache UND hat keinen Pin -> 409, altes Modell unangetastet ──
-def test_switch_model_missing_pin_is_409_and_leaves_model_untouched():
+# ── Ziel hat keinen vollständigen v2-Lock -> 409, altes Modell unangetastet ──
+def test_switch_model_missing_lock_is_409_and_leaves_model_untouched():
     def check(client):
         original_model, original_tok = server._model, server._tok
-        with _Patch(_model_fully_cached=lambda m: False, _lookup_pinned_revision=lambda m: None):
+        with _Patch(_lookup_model_lock=lambda m: None):
             response = client.post("/switch-model", json={"model": "mlx-community/gemma-4-e2b-it-4bit"})
         assert response.status_code == 409, response.text
-        assert "Pin" in response.json()["detail"]
+        assert "v2-Lock" in response.json()["detail"]
         assert server._model is original_model
         assert server._tok is original_tok
         assert server._loaded is True
@@ -135,23 +135,102 @@ def test_switch_model_missing_pin_is_409_and_leaves_model_untouched():
     _with_active_model(check)
 
 
-# ── Ziel fehlt im Cache, Pin da, aber zu wenig Platz -> 507, nichts angefasst ─
-def test_switch_model_low_disk_is_507_and_leaves_model_untouched():
+def test_switch_model_accepts_only_locked_target_and_starts_verify_worker():
     def check(client):
-        original_model = server._model
-        with _Patch(_model_fully_cached=lambda m: False,
-                    _lookup_pinned_revision=lambda m: "deadbeefpin",
-                    _free_disk_bytes=lambda: 1024):
-            response = client.post("/switch-model", json={"model": "mlx-community/gemma-4-e2b-it-4bit"})
-        assert response.status_code == 507, response.text
-        assert "GB" in response.json()["detail"]
-        assert server._model is original_model
-        assert server._switching is False
+        captured: dict = {}
+        lock = {
+            "id": "brain-e2b",
+            "pinned_revision": "a" * 40,
+            "license_acceptance": "gemma",
+        }
+
+        def capture_worker(target, selected_lock):
+            captured["target"] = target
+            captured["lock"] = selected_lock
+
+        with _Patch(
+            _lookup_model_lock=lambda model: lock,
+            _start_verify_worker=capture_worker,
+        ):
+            response = client.post(
+                "/switch-model",
+                json={"model": "mlx-community/gemma-4-e2b-it-4bit"},
+            )
+
+        assert response.status_code == 202, response.text
+        assert response.json() == {
+            "status": "verifying",
+            "model": "mlx-community/gemma-4-e4b-it-4bit",
+            "target": "mlx-community/gemma-4-e2b-it-4bit",
+            "changed": False,
+        }
+        assert captured == {
+            "target": "mlx-community/gemma-4-e2b-it-4bit",
+            "lock": lock,
+        }
+        assert server._switching is True
+        assert server._switch_phase == "verifying"
     _with_active_model(check)
 
 
-# ── Ziel schon vollstaendig im Cache -> synchroner Tausch, Reihenfolge entladen->laden
-def test_switch_model_cached_target_unloads_then_loads_in_order():
+def test_switch_model_worker_start_failure_resets_state_and_keeps_old_model():
+    def check(client):
+        original_model = server._model
+        lock = {
+            "id": "brain-e2b",
+            "pinned_revision": "a" * 40,
+            "license_acceptance": "gemma",
+        }
+
+        def fail_start(target, selected_lock):
+            raise RuntimeError("thread start kaputt")
+
+        with _Patch(
+            _lookup_model_lock=lambda model: lock,
+            _start_verify_worker=fail_start,
+        ):
+            response = client.post(
+                "/switch-model",
+                json={"model": "mlx-community/gemma-4-e2b-it-4bit"},
+            )
+
+        assert response.status_code == 503, response.text
+        detail = response.json()["detail"]
+        assert "Verify-Worker konnte nicht gestartet werden" in detail
+        assert server._model is original_model
+        assert server._loaded is True
+        assert server._switching is False
+        assert server._switch_phase is None
+        assert server._switch_target is None
+        assert server._switch_started_ts is None
+        assert server._switch_error == detail
+    _with_active_model(check)
+
+
+# ── Ziel fehlt/driftet -> Worker laesst altes Modell + Fetch-Hinweis ─────────
+def test_verify_worker_unverified_leaves_model_untouched_and_names_fetch():
+    def check(client):
+        original_model = server._model
+        lock = {
+            "id": "brain-e2b",
+            "pinned_revision": "a" * 40,
+            "license_acceptance": "gemma",
+        }
+        server._switching = True
+        server._switch_phase = "verifying"
+        server._switch_target = "mlx-community/gemma-4-e2b-it-4bit"
+        with _Patch(_verify_model_artifact=lambda artifact_id: False):
+            server._verify_and_swap("mlx-community/gemma-4-e2b-it-4bit", lock)
+        assert "tools/verified_fetch.py fetch brain-e2b --accept-license gemma" in server._switch_error
+        assert server._model is original_model
+        assert server._loaded is True
+        assert server._switching is False
+        assert server._switch_phase is None
+    _with_active_model(check)
+
+
+# ── Vollhash PASS -> Reihenfolge verify -> entladen -> laden ─────────────────
+def test_verify_worker_unloads_only_after_fullhash_pass():
     def check(client):
         call_order: list = []
         original_unload = server._unload_model
@@ -164,17 +243,24 @@ def test_switch_model_cached_target_unloads_then_loads_in_order():
             call_order.append(("load", model_id))
             return ("FAKE_MODEL", "FAKE_TOK")
 
-        with _Patch(_model_fully_cached=lambda m: True,
-                    _unload_model=spy_unload, _load_model=fake_load):
-            response = client.post("/switch-model", json={"model": "mlx-community/gemma-4-e2b-it-4bit"})
+        lock = {"id": "brain-e2b", "pinned_revision": "a" * 40}
 
-        assert response.status_code == 200, response.text
-        body = response.json()
-        assert body["status"] == "ok"
-        assert body["model"] == "mlx-community/gemma-4-e2b-it-4bit"
-        assert body["changed"] is True
-        assert isinstance(body["loadMs"], int)
-        assert call_order == ["unload", ("load", "mlx-community/gemma-4-e2b-it-4bit")]
+        def verified(artifact_id):
+            call_order.append(("verify", artifact_id))
+            return True
+
+        server._switching = True
+        server._switch_phase = "verifying"
+        server._switch_target = "mlx-community/gemma-4-e2b-it-4bit"
+        with _Patch(_verify_model_artifact=verified,
+                    _unload_model=spy_unload, _load_model=fake_load):
+            server._verify_and_swap("mlx-community/gemma-4-e2b-it-4bit", lock)
+
+        assert call_order == [
+            ("verify", "brain-e2b"),
+            "unload",
+            ("load", "mlx-community/gemma-4-e2b-it-4bit"),
+        ]
         assert server._model == "FAKE_MODEL"
         assert server._tok == "FAKE_TOK"
         assert server._loaded is True
@@ -184,16 +270,19 @@ def test_switch_model_cached_target_unloads_then_loads_in_order():
 
 
 # ── Ladefehler: ehrlich kaputt melden, KEIN stiller Rueckfall ────────────────
-def test_switch_model_load_failure_is_honest_500_and_marks_unloaded():
+def test_verify_worker_load_failure_marks_brain_honestly_unloaded():
     def check(client):
         def failing_load(model_id):
             raise RuntimeError("absichtlicher Testfehler")
 
-        with _Patch(_model_fully_cached=lambda m: True, _load_model=failing_load):
-            response = client.post("/switch-model", json={"model": "mlx-community/gemma-4-e2b-it-4bit"})
+        lock = {"id": "brain-e2b", "pinned_revision": "a" * 40}
+        server._switching = True
+        server._switch_phase = "verifying"
+        server._switch_target = "mlx-community/gemma-4-e2b-it-4bit"
+        with _Patch(_verify_model_artifact=lambda artifact_id: True,
+                    _load_model=failing_load):
+            server._verify_and_swap("mlx-community/gemma-4-e2b-it-4bit", lock)
 
-        assert response.status_code == 500, response.text
-        assert "fehlgeschlagen" in response.json()["detail"]
         assert server._model is None
         assert server._tok is None
         assert server._loaded is False
@@ -224,7 +313,7 @@ class _FakeStuckLock:
 # statt fuer immer blockieren. Kritisch: _unload_model()/_load_model() duerfen
 # beim Timeout NIE aufgerufen werden (Reihenfolge-Check aus dem Auftrag) — am
 # geladenen Zustand darf GAR NICHTS veraendert werden.
-def test_do_swap_lock_timeout_aborts_honestly_without_touching_loaded_model():
+def test_verify_worker_lock_timeout_aborts_honestly_without_touching_loaded_model():
     def check(client):
         original_model, original_tok, original_model_id = (
             server._model, server._tok, server.MODEL_ID
@@ -237,17 +326,18 @@ def test_do_swap_lock_timeout_aborts_honestly_without_touching_loaded_model():
         def boom_load(model_id):
             raise AssertionError("_load_model() wurde trotz Lock-Timeout aufgerufen")
 
-        with _Patch(_GEN_LOCK=fake_lock, _model_fully_cached=lambda m: True,
+        lock = {"id": "brain-e2b", "pinned_revision": "a" * 40}
+        server._switching = True
+        server._switch_phase = "verifying"
+        server._switch_target = "mlx-community/gemma-4-e2b-it-4bit"
+        with _Patch(_GEN_LOCK=fake_lock,
+                    _verify_model_artifact=lambda artifact_id: True,
                     _unload_model=boom_unload, _load_model=boom_load):
-            response = client.post(
-                "/switch-model", json={"model": "mlx-community/gemma-4-e2b-it-4bit"}
-            )
+            server._verify_and_swap("mlx-community/gemma-4-e2b-it-4bit", lock)
 
-        assert response.status_code == 503, response.text
-        detail = response.json()["detail"]
-        assert f"{server._SWITCH_GEN_LOCK_TIMEOUT_S}s" in detail
-        assert "Wechsel abgebrochen" in detail
-        assert "bleibt/blieb geladen" in detail
+        assert f"{server._SWITCH_GEN_LOCK_TIMEOUT_S}s" in server._switch_error
+        assert "Wechsel abgebrochen" in server._switch_error
+        assert "bleibt/blieb geladen" in server._switch_error
         # GAR NICHTS am geladenen Zustand veraendert:
         assert server._model is original_model
         assert server._tok is original_tok
@@ -270,7 +360,7 @@ def test_do_swap_lock_timeout_aborts_honestly_without_touching_loaded_model():
 def test_health_reports_switch_stuck_seconds_only_past_threshold():
     def check(client):
         server._switching = True
-        server._switch_phase = "downloading"
+        server._switch_phase = "verifying"
         server._switch_target = "mlx-community/gemma-4-e2b-it-4bit"
 
         # Unterhalb der Schwelle: normales Arbeiten, kein falscher Alarm.
@@ -286,7 +376,7 @@ def test_health_reports_switch_stuck_seconds_only_past_threshold():
         assert body["switch_stuck_seconds"] is not None
         assert body["switch_stuck_seconds"] >= server._SWITCH_STUCK_THRESHOLD_S
         assert server._switching is True
-        assert server._switch_phase == "downloading"
+        assert server._switch_phase == "verifying"
     _with_active_model(check)
 
 
@@ -302,8 +392,8 @@ def test_chat_rejects_with_503_during_loading_phase():
     _with_active_model(check)
 
 
-# ── waehrend eines Hintergrund-Downloads bedient das alte Modell normal weiter
-def test_chat_does_not_503_during_download_phase():
+# ── waehrend des Vollhashs bedient das alte Modell normal weiter ────────────
+def test_chat_does_not_503_during_verifying_phase():
     class _PastGuardMarker(Exception):
         pass
 
@@ -312,7 +402,7 @@ def test_chat_does_not_503_during_download_phase():
 
     def check(client):
         server._switching = True
-        server._switch_phase = "downloading"
+        server._switch_phase = "verifying"
         server._switch_target = "mlx-community/gemma-4-e2b-it-4bit"
         with _Patch(build_prompt=boom):
             try:
@@ -322,64 +412,53 @@ def test_chat_does_not_503_during_download_phase():
             else:
                 raise AssertionError(
                     "build_prompt()-Sabotage wurde nie erreicht — der 503-Guard "
-                    "griff faelschlich auch waehrend der reinen Download-Phase"
+                    "griff faelschlich auch waehrend der reinen Verify-Phase"
                 )
     _with_active_model(check)
 
 
-# ── Hintergrund-Download: NUR gegen den gepinnten Snapshot, dann Tausch ─────
-def test_download_and_swap_uses_pinned_revision_then_swaps():
-    def check(client):
-        calls: dict = {}
+# ── Der Verify-Subprozess ist exakt, offline und mutiert nichts ─────────────
+def test_verify_model_artifact_calls_only_offline_verify():
+    captured: dict = {}
 
-        def fake_snapshot_download(repo_id, revision=None):
-            calls["download"] = (repo_id, revision)
-            return "/fake/cache/path"
+    class Result:
+        returncode = 0
 
-        def fake_load(model_id):
-            return ("FAKE_MODEL2", "FAKE_TOK2")
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return Result()
 
-        with _Patch(snapshot_download=fake_snapshot_download,
-                    _model_fully_cached=lambda m: True,  # Cache-Recheck NACH dem Download: ok
-                    _load_model=fake_load):
-            server._switching = True
-            server._switch_phase = "downloading"
-            server._switch_target = "mlx-community/gemma-4-e2b-it-4bit"
-            server._download_and_swap("mlx-community/gemma-4-e2b-it-4bit", "deadbeefpin")
+    with patch.object(server.subprocess, "run", fake_run):
+        assert server._verify_model_artifact("brain-e2b") is True
 
-        assert calls["download"] == ("mlx-community/gemma-4-e2b-it-4bit", "deadbeefpin")
-        assert server._model == "FAKE_MODEL2"
-        assert server._tok == "FAKE_TOK2"
-        assert server._loaded is True
-        assert server._switching is False
-        assert server._switch_phase is None
-    _with_active_model(check)
+    assert captured["command"] == [
+        sys.executable,
+        server._VERIFIED_FETCH_PATH,
+        "verify",
+        "brain-e2b",
+    ]
+    assert captured["kwargs"]["env"]["HF_HUB_OFFLINE"] == "1"
+    assert captured["kwargs"]["cwd"] == server._REPO_ROOT
+    assert captured["kwargs"]["timeout"] == server._MODEL_VERIFY_TIMEOUT_S
+    assert captured["kwargs"]["check"] is False
 
 
-# ── Download-Fehler: altes Modell laeuft unveraendert weiter ────────────────
-def test_download_and_swap_failure_leaves_old_model_untouched():
-    def check(client):
-        original_model, original_tok, original_model_id = (
-            server._model, server._tok, server.MODEL_ID
-        )
+def test_verify_model_artifact_timeout_is_fail_closed():
+    with patch.object(
+        server.subprocess,
+        "run",
+        side_effect=server.subprocess.TimeoutExpired(["verify"], 1),
+    ):
+        assert server._verify_model_artifact("brain-e2b") is False
 
-        def failing_snapshot_download(repo_id, revision=None):
-            raise RuntimeError("Netzwerk weg")
 
-        with _Patch(snapshot_download=failing_snapshot_download):
-            server._switching = True
-            server._switch_phase = "downloading"
-            server._switch_target = "mlx-community/gemma-4-e2b-it-4bit"
-            server._download_and_swap("mlx-community/gemma-4-e2b-it-4bit", "deadbeefpin")
-
-        assert server._model is original_model
-        assert server._tok is original_tok
-        assert server.MODEL_ID == original_model_id
-        assert server._loaded is True
-        assert server._switching is False
-        assert server._switch_phase is None
-        assert "Download fehlgeschlagen" in server._switch_error
-    _with_active_model(check)
+def test_real_model_lock_maps_repo_to_unchanged_full_pin():
+    lock = server._lookup_model_lock("mlx-community/gemma-4-e2b-it-4bit")
+    assert lock is not None
+    assert lock["id"] == "brain-e2b"
+    assert lock["pinned_revision"] == "2c3e507453b4f218d05fe3cc97bea5c5a654257e"
+    assert lock["license_acceptance"] == "gemma"
 
 
 # ── memory-Feld (Andi-Auftrag 2026-07-25/26): Schwellen, Cache, ehrliches Fehlen ──
@@ -533,6 +612,53 @@ def test_health_memory_field_is_none_when_measurement_unavailable():
             response = client.get("/health")
         assert response.status_code == 200, response.text
         assert response.json()["memory"] is None
+    _with_active_model(check)
+
+
+# ── HOSHI_SIDECAR_TOKEN-Wand (Codex-Sicherheits-P0 2026-07-27) ──────────────
+# server.py liest _HOSHI_SIDECAR_TOKEN EINMAL beim Modul-Import aus os.environ
+# (leer im Testlauf, da die Var beim Testrun nicht gesetzt ist) — die Tests
+# patchen deshalb direkt das Modul-Attribut statt os.environ (wie der uebrige
+# State in diesem File, s. _Patch oben), sonst wuerde ein nachtraeglich
+# gesetztes os.environ.setdefault() den bereits gelesenen Wert nicht mehr
+# aendern.
+
+def test_token_wall_open_without_token_when_env_empty():
+    """Leer/ungesetzt (Default) ⇒ heutiges offenes Verhalten, NULL Aenderung —
+    kein X-Hoshi-Token-Header noetig, auch nicht fuer Nicht-/health-Pfade."""
+    def check(client):
+        assert server._HOSHI_SIDECAR_TOKEN == "", "Testvoraussetzung: Token-Wand ist im Testlauf aus"
+        response = client.post("/switch-model", json={"model": server.MODEL_ID})
+        assert response.status_code == 200, response.text
+    _with_active_model(check)
+
+
+def test_token_wall_rejects_missing_or_wrong_token_with_401_when_set():
+    def check(client):
+        with _Patch(_HOSHI_SIDECAR_TOKEN="geheimwert-test"):
+            missing = client.post("/switch-model", json={"model": server.MODEL_ID})
+            assert missing.status_code == 401, missing.text
+            assert missing.json() == {"detail": "unauthorized"}
+
+            wrong = client.post(
+                "/switch-model", json={"model": server.MODEL_ID},
+                headers={"X-Hoshi-Token": "falscher-wert"},
+            )
+            assert wrong.status_code == 401, wrong.text
+
+            correct = client.post(
+                "/switch-model", json={"model": server.MODEL_ID},
+                headers={"X-Hoshi-Token": "geheimwert-test"},
+            )
+            assert correct.status_code == 200, correct.text
+    _with_active_model(check)
+
+
+def test_token_wall_never_blocks_health_even_when_token_is_set():
+    def check(client):
+        with _Patch(_HOSHI_SIDECAR_TOKEN="geheimwert-test"):
+            response = client.get("/health")
+        assert response.status_code == 200, response.text
     _with_active_model(check)
 
 

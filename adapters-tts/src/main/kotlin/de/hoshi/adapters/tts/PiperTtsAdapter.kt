@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import de.hoshi.core.dto.Language
 import de.hoshi.core.port.TtsPort
+import de.hoshi.core.security.SidecarTokenHeader
 import org.slf4j.LoggerFactory
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Mono
@@ -53,6 +54,9 @@ class PiperTtsAdapter(
     private val voice: String = "de_DE-thorsten-medium",
     private val timeoutSeconds: Long = 30,
     private val mapper: ObjectMapper = jacksonObjectMapper(),
+    // Sidecar-Token-Wand (opt-in, s. SidecarTokenHeader-KDoc): leer (Default) ⇒ KEIN
+    // Header ⇒ byte-identisch zu vor der Wand.
+    private val token: String = "",
 ) : TtsPort {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -60,6 +64,10 @@ class PiperTtsAdapter(
         .baseUrl(baseUrl)
         // WAV eines Satzes kann ~100–300 KB sein — großzügiger In-Memory-Puffer (wie die Geschwister).
         .codecs { it.defaultCodecs().maxInMemorySize(8 * 1024 * 1024) }
+        // `.let` statt `.apply` (s. MlxBrainAdapter-KDoc): WebClient.Builder hat SELBST
+        // eine Member-Methode `apply(Consumer<Builder>)`, die den Lambda-Empfänger
+        // auf `it` umbiegen würde.
+        .let { b -> if (token.isNotBlank()) b.defaultHeader(SidecarTokenHeader.NAME, token) else b }
         .build()
 
     override fun synth(text: String, language: Language): Mono<ByteArray> {

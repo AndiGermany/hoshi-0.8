@@ -863,6 +863,21 @@ button.ops__pill {
   flex: none;
   color: var(--text-3);
 }
+/* Jetzt-Temperatur (Flur-Auftrag 2026-07-27): erbt die große Schrift von
+   .idle__nowcond, nur etwas fetter — die Zahl soll die Hauptsache sein. */
+.idle__nowtemp {
+  font-weight: 600;
+}
+/* Die Jetzt-Lage NEBEN der Temperatur ist bewusst kleiner/leiser (em-Maß,
+   folgt also der fluiden Kondition-Schrift mit) — nur wenn eine Jetzt-
+   Temperatur da ist; fehlt sie (altes BE/Timeout), bleibt der Bedingungstext
+   ohne diese Klasse in der vollen Größe (ehrlicher Fallback auf die Ansicht
+   von vor dieser Erweiterung). */
+.idle__nowcondtext {
+  font-size: 0.55em;
+  font-weight: 400;
+  color: var(--text-3);
+}
 .idle__nowspan {
   font-size: 14px;
   color: var(--text-3);
@@ -871,6 +886,17 @@ button.ops__pill {
 .idle__nowprecip {
   font-size: 13px;
   color: var(--text-3);
+}
+/* Morgen-/Regen-ab-Zeile: dieselbe leise Stufe wie .idle__nowgap, aber ohne
+   dessen max-width-Zeilenumbruch-Regel (das sind kurze Einzeiler). */
+.idle__nowline {
+  font-size: 13px;
+  color: var(--text-4);
+}
+/* Sonnenauf-/-untergang: „sehr flurtauglich, sehr klein" (Andi-Auftrag) —
+   eine Stufe leiser als die anderen Zusatzzeilen. */
+.idle__nowline--sun {
+  font-size: 11px;
 }
 .idle__nowgap {
   font-size: 13px;
@@ -1035,6 +1061,72 @@ button.ops__pill {
   margin-bottom: 4px;
 }
 
+/* ---- Räume-Kopfzeile: Zuordnungs-Wahrheit + Suche + Domänen-Chips (Scheibe 1
+   des Räume-Verwaltungs-Konzepts, `.orch-bus/inbox/20260727-2223-cowork-
+   raeume-verwaltung-konzept.md` §6). Muster `.feed__daysep`/`.settings__text`/
+   `.settings__cattab`: nur Tokens, kein eigenes Hardcode-Grau. */
+.rooms__toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.rooms__summary {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.rooms__search {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--bg-hairline);
+  border-radius: 10px;
+  background: var(--bg-base);
+  color: var(--text-1);
+  font: inherit;
+}
+.rooms__search::placeholder {
+  color: var(--text-4);
+}
+.rooms__search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.rooms__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rooms__chip {
+  padding: 6px 12px;
+  border: 1px solid var(--bg-hairline);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-3);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-standard),
+    background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+.rooms__chip:hover {
+  color: var(--text-1);
+}
+.rooms__chip.is-active {
+  border-color: var(--accent);
+  background: var(--accent-faint);
+  color: var(--text-1);
+}
+.rooms__nomatch {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-4);
+}
+
 /* ---- Räume (echte Geräte-Liste, Scheibe 1 des Geräte-Zuordnungs-Konzepts) ----
    `.rooms` erbt Raster+Eintritts-Stagger von `.tiles` (beide Klassen am
    Container) — nur die Spaltenbreite wird hier verbreitert, eine Raum-Karte
@@ -1106,31 +1198,73 @@ button.ops__pill {
   color: var(--warn);
 }
 
-/* Scheibe 2 — dezenter Raum-Picker auf „Nicht zugeordnet"-Zeilen (Mockup 11b:
-   „Raum wählen ▾"). Yoru-Tokens, SVG-frei; nur gerendert, wenn der Edit-Flag an
-   ist. `margin-left:auto` schiebt ihn wie die Label-Chips ans Zeilenende. */
-.room__picker {
-  margin-left: auto;
-}
-.room__pickerselect {
-  font: inherit;
-  font-size: 11px;
-  color: var(--accent);
-  background: var(--bg-elevated);
-  border: 1px solid var(--bg-hairline-dashed);
-  border-radius: 999px;
-  padding: 2px 8px;
-  cursor: pointer;
-}
-.room__pickerselect:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
+/* `.room__pickererror` bleibt (Scheibe 1 des Räume-Verwaltungs-Konzepts nutzt
+   sie weiter für die Zeilen-Fehlermeldung in `InboxRow`) — der alte, bloße
+   `.room__picker`/`.room__pickerselect`-Picker der „Nicht zugeordnet"-Karte
+   ist mit der „Braucht dich"-Inbox entfallen (s. `.inbox__select` unten). */
 .room__pickererror {
   flex-basis: 100%;
   margin: 4px 0 0;
   font-size: 11px;
   color: var(--error);
+}
+
+/* „Braucht dich"-Inbox (ersetzt die alte `UnassignedCard`-Darstellung,
+   Scheibe 1 des Räume-Verwaltungs-Konzepts): Picker + „Bestätigen" sitzen
+   zusammen rechts in der Zeile, derselbe `margin-left:auto`-Trick wie
+   `.room__picker`. Der Select selbst ist bewusst KEIN Auto-Write mehr (anders
+   als der alte `.room__pickerselect`) — erst der Knopf schreibt. */
+.inbox__assign {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.inbox__select {
+  font: inherit;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-hairline-dashed, var(--bg-hairline));
+  border-radius: 999px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.inbox__select:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.inbox__confirm {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-faint);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.inbox__confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Raum-Karte: „die übrigen n zeigen"/„Einklappen" (Muster `.sched__toggle`-
+   Chevron: Glyph in eigenem `aria-hidden`-Span, kein Emoji). */
+.room__more {
+  align-self: flex-start;
+  margin-top: 2px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.room__more:hover {
+  color: var(--text-1);
 }
 
 /* `unreachable`: die Naht ist verdrahtet, HA antwortet gerade nicht —
@@ -1454,6 +1588,36 @@ button.ops__pill {
     border-color var(--dur-fast) var(--ease-standard);
 }
 .feed__refresh:hover {
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+}
+
+/* ---- Aktivität: Tages-Trenner + „Frühere laden" (Cap+Nachladen, Andi-Auftrag
+   2026-07-27) — nur Tokens, keine eigenen Hardcodes. ---- */
+.feed__daysep {
+  padding: 6px 16px;
+  background: var(--bg-subtle);
+  color: var(--text-4);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.feed__loadmore {
+  margin: 8px auto 0;
+  display: block;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-elevated);
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+}
+.feed__loadmore:hover {
   color: var(--text-1);
   border-color: var(--accent-soft);
 }

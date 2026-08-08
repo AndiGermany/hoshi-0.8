@@ -229,4 +229,70 @@ class HaAreaCatalogAdapterTest {
         val areas = adapter.areas()
         assertEquals(listOf(AreaInfo(areaId = "garten", label = "Garten", aliases = setOf("garten"))), areas)
     }
+
+    // ── Regressions-Fix (2026-07-25): die statische ToolAreas-Bruecke ────────────
+    // Der Live-Endpunkt liefert NUR {id, name.lowercase()} je Area (kein HA-natives
+    // aliases-Feld, s. Klassen-KDoc) — ohne die Bruecke wuerden die kuratierten
+    // EN-Aliase ("living room", "kitchen", …) beim dynamischen Katalog verloren
+    // gehen. `mergeStaticAliases` schliesst genau diese Luecke.
+
+    @Test
+    fun `mergt die kuratierten EN-Aliase in bekannte area_ids obwohl der Live-Payload sie nicht traegt`() = withHa { url, _, _ ->
+        val adapter = HaAreaCatalogAdapter(baseUrl = url, token = "secret-token")
+        val byId = adapter.areas().associateBy { it.areaId }
+
+        // Roh-Payload traegt nur "wohnzimmer"/"wohnzimmer" (id + Name-lowercase) —
+        // "living room" kommt NUR aus der statischen Bruecke.
+        assertTrue(byId.getValue("wohnzimmer").aliases.contains("living room"), "EN-Mehrwort-Alias muss aus ToolAreas gemerged werden")
+        assertTrue(byId.getValue("kuche").aliases.contains("kitchen"), "EN-Alias fuer Kueche muss gemerged werden")
+        // Die urspruenglichen dynamischen Aliase bleiben erhalten (Vereinigung, kein Ersatz).
+        assertTrue(byId.getValue("wohnzimmer").aliases.contains("wohnzimmer"))
+    }
+
+    @Test
+    fun `deutsche Labels bleiben nach dem Alias-Merge byte-identisch`() = withHa { url, _, _ ->
+        val adapter = HaAreaCatalogAdapter(baseUrl = url, token = "secret-token")
+        val byId = adapter.areas().associateBy { it.areaId }
+        assertEquals("Wohnzimmer", byId.getValue("wohnzimmer").label, "Label darf der Merge nicht anfassen")
+        assertEquals("Küche", byId.getValue("kuche").label, "Label darf der Merge nicht anfassen")
+    }
+
+    @Test
+    fun `unbekannte area_id ausserhalb des statischen Mappings bleibt unangetastet`() {
+        val adapter = HaAreaCatalogAdapter(baseUrl = "http://127.0.0.1:1", token = "secret-token")
+        val dynamic = listOf(AreaInfo(areaId = "gastzimmer", label = "Gästezimmer", aliases = setOf("gastzimmer", "gästezimmer")))
+        val merged = adapter.mergeStaticAliases(dynamic)
+        assertEquals(dynamic, merged, "kein statisches Mapping fuer 'gastzimmer' -> unveraendert durchreichen")
+    }
+
+    @Test
+    fun `Kollisionsregel - ein von einer ANDEREN dynamischen Area beanspruchtes Wort wird NICHT durch die Bruecke ueberschrieben`() {
+        val adapter = HaAreaCatalogAdapter(baseUrl = "http://127.0.0.1:1", token = "secret-token")
+        // Simuliert einen kuenftigen HA-nativen Alias: "office" wird (fiktiv) NICHT
+        // "arbeitszimmer" zugeordnet, sondern einer separaten Area "gastzimmer" —
+        // ein echter Widerspruch zur statischen ToolAreas-Bruecke (die "office" ->
+        // "arbeitszimmer" kennt). Dynamisch/nativ MUSS gewinnen.
+        val dynamic = listOf(
+            AreaInfo(areaId = "arbeitszimmer", label = "Arbeitszimmer", aliases = setOf("arbeitszimmer")),
+            AreaInfo(areaId = "gastzimmer", label = "Gästezimmer", aliases = setOf("gastzimmer", "office")),
+        )
+        val merged = adapter.mergeStaticAliases(dynamic).associateBy { it.areaId }
+
+        // "office" bleibt bei gastzimmer (dynamisch/nativ gewinnt) …
+        assertTrue(merged.getValue("gastzimmer").aliases.contains("office"))
+        // … und wird NICHT zusaetzlich in arbeitszimmer gemischt (keine Doppel-Vergabe).
+        assertFalse(merged.getValue("arbeitszimmer").aliases.contains("office"), "die Bruecke darf ein anderswo beanspruchtes Wort nicht ueberschreiben")
+        // Luecken OHNE Widerspruch werden trotzdem gefuellt ("büro"/"buero" sind frei).
+        assertTrue(merged.getValue("arbeitszimmer").aliases.contains("büro"))
+        assertTrue(merged.getValue("arbeitszimmer").aliases.contains("buero"))
+    }
+
+    @Test
+    fun `mehrere Areas gleichzeitig - jede bekommt nur ihre eigenen Luecken gefuellt`() = withHa { url, _, _ ->
+        val adapter = HaAreaCatalogAdapter(baseUrl = url, token = "secret-token")
+        val byId = adapter.areas().associateBy { it.areaId }
+        // wohnzimmer bekommt KEINE Kueche-Worte und umgekehrt.
+        assertFalse(byId.getValue("wohnzimmer").aliases.contains("kitchen"))
+        assertFalse(byId.getValue("kuche").aliases.contains("living room"))
+    }
 }

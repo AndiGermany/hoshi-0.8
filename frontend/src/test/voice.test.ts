@@ -104,6 +104,23 @@ describe('streamVoice — Request + SSE-Verarbeitung', () => {
     expect(fetchMock.mock.calls[1][0] as string).toContain('voice=nova');
   });
 
+  // Andi-Auftrag 2026-07-27 („fünf Sprachen ohne Sternchen"): Español/Français/
+  // Italiano gehen NIE als `languagePolicy`-Query mit (Backend-Enum kennt nur
+  // AUTO/DE/EN) — nur das konkrete `language`-Feld trägt sie, s. api/voice.ts.
+  it.each(['es', 'fr', 'it'] as const)(
+    "language:'%s' → language-Query GROSS, languagePolicy fehlt ganz (kein 400 möglich)",
+    async (code) => {
+      const fetchMock = vi.fn().mockResolvedValue(sseResponse(''));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await streamVoice(new Blob(['x']), { onEvent: () => {}, language: code });
+
+      const url = fetchMock.mock.calls[0][0] as string;
+      expect(url).toContain(`language=${code.toUpperCase()}`);
+      expect(url).not.toContain('languagePolicy');
+    },
+  );
+
   it('HTTP 415 (Content-Type abgelehnt) wird sichtbar geworfen, nicht verschluckt', async () => {
     const fetchMock = vi.fn().mockResolvedValue(sseResponse('', 415));
     vi.stubGlobal('fetch', fetchMock);

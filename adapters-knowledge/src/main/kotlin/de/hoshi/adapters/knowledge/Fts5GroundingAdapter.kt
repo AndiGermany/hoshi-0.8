@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.pipeline.GroundingPort
+import de.hoshi.core.security.SidecarTokenHeader
 import org.slf4j.LoggerFactory
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Mono
@@ -63,12 +64,19 @@ class Fts5GroundingAdapter(
     private val useKnowledgePackV1: Boolean = false,
     private val timeout: Duration = Duration.ofSeconds(5),
     private val mapper: ObjectMapper = jacksonObjectMapper(),
+    // Sidecar-Token-Wand (opt-in, s. SidecarTokenHeader-KDoc): leer (Default) ⇒ KEIN
+    // Header ⇒ byte-identisch zu vor der Wand.
+    private val token: String = "",
 ) : GroundingPort {
     private val log = LoggerFactory.getLogger(javaClass)
 
     private val client = WebClient.builder()
         .baseUrl(baseUrl.trimEnd('/'))
         .codecs { it.defaultCodecs().maxInMemorySize(4 * 1024 * 1024) }
+        // `.let` statt `.apply` (s. MlxBrainAdapter-KDoc): WebClient.Builder hat SELBST
+        // eine Member-Methode `apply(Consumer<Builder>)`, die den Lambda-Empfänger
+        // auf `it` umbiegen würde.
+        .let { b -> if (token.isNotBlank()) b.defaultHeader(SidecarTokenHeader.NAME, token) else b }
         .build()
 
     /**

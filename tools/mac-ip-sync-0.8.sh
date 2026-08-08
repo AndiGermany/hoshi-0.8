@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # tools/mac-ip-sync-0.8.sh — IP-Drift-Watchdog für das 0.8-Backend auf ct-106.
 #
+# Betriebsweg: läuft nur auf Andis Mac gegen sein ct-106 (SSH + Remote-Unit-Pfad
+# fest verdrahtet) — Frischklon: nicht nötig (ohne ct-106-SSH still exit 0, s.u.).
+#
 # ── INCIDENT-REFERENZ 2026-07-06 ──────────────────────────────────────────────
 # Die Mac-IP driftete per DHCP (→ 192.168.178.84). ct-106s systemd-Unit
 # (hoshi-0.8-backend) trägt die Mac-IP nur als DEPLOY-ZEIT-Rendering

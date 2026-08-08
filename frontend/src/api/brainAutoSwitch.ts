@@ -1,4 +1,6 @@
 import { API_BASE, TOKEN } from './config';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 
 /**
  * Typisierter Client für das `brainAutoSwitch`-Settings (Andi-Auftrag „12B für
@@ -33,8 +35,8 @@ export async function fetchBrainAutoSwitch(signal?: AbortSignal): Promise<BrainA
     headers: authHeaders(),
     signal,
   });
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   return toSetting(await res.json());
 }
 
@@ -50,7 +52,7 @@ export async function saveBrainAutoSwitch(enabled: boolean, signal?: AbortSignal
     body: JSON.stringify({ enabled }),
     signal,
   });
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   return toSetting(await res.json());
 }

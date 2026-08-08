@@ -1,34 +1,60 @@
 {
-  "_comment": "Manifest der Sidecar-Modelle, die der 0.8-Stack lokal braucht. WARUM: ein unvollständiger HF-Cache (fehlende safetensors, .incomplete-Reste) fiel bisher erst beim Brain-Start auf (Start-Guard). Dieses Manifest + tools/models-verify.sh melden es VORHER, read-only. v1 prüft Vollständigkeit über Datei-Muster, bewusst OHNE Hash-Verifikation.",
-  "version": 1,
+  "_comment": "Manifest der Sidecar-Modelle, die der 0.8-Stack lokal braucht. v2 bindet Hugging-Face-Modelle an volle Commit-IDs und jede Runtime-Datei an Bytegroesse + SHA-256. tools/verified_fetch.py aktiviert einen Snapshot erst nach vollstaendiger Verifikation; tools/models-verify.sh bleibt der schnelle read-only Betriebscheck.",
+  "version": 2,
   "models": [
     {
       "id": "brain-e2b",
       "type": "hf",
       "hf_repo": "mlx-community/gemma-4-e2b-it-4bit",
-      "role": "brain",
-      "required": true,
+      "role": "brain-alt",
+      "required": false,
       "license": "gemma",
-      "note": "Default-Brain (siehe pipeline/stack-lib.sh resolve_brain_model, HOSHI_BRAIN_MODEL=e2b). PIN: upstream liegt seit 2026-07-06 eine neuere Revision (23876752, vermutlich dieselbe KV-Sharing-Umstellung wie beim e4b-Revisions-Incident) — Upgrade NUR zusammen mit mlx-lm-Upgrade im Brain-Fenster (PREP-mlx-modell-upgrade), nie durch blindes Re-Download.",
+      "note": "RETIRED seit 0.8.3, bleibt als Rückweg (0.8.3 fährt e4b als Voice-Brain + 12b als Chat-Brain hinter Auto-Modellwahl, siehe brain-e4b/brain-12b unten und pipeline/stack-lib.sh resolve_brain_model). Optional, daher required=false. PIN: upstream liegt seit 2026-07-06 eine neuere Revision (23876752, vermutlich dieselbe KV-Sharing-Umstellung wie beim e4b-Revisions-Incident) — Upgrade NUR zusammen mit mlx-lm-Upgrade im Brain-Fenster (PREP-mlx-modell-upgrade), nie durch blindes Re-Download.",
       "expected_files": [
         "config.json",
         "*.safetensors"
       ],
-      "pinned_revision": "2c3e507453b4f218d05fe3cc97bea5c5a654257e"
+      "pinned_revision": "2c3e507453b4f218d05fe3cc97bea5c5a654257e",
+      "download_bytes": 3613528388,
+      "license_url": "https://ai.google.dev/gemma/terms",
+      "license_acceptance": "gemma",
+      "artifacts": [
+        {"path": "chat_template.jinja", "bytes": 17336, "sha256": "2f1b4d75d067bae3fe44e676721c7f077d243bc007156cb9c2f8b5836613d082"},
+        {"path": "config.json", "bytes": 5996, "sha256": "6d12c87861fff3871d3a745011b0d852be6513f3ce594ae1e8d643dae9d3b9a8"},
+        {"path": "generation_config.json", "bytes": 208, "sha256": "d4226bbe3117d2d253ba4609720ba82c6c4ce4627a9a6ae05387c78983ac03de"},
+        {"path": "model.safetensors", "bytes": 3581101896, "sha256": "e9bea0584546fafb5ff83a1132a6c4662a8498cc6a5bcda52fc6ca562b7bafab"},
+        {"path": "model.safetensors.index.json", "bytes": 230329, "sha256": "a8aa7359c747a0d59368dbff9a1029da86bda139ccc0ae1f1e938db75de7d5ce"},
+        {"path": "processor_config.json", "bytes": 902, "sha256": "1bd0d00776284f369c1eff5fb631e865dfcdca861e0b7d60dbef27fcf37436a8"},
+        {"path": "tokenizer.json", "bytes": 32169626, "sha256": "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f"},
+        {"path": "tokenizer_config.json", "bytes": 2095, "sha256": "90c3a3ba5bf53818383a58e1a776cbcacd2a038d4812eaa373e1522f2d06f3df"}
+      ]
     },
     {
       "id": "brain-e4b",
       "type": "hf",
       "hf_repo": "mlx-community/gemma-4-e4b-it-4bit",
-      "role": "brain-alt",
-      "required": false,
+      "role": "brain",
+      "required": true,
       "license": "gemma",
-      "note": "Alternatives/Test-Brain (16-GB-Wand: e4b und 12b laufen nie gleichzeitig, siehe brain_guard_blocks in pipeline/stack-lib.sh). Optional, daher required=false. PIN: neuere Repo-Revision (475b9088) nutzt geteilte KV-Gewichte (Layer 24-41) und braucht ein neueres mlx-lm als das gepinnte 0.31.2 — refs/main muss auf die gepinnte Revision zeigen (byte-genau, ohne Newline), sonst Missing-54-parameters-Ladefehler.",
+      "note": "Operatives Default-Brain seit 0.8.3 (Voice-Brain; siehe pipeline/stack-lib.sh resolve_brain_model, HOSHI_BRAIN_MODEL=e4b — dieser Eintrag IST die Modell-Wahrheit, gegen die pipeline/doctor.sh den stack-lib.sh-Default gegenliest). Chat faehrt separat ueber brain-12b hinter Auto-Modellwahl (16-GB-Wand: e4b und 12b laufen nie gleichzeitig, siehe brain_guard_blocks in pipeline/stack-lib.sh). PIN: neuere Repo-Revision (475b9088) nutzt geteilte KV-Gewichte (Layer 24-41) und braucht ein neueres mlx-lm als das gepinnte 0.31.2 — refs/main muss auf die gepinnte Revision zeigen (byte-genau, ohne Newline), sonst Missing-54-parameters-Ladefehler.",
       "expected_files": [
         "config.json",
         "*.safetensors"
       ],
-      "pinned_revision": "deb1db712068b1c9f83fb1c97f08c1204b9459a1"
+      "pinned_revision": "deb1db712068b1c9f83fb1c97f08c1204b9459a1",
+      "download_bytes": 5249809327,
+      "license_url": "https://ai.google.dev/gemma/terms",
+      "license_acceptance": "gemma",
+      "artifacts": [
+        {"path": "chat_template.jinja", "bytes": 17336, "sha256": "2f1b4d75d067bae3fe44e676721c7f077d243bc007156cb9c2f8b5836613d082"},
+        {"path": "config.json", "bytes": 6229, "sha256": "18521c2237729a659a3b821eeb706f088e46518d8698f8e357df7bf7300e7041"},
+        {"path": "generation_config.json", "bytes": 208, "sha256": "d4226bbe3117d2d253ba4609720ba82c6c4ce4627a9a6ae05387c78983ac03de"},
+        {"path": "model.safetensors", "bytes": 5217361182, "sha256": "339409bd18494955556e1fde6ccc15faaa9f707b911b74791fe290b9d722beed"},
+        {"path": "model.safetensors.index.json", "bytes": 251749, "sha256": "50c54ba1baf793652f8f85fb61cf9bedfafdc2ea7b59f80cf56611c9912fccd0"},
+        {"path": "processor_config.json", "bytes": 902, "sha256": "1bd0d00776284f369c1eff5fb631e865dfcdca861e0b7d60dbef27fcf37436a8"},
+        {"path": "tokenizer.json", "bytes": 32169626, "sha256": "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f"},
+        {"path": "tokenizer_config.json", "bytes": 2095, "sha256": "90c3a3ba5bf53818383a58e1a776cbcacd2a038d4812eaa373e1522f2d06f3df"}
+      ]
     },
     {
       "id": "brain-12b",
@@ -42,7 +68,21 @@
         "config.json",
         "*.safetensors"
       ],
-      "pinned_revision": "73bcf09092aa277861d5a191b989b666f7f32e8f"
+      "pinned_revision": "73bcf09092aa277861d5a191b989b666f7f32e8f",
+      "download_bytes": 6773371194,
+      "license_url": "https://ai.google.dev/gemma/terms",
+      "license_acceptance": "gemma",
+      "artifacts": [
+        {"path": "chat_template.jinja", "bytes": 17466, "sha256": "36e3a42e5cf14cd0020e72d92e1fdd9970f59b82170e421f0cbe1bb42bead3f0"},
+        {"path": "config.json", "bytes": 5415, "sha256": "fbc1c1cb48ed86ec98482b2d41f5a03d3991aba74b7c29a93d430761e6518a38"},
+        {"path": "generation_config.json", "bytes": 260, "sha256": "a8349d9bd64cc5841297fcb5002f0fdc4749c473c8f1b10ea337f9ce4ee7014e"},
+        {"path": "model-00001-of-00002.safetensors", "bytes": 5351756584, "sha256": "0d58feed0c98a69c07317b4481aeae5ab2785f12a496ea96ab24c4842808de78"},
+        {"path": "model-00002-of-00002.safetensors", "bytes": 1389282927, "sha256": "5b00a1bcb596ce6e827b4cdea6ecf2a0f35bb01306eb87c1ea4b3bcde36c7755"},
+        {"path": "model.safetensors.index.json", "bytes": 135329, "sha256": "9ac99e7a6cf3e4d40eb8df01644fe9c04036ace94f3389df35db9d9449758516"},
+        {"path": "processor_config.json", "bytes": 868, "sha256": "016a1db9c4f41ea0c61919c46855ea5e7c45c6e4ae4bfbedfb5b6bed79a2fe92"},
+        {"path": "tokenizer.json", "bytes": 32169626, "sha256": "cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f"},
+        {"path": "tokenizer_config.json", "bytes": 2719, "sha256": "fc1384a911d2c9860ac07bc3ceafff20bff26695991744b7dbe5e1e4522bfa57"}
+      ]
     },
     {
       "id": "stt-whisper",
@@ -55,6 +95,13 @@
       "expected_files": [
         "config.json",
         "*.safetensors"
+      ],
+      "pinned_revision": "a4aaeec0636e6fef84abdcbe3544cb2bf7e9f6fb",
+      "download_bytes": 1613977880,
+      "license_url": "https://huggingface.co/mlx-community/whisper-large-v3-turbo",
+      "artifacts": [
+        {"path": "config.json", "bytes": 268, "sha256": "b34fc29e4e11e0a25e812775dd67f4dd16fc2c8eb43d28ae25ff7d660ecb6379"},
+        {"path": "weights.safetensors", "bytes": 1613977612, "sha256": "951ed3fc1203e6a62467abb2144a96ce7eafca8fa77e3704fdb8635ff3e7f8a6"}
       ]
     },
     {
@@ -64,9 +111,11 @@
       "role": "speaker",
       "required": true,
       "license": "apache-2.0",
-      "note": "CAM++-ONNX-Speaker-Embedding, siehe Hoshi_0.5/hoshi-speaker-id/setup.sh. WICHTIG: kommt NICHT über huggingface_hub.snapshot_download (kein Eintrag im HF-Hub-Cache) — setup.sh lädt die Datei per curl direkt in den Projektordner. tools/models-verify.sh prüft deshalb local_path statt Snapshot-Cache. [0.8-Port] sidecars/speaker/bootstrap.sh lädt dieselbe Datei (hash-/größenverifiziert aus genau diesem Manifest-Eintrag, s. expected_sha256) nach sidecar_local_path — lokal-relativ zum Sidecar, siehe Path(__file__)-Default in sidecars/speaker/server.py. local_path bleibt bis zum Scheibe-4-Cutover (pipeline/stack-lib.sh auf sidecars/ umgestellt) die von tools/models-verify.sh geprüfte Live-Wahrheit; sidecar_local_path ist der künftige Ziel-Pfad, noch nicht produktiv verdrahtet.",
+      "note": "CAM++-ONNX-Speaker-Embedding. WICHTIG: kommt NICHT über huggingface_hub.snapshot_download (kein Eintrag im HF-Hub-Cache), sondern über den zentralen verified_fetch direkt von source_url an der vollen pinned_revision. sidecars/speaker/bootstrap.sh ruft diesen Vertrag auf; tools/models-verify.sh prüft die Repo-Sidecar-Datei an sidecar_local_path mit Größe + SHA-256. local_path dokumentiert nur noch den abgeschalteten Vorgängerpfad.",
       "local_path": "$HOSHI_05_ROOT/hoshi-speaker-id/models/voxceleb_CAM++.onnx",
       "sidecar_local_path": "sidecars/speaker/models/voxceleb_CAM++.onnx",
+      "pinned_revision": "acf623ad8ca746e50baa432255cf8fc57c669c45",
+      "source_url": "https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus/resolve/acf623ad8ca746e50baa432255cf8fc57c669c45/voxceleb_CAM%2B%2B.onnx",
       "expected_bytes": 29292449,
       "expected_sha256": "b50810498b5bcf5773d086f6993d344476bd0c88b566a41e8d801aaf8461efad",
       "expected_files": [

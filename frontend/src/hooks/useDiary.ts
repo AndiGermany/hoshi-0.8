@@ -14,6 +14,14 @@ import { API_BASE, TOKEN } from '../api/config';
  * `parseDiaryTurns`/`fetchDiaryRecent` sind pure/seam-Funktionen (kein DOM,
  * keine Timer) → ohne Live-Backend unit-testbar. Der Hook lädt EINMAL beim
  * Öffnen der View + auf manuelles `refresh()` — bewusst KEIN Dauerpoll.
+ *
+ * `loadMore()` (Andi-Auftrag „Frühere laden" 2026-07-27): hängt weitere,
+ * ÄLTERE Turns ans Ende des Arrays an — via den additiven `?before=`-Vertrag
+ * von `GET /api/v1/diary/recent` (s. `DiaryController`). Der pure/seam-Anteil
+ * (`fetchDiaryRecentBefore`) ist wie `fetchDiaryRecent` ohne Live-Backend
+ * testbar; `hasMoreOlder` startet optimistisch `true` (unbekannt, nicht
+ * „keine weiteren") und wird erst `false`, sobald eine `before`-Anfrage
+ * ehrlich leer zurückkommt.
  */
 
 export interface DiaryTurn {
@@ -94,18 +102,13 @@ export function parseDiaryTurns(body: unknown): DiaryTurn[] | null {
   });
 }
 
-/**
- * Best-effort-Abruf: jeder Misserfolg (401/5xx/Netz/Abbruch/kein Array) → `null`.
- * Token geht als `X-Hoshi-Token` (gleicher Mechanismus wie `api/chat.ts`).
- */
-export async function fetchDiaryRecent(
-  limit = 50,
-  signal?: AbortSignal,
-): Promise<DiaryTurn[] | null> {
+/** Gemeinsamer Abruf: jeder Misserfolg (401/5xx/Netz/Abbruch/kein Array) → `null`. */
+async function fetchDiary(params: Record<string, string>, signal?: AbortSignal): Promise<DiaryTurn[] | null> {
   try {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (TOKEN.trim()) headers['X-Hoshi-Token'] = TOKEN;
-    const res = await fetch(`${API_BASE}/api/v1/diary/recent?limit=${limit}`, { headers, signal });
+    const qs = new URLSearchParams(params).toString();
+    const res = await fetch(`${API_BASE}/api/v1/diary/recent?${qs}`, { headers, signal });
     if (!res.ok) return null; // 401/5xx → ehrlich „nicht erreichbar", kein Lärm
     const body: unknown = await res.json().catch(() => null);
     return parseDiaryTurns(body);
@@ -115,18 +118,83 @@ export async function fetchDiaryRecent(
 }
 
 /**
+ * Best-effort-Abruf: jeder Misserfolg (401/5xx/Netz/Abbruch/kein Array) → `null`.
+ * Token geht als `X-Hoshi-Token` (gleicher Mechanismus wie `api/chat.ts`).
+ */
+export async function fetchDiaryRecent(
+  limit = 50,
+  signal?: AbortSignal,
+): Promise<DiaryTurn[] | null> {
+  return fetchDiary({ limit: String(limit) }, signal);
+}
+
+/** Nachlade-Schrittgröße (Netz-Seite) — deckungsgleich mit `FEED_PAGE_SIZE` der View. */
+const FEED_LOAD_MORE_SIZE = 25;
+
+/**
+ * Nachlade-Seite: die `limit` jüngsten Zeilen STRIKT VOR `before` (additiver
+ * Backend-Vertrag `?before=<ISO-8601-ts>`, s. `DiaryController`). Gleiche
+ * Ehrlichkeits-Regel wie `fetchDiaryRecent`: jeder Misserfolg → `null`.
+ */
+export async function fetchDiaryRecentBefore(
+  before: string,
+  limit = FEED_LOAD_MORE_SIZE,
+  signal?: AbortSignal,
+): Promise<DiaryTurn[] | null> {
+  return fetchDiary({ limit: String(limit), before }, signal);
+}
+
+/**
  * Lädt den Feed EINMAL beim Mount (View-Öffnen) und auf `refresh()` —
  * kein Intervall. `turns === null` heißt „(noch) nicht erreichbar/geladen".
+ *
+ * `loadMore()` hängt eine weitere, ÄLTERE Seite ans Ende an (kein Ersatz des
+ * Arrays) — no-op ohne geladene Turns oder während eine Nachlade-Anfrage
+ * schon läuft (kein doppelter Schuss bei Doppelklick). `hasMoreOlder` ist
+ * VOR der ersten `before`-Anfrage optimistisch `true` (ehrlich „unbekannt",
+ * nie eine erfundene Gewissheit) und wird erst `false`, wenn eine
+ * `before`-Anfrage wirklich leer zurückkommt.
  */
-export function useDiary(limit = 50): { turns: DiaryTurn[] | null; refresh: () => void } {
+export function useDiary(limit = 50): {
+  turns: DiaryTurn[] | null;
+  refresh: () => void;
+  loadMore: () => void;
+  hasMoreOlder: boolean;
+} {
   const [turns, setTurns] = useState<DiaryTurn[] | null>(null);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const aliveRef = useRef(true);
+  const turnsRef = useRef<DiaryTurn[] | null>(null);
+  const loadingMoreRef = useRef(false);
+
+  useEffect(() => {
+    turnsRef.current = turns;
+  }, [turns]);
 
   const refresh = useCallback(() => {
     void fetchDiaryRecent(limit).then((next) => {
-      if (aliveRef.current) setTurns(next);
+      if (!aliveRef.current) return;
+      setTurns(next);
+      setHasMoreOlder(true); // frischer Ladevorgang: „mehr?" wieder unbekannt/offen
     });
   }, [limit]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMoreRef.current) return; // schon eine Nachlade-Anfrage unterwegs
+    const current = turnsRef.current;
+    if (!current || current.length === 0) return; // nichts zum Anhängen
+    const oldest = current[current.length - 1].ts;
+    loadingMoreRef.current = true;
+    void fetchDiaryRecentBefore(oldest, FEED_LOAD_MORE_SIZE).then((older) => {
+      loadingMoreRef.current = false;
+      if (!aliveRef.current) return;
+      if (older === null || older.length === 0) {
+        setHasMoreOlder(false); // ehrlich leer ⇒ keine weiteren mehr
+        return;
+      }
+      setTurns((prev) => (prev ? [...prev, ...older] : prev));
+    });
+  }, []);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -136,5 +204,5 @@ export function useDiary(limit = 50): { turns: DiaryTurn[] | null; refresh: () =
     };
   }, [refresh]);
 
-  return { turns, refresh };
+  return { turns, refresh, loadMore, hasMoreOlder };
 }

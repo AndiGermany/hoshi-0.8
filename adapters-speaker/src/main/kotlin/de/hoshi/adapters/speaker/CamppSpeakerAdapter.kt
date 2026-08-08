@@ -3,6 +3,7 @@ package de.hoshi.adapters.speaker
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import de.hoshi.core.port.SpeakerEmbedPort
+import de.hoshi.core.security.SidecarTokenHeader
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.http.HttpClient
@@ -24,8 +25,12 @@ import java.util.Base64
  * Synchron ueber `java.net.http` (wie `HttpBrainHealthSource` in `SidecarHealthService`) —
  * der Port-Vertrag ist synchron (`FloatArray?`), das Blocking kapselt der Aufrufer
  * (Enroll-Controller per `Schedulers.boundedElastic()`, nie auf dem Netty-Event-Loop).
- * **Kein Token noetig** (lokaler LAN-Sidecar). **Best-Effort:** jeder Fehler/Timeout/Nicht-2xx
- * ⇒ `null`, NIE eine Exception.
+ * **Sidecar-Token-Wand (opt-in, s. [SidecarTokenHeader]-KDoc):** [token] leer (Default)
+ * ⇒ KEIN Header ⇒ byte-identisch zu vor der Wand — EHRLICHER NACHTRAG: dieser Text hieß
+ * hier lange „Kein Token noetig (lokaler LAN-Sidecar)", das galt nur, solange die
+ * Token-Wand noch nicht existierte (Commit 62fccc7 fügte sie allen sechs Sidecars
+ * opt-in hinzu). **Best-Effort:** jeder Fehler/Timeout/Nicht-2xx ⇒ `null`, NIE eine
+ * Exception.
  *
  * `mime` wird akzeptiert (Ehrlichkeit ueber das Empfangene), aber NICHT an den Sidecar gereicht:
  * der erkennt WAV selbst am RIFF-Magic; `sampleRate` greift nur fuer rohes PCM (Default 16k).
@@ -35,6 +40,9 @@ class CamppSpeakerAdapter(
     private val sampleRate: Int = 16_000,
     private val timeout: Duration = Duration.ofSeconds(5),
     private val mapper: ObjectMapper = jacksonObjectMapper(),
+    // Sidecar-Token-Wand (opt-in, s. SidecarTokenHeader-KDoc): leer (Default) ⇒ KEIN
+    // Header ⇒ byte-identisch zu vor der Wand.
+    private val token: String = "",
 ) : SpeakerEmbedPort {
     private val log = LoggerFactory.getLogger(javaClass)
     private val embedUri: URI = URI.create(baseUrl.trimEnd('/') + "/embed")
@@ -49,11 +57,11 @@ class CamppSpeakerAdapter(
                     "sampleRate" to sampleRate,
                 ),
             )
-            val req = HttpRequest.newBuilder(embedUri)
+            val reqBuilder = HttpRequest.newBuilder(embedUri)
                 .timeout(timeout)
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                .build()
+            if (token.isNotBlank()) reqBuilder.header(SidecarTokenHeader.NAME, token)
+            val req = reqBuilder.POST(HttpRequest.BodyPublishers.ofByteArray(body)).build()
             val resp = client.send(req, HttpResponse.BodyHandlers.ofString())
             if (resp.statusCode() !in 200..299) {
                 log.warn("[speaker-embed] /embed → HTTP {} (best-effort null)", resp.statusCode())

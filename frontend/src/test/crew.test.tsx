@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CrewOverlay } from '../components/CrewOverlay';
-import { TopNav } from '../components/TopNav';
+import { TopNav, resolveHoshiVersion } from '../components/TopNav';
 import { fetchCrew, type CrewMember } from '../api/crew';
 
 /** Gültige Crew-Zeile, per `over` punktuell überschreibbar. */
@@ -67,7 +67,13 @@ describe('TopNav — 星-Marke leise links im Brand (Render-Vertrag)', () => {
     expect(header).not.toContain('✦'); // (das ✦ im Crew-Overlay ist ein anderes)
     expect(html).not.toContain('nav__star');
     expect(header).toContain('Hoshi');
-    expect(header).toContain('0.8.3 · Suisei');
+    // Versions-Wahrheit lebt einzig in gradle.properties (vite.config.ts injiziert
+    // __HOSHI_VERSION__ per `define` daraus) — kein Versions-Literal mehr hier
+    // pinnen. `resolveHoshiVersion()` ist dieselbe Auflösung, die TopNav selbst
+    // rendert (inkl. "dev"-Fallback, den Vitest zieht: vitest.config.ts ist
+    // bewusst eine eigene Config und bekommt vite.config.ts' `define` NICHT
+    // mit — s. Kommentar bei resolveHoshiVersion in TopNav.tsx).
+    expect(header).toContain(`${resolveHoshiVersion()} · Suisei`);
   });
 });
 

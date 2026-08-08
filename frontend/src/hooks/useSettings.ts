@@ -75,13 +75,22 @@ export const THEMES: { id: Theme; label: string; hint: string }[] = THEME_IDS.ma
   ...de.settings.themes[id],
 }));
 
-/** Die drei wählbaren Chat-/STT-Sprachen in Panel-Reihenfolge. */
-export const LANGUAGE_IDS: readonly Language[] = ['auto', 'de', 'en'];
+/**
+ * Die sechs wählbaren Chat-/STT-Sprachen in Panel-Reihenfolge (Andi-Auftrag
+ * 2026-07-27, „fünf Sprachen ohne Sternchen"): 'auto' bleibt die bilinguale
+ * DE/EN-Erkennung — Español/Français/Italiano kommen NEU dazu, aber NUR als
+ * explizite Wahl (s. KDoc von {@link Language} in `api/types.ts`), nie als Teil
+ * von 'auto'.
+ */
+export const LANGUAGE_IDS: readonly Language[] = ['auto', 'de', 'en', 'es', 'fr', 'it'];
 
 /**
- * Die wählbaren Sprachen. 'de'/'en' spiegeln das Backend-Enum Language (DE/EN);
- * 'auto' ist die bilinguale Auto-Erkennung — das FE schickt sie als
- * `languagePolicy=AUTO` mit konkretem `language=DE`-Fallback (api/chat.ts).
+ * Die wählbaren Sprachen. 'de'/'en'/'es'/'fr'/'it' spiegeln das Backend-Enum
+ * Language (DE/EN/ES/FR/IT); 'auto' ist die bilinguale Auto-Erkennung — das FE
+ * schickt sie als `languagePolicy=AUTO` mit konkretem `language=DE`-Fallback
+ * (api/chat.ts). Für 'es'/'fr'/'it' lässt das FE `languagePolicy` bewusst WEG
+ * (das Backend-Enum `LanguagePolicy` kennt nur AUTO/DE/EN) und schickt nur das
+ * konkrete `language`-Feld — s. api/chat.ts & api/voice.ts.
  * Die Anzeigenamen kommen aus dem Text-Katalog (`settings.languages`).
  */
 export const LANGUAGES: { id: Language; label: string }[] = LANGUAGE_IDS.map((id) => ({

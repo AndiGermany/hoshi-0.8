@@ -104,4 +104,40 @@ class CamppSpeakerAdapterTest {
         val adapter = CamppSpeakerAdapter(baseUrl = "http://127.0.0.1:1", timeout = Duration.ofSeconds(2))
         assertNull(adapter.embed("FAKE".toByteArray(), "audio/wav"))
     }
+
+    // ---- Sidecar-Token-Wand (opt-in, Commit 62fccc7): Property gesetzt ⇒ Header,
+    // Property leer ⇒ KEIN Header (byte-identisch zu vor der Wand — dieser Adapter
+    // hiess hier lange "kein Token noetig", s. Klassen-KDoc-Nachtrag). ----
+
+    /** Wie [withSidecar], liefert zusätzlich den `X-Hoshi-Token`-Header des Requests. */
+    private fun withSidecarCapturingToken(body: String, block: (url: String, capturedToken: AtomicReference<String?>) -> Unit) {
+        val capturedToken = AtomicReference<String?>(null)
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/embed") { ex ->
+            capturedToken.set(ex.requestHeaders.getFirst("X-Hoshi-Token"))
+            val bytes = body.toByteArray()
+            ex.sendResponseHeaders(200, bytes.size.toLong())
+            ex.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            block("http://127.0.0.1:${server.address.port}", capturedToken)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `Token konfiguriert - Request traegt X-Hoshi-Token`() =
+        withSidecarCapturingToken(embeddingJson(0.1)) { url, capturedToken ->
+            CamppSpeakerAdapter(baseUrl = url, token = "geheim-123").embed("FAKE".toByteArray(), "audio/wav")
+            assertEquals("geheim-123", capturedToken.get(), "gesetzter Token muss als X-Hoshi-Token mitgehen")
+        }
+
+    @Test
+    fun `Token leer (Default) - KEIN X-Hoshi-Token-Header (byte-neutral)`() =
+        withSidecarCapturingToken(embeddingJson(0.1)) { url, capturedToken ->
+            CamppSpeakerAdapter(baseUrl = url).embed("FAKE".toByteArray(), "audio/wav")
+            assertNull(capturedToken.get(), "leerer Token darf KEINEN Header senden")
+        }
 }

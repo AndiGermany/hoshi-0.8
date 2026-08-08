@@ -26,6 +26,11 @@ export HOSHI_PIPER_PORT="${HOSHI_PIPER_PORT:-8045}"
 export HOSHI_PIPER_MODEL_DIR="${HOSHI_PIPER_MODEL_DIR:-$PIPER_DIR/models}"
 export HOSHI_PIPER_DEFAULT_VOICE="${HOSHI_PIPER_DEFAULT_VOICE:-de_DE-thorsten-medium}"
 export HOSHI_PIPER_THREADS="${HOSHI_PIPER_THREADS:-2}"
+# HOSHI_SIDECAR_TOKEN (optional, Codex-Sicherheits-P0 2026-07-27): server.py
+# liest diese Var SELBST per os.environ.get() (kein run.sh-Durchreichen/Export
+# noetig). Leer/ungesetzt (Default) = heutiges offenes Verhalten, NULL
+# Aenderung fuers Produktiv-Setup. Gesetzt: jeder Request ausser /health
+# braucht den Header X-Hoshi-Token mit exakt diesem Wert, sonst 401.
 export PYTHONUNBUFFERED=1
 export VIRTUAL_ENV="$PIPER_DIR/.venv"
 export PATH="$VIRTUAL_ENV/bin:$PATH"

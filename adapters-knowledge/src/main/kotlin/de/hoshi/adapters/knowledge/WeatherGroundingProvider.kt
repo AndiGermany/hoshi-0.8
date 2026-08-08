@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Mono
 import java.time.Duration
+import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
 /**
@@ -248,15 +249,28 @@ class WeatherGroundingProvider(
      * wie `TtsSettingsController.activeLanguage`/`TtsRuntimeConfig`) und reicht sie
      * hier durch. Default bleibt [Language.DE] — byte-neutral für jeden Aufrufer,
      * der (wie die Bestands-Tests) keine Sprache übergibt.
+     *
+     * **Flur-Fertigstellung 2026-07-27 (additive Felder, KEIN neuer API-Call):**
+     * derselbe [fetchDailyJson]-Body trägt jetzt auch `current` (Jetzt-Temperatur/
+     * -Lage, [parseCurrent]), den morgigen Tag ([parseDays]-Offset 1),
+     * `daily.sunrise`/`sunset` ([parseSunTimes]) und den neuen `hourly`-Block
+     * ([parseHourly]) — bisher wurde alles außer heute verworfen. Jedes neue Feld
+     * ist EINZELN best-effort: fehlt/kaputt ⇒ `null` (bzw. leere Liste bei
+     * [TodayForecast.hourly]), NIE ein erfundener Wert. Alt-Clients, die die neuen
+     * Felder nicht kennen, ignorieren sie (additiver Wire-Vertrag).
      */
     fun todayForecast(displayLanguage: Language = Language.DE): Mono<TodayForecast> =
         Mono.fromSupplier { configuredLocation() }
             .flatMap { location ->
                 fetchDailyJson(location).flatMap { body ->
-                    val today = parseDays(body).firstOrNull { it.offset == 0 }
+                    val days = parseDays(body)
+                    val today = days.firstOrNull { it.offset == 0 }
                     if (today == null) {
                         Mono.empty()
                     } else {
+                        val tomorrow = days.firstOrNull { it.offset == 1 }
+                        val (nowTemp, nowCodeText) = parseCurrent(body, displayLanguage)
+                        val (sunrise, sunset) = parseSunTimes(body)
                         Mono.just(
                             TodayForecast(
                                 label = location.label,
@@ -264,6 +278,14 @@ class WeatherGroundingProvider(
                                 todayMax = today.tMax,
                                 codeText = weatherCodeText(today.code, displayLanguage),
                                 precipMm = today.precipMm,
+                                nowTemp = nowTemp,
+                                nowCodeText = nowCodeText,
+                                tomorrowMin = tomorrow?.tMin,
+                                tomorrowMax = tomorrow?.tMax,
+                                tomorrowCodeText = tomorrow?.let { weatherCodeText(it.code, displayLanguage) },
+                                sunriseEpochMs = sunrise,
+                                sunsetEpochMs = sunset,
+                                hourly = parseHourly(body),
                             ),
                         )
                     }
@@ -282,7 +304,16 @@ class WeatherGroundingProvider(
                 buildBlock(requested, location.label, reference.explicit, language)
             }
 
-    /** Der EINE Open-Meteo-`/v1/forecast`-Call (rohes JSON) — geteilt von Grounding- und Lese-Pfad. */
+    /**
+     * Der EINE Open-Meteo-`/v1/forecast`-Call (rohes JSON) — geteilt von Grounding- und
+     * Lese-Pfad. **Flur-Fertigstellung 2026-07-27** (KEIN neuer Call, nur zwei ZUSÄTZLICHE
+     * Parameter am BESTEHENDEN Request, additiv geparst in [todayForecast]):
+     *  - `daily` bekommt `sunrise,sunset` dazu (heute-Zeile „hell bis …"/„hell ab …").
+     *  - `hourly=temperature_2m,precipitation_probability` ist der EINZIGE wirklich neue
+     *    Datenpunkt (Stunden-Verlauf + Regenwahrscheinlichkeit fürs Jetzt-Band).
+     * [groundingBlock]/[parseDays] lesen aus demselben Body weiter NUR `current`/`daily`
+     * ohne `sunrise`/`sunset`/`hourly` zu berühren — der Prompt-Block bleibt byte-identisch.
+     */
     private fun fetchDailyJson(location: WeatherLocation): Mono<String> =
         client.get()
             .uri { b ->
@@ -290,7 +321,11 @@ class WeatherGroundingProvider(
                     .queryParam("latitude", location.lat)
                     .queryParam("longitude", location.lon)
                     .queryParam("current", "temperature_2m,weathercode")
-                    .queryParam("daily", "temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode")
+                    .queryParam(
+                        "daily",
+                        "temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,sunrise,sunset",
+                    )
+                    .queryParam("hourly", "temperature_2m,precipitation_probability")
                     .queryParam("forecast_days", FORECAST_DAYS)
                     .queryParam("timezone", "Europe/Berlin")
                     .build()
@@ -330,6 +365,84 @@ class WeatherGroundingProvider(
     }.getOrElse { emptyList() }
 
     private fun JsonNode.numOrZero(i: Int): Double = this.path(i).asDouble(0.0)
+
+    // ── Flur-Fertigstellung 2026-07-27: Jetzt/Morgen/Stunden/Sonne — ALLE aus dem
+    // EINEN [fetchDailyJson]-Body, den der Provider ohnehin schon abruft. Jeder
+    // Parser ist EINZELN best-effort (eigenes `runCatching`): ein kaputtes/
+    // fehlendes Feld darf die anderen nicht mitreißen — [todayForecast] reicht
+    // pro Feld `null`/leere Liste durch statt den ganzen Read-Pfad zu brechen. ──
+
+    /**
+     * `current.temperature_2m`/`current.weathercode` → (Jetzt-Temperatur gerundet,
+     * Jetzt-Lage-Text in [language]). Der `current`-Node wurde SCHON IMMER
+     * mitgeschickt ([fetchDailyJson]: `current=temperature_2m,weathercode`) und bis
+     * heute komplett verworfen. Fehlt der Node oder ein einzelnes Feld darin (Open-
+     * Meteo liefert `current` z.B. nicht mehr, oder ein Feld ist kein Zahl-Wert) ⇒
+     * das jeweilige Feld wird `null` — NIE ein erfundener Wert, NIE ein Crash.
+     */
+    private fun parseCurrent(body: String, language: Language): Pair<Int?, String?> = runCatching {
+        val current = mapper.readTree(body).path("current")
+        val temp = current.path("temperature_2m").takeIf { it.isNumber }?.asDouble()?.roundToInt()
+        val code = current.path("weathercode").takeIf { it.isIntegralNumber }?.asInt()
+        temp to code?.let { weatherCodeText(it, language) }
+    }.getOrElse { null to null }
+
+    /**
+     * `daily.sunrise[0]`/`daily.sunset[0]` (HEUTE, Index 0) → Epoch-Millisekunden.
+     * Open-Meteo liefert diese als LOKALE ISO-Zeit ohne Zonen-Suffix (Muster
+     * „2026-06-28T05:32", weil `timezone=Europe/Berlin` bereits im Request steht) —
+     * [parseBerlinLocalTime] verankert sie explizit in [DayReferenceResolver.BERLIN]
+     * statt UTC anzunehmen. Fehlend/kaputt ⇒ `null` (die Zeile verschwindet im FE).
+     */
+    private fun parseSunTimes(body: String): Pair<Long?, Long?> = runCatching {
+        val daily = mapper.readTree(body).path("daily")
+        val sunrise = parseBerlinLocalTime(daily.path("sunrise").path(0).asText(""))
+        val sunset = parseBerlinLocalTime(daily.path("sunset").path(0).asText(""))
+        sunrise to sunset
+    }.getOrElse { null to null }
+
+    /** Lokale (Europe/Berlin) ISO-Zeit ohne Zone (z.B. „2026-06-28T05:32") → Epoch-ms, oder `null`. */
+    private fun parseBerlinLocalTime(iso: String): Long? = runCatching {
+        LocalDateTime.parse(iso).atZone(DayReferenceResolver.BERLIN).toInstant().toEpochMilli()
+    }.getOrNull()
+
+    /**
+     * Der NEUE `hourly`-Block (`temperature_2m`, `precipitation_probability"), auf die
+     * nächsten [HOURLY_WINDOW] Stunden KOMPAKTIERT (Open-Meteo liefert `forecast_days
+     * × 24` = bis zu 168 Punkte — das Jetzt-Band braucht nur einen kurzen Ausblick,
+     * kein Sieben-Tage-Diagramm).
+     *
+     * **Start-Index:** `current.time` (dieselbe Zeitbasis wie [parseCurrent], vom
+     * selben `current`-Node) markiert „jetzt" — der erste `hourly.time`-Eintrag, der
+     * NICHT davor liegt (String-Vergleich reicht: ISO-`yyyy-MM-ddTHH:mm` sortiert
+     * lexikalisch identisch zur echten Reihenfolge). Fehlt `current.time` (z.B.
+     * kanned Test-JSON ohne dieses Feld) ⇒ Start bei Index 0 — konservativ, nie ein
+     * Crash. Fehlt der `hourly`-Block ganz ⇒ leere Liste (die Sparkline/Regen-Zeile
+     * verschwindet im FE, statt erfundene Stunden zu zeigen).
+     */
+    private fun parseHourly(body: String): List<HourPoint> = runCatching {
+        val root = mapper.readTree(body)
+        val hourly = root.path("hourly")
+        val times = hourly.path("time")
+        val temps = hourly.path("temperature_2m")
+        val probs = hourly.path("precipitation_probability")
+        if (!times.isArray || times.size() == 0) return emptyList()
+        val currentTime = root.path("current").path("time").asText("")
+        val startIndex = if (currentTime.isBlank()) {
+            0
+        } else {
+            (0 until times.size()).firstOrNull { times.path(it).asText("") >= currentTime } ?: 0
+        }
+        val endIndex = minOf(startIndex + HOURLY_WINDOW, times.size())
+        (startIndex until endIndex).mapNotNull { i ->
+            val epochMs = parseBerlinLocalTime(times.path(i).asText("")) ?: return@mapNotNull null
+            HourPoint(
+                epochMs = epochMs,
+                tempC = temps.numOrZero(i).roundToInt(),
+                precipProbability = probs.path(i).asInt(0),
+            )
+        }
+    }.getOrElse { emptyList() }
 
     /**
      * Baut den kompakten Hintergrund-Block. Leere Liste → `""`.
@@ -451,6 +564,16 @@ class WeatherGroundingProvider(
      * Temperatur (°C), der deutsche Lagen-Text ([weatherCodeText]) und die
      * Niederschlags-Summe in mm — exakt die Werte, die auch der Grounding-Block
      * dem Brain gibt (eine Wahrheit, zwei Leser).
+     *
+     * **Additive Felder (Flur-Fertigstellung 2026-07-27)** — Alt-Clients (FE, das
+     * die neuen Keys noch nicht kennt) ignorieren sie einfach, kein Breaking
+     * Change: [nowTemp]/[nowCodeText] (der `current`-Node, JETZT endlich
+     * ausgeliefert statt nur intern verworfen), [tomorrowMin]/[tomorrowMax]/
+     * [tomorrowCodeText] (Offset 1 aus [parseDays]), [sunriseEpochMs]/
+     * [sunsetEpochMs] (`daily.sunrise`/`sunset[0]`) und [hourly] (der neue
+     * `hourly`-Parameter, auf [HOURLY_WINDOW] Stunden kompaktiert). JEDES Feld ist
+     * EINZELN best-effort: fehlt/kaputt ⇒ `null` bzw. leere Liste — nie ein
+     * erfundener Wert (das FE lässt die jeweilige Zeile dann ehrlich weg).
      */
     data class TodayForecast(
         val label: String,
@@ -458,6 +581,27 @@ class WeatherGroundingProvider(
         val todayMax: Int,
         val codeText: String,
         val precipMm: Double,
+        val nowTemp: Int? = null,
+        val nowCodeText: String? = null,
+        val tomorrowMin: Int? = null,
+        val tomorrowMax: Int? = null,
+        val tomorrowCodeText: String? = null,
+        val sunriseEpochMs: Long? = null,
+        val sunsetEpochMs: Long? = null,
+        val hourly: List<HourPoint> = emptyList(),
+    )
+
+    /**
+     * Ein Stunden-Punkt des kompakten `hourly`-Verlaufs ([parseHourly]) — Wire-Teil
+     * von [TodayForecast.hourly]. [epochMs] statt eines rohen ISO-Strings, damit das
+     * FE dieselbe locale-bewusste Uhrzeit-Formatierung nutzen kann wie überall sonst
+     * (Muster `dueClock` in `useScheduledItems.ts`), statt eine zweite Zeit-
+     * Formatierung zu erfinden.
+     */
+    data class HourPoint(
+        val epochMs: Long,
+        val tempC: Int,
+        val precipProbability: Int,
     )
 
     companion object {
@@ -477,6 +621,13 @@ class WeatherGroundingProvider(
          * referenzierten Tage — ohne Referenz bleibt der Block heute+morgen.
          */
         internal const val FORECAST_DAYS = 7
+
+        /**
+         * Kompaktierungs-Fenster von [parseHourly]: die nächsten 12 Stunden ab
+         * `current.time` — genug für „Regen ab ~17 Uhr" oder eine Mini-Sparkline,
+         * ohne die vollen bis zu 168 `hourly`-Punkte (7 Tage × 24 h) durchzureichen.
+         */
+        internal const val HOURLY_WINDOW = 12
 
         /**
          * Wissens-Kategorien-Gate (FACT_SHORT/NEEDS_WEB/AMBIG) als geteilte

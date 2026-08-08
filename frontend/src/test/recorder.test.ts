@@ -7,6 +7,7 @@ import {
   VoiceRecorderError,
 } from '../audio/recorder';
 import { PRE_ROLL_MS } from '../audio/preRoll';
+import { getActiveUiLanguage, setActiveUiLanguage } from '../i18n';
 
 // ── pickMimeType (rein, isSupported injizierbar) ───────────────────────────────
 
@@ -109,6 +110,57 @@ describe('VoiceRecorder — Fehlerpfade', () => {
     const err = await rec.start().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(VoiceRecorderError);
     expect((err as VoiceRecorderError).kind).toBe('unsupported');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Fünf-Sprachen-Sweep 2026-07-27: `VoiceRecorderError.message` landet wörtlich
+//  im Mikro-Fehl-Banner (useVoiceChatSession.humanMicError) UND im Anlern-Dialog
+//  (SpeakerSection) — die Zeilen kommen jetzt aus dem aktiven UI-Katalog statt
+//  einer hart deutschen Modul-Konstante.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('VoiceRecorder — Fehlermeldungen folgen der aktiven UI-Sprache', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setActiveUiLanguage('de');
+  });
+
+  it.each([
+    ['es', 'Este navegador no admite grabación de micrófono.'],
+    ['fr', "Ce navigateur ne prend pas en charge l'enregistrement au micro."],
+    ['it', 'Questo browser non supporta la registrazione dal microfono.'],
+    ['en', "This browser doesn't support microphone recording."],
+  ] as const)('%s: ohne mediaDevices → übersetzte "unsupported"-Zeile', async (lang, expected) => {
+    setActiveUiLanguage(lang);
+    vi.stubGlobal('navigator', {});
+    const rec = new VoiceRecorder();
+    const err = await rec.start().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(VoiceRecorderError);
+    expect((err as VoiceRecorderError).message).toBe(expected);
+  });
+
+  it.each([
+    ['es', 'NotAllowedError', 'Acceso al micrófono denegado. Permite el micrófono y luego habla con Hoshi.'],
+    ['fr', 'NotFoundError', 'Aucun micro trouvé. Branches-en un, puis réessaie.'],
+    ['it', 'NotAllowedError', 'Accesso al microfono negato. Consenti il microfono, poi parla con Hoshi.'],
+  ] as const)(
+    '%s: %s wird als übersetzte Zeile durchgereicht (mapGetUserMediaError)',
+    async (lang, errorName, expected) => {
+      setActiveUiLanguage(lang);
+      stubMic(() => Promise.reject(Object.assign(new Error('x'), { name: errorName })));
+      const rec = new VoiceRecorder();
+      const err = await rec.start().catch((e: unknown) => e);
+      expect((err as VoiceRecorderError).message).toBe(expected);
+    },
+  );
+
+  it('Deutsch (Gegenprobe + Default): bleibt byte-gleich zum Bestand', async () => {
+    expect(getActiveUiLanguage()).toBe('de');
+    vi.stubGlobal('navigator', {});
+    const rec = new VoiceRecorder();
+    const err = await rec.start().catch((e: unknown) => e);
+    expect((err as VoiceRecorderError).message).toBe('Dieser Browser unterstützt keine Mikro-Aufnahme.');
   });
 });
 

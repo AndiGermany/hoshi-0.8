@@ -1,0 +1,35 @@
+{
+  "_comment": "Immutable toolchain artifacts for Hoshi's supported first-run profiles. Update URLs, sizes and hashes only as one reviewed lock change; the fetcher never resolves 'latest'.",
+  "version": 1,
+  "artifacts": [
+    {
+      "id": "jdk-21-macos-aarch64",
+      "type": "jdk-tar-gz",
+      "profiles": [
+        "local-mac"
+      ],
+      "vendor": "Eclipse Adoptium",
+      "distribution": "Temurin",
+      "version": "21.0.12+8",
+      "platform": {
+        "os": "darwin",
+        "arch": "arm64"
+      },
+      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.12_8.tar.gz",
+      "bytes": 200069721,
+      "installed_bytes": 351002782,
+      "sha256": "021d629349ebc12a409faa517b837ec80ceee8f58a5ac85c788ecad07ca6881c",
+      "archive_root": "jdk-21.0.12+8",
+      "java_home": "jdk-21.0.12+8/Contents/Home",
+      "target_dir": "temurin-21.0.12+8-macos-aarch64",
+      "license": "GPL-2.0-only WITH Classpath-exception-2.0",
+      "license_url": "https://openjdk.org/legal/gplv2+ce.html",
+      "release": {
+        "IMPLEMENTOR": "Eclipse Adoptium",
+        "IMPLEMENTOR_VERSION": "Temurin-21.0.12+8",
+        "JAVA_VERSION": "21.0.12",
+        "OS_ARCH": "aarch64"
+      }
+    }
+  ]
+}

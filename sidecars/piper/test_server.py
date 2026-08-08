@@ -440,6 +440,51 @@ def test_german_default_path_stays_byte_identical_across_the_multivoice_change()
     _with_client(check, extra_voices={"en_US-kristin-medium": kristin_spec})
 
 
+# ── HOSHI_SIDECAR_TOKEN-Wand (Codex-Sicherheits-P0 2026-07-27) ──────────────
+# Echter HTTP-Roundtrip ueber [_with_client] (kein FastAPI hier, s. Moduldoc
+# in server.py — reine stdlib http.server-Huelle). server._HOSHI_SIDECAR_TOKEN
+# wird direkt gesetzt/zurueckgesetzt (kein monkeypatch-Fixture im Einsatz in
+# diesem File, s. try/finally-Muster wie ueberall sonst hier).
+
+def test_token_wall_open_without_token_when_env_empty():
+    """Leer/ungesetzt (Default) ⇒ heutiges offenes Verhalten, NULL Aenderung —
+    kein X-Hoshi-Token-Header noetig, auch nicht fuer Nicht-/health-Pfade."""
+    def check(client, _cache):
+        assert server._HOSHI_SIDECAR_TOKEN == "", "Testvoraussetzung: Token-Wand ist im Testlauf aus"
+        response = client.get("/voices")
+        assert response.status_code == 200, response.text
+    _with_client(check)
+
+
+def test_token_wall_rejects_missing_or_wrong_token_with_401_when_set():
+    def check(client, _cache):
+        try:
+            server._HOSHI_SIDECAR_TOKEN = "geheimwert-test"
+            missing = client.get("/voices")
+            assert missing.status_code == 401, missing.text
+            assert missing.json() == {"detail": "unauthorized"}
+
+            wrong = client.raw_request("GET", "/voices", None, {"X-Hoshi-Token": "falsch"})
+            assert wrong.status_code == 401, wrong.text
+
+            correct = client.raw_request("GET", "/voices", None, {"X-Hoshi-Token": "geheimwert-test"})
+            assert correct.status_code == 200, correct.text
+        finally:
+            server._HOSHI_SIDECAR_TOKEN = ""
+    _with_client(check)
+
+
+def test_token_wall_never_blocks_health_even_when_token_is_set():
+    def check(client, _cache):
+        try:
+            server._HOSHI_SIDECAR_TOKEN = "geheimwert-test"
+            response = client.get("/health")
+            assert response.status_code == 200, response.text
+        finally:
+            server._HOSHI_SIDECAR_TOKEN = ""
+    _with_client(check)
+
+
 if __name__ == "__main__":
     tests = [(name, fn) for name, fn in sorted(globals().items()) if name.startswith("test_") and callable(fn)]
     failed = 0

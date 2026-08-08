@@ -18,6 +18,8 @@
 // `useVoiceChatSession.ts`), darum reicht EINE Stelle.
 
 import { prependPreRoll } from './preRoll';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 
 /** Ziel-Abtastrate der Enroll-WAV (Backend empfiehlt 16 kHz, resampled eh auf 16k). */
 export const ENROLL_SAMPLE_RATE = 16000;
@@ -128,9 +130,16 @@ export function downsampleTo(samples: Float32Array, fromRate: number, toRate: nu
   return out;
 }
 
-/** Fehler, wenn der Browser die Aufnahme nicht in WAV umwandeln kann (kein AudioContext). */
+/**
+ * Fehler, wenn der Browser die Aufnahme nicht in WAV umwandeln kann (kein
+ * AudioContext). Fünf-Sprachen-Sweep 2026-07-27: der Default-Text kommt jetzt aus
+ * dem AKTIVEN UI-Katalog (`UiStrings.micErrors.convertFailed`) statt einer hart
+ * deutschen Modul-Konstante — DE bleibt byte-gleich zum bisherigen Stand. Nur der
+ * Anlern-Dialog zeigt diese Zeile (der reguläre Voice-Turn fängt sie still ab,
+ * s. {@link voiceTurnUploadBlob}).
+ */
 export class WavConvertError extends Error {
-  constructor(message = 'Aufnahme ließ sich nicht in WAV umwandeln.') {
+  constructor(message = resolveUiStrings(getActiveUiLanguage()).micErrors.convertFailed) {
     super(message);
     this.name = 'WavConvertError';
   }
@@ -166,7 +175,7 @@ export async function webmBlobToWav(
   const Ctor =
     (globalThis as { AudioContext?: new () => DecodingAudioContext }).AudioContext ??
     (globalThis as { webkitAudioContext?: new () => DecodingAudioContext }).webkitAudioContext;
-  if (!Ctor) throw new WavConvertError('Dieser Browser kann Audio nicht dekodieren.');
+  if (!Ctor) throw new WavConvertError(resolveUiStrings(getActiveUiLanguage()).micErrors.decodeUnsupported);
 
   const arrayBuffer = await blob.arrayBuffer();
   const ctx = new Ctor();

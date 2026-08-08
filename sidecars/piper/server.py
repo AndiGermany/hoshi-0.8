@@ -8,6 +8,7 @@ spricht ausschliesslich HTTP mit diesem Sidecar; kein Piper-Code wird vendort.
 from __future__ import annotations
 
 import argparse
+import hmac
 import io
 import json
 import logging
@@ -33,6 +34,19 @@ SIDE_CAR_DIR = Path(__file__).resolve().parent
 MANIFEST_PATH = SIDE_CAR_DIR / "artifacts.lock.json"
 MAX_TEXT_CHARS = 1000
 MAX_REQUEST_BYTES = 16_384
+
+# ── Optionale Token-Wand (HOSHI_SIDECAR_TOKEN, Codex-Sicherheits-P0 2026-07-27) ──
+# Alle 6 Sidecars binden 0.0.0.0 ohne Auth (vom LAN aus tokenlos abfragbar).
+# Diese Wand ist BEWUSST opt-in: HOSHI_SIDECAR_TOKEN leer/ungesetzt ⇒ exakt
+# heutiges Verhalten (offen, NULL Verhaltensänderung — das Produktiv-Setup
+# ct-106↔Mac-Sidecars läuft unverändert weiter). Gesetzt ⇒ jeder Request AUSSER
+# /health (Watchdogs/doctor/IP-Sync dürfen nie sterben) muss den Header
+# X-Hoshi-Token exakt tragen — hmac.compare_digest (timing-sicher) statt `==`,
+# sonst 401 mit knappem JSON-Body. Gleiche Wand/Env-Var/Header/health-Ausnahme
+# in allen 6 Sidecars (server.py je brain/stt/speaker/knowledge/piper/say) —
+# hier als Methoden-Hook in PiperHandler.do_GET/do_POST (kein FastAPI/Flask
+# hier, s. Moduldoc: bewusst stdlib-``http.server`` statt Webframework-Stack).
+_HOSHI_SIDECAR_TOKEN = os.environ.get("HOSHI_SIDECAR_TOKEN", "")
 
 parser = argparse.ArgumentParser(description="Hoshi-TTS-Piper-Sidecar")
 parser.add_argument("--host", default=os.environ.get("HOSHI_PIPER_HOST", "0.0.0.0"))
@@ -425,8 +439,25 @@ class PiperHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(response.content)
 
+    def _token_ok(self) -> bool:
+        """Token-Wand-Pruefung (s. _HOSHI_SIDECAR_TOKEN oben): leer/ungesetzt
+        ⇒ immer True (heutiges offenes Verhalten). Gesetzt ⇒ der Header
+        X-Hoshi-Token muss exakt uebereinstimmen (hmac.compare_digest,
+        timing-sicher). Header-Namen sind bei http.server case-insensitiv
+        (email.message.Message-basiert), kein manuelles Lowercasing noetig."""
+        if not _HOSHI_SIDECAR_TOKEN:
+            return True
+        supplied = self.headers.get("X-Hoshi-Token", "")
+        return hmac.compare_digest(supplied, _HOSHI_SIDECAR_TOKEN)
+
     def do_GET(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler-Vertrag
         path = urlsplit(self.path).path
+        # /health bleibt IMMER offen (Watchdogs/doctor/IP-Sync duerfen nie an
+        # der Token-Wand sterben) — jeder andere GET-Pfad braucht den Token,
+        # sobald HOSHI_SIDECAR_TOKEN gesetzt ist.
+        if path != "/health" and not self._token_ok():
+            self._write(_json_api_response(401, {"detail": "unauthorized"}))
+            return
         if path == "/health":
             self._write(_json_api_response(200, health_payload()))
         elif path == "/voices":
@@ -435,6 +466,10 @@ class PiperHandler(BaseHTTPRequestHandler):
             self._write(_json_api_response(404, {"detail": "nicht gefunden"}))
 
     def do_POST(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler-Vertrag
+        # POST kennt keinen /health-Pfad — die Token-Wand gilt hier ausnahmslos.
+        if not self._token_ok():
+            self._write(_json_api_response(401, {"detail": "unauthorized"}))
+            return
         if urlsplit(self.path).path != "/tts":
             self._write(_json_api_response(404, {"detail": "nicht gefunden"}))
             return

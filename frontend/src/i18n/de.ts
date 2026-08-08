@@ -65,6 +65,10 @@ export const de: UiStrings = {
       unreachableNote: 'Wetter grad nicht lesbar — hier steht nichts Erfundenes.',
       precipSome: (mm) => `${mm} mm Regen heute`,
       precipNone: 'trocken',
+      tomorrow: (span, cond) => `morgen ${span}, ${cond}`,
+      rainFrom: (clock) => `Regen ab ~${clock}`,
+      sunUntil: (clock) => `hell bis ${clock}`,
+      sunFrom: (clock) => `hell ab ${clock}`,
     },
     status: {
       online: 'online',
@@ -261,6 +265,36 @@ export const de: UiStrings = {
       'Sitzung abgebrochen — die bisherigen Sätze bleiben erhalten, die Sitzung war unvollständig.',
     statusInProgress: 'in Arbeit',
     statusComplete: 'vollständig',
+    justNow: 'gerade eben',
+    enrolledOn: (date) => `angelernt ${date}`,
+    sentenceCount: (count) => `${count} ${count === 1 ? 'Satz' : 'Sätze'}`,
+    progress: (sample, total) => `Satz ${sample} von ${total}`,
+    quote: (text) => `„${text}“`,
+    deleteProfileAria: (name) => `Profil ${name} löschen`,
+    continueButton: 'Weiter anlernen', continueFullHint: 'Profil ist voll (9 von 9) — lösche einzelne Aufnahmen, um Platz zu schaffen.',
+    continueAria: (name) => `${name} weiter anlernen`,
+    soloEnrollHint: 'Bitte einzeln anlernen — nur eine Person im Raum, alle anderen bleiben still.',
+    recordingsToggle: (count) => `Aufnahmen (${count})`,
+    recordingsLoadError: 'Aufnahmen grad nicht lesbar.',
+    fitGood: 'passt gut',
+    fitMedium: 'passt mäßig',
+    fitPoor: 'passt nicht',
+    fitUnknown: 'noch nicht vergleichbar',
+    recordingUnknown: 'unbekannt',
+    recordingDuration: (seconds) => `${seconds.toFixed(1)} s`,
+    deleteRecording: 'Aufnahme löschen',
+    deleteRecordingAria: (index) => `Aufnahme ${index} löschen`,
+    deleteRecordingLastHint: 'Das ist die letzte Aufnahme — lösche stattdessen das ganze Profil.',
+    deleteRecordingFailed: 'Löschen der Aufnahme fehlgeschlagen — sie ist noch da. Bitte erneut versuchen.',
+    enrollErrors: {
+      auth: '401 — Token fehlt oder ist ungültig (Auth-Wand).',
+      badName: 'Name ungültig — erlaubt sind Buchstaben, Ziffern, _ und -.',
+      outOfSync: 'Die Aufnahmen sind durcheinandergeraten — bitte von vorn beginnen.',
+      tooShort: 'Die Aufnahme war zu kurz oder zu leise. Sprich den Satz noch einmal.',
+      noEmbedding: 'Die Stimmerkennung ist gerade nicht erreichbar. Später erneut versuchen.',
+      unknown: (status) => `Anlernen fehlgeschlagen (HTTP ${status}).`,
+      unreadable: 'Anlern-Antwort unlesbar.',
+    },
   },
 
   nightMode: {
@@ -344,7 +378,7 @@ export const de: UiStrings = {
     lede: 'Was zuletzt im Zuhause passiert ist — der Turn-Feed aus Hoshis Nutzungs-Diary und der Health-Verlauf, beides echt.',
     stageLatencyTitle: 'Stage-Latenzen heute', stageLatencyHint: 'p50/p95 je Pipeline-Stage, aus denselben Diary-Zeilen aggregiert (nur heutige Turns; Turns ohne Messwert fallen aus der jeweiligen Stage heraus). „—" heißt ehrlich: heute keine Messwerte.',
     diaryUnavailable: 'Diary nicht erreichbar — keine Zusammenfassung ohne Daten.', turnFeedTitle: 'Turn-Feed', refresh: 'Aktualisieren',
-    turnFeedHint: 'Jede Zeile ist ein realer Turn aus deinem Tagesbuch (heute + gestern, neueste zuerst). Geladen beim Öffnen und per „Aktualisieren" — kein Dauerpoll.',
+    turnFeedHint: 'Jede Zeile ist ein realer Turn aus deinem Tagesbuch (heute + gestern, neueste zuerst). Geladen beim Öffnen und per „Aktualisieren" — kein Dauerpoll. Gezeigt werden zuerst die letzten 25, gruppiert nach Tag; „Frühere laden" holt mehr.',
     diaryUnavailableRetry: 'Diary nicht erreichbar — hier steht nichts Erfundenes. „Aktualisieren" versucht es erneut.',
     diaryEmpty: 'Noch kein Turn im Diary (heute + gestern) — leer ist ehrlich leer.', deflected: 'deflected',
     deflectedTitle: 'Ehrliches „wusste ich nicht“ statt einer erfundenen Antwort', error: 'Fehler', errorStage: (stage) => `Fehler-Stage: ${stage}`,
@@ -352,6 +386,7 @@ export const de: UiStrings = {
     healthTitle: 'Health-Verlauf', healthHint: 'Jede Zeile ist eine reale Beobachtung des Verbindungsstatus. Aufgezeichnet werden Zustands­wechsel, neueste zuerst.',
     noObservation: 'Noch keine Beobachtung — die erste Health-Antwort steht aus. (Kein erfundener Verlauf.)', backendState: (state) => `Backend ${state}`,
     diagnoseTitle: 'Diagnose', diagnoseHint: 'Technischer Ist-Stand für Nerds — von der Übersicht hierher umgezogen, damit die Startseite dem Zuhause gehört.',
+    dayToday: 'Heute', dayYesterday: 'Gestern', dayUnknown: 'Datum unbekannt', loadEarlier: 'Frühere laden',
   },
 
   rooms: {
@@ -367,6 +402,15 @@ export const de: UiStrings = {
     loading: 'Wird gerade gelesen.', offNote: 'Räume kommen, sobald Home Assistant verdrahtet ist. Das 0.8-Backend exponiert heute noch keine Geräte- oder Raum-Registry — darum steht hier bewusst nichts Erfundenes.',
     idea: 'Die Idee', ideaHint: 'Eine ruhige Skizze der Verbindung — kein echter Bestand. Die Platzhalter sind gestrichelt und leer; echte Räume erscheinen erst, wenn die Registry steht.',
     assignFailed: 'Zuordnung fehlgeschlagen — bitte später erneut versuchen.',
+    assignedSummary: (assigned, total, roomCount) =>
+      `${assigned} von ${total} Geräten einem Raum zugeordnet · ${roomCount} ${roomCount === 1 ? 'Raum' : 'Räume'}`,
+    searchPlaceholder: 'Suchen — auch nach dem Wort, das du gesagt hast', searchAria: 'Räume und Geräte durchsuchen',
+    noMatches: (query) => query.trim() ? `Kein Treffer für „${query.trim()}".` : 'Für diesen Filter gibt es aktuell keine Geräte.',
+    domainFilterAria: 'Nach Geräte-Art filtern', domainAll: 'Alle', domainLight: 'Licht', domainClimate: 'Klima', domainSensors: 'Sensoren', domainOther: 'Rest',
+    inboxTitle: 'Braucht dich', inboxEmpty: 'Nichts zu tun.', inboxConfirm: 'Bestätigen',
+    inboxHintEditable: 'Diese Geräte haben in Home Assistant noch keinen Raum. Der Raum-Vorschlag ist schon vorbelegt — kurz prüfen und „Bestätigen" tippen; gespeichert wird direkt in Home Assistant, dort jederzeit sichtbar und umkehrbar.',
+    inboxHintReadOnly: 'Diese Geräte haben in Home Assistant noch keinen Raum. Zuordnen geht bislang nur direkt in Home Assistant — Hoshi zeigt die Lücke hier nur ehrlich an.',
+    roomShowMore: (hiddenCount) => `die übrigen ${hiddenCount} zeigen`, roomShowLess: 'Einklappen',
   },
 
   overview: {
@@ -391,6 +435,17 @@ export const de: UiStrings = {
   voiceChat: {
     slowTurn: 'dauert grad länger als sonst — ich bin dran.', connection: 'Verbindung', errorStage: (stage) => `Fehler · ${stage}`,
     noAudioHeard: 'Ich habe nichts gehört — halt das Mikro gedrückt und sprich.',
+  },
+  micErrors: {
+    permissionDenied: 'Mikro-Zugriff abgelehnt. Erlaube das Mikrofon, dann sprich mit Hoshi.',
+    noDevice: 'Kein Mikrofon gefunden. Schließ eines an, dann probier es erneut.',
+    insecureContext: 'Mikro-Zugriff braucht eine sichere Verbindung (https oder localhost).',
+    noApi: 'Dieser Browser unterstützt keine Mikro-Aufnahme.',
+    noRecorder: 'Dieser Browser kann kein Audio aufnehmen.',
+    unknown: 'Das Mikrofon ließ sich nicht öffnen. Probier es noch einmal.',
+    stopWithoutRecording: 'stop() ohne aktive Aufnahme.',
+    decodeUnsupported: 'Dieser Browser kann Audio nicht dekodieren.',
+    convertFailed: 'Aufnahme ließ sich nicht in WAV umwandeln.',
   },
   turnAnatomy: {
     heard: 'gehört', understood: 'verstanden', route: 'Weg gewählt',
@@ -489,8 +544,12 @@ export const de: UiStrings = {
       auto: 'Automatisch (Deutsch / Englisch)',
       de: 'Deutsch',
       en: 'English',
+      es: 'Español',
+      fr: 'Français',
+      it: 'Italiano',
     },
-    languageHint: 'Steuert die Chat-Sprache und die Spracherkennung (STT).',
+    languageHint:
+      'Steuert die Chat-Sprache und die Spracherkennung (STT) für dieses Gerät — getrennt von der Oberflächen-Sprache, die weiter unten bei „Hoshi spricht (Server-Standard)“ eingestellt wird.',
     languageAutoHint: 'Automatisch erkennt pro Nachricht Deutsch oder Englisch und antwortet passend.',
     personaLabel: 'Persönlichkeit',
     personas: {
@@ -604,6 +663,7 @@ export const de: UiStrings = {
     unauthorized: '401 — Token fehlt oder ist ungültig (Auth-Wand). Setze VITE_TOKEN.',
     unsupportedAudioType: '415 — Backend lehnt den Audio-Content-Type ab (/api/v1/voice).',
     httpStatus: (status) => `Backend antwortete HTTP ${status}`,
+    authWall: '401 — Token fehlt oder ist ungültig (Auth-Wand).',
   },
 
   speakerChip: {

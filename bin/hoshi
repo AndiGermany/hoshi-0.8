@@ -26,6 +26,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Versions-Wahrheit: gradle.properties ist die EINZIGE Quelle (Konsolidierung
+# 2026-07-27 — die Kopfzeile hier behauptete zuletzt "0.8.2" bei realer 0.8.3).
+# Nur lesen, Fallback "dev" wenn unlesbar — nie eine geratene Nummer.
+HOSHI_VERSION="$(sed -n 's/^version=//p' "$REPO_ROOT/gradle.properties" 2>/dev/null | head -1)"
+HOSHI_VERSION="${HOSHI_VERSION:-dev}"
 PIPELINE_DIR="$REPO_ROOT/pipeline"
 
 # ── Farben (nur am tty) ──────────────────────────────────────────────────────
@@ -38,7 +44,7 @@ fi
 
 usage() {
     cat <<EOF
-${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (0.8.2 / Suisei)
+${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (${HOSHI_VERSION} / Suisei)
 
   ${C_CYAN}verify${C_RESET}       grüner Gate: Deploy-Render + TTS-Fresh-HOME +
                ./gradlew build (ArchUnit/Unit) + LIVE-Brain-Smoke (:8041)
@@ -58,6 +64,14 @@ ${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (0.8.2 / Suisei)
                (:8035, dt. Wiki) — gibt den abgerufenen Grounding-Block wörtlich aus
   ${C_CYAN}services${C_RESET}     M3-Beweis: Sidecar-Supervisor live gegen die echte Infra
                (read-only inspect, ehrlich OK/DEGRADED/DOWN, Restart GATED)
+  ${C_CYAN}preflight${C_RESET}    zustandsarmer Vorab-Check VOR Install/Start (READ-ONLY, startet
+               und lädt NICHTS): Tools/JDK/Platte/RAM/Ports/models.json;
+               --profile local-mac|split (split: druckt die nötigen Env-Variablen)
+  ${C_CYAN}setup${C_RESET}        idempotenter Setup-Einstieg (Profil local-mac): baut/installiert
+               NUR was fehlt (Backend-Jar, npm, Sidecar-venvs), Modelle werden
+               geprüft aber NIE selbst geladen; --dry-run zeigt nur den Plan,
+               --with-piper schaltet das GPL-Opt-in frei. Wiederholen ist
+               immer sicher — zweiter Lauf meldet nur „schon da".
   ${C_CYAN}doctor${C_RESET}       Stack ehrlich prüfen (READ-ONLY): Brain via echtem /v1/chat-Roundtrip
                (grün≠lebt → OK/WEDGE/ZOMBIE/DOWN/LOADING), Sidecars + RAM + Brain-Guard
   ${C_CYAN}heal${C_RESET}         Zombie/Wedge/Down-Brain auto-fixen: guard-sicher kill→start,
@@ -77,7 +91,7 @@ cmd="${1:-}"
 [ $# -gt 0 ] && shift || true
 
 case "$cmd" in
-    verify|run|turn|ask|voice|voicein|tts-openai|ground|services|doctor|heal|up|seam-watch|deploy)
+    verify|run|turn|ask|voice|voicein|tts-openai|ground|services|preflight|setup|doctor|heal|up|seam-watch|deploy)
         target="$PIPELINE_DIR/$cmd.sh"
         if [ ! -x "$target" ]; then
             echo "${C_RED}✗ FAIL${C_RESET} — $target fehlt oder ist nicht ausführbar" >&2
@@ -92,6 +106,11 @@ case "$cmd" in
         echo
         if [ "$rc" -eq 0 ]; then
             echo "${C_GREEN}${C_BOLD}✓ OK${C_RESET} — hoshi $cmd (exit 0)"
+        elif [ "$rc" -eq 2 ]; then
+            # Die 0/2/3-Konvention (doctor/preflight/setup): 2 heißt DEGRADED/
+            # Einschränkungen — lief durch, mit ehrlichen Warnungen. Das als
+            # FAIL zu färben hieße, dem eigenen Vokabular zu widersprechen.
+            echo "${C_BOLD}! EINGESCHRÄNKT${C_RESET} — hoshi $cmd (exit 2, s. Warnungen oben)"
         else
             echo "${C_RED}${C_BOLD}✗ FAIL${C_RESET} — hoshi $cmd (exit $rc)"
         fi

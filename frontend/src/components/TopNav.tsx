@@ -44,6 +44,25 @@ const KONAMI: readonly string[] = [
   'a',
 ];
 
+/**
+ * Liest die vom Build injizierte Versions-Konstante defensiv aus.
+ * `vite.config.ts` setzt `__HOSHI_VERSION__` per `define` (Build-Zeit-Ersetzung
+ * aus gradle.properties, der EINZIGEN Versions-Quelle) — Vitest hat aber eine
+ * bewusst eigene, getrennte Config (vitest.config.ts, s. Kommentar dort) und
+ * zieht dieses `define` NICHT mit. Im Test bliebe `__HOSHI_VERSION__` darum ein
+ * freier Bezeichner, dessen Zugriff mit ReferenceError wirft — try/catch fängt
+ * genau das ab und liefert denselben "dev"-Fallback wie ein beim Build
+ * unlesbares gradle.properties. Exportiert, damit der Render-Test (crew.test.tsx)
+ * dieselbe Auflösung prüft statt eine Versionsnummer hart zu pinnen.
+ */
+export function resolveHoshiVersion(): string {
+  try {
+    return __HOSHI_VERSION__;
+  } catch {
+    return 'dev';
+  }
+}
+
 /** Schlanke status-first Top-Nav: Übersicht / Räume / Aktivität / Chat + Health-Badge. */
 export function TopNav({ tab, onTab, onOpenSettings }: Props) {
   const { topNav } = useUiStrings();
@@ -121,7 +140,10 @@ export function TopNav({ tab, onTab, onOpenSettings }: Props) {
           <span className="nav__title" title="Hoshi">
             Hoshi
           </span>
-          <span className="nav__ver">0.8.3 · Suisei</span>
+          {/* Version kommt per vite `define` aus gradle.properties (der EINZIGEN
+              Versions-Quelle) — s. resolveHoshiVersion() oben. „Suisei" bleibt
+              reiner Text, der Codename der 0.8.x-Linie, keine zweite Wahrheit. */}
+          <span className="nav__ver">{resolveHoshiVersion()} · Suisei</span>
         </div>
 
         <nav className="nav__tabs" aria-label={topNav.mainNav}>

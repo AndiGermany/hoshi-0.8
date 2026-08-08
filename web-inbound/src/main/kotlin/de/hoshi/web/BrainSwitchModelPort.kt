@@ -1,5 +1,6 @@
 package de.hoshi.web
 
+import de.hoshi.core.security.SidecarTokenHeader
 import org.springframework.http.MediaType
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Mono
@@ -42,9 +43,18 @@ fun interface BrainSwitchModelPort {
 class HttpBrainSwitchModelPort(
     baseUrl: String,
     private val timeout: Duration = Duration.ofSeconds(5),
+    // Sidecar-Token-Wand (opt-in, s. de.hoshi.core.security.SidecarTokenHeader-KDoc):
+    // `/switch-model` ist KEIN `/health`-Pfad, braucht den Header also wie jeder
+    // andere Call. Leer (Default) ⇒ byte-neutral.
+    private val token: String = "",
 ) : BrainSwitchModelPort {
 
-    private val client = WebClient.builder().baseUrl(baseUrl).build()
+    private val client = WebClient.builder().baseUrl(baseUrl)
+        // `.let` statt `.apply`: WebClient.Builder hat SELBST eine Member-Methode
+        // `apply(Consumer<Builder>)`, die den Lambda-Empfänger auf `it` umbiegen würde
+        // (s. MlxBrainAdapter-KDoc).
+        .let { b -> if (token.isNotBlank()) b.defaultHeader(SidecarTokenHeader.NAME, token) else b }
+        .build()
 
     override fun switchModel(repo: String): Mono<BrainSwitchResult> =
         client.post().uri("/switch-model")

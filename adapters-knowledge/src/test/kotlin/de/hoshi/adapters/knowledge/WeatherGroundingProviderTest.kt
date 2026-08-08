@@ -13,6 +13,7 @@ import java.net.InetSocketAddress
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDateTime
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -44,6 +45,43 @@ class WeatherGroundingProviderTest {
             "temperature_2m_min": [11.3, 13.0, 14.2, 12.8, 10.1, 11.7, 12.9],
             "precipitation_sum": [3.4, 0.0, 0.0, 1.2, 6.7, 0.0, 0.3],
             "weathercode": [61, 2, 0, 3, 63, 1, 2]
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * **Flur-Fertigstellung 2026-07-27:** derselbe Sonntag wie [forecastJson], aber
+     * mit den drei NEUEN Bausteinen, die [WeatherGroundingProvider.todayForecast]
+     * jetzt zusätzlich parst: `current.time` (Start-Anker für [parseHourly]),
+     * `daily.sunrise`/`sunset` und ein `hourly`-Block (00:00–23:00 desselben Tages,
+     * „jetzt" = 12:00 ⇒ Index 12). Bewusst NUR Tag 0 mit Stunden hinterlegt (die
+     * anderen sechs Tage bräuchten sie für keinen der neuen Tests).
+     */
+    private val richForecastJson = """
+        {
+          "latitude": 52.52,
+          "longitude": 13.41,
+          "current": { "temperature_2m": 14.2, "weathercode": 61, "time": "2026-06-28T12:00" },
+          "daily": {
+            "time": ["2026-06-28", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04"],
+            "temperature_2m_max": [19.4, 22.1, 24.0, 21.5, 18.2, 20.0, 23.3],
+            "temperature_2m_min": [11.3, 13.0, 14.2, 12.8, 10.1, 11.7, 12.9],
+            "precipitation_sum": [3.4, 0.0, 0.0, 1.2, 6.7, 0.0, 0.3],
+            "weathercode": [61, 2, 0, 3, 63, 1, 2],
+            "sunrise": ["2026-06-28T05:02", "2026-06-29T05:03"],
+            "sunset": ["2026-06-28T21:34", "2026-06-29T21:33"]
+          },
+          "hourly": {
+            "time": [
+              "2026-06-28T00:00", "2026-06-28T01:00", "2026-06-28T02:00", "2026-06-28T03:00",
+              "2026-06-28T04:00", "2026-06-28T05:00", "2026-06-28T06:00", "2026-06-28T07:00",
+              "2026-06-28T08:00", "2026-06-28T09:00", "2026-06-28T10:00", "2026-06-28T11:00",
+              "2026-06-28T12:00", "2026-06-28T13:00", "2026-06-28T14:00", "2026-06-28T15:00",
+              "2026-06-28T16:00", "2026-06-28T17:00", "2026-06-28T18:00", "2026-06-28T19:00",
+              "2026-06-28T20:00", "2026-06-28T21:00", "2026-06-28T22:00", "2026-06-28T23:00"
+            ],
+            "temperature_2m": [12,12,11,11,11,12,13,14,15,16,17,18,18,19,19,18,17,16,15,14,13,13,12,12],
+            "precipitation_probability": [5,5,5,5,5,10,10,10,15,15,15,15,15,15,20,25,35,45,30,20,15,10,5,5]
           }
         }
     """.trimIndent()
@@ -811,6 +849,153 @@ class WeatherGroundingProviderTest {
             }
         }
     }
+
+    // ── Neu (Flur-Fertigstellung 2026-07-27): Jetzt/Morgen/Stunden/Sonne aus
+    // demselben Body, den [WeatherGroundingProvider.todayForecast] ohnehin schon
+    // abruft — KEIN zweiter Open-Meteo-Call. ─────────────────────────────────────
+
+    @Test
+    fun `todayForecast liefert Jetzt-Temperatur und Jetzt-Lage aus dem current-Node`() =
+        withOpenMeteo(richForecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val today = provider.todayForecast().block(Duration.ofSeconds(5))!!
+
+            assertEquals(14, today.nowTemp, "14.2 gerundet")
+            assertEquals("leichter Regen", today.nowCodeText, "Code 61 → DE-Text, wie die Tages-Zeile")
+        }
+
+    @Test
+    fun `todayForecast folgt fuer nowCodeText ebenfalls der uebergebenen Anzeigesprache`() =
+        withOpenMeteo(richForecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val today = provider.todayForecast(Language.EN).block(Duration.ofSeconds(5))!!
+
+            assertEquals("light rain", today.nowCodeText)
+        }
+
+    @Test
+    fun `todayForecast - fehlender current-Node liefert nowTemp und nowCodeText als null, kein Crash`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            // forecastJson traegt zwar current, aber OHNE "time" — reicht fuer diesen
+            // Test nicht; wir brauchen current KOMPLETT weg, um den Fehlend-Fall zu pruefen.
+            val noCurrentJson = """
+                {
+                  "daily": {
+                    "time": ["2026-06-28", "2026-06-29"],
+                    "temperature_2m_max": [19.4, 22.1],
+                    "temperature_2m_min": [11.3, 13.0],
+                    "precipitation_sum": [3.4, 0.0],
+                    "weathercode": [61, 2]
+                  }
+                }
+            """.trimIndent()
+            withOpenMeteo(noCurrentJson) { url2, _, _ ->
+                val provider = WeatherGroundingProvider(baseUrl = url2, locationLabel = "Berlin")
+                val today = provider.todayForecast().block(Duration.ofSeconds(5))!!
+
+                assertNull(today.nowTemp, "kein current-Node ⇒ nowTemp null, nicht erfunden")
+                assertNull(today.nowCodeText, "kein current-Node ⇒ nowCodeText null, nicht erfunden")
+                // Der Rest (heute-Werte) bleibt unberührt vom fehlenden current-Node.
+                assertEquals(11, today.todayMin)
+                assertEquals(19, today.todayMax)
+            }
+        }
+
+    @Test
+    fun `todayForecast liefert Morgen-Felder aus Offset 1 - dieselbe Wahrheit wie der Grounding-Block`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val today = provider.todayForecast().block(Duration.ofSeconds(5))!!
+
+            assertEquals(13, today.tomorrowMin, "Tag 1: 13.0 gerundet")
+            assertEquals(22, today.tomorrowMax, "Tag 1: 22.1 gerundet")
+            assertEquals("teilweise bewölkt", today.tomorrowCodeText, "Code 2 → DE-Text")
+        }
+
+    @Test
+    fun `todayForecast - Morgen-Felder sind null, wenn der JSON-Horizont nur heute enthaelt`() =
+        withOpenMeteo(forecastJson.replace(Regex("\"temperature_2m_max\": \\[[^]]*]"), "\"temperature_2m_max\": [19.4]")) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val today = provider.todayForecast().block(Duration.ofSeconds(5))!!
+
+            assertNull(today.tomorrowMin, "kein Tag 1 im JSON ⇒ null statt erfunden")
+            assertNull(today.tomorrowMax)
+            assertNull(today.tomorrowCodeText)
+            assertEquals(11, today.todayMin, "heute bleibt trotzdem lesbar")
+        }
+
+    @Test
+    fun `todayForecast kompaktiert hourly auf 12 Punkte ab current-time (Index 12 = 12-00 Uhr)`() =
+        withOpenMeteo(richForecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val today = provider.todayForecast().block(Duration.ofSeconds(5))!!
+
+            assertEquals(12, today.hourly.size, "genau 12 Stunden, nicht die vollen 24")
+            val first = today.hourly.first()
+            val last = today.hourly.last()
+            assertEquals(
+                LocalDateTime.of(2026, 6, 28, 12, 0),
+                Instant.ofEpochMilli(first.epochMs).atZone(DayReferenceResolver.BERLIN).toLocalDateTime(),
+                "erster Punkt ist current.time (12:00), nicht Mitternacht",
+            )
+            assertEquals(18, first.tempC, "12:00-Temp aus dem hourly-Array")
+            assertEquals(15, first.precipProbability)
+            assertEquals(
+                LocalDateTime.of(2026, 6, 28, 23, 0),
+                Instant.ofEpochMilli(last.epochMs).atZone(DayReferenceResolver.BERLIN).toLocalDateTime(),
+                "zwölfter Punkt = 23:00 (12:00 + 11 h)",
+            )
+            assertEquals(12, last.tempC)
+            assertEquals(5, last.precipProbability)
+        }
+
+    @Test
+    fun `todayForecast - hourly ist leer, wenn der hourly-Block fehlt (best-effort, kein Crash)`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val today = provider.todayForecast().block(Duration.ofSeconds(5))!!
+
+            assertEquals(emptyList<WeatherGroundingProvider.HourPoint>(), today.hourly)
+        }
+
+    @Test
+    fun `todayForecast liefert sunriseEpochMs und sunsetEpochMs aus daily-sunrise-sunset Index 0`() =
+        withOpenMeteo(richForecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val today = provider.todayForecast().block(Duration.ofSeconds(5))!!
+
+            assertEquals(
+                LocalDateTime.of(2026, 6, 28, 5, 2),
+                Instant.ofEpochMilli(today.sunriseEpochMs!!).atZone(DayReferenceResolver.BERLIN).toLocalDateTime(),
+            )
+            assertEquals(
+                LocalDateTime.of(2026, 6, 28, 21, 34),
+                Instant.ofEpochMilli(today.sunsetEpochMs!!).atZone(DayReferenceResolver.BERLIN).toLocalDateTime(),
+            )
+        }
+
+    @Test
+    fun `todayForecast - sunriseEpochMs und sunsetEpochMs sind null, wenn daily keine sunrise-sunset traegt`() =
+        withOpenMeteo(forecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val today = provider.todayForecast().block(Duration.ofSeconds(5))!!
+
+            assertNull(today.sunriseEpochMs)
+            assertNull(today.sunsetEpochMs)
+        }
+
+    @Test
+    fun `groundingBlock bleibt trotz der neuen hourly-sunrise-sunset-Parameter BYTE-GLEICH (der Prompt-Block ruehrt sie nicht an)`() =
+        withOpenMeteo(richForecastJson) { url, _, _ ->
+            val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            val expected = "\n\n---\n" +
+                "HINTERGRUND (nur für dich, im Gespräch NICHT erwähnen):\n" +
+                "• Wetter Berlin heute: 11 bis 19 Grad, leichter Regen, etwa 3 mm Niederschlag.\n" +
+                "• Wetter Berlin morgen: 13 bis 22 Grad, teilweise bewölkt, kaum Niederschlag.\n" +
+                "ANWEISUNG: Nutze diese ECHTEN Wetterdaten und antworte knapp im eigenen warmen Stil — " +
+                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“."
+            assertEquals(expected, block(provider, "Wie wird das Wetter?"))
+        }
 
     @Test
     fun `expliziter-Ort-Erkenner erkennt GROSS UND klein (Bigram erlaubt), aber keine Zahlen oder Zeit-Stoppwoerter`() {

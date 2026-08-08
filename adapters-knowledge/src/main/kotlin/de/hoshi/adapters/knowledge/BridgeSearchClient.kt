@@ -2,6 +2,7 @@ package de.hoshi.adapters.knowledge
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import de.hoshi.core.security.SidecarTokenHeader
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.URLEncoder
@@ -37,6 +38,9 @@ class BridgeSearchClient(
     baseUrl: String,
     private val timeout: Duration = Duration.ofSeconds(5),
     private val mapper: ObjectMapper = jacksonObjectMapper(),
+    // Sidecar-Token-Wand (opt-in, s. SidecarTokenHeader-KDoc): leer (Default) ⇒ KEIN
+    // Header ⇒ byte-identisch zu vor der Wand.
+    private val token: String = "",
 ) : BridgeSearch {
     private val log = LoggerFactory.getLogger(javaClass)
     private val base = baseUrl.trimEnd('/')
@@ -50,12 +54,12 @@ class BridgeSearchClient(
         return try {
             val q = URLEncoder.encode(query, StandardCharsets.UTF_8)
             val uri = URI.create("$base/search?q=$q&limit=$limit&extract_max_chars=120")
-            val request = HttpRequest.newBuilder()
+            val requestBuilder = HttpRequest.newBuilder()
                 .uri(uri)
                 .timeout(timeout)
                 .header("Accept", "application/json")
-                .GET()
-                .build()
+            if (token.isNotBlank()) requestBuilder.header(SidecarTokenHeader.NAME, token)
+            val request = requestBuilder.GET().build()
             val response = http.send(request, HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() != 200) {
                 log.warn("[bridge-probe] HTTP {} für '{}' — leer (best-effort)", response.statusCode(), query.take(60))

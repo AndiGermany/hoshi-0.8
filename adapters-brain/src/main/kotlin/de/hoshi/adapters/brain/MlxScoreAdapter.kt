@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import de.hoshi.core.port.SttSurprisal
 import de.hoshi.core.port.SttSurprisalPort
+import de.hoshi.core.security.SidecarTokenHeader
 import org.slf4j.LoggerFactory
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Mono
@@ -41,12 +42,20 @@ class MlxScoreAdapter(
     baseUrl: String,
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     private val mapper: ObjectMapper = jacksonObjectMapper(),
+    // Sidecar-Token-Wand (opt-in, s. SidecarTokenHeader-KDoc) — derselbe Sidecar
+    // wie MlxBrainAdapter, darum derselbe token-Parameter. Leer (Default) ⇒ kein
+    // Header ⇒ byte-identisch zu vor der Wand.
+    private val token: String = "",
 ) : SttSurprisalPort {
     private val log = LoggerFactory.getLogger(javaClass)
 
     private val client = WebClient.builder()
         .baseUrl(baseUrl)
         .codecs { it.defaultCodecs().maxInMemorySize(1 * 1024 * 1024) }
+        // `.let` statt `.apply` (s. MlxBrainAdapter-KDoc): WebClient.Builder hat SELBST
+        // eine Member-Methode `apply(Consumer<Builder>)`, die den Lambda-Empfänger
+        // auf `it` umbiegen würde.
+        .let { b -> if (token.isNotBlank()) b.defaultHeader(SidecarTokenHeader.NAME, token) else b }
         .build()
 
     /**

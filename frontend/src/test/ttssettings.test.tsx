@@ -51,43 +51,54 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('TtsEngineSectionView — Render (aus GET)', () => {
-  it('zeigt alle vier Engines mit Namen', () => {
+// Andi-Auftrag (07.08): „TTS-Engine soll ein Drop Down werden" — vorher eine
+// Liste von Zeilen mit Zwei-Stufen-Toggle (Muster SkillsSection), jetzt EIN
+// natives `<select>` (Muster LookupModelSectionView) mit einer `<option>` je
+// Engine. Nicht verfügbare Engines bleiben als `<option disabled>` in der
+// Liste stehen, MIT ihrem ehrlichen Hinweis im sichtbaren Options-Text.
+describe('TtsEngineSectionView — Dropdown-Render (aus GET) (Akzeptanzkriterium a)', () => {
+  it('rendert alle vier Engines als Dropdown-Optionen', () => {
     const html = render();
     expect(html).toContain(TTS_ENGINE_TEXTS.label);
+    expect(html).toContain('<select');
+    expect(html).toContain('id="settings-tts-engine"');
+    expect(html).toContain('settings__select');
+    expect(html).toContain('<option value="openai"');
+    expect(html).toContain('<option value="say"');
+    expect(html).toContain('<option value="piper"');
+    expect(html).toContain('<option value="voxtral"');
     expect(html).toContain('OpenAI (Cloud)');
     expect(html).toContain('macOS say (lokal)');
     expect(html).toContain('Piper (lokal)');
     expect(html).toContain('Voxtral (lokal)');
   });
 
-  it('die aktive Engine trägt das "aktiv"-Badge', () => {
+  it('die aktive Engine (voxtral) ist im Dropdown vorausgewählt', () => {
     const html = render();
-    expect(html).toContain(TTS_ENGINE_TEXTS.active);
+    expect(html).toContain('<option value="voxtral" selected="">Voxtral (lokal)</option>');
   });
 
-  it('nicht verfügbare Engines (piper/openai): Toggle disabled + ehrlicher Hinweis-Badge', () => {
+  it('nicht verfügbare Engines (piper/openai): Option disabled + ehrlicher Hinweis im Options-Text', () => {
     const html = render();
-    expect(html).toContain('nicht gestartet');
-    expect(html).toContain('Kein OPENAI_API_KEY gesetzt.');
-    // Piper/OpenAI müssen disabled sein — say (verfügbar, nicht aktiv) darf NICHT disabled sein.
-    // (grober, aber ehrlicher Textnachweis: 2x "nicht gestartet"/Key-Hinweis kommen nur bei den
-    // unverfügbaren Zeilen vor, disabled steht daneben.)
+    expect(html).toContain('OpenAI (Cloud) — Kein OPENAI_API_KEY gesetzt.');
+    expect(html).toContain('Piper (lokal) — nicht gestartet');
+    // Genau piper + openai sind disabled — say (verfügbar) und voxtral (aktiv, verfügbar) nicht.
     const disabledCount = (html.match(/disabled=""/g) ?? []).length;
-    expect(disabledCount).toBeGreaterThanOrEqual(2); // piper + openai (voxtral ist aktiv, ebenfalls disabled)
+    expect(disabledCount).toBe(2);
   });
 
-  it('verfügbare, NICHT aktive Engine (say) bleibt anwählbar — kein disabled', () => {
+  it('verfügbare, NICHT aktive Engine (say) bleibt anwählbar — keine disabled-Option', () => {
     const html = render();
-    // "say" ist verfügbar und nicht aktiv ⇒ sein Toggle-Button darf NICHT disabled sein.
-    const sayRowMatch = html.match(/settings__skillname">macOS say[\s\S]*?<\/button>/);
-    expect(sayRowMatch).not.toBeNull();
-    expect(sayRowMatch![0]).not.toContain('disabled');
+    const sayOption = html.match(/<option value="say"[^>]*>[\s\S]*?<\/option>/);
+    expect(sayOption).not.toBeNull();
+    expect(sayOption![0]).not.toContain('disabled');
+    expect(sayOption![0]).not.toContain('selected');
   });
 
-  it('busy: „wechselt…" steht da', () => {
+  it('busy: Select ist disabled + „wechselt…" steht da', () => {
     const html = render({ busy: true });
     expect(html).toContain(TTS_ENGINE_TEXTS.switching);
+    expect(html).toMatch(/<select[^>]*disabled=""/);
   });
 
   it('Fehler-Notiz (Engine nicht verfügbar) steht als role=status im Panel', () => {
@@ -95,10 +106,11 @@ describe('TtsEngineSectionView — Render (aus GET)', () => {
     expect(html).toContain('role="status"');
   });
 
-  it('Lade-Fehler: ehrliche Zeile als role=alert', () => {
+  it('Lade-Fehler: ehrliche Zeile als role=alert, kein Select ohne current', () => {
     const html = render({ current: null, error: TTS_ENGINE_TEXTS.loadError });
     expect(html).toContain(TTS_ENGINE_TEXTS.loadError);
     expect(html).toContain('role="alert"');
+    expect(html).not.toContain('<select');
   });
 });
 
@@ -400,13 +412,13 @@ describe('TtsAndVoiceSection — Engine-Wechsel lädt die Stimmen-Liste neu (ein
     // Vor dem Wechsel: say ist aktiv, die Stimmen-Liste zeigt Anna.
     expect(container.textContent).toContain('Anna');
 
-    const piperToggle = Array.from(container.querySelectorAll('[role="switch"]')).find(
-      (el) => el.getAttribute('aria-label') === 'Piper (lokal)',
-    ) as HTMLButtonElement;
-    expect(piperToggle, 'Piper-Toggle muss im DOM stehen').toBeTruthy();
+    const engineSelect = container.querySelector('#settings-tts-engine') as HTMLSelectElement;
+    expect(engineSelect, 'Engine-Dropdown muss im DOM stehen').toBeTruthy();
 
     await act(async () => {
-      piperToggle.click();
+      engineSelect.value = 'piper';
+      engineSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
     });
     await flush();
 
@@ -415,6 +427,117 @@ describe('TtsAndVoiceSection — Engine-Wechsel lädt die Stimmen-Liste neu (ein
     expect(container.textContent).toContain('de_DE-thorsten-medium');
     expect(container.textContent).not.toContain('Anna');
     expect(fetchMock).toHaveBeenCalledTimes(2); // 1x initiales GET, 1x PUT — kein extra Stimmen-GET
+  });
+
+  // ── Akzeptanzkriterium (b): die Stimmen-Einstellungen sind ausgeblendet
+  //    (kein leerer/disabled-Select), solange die aktive Engine (voxtral) noch
+  //    keinen Stimmen-Katalog hat — UND erscheinen sofort, sobald auf eine
+  //    Engine mit Stimmen (say) umgeschaltet wird. Kein zweiter Fetch nötig,
+  //    dieselbe PUT-Readback treibt beide Sektionen (s. Test oben).
+  it('Stimm-Einstellungen erscheinen NUR bei einer Engine mit Stimmen-Katalog (Akzeptanzkriterium b)', async () => {
+    const voxtralActive = setting({ aktiv: 'voxtral', stimmen: [], aktiveStimme: null });
+    const sayActive = setting({
+      aktiv: 'say',
+      stimmen: [{ id: 'Anna', label: 'Anna', locale: 'de_DE' }],
+      aktiveStimme: 'Anna',
+    });
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') return okResponse(sayActive);
+      return okResponse(voxtralActive);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<TtsAndVoiceSection voice="coral" onVoice={() => {}} />);
+    });
+    await flush();
+
+    // voxtral aktiv, keine Stimmen ⇒ kein Stimmen-Select im DOM — ausgeblendet,
+    // nicht bloß disabled (der Server-Hinweis-Text steht stattdessen da).
+    expect(container.querySelector('#settings-voice')).toBeNull();
+
+    const engineSelect = container.querySelector('#settings-tts-engine') as HTMLSelectElement;
+    await act(async () => {
+      engineSelect.value = 'say';
+      engineSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await flush();
+
+    // Nach dem Wechsel zu say (hat Stimmen): der Stimmen-Select erscheint sofort.
+    const voiceSelect = container.querySelector('#settings-voice') as HTMLSelectElement | null;
+    expect(voiceSelect, 'Stimmen-Select muss nach dem Wechsel zu say erscheinen').toBeTruthy();
+    expect(voiceSelect!.value).toBe('Anna');
+  });
+
+  // ── Akzeptanzkriterium (c): wer zurückwechselt, findet seine Stimmen-Wahl
+  //    wieder — kein Reset. Die Erinnerung liegt server-seitig (Andi-Auftrag:
+  //    „Werte NICHT zurücksetzen beim Umschalten"); hier simuliert per Mock,
+  //    der jeder Engine ihre zuletzt gemerkte Stimme zurückgibt (Muster
+  //    JsonFileTtsEngineStore) — say→piper→say verliert Annas Wahl NICHT.
+  it('say → piper → zurück zu say: die gemerkte Stimme (Anna) ist wieder da, kein Reset (Akzeptanzkriterium c)', async () => {
+    const sayActive = setting({
+      aktiv: 'say',
+      engines: [
+        { id: 'openai', verfuegbar: false, hinweis: 'Kein OPENAI_API_KEY gesetzt.' },
+        { id: 'say', verfuegbar: true, hinweis: '' },
+        { id: 'piper', verfuegbar: true, hinweis: '' },
+        { id: 'voxtral', verfuegbar: true, hinweis: '' },
+      ],
+      stimmen: [{ id: 'Anna', label: 'Anna', locale: 'de_DE' }],
+      aktiveStimme: 'Anna',
+    });
+    const piperActive = setting({
+      aktiv: 'piper',
+      engines: sayActive.engines,
+      stimmen: piperStimmen,
+      aktiveStimme: 'de_DE-thorsten-medium',
+    });
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(init.body as string) as { id: string };
+        // Der Server merkt sich die Stimme PRO Engine — say liefert immer Anna,
+        // piper immer Thorsten zurück, unabhängig davon, in welcher Reihenfolge
+        // umgeschaltet wird.
+        return okResponse(body.id === 'piper' ? piperActive : sayActive);
+      }
+      return okResponse(sayActive); // initiales GET
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<TtsAndVoiceSection voice="coral" onVoice={() => {}} />);
+    });
+    await flush();
+    expect(container.textContent).toContain('Anna');
+
+    const engineSelect = container.querySelector('#settings-tts-engine') as HTMLSelectElement;
+
+    await act(async () => {
+      engineSelect.value = 'piper';
+      engineSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await flush();
+    expect(container.textContent).toContain('de_DE-thorsten-medium');
+    expect(container.textContent).not.toContain('Anna');
+
+    await act(async () => {
+      engineSelect.value = 'say';
+      engineSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await flush();
+
+    // Zurück bei say: Annas Wahl steht wieder da — nicht leer, nicht zurückgesetzt.
+    expect(container.textContent).toContain('Anna');
+    expect(container.textContent).not.toContain('de_DE-thorsten-medium');
   });
 
   it('openai aktiv: eine Stimmen-Auswahl ruft `onVoice` (Client-seitig), OHNE einen PUT auszulösen', async () => {

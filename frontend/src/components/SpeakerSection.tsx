@@ -2,14 +2,22 @@ import { useEffect, useRef, useState } from 'react';
 import { SPEAKER_ID } from '../api/config';
 import {
   SPEAKER_NAME_PATTERN,
+  SpeakerSampleDeleteError,
+  type SpeakerDiagnostics,
+  type SpeakerProfileDiagnostics,
   type SpeakerSummary,
   deleteSpeaker,
+  deleteSpeakerSample,
   enrollSpeaker,
+  fetchSpeakerDiagnostics,
   fetchSpeakers,
 } from '../api/speakers';
 import { type EnrollCapture, createBrowserEnrollCapture } from '../audio/enrollCapture';
 import { de } from '../i18n/de';
 import { useUiStrings } from '../i18n';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
+import type { SpeakerStrings } from '../i18n/types';
 import { LockGlyph, MicGlyph } from './icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,9 +86,15 @@ export function samplesForNameIn(speakers: SpeakerSummary[] | null | undefined, 
   return speakers?.find((s) => sameSpeakerName(s.name, name))?.samples ?? 0;
 }
 
-/** „Satz i von 3" — der eine Fortschritts-Text, überall identisch (UI + Tests). Zählt INNERHALB einer Sitzung. */
+/**
+ * „Satz i von 3" — der eine Fortschritts-Text, überall identisch (UI + Tests). Zählt
+ * INNERHALB einer Sitzung. Fünf-Sprachen-Sweep 2026-07-27: liest die Vorlage jetzt aus
+ * dem AKTIVEN UI-Katalog (Modul-Singleton, exakt das Muster von `getActiveUiLanguage`
+ * in api/chat.ts/voice.ts) statt einer hart deutschen Vorlage — DE bleibt byte-gleich
+ * zum bisherigen Stand (kein `setActiveUiLanguage`-Aufruf ⇒ Default 'de').
+ */
 export function sampleProgress(i: number): string {
-  return `Satz ${i} von ${ENROLL_SAMPLE_COUNT}`;
+  return resolveUiStrings(getActiveUiLanguage()).speaker.progress(i, ENROLL_SAMPLE_COUNT);
 }
 
 /**
@@ -93,11 +107,17 @@ export const SPEAKER_TEXTS = de.speaker;
 /** Wie lange der scharfe Zweitklick-Zustand hält, bevor er sich selbst entschärft (wie Privacy). */
 const ARM_TIMEOUT_MS = 5000;
 
-/** Anlern-Datum menschlich (nie eine erfundene Zahl — 0/fehlend ⇒ „gerade eben"). */
+/**
+ * Anlern-Datum menschlich (nie eine erfundene Zahl — 0/fehlend ⇒ „gerade eben"). Fünf-
+ * Sprachen-Sweep 2026-07-27: Fallback-Text UND Datums-Locale folgen jetzt dem AKTIVEN
+ * UI-Katalog (s. {@link sampleProgress}) statt hart 'gerade eben'/'de-DE' — DE bleibt
+ * byte-gleich zum bisherigen Stand.
+ */
 export function formatEnrolledDate(ms: number): string {
-  if (!ms || ms <= 0) return 'gerade eben';
+  const t = resolveUiStrings(getActiveUiLanguage());
+  if (!ms || ms <= 0) return t.speaker.justNow;
   try {
-    return new Date(ms).toLocaleDateString('de-DE', {
+    return new Date(ms).toLocaleDateString(t.locale, {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
@@ -107,17 +127,70 @@ export function formatEnrolledDate(ms: number): string {
   }
 }
 
-/** Kapazitäts-Probe: sichere Verbindung + Mikro + MediaRecorder da? Ehrlicher Grund, wenn nicht. */
+/**
+ * Zeitpunkt EINER Aufnahme, Datum + Uhrzeit (nie eine erfundene Zahl — fehlend/0 ⇒
+ * {@link SpeakerStrings.recordingUnknown}, echte Alt-Aufnahmen ohne Herkunft eingeschlossen).
+ * Reparatur-Auftrag 07.08 (Diagnose-Liste je Profil).
+ */
+export function formatSampleTimestamp(ms: number | null | undefined): string {
+  const t = resolveUiStrings(getActiveUiLanguage());
+  if (!ms || ms <= 0) return t.speaker.recordingUnknown;
+  try {
+    return new Date(ms).toLocaleString(t.locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return t.speaker.recordingUnknown;
+  }
+}
+
+/** Netto-Dauer EINER Aufnahme — `null` (WAV nicht sicher geparst/Alt-Aufnahme) ⇒ ehrlich „unbekannt". */
+export function formatSampleDuration(seconds: number | null | undefined): string {
+  const t = resolveUiStrings(getActiveUiLanguage());
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) {
+    return t.speaker.recordingUnknown;
+  }
+  return t.speaker.recordingDuration(seconds);
+}
+
+/** Schwellen aus dem Reparatur-Auftrag 07.08 (Diagnose-Endpoint `leaveOneOutSimilarity`). */
+const FIT_GOOD_THRESHOLD = 0.6;
+const FIT_MEDIUM_THRESHOLD = 0.35;
+
+/**
+ * „Passt zu mir"-Text EINER Aufnahme aus dem Leave-one-out-Wert — ruhiger Text statt Rohzahl
+ * (die Rohzahl kommt im `title`, s. `SpeakerListView`). `undefined` (Profil hatte beim Messen
+ * <2 Samples — nichts zu leaven) ⇒ {@link SpeakerStrings.fitUnknown}, kein geratener Wert.
+ */
+export function fitLabel(t: SpeakerStrings, loo: number | undefined): { text: string; title?: string } {
+  if (typeof loo !== 'number' || !Number.isFinite(loo)) return { text: t.fitUnknown };
+  const title = loo.toFixed(3);
+  if (loo > FIT_GOOD_THRESHOLD) return { text: t.fitGood, title };
+  if (loo >= FIT_MEDIUM_THRESHOLD) return { text: t.fitMedium, title };
+  return { text: t.fitPoor, title };
+}
+
+/**
+ * Kapazitäts-Probe: sichere Verbindung + Mikro + MediaRecorder da? Ehrlicher Grund, wenn
+ * nicht. Fünf-Sprachen-Sweep 2026-07-27: liest die Gründe jetzt aus dem AKTIVEN UI-Katalog
+ * (s. {@link sampleProgress}) statt dem festen `SPEAKER_TEXTS`-Modulwert — DE bleibt
+ * byte-gleich zum bisherigen Stand.
+ */
 export function micSupport(): { ok: boolean; reason?: string } {
+  const t = resolveUiStrings(getActiveUiLanguage()).speaker;
   if (typeof globalThis.isSecureContext === 'boolean' && !globalThis.isSecureContext) {
-    return { ok: false, reason: SPEAKER_TEXTS.insecure };
+    return { ok: false, reason: t.insecure };
   }
   const md = globalThis.navigator?.mediaDevices;
   if (!md || typeof md.getUserMedia !== 'function') {
-    return { ok: false, reason: SPEAKER_TEXTS.noMic };
+    return { ok: false, reason: t.noMic };
   }
   if (typeof globalThis.MediaRecorder === 'undefined') {
-    return { ok: false, reason: SPEAKER_TEXTS.noMic };
+    return { ok: false, reason: t.noMic };
   }
   return { ok: true };
 }
@@ -136,6 +209,75 @@ export interface SpeakerListViewProps {
   note?: string | null;
   onDelete: (name: string) => void;
   onEnroll: () => void;
+  /** Öffnet den Anlern-Dialog vorausgefüllt zum Fortsetzen EINES bestehenden Profils. */
+  onContinue: (name: string) => void;
+  /**
+   * Aufnahmen-Diagnose je Profil (Reparatur-Auftrag 07.08) — `null` solange (noch) nicht
+   * geladen; die aufklappbare Liste zeigt in dem Fall die Lade-/Fehlzeile statt Aufnahmen.
+   */
+  diagnostics?: SpeakerDiagnostics | null;
+  diagnosticsError?: string | null;
+  /** Einzel-Löschen EINER Aufnahme (nutzt `DELETE .../samples/{index}`). */
+  onDeleteSample: (name: string, index: number) => void;
+  /** Welche Aufnahme (Profilname + Index) gerade gelöscht wird — sperrt NUR diesen Knopf. */
+  sampleBusy?: { name: string; index: number } | null;
+}
+
+/**
+ * Aufklappbare Aufnahmen-Liste EINES Profils (Muster `<details>`/`<summary>` wie
+ * `feed__details`/ChatView-Quellen — kein eigener JS-Auf/Zu-State nötig). Datenquelle: die
+ * bereits geladene {@link SpeakerDiagnostics} (ein GET für ALLE Profile, s. `SpeakerSection`).
+ * Je Aufnahme: Zeitpunkt · Dauer · „passt zu mir"-Text (Rohwert im `title`) · Einzel-Löschen
+ * (gesperrt bei der letzten Aufnahme — Reparatur-Auftrag 07.08).
+ */
+function SpeakerRecordings({
+  name,
+  diag,
+  diagnosticsError,
+  sampleBusy,
+  onDeleteSample,
+  t,
+}: {
+  name: string;
+  diag: SpeakerProfileDiagnostics | undefined;
+  diagnosticsError?: string | null;
+  sampleBusy?: { name: string; index: number } | null;
+  onDeleteSample: (name: string, index: number) => void;
+  t: SpeakerStrings;
+}) {
+  if (!diag) {
+    return <p className="settings__hint">{diagnosticsError ?? t.loading}</p>;
+  }
+  const isLast = diag.sampleOrigins.length <= 1;
+  return (
+    <details className="settings__recordings">
+      <summary className="settings__recordingssummary">{t.recordingsToggle(diag.sampleOrigins.length)}</summary>
+      <ul className="settings__recordinglist">
+        {diag.sampleOrigins.map((origin, i) => {
+          const fit = fitLabel(t, diag.leaveOneOutSimilarity[i]);
+          const busyThis = sampleBusy?.name === name && sampleBusy.index === i;
+          return (
+            <li className="settings__recordingrow" key={i}>
+              <span className="settings__recordingmeta">
+                {formatSampleTimestamp(origin.recordedAt)} · {formatSampleDuration(origin.durationSeconds)} ·{' '}
+                <span title={fit.title}>{fit.text}</span>
+              </span>
+              <button
+                type="button"
+                className="settings__deletebtn"
+                disabled={isLast || busyThis}
+                title={isLast ? t.deleteRecordingLastHint : undefined}
+                aria-label={t.deleteRecordingAria(i + 1)}
+                onClick={() => onDeleteSample(name, i)}
+              >
+                {busyThis ? t.deleting : t.deleteRecording}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
 }
 
 export function SpeakerListView({
@@ -147,6 +289,11 @@ export function SpeakerListView({
   note,
   onDelete,
   onEnroll,
+  onContinue,
+  diagnostics,
+  diagnosticsError,
+  onDeleteSample,
+  sampleBusy,
 }: SpeakerListViewProps) {
   const t = useUiStrings();
   const SPEAKER_TEXTS = t.speaker;
@@ -180,9 +327,8 @@ export function SpeakerListView({
                 <div className="settings__speakermeta">
                   <span className="settings__speakername">{s.name}</span>
                   <span className="settings__speakerdate">
-                    angelernt {formatEnrolledDate(s.enrolledAt)}
-                    {typeof s.samples === 'number' &&
-                      ` · ${s.samples} ${s.samples === 1 ? 'Satz' : 'Sätze'}`}
+                    {SPEAKER_TEXTS.enrolledOn(formatEnrolledDate(s.enrolledAt))}
+                    {typeof s.samples === 'number' && ` · ${SPEAKER_TEXTS.sentenceCount(s.samples)}`}
                     {/* Sitzungs-Fortschritt (Andi-Auftrag 25.07): <9 Sätze ⇒ "in Arbeit", 9 ⇒ "vollständig". */}
                     {typeof s.samples === 'number' &&
                       ` · ${
@@ -191,20 +337,52 @@ export function SpeakerListView({
                           : SPEAKER_TEXTS.statusInProgress
                       }`}
                   </span>
+                  {/* Aufklappbare Aufnahmen-Liste (Reparatur-Auftrag 07.08): Datum · Dauer ·
+                      „passt zu mir" · Einzel-Löschen — Datenquelle GET .../diagnostics. */}
+                  <SpeakerRecordings
+                    name={s.name}
+                    diag={diagnostics?.profiles.find((p) => sameSpeakerName(p.name, s.name))}
+                    diagnosticsError={diagnosticsError}
+                    sampleBusy={sampleBusy}
+                    onDeleteSample={onDeleteSample}
+                    t={SPEAKER_TEXTS}
+                  />
                 </div>
-                <button
-                  type="button"
-                  className={`settings__deletebtn ${isArmed ? 'is-armed' : ''}`}
-                  disabled={isBusy}
-                  aria-label={`Profil ${s.name} löschen`}
-                  onClick={() => onDelete(s.name)}
-                >
-                  {isBusy
-                    ? SPEAKER_TEXTS.deleting
-                    : isArmed
-                      ? SPEAKER_TEXTS.confirm
-                      : SPEAKER_TEXTS.delete}
-                </button>
+                <div className="settings__speakeractions">
+                  {/* „Weiter anlernen" (Andi-Auftrag 07.08): öffnet den Anlern-Dialog
+                      vorausgefüllt+gesperrt auf DIESEN Namen — die Startindex-folgt-Namen-Logik
+                      (s. `enrollStartIndex`/`samplesForNameIn` oben) setzt automatisch am
+                      richtigen Satz fort, ganz ohne eigene Fortsetz-Logik hier. */}
+                  {/* VOLLES Profil (9/9): „Weiter anlernen" würde durch den
+                      enrollStartIndex-Rücksprung auf 1 das Profil STILL ERSETZEN —
+                      exakt die Fußangel-Klasse der beiden 08.08-Vorfälle
+                      (versehentliche Löschung, Gleichzeitig-Anlernen). Darum hier
+                      disabled mit ehrlichem Hinweis statt eines stillen Neustarts;
+                      Platz schaffen geht über die Einzel-Aufnahmen-Löschung. */}
+                  <button
+                    type="button"
+                    className="settings__enrollbtn settings__continuebtn"
+                    aria-label={SPEAKER_TEXTS.continueAria(s.name)}
+                    disabled={(s.samples ?? 0) >= ENROLL_TOTAL_SAMPLES}
+                    title={(s.samples ?? 0) >= ENROLL_TOTAL_SAMPLES ? SPEAKER_TEXTS.continueFullHint : undefined}
+                    onClick={() => onContinue(s.name)}
+                  >
+                    {SPEAKER_TEXTS.continueButton}
+                  </button>
+                  <button
+                    type="button"
+                    className={`settings__deletebtn ${isArmed ? 'is-armed' : ''}`}
+                    disabled={isBusy}
+                    aria-label={SPEAKER_TEXTS.deleteProfileAria(s.name)}
+                    onClick={() => onDelete(s.name)}
+                  >
+                    {isBusy
+                      ? SPEAKER_TEXTS.deleting
+                      : isArmed
+                        ? SPEAKER_TEXTS.confirm
+                        : SPEAKER_TEXTS.delete}
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -253,6 +431,13 @@ export interface EnrollDialogProps {
   onSessionIncomplete?: () => void;
   defaultName?: string;
   /**
+   * Namensfeld von ANFANG AN gesperrt (Andi-Auftrag 07.08, „Weiter anlernen"-Knopf einer
+   * Profil-Zeile) — anders als das normale Einfrieren erst NACH dem ersten gespeicherten
+   * Satz (s. `nameLocked` unten): hier ist [defaultName] bereits ein BESTEHENDES Profil,
+   * ein Tippen im Feld dürfte NIE versehentlich auf ein anderes/neues Profil umschalten.
+   */
+  lockName?: boolean;
+  /**
    * Sätze-Zählerstand-Lookup für einen Namen (Default: 0 — immer frischer Start). Reales
    * Bild (Korrektur 25.07): am selben Browser lernen ZWEI Menschen an (z. B. Andi und
    * Person B), unterschieden NUR durchs Namensfeld im Dialog — ein fest verdrahteter
@@ -280,6 +465,7 @@ export function EnrollDialog({
   onAborted,
   onSessionIncomplete,
   defaultName = SPEAKER_ID,
+  lockName = false,
   samplesForName = () => 0,
   createCapture = createBrowserEnrollCapture,
   enroll = enrollSpeaker,
@@ -320,8 +506,12 @@ export function EnrollDialog({
   const sessionNumber = sessionOfIndex(sampleIndex);
   /** Nur eine bei Satz 1 begonnene (frische) Sitzung darf im Abbruchfall löschen. */
   const isFreshStart = sessionStartIndex === 1;
-  /** Namensfeld wird gesperrt, sobald diese Sitzung mindestens einen Satz gespeichert hat. */
-  const nameLocked = savedCount > 0;
+  /**
+   * Namensfeld wird gesperrt, sobald diese Sitzung mindestens einen Satz gespeichert hat —
+   * ODER von Anfang an, wenn [lockName] gesetzt ist („Weiter anlernen" an einem bestehenden
+   * Profil, s. {@link EnrollDialogProps.lockName}).
+   */
+  const nameLocked = savedCount > 0 || lockName;
 
   useEffect(() => {
     aliveRef.current = true;
@@ -472,6 +662,9 @@ export function EnrollDialog({
           <p className="settings__hint settings__consent">
             <LockGlyph /> {SPEAKER_TEXTS.consent}
           </p>
+          {/* Kreuz-Kontaminations-Vorfall 07.08: zwei Haushaltsmitglieder lernten GLEICHZEITIG im selben
+              Raum an — beide Profile mussten gewiped werden. Ruhiger, fester Hinweis. */}
+          <p className="settings__hint">{SPEAKER_TEXTS.soloEnrollHint}</p>
 
           <label className="settings__label settings__enrolllabel" htmlFor="enroll-name">
             {SPEAKER_TEXTS.nameLabel}
@@ -507,7 +700,7 @@ export function EnrollDialog({
           <ol className="settings__enrollsentences">
             {sessionSentences.map((line) => (
               <li className="settings__enrollsentence" key={line}>
-                „{line}“
+                {SPEAKER_TEXTS.quote(line)}
               </li>
             ))}
           </ol>
@@ -540,7 +733,7 @@ export function EnrollDialog({
             {SPEAKER_TEXTS.sessionLabel(sessionNumber)} · {sampleProgress(savedCount + 1)} —{' '}
             {SPEAKER_TEXTS.recordingHint}
           </p>
-          <p className="settings__enrollsentence">„{currentSentence}“</p>
+          <p className="settings__enrollsentence">{SPEAKER_TEXTS.quote(currentSentence)}</p>
           <div className="settings__enrollactions">
             <button
               type="button"
@@ -571,7 +764,7 @@ export function EnrollDialog({
           {/* Ehrlicher Zwischenstand: es gibt noch KEIN fertiges Profil. */}
           <p className="settings__hint">{SPEAKER_TEXTS.partialHint}</p>
           <p className="settings__hint">{SPEAKER_TEXTS.nextUp}</p>
-          <p className="settings__enrollsentence">„{currentSentence}“</p>
+          <p className="settings__enrollsentence">{SPEAKER_TEXTS.quote(currentSentence)}</p>
           <div className="settings__enrollactions">
             <button
               type="button"
@@ -655,6 +848,13 @@ export function SpeakerSection() {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  /** Profil, das per „Weiter anlernen" fortgesetzt wird — `null` ⇒ normaler Anlern-Knopf. */
+  const [continueName, setContinueName] = useState<string | null>(null);
+  /** Aufnahmen-Diagnose je Profil (Reparatur-Auftrag 07.08) — EIN GET fuer ALLE Profile. */
+  const [diagnostics, setDiagnostics] = useState<SpeakerDiagnostics | null>(null);
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  /** Welche Aufnahme (Profilname + Index) gerade geloescht wird — sperrt NUR diesen Knopf. */
+  const [sampleBusy, setSampleBusy] = useState<{ name: string; index: number } | null>(null);
   const aliveRef = useRef(true);
   const armTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -675,10 +875,24 @@ export function SpeakerSection() {
     }
   };
 
+  /** Aufnahmen-Diagnose separat laden (eigener Fehlerkanal — die Profil-Liste bleibt lesbar). */
+  const loadDiagnostics = async (signal?: AbortSignal) => {
+    try {
+      const next = await fetchSpeakerDiagnostics(signal);
+      if (aliveRef.current) {
+        setDiagnostics(next);
+        setDiagnosticsError(null);
+      }
+    } catch {
+      if (aliveRef.current) setDiagnosticsError(SPEAKER_TEXTS.recordingsLoadError);
+    }
+  };
+
   useEffect(() => {
     aliveRef.current = true;
     const controller = new AbortController();
     void load(controller.signal);
+    void loadDiagnostics(controller.signal);
     return () => {
       aliveRef.current = false;
       controller.abort();
@@ -708,6 +922,7 @@ export function SpeakerSection() {
         if (!aliveRef.current) return;
         // Server-Wahrheit nachladen (nicht optimistisch raten).
         await load();
+        void loadDiagnostics();
       } catch {
         if (aliveRef.current) setNote(SPEAKER_TEXTS.deleteFailed);
       } finally {
@@ -716,10 +931,36 @@ export function SpeakerSection() {
     })();
   };
 
+  /** Einzel-Aufnahme-Löschen (Reparatur-Auftrag 07.08) — nutzt die neue `.../samples/{index}`-Naht. */
+  const handleDeleteSample = (name: string, index: number) => {
+    if (sampleBusy) return;
+    setSampleBusy({ name, index });
+    setNote(null);
+    void (async () => {
+      try {
+        await deleteSpeakerSample(name, index);
+        if (!aliveRef.current) return;
+        // Server-Wahrheit nachladen (Zentroid + Aufnahmen-Zahl haben sich geändert).
+        await Promise.all([load(), loadDiagnostics()]);
+      } catch (err) {
+        if (aliveRef.current) {
+          setNote(
+            err instanceof SpeakerSampleDeleteError && err.kind === 'last-sample'
+              ? SPEAKER_TEXTS.deleteRecordingLastHint
+              : SPEAKER_TEXTS.deleteRecordingFailed,
+          );
+        }
+      } finally {
+        if (aliveRef.current) setSampleBusy(null);
+      }
+    })();
+  };
+
   const handleEnrolled = () => {
     // Dialog zeigt den Erfolg selbst; hier die Liste frisch vom Server holen.
     setNote(SPEAKER_TEXTS.enrolledNote);
     void load();
+    void loadDiagnostics();
   };
 
   return (
@@ -734,11 +975,26 @@ export function SpeakerSection() {
         onDelete={handleDelete}
         onEnroll={() => {
           setNote(null);
+          setContinueName(null);
           setDialogOpen(true);
         }}
+        onContinue={(name) => {
+          setNote(null);
+          setContinueName(name);
+          setDialogOpen(true);
+        }}
+        diagnostics={diagnostics}
+        diagnosticsError={diagnosticsError}
+        onDeleteSample={handleDeleteSample}
+        sampleBusy={sampleBusy}
       />
       {dialogOpen && (
         <EnrollDialog
+          defaultName={continueName ?? SPEAKER_ID}
+          // „Weiter anlernen" (Andi-Auftrag 07.08): Name ist ein BESTEHENDES Profil, von
+          // Anfang an schreibgeschützt — die Startindex-folgt-Namen-Logik unten setzt sich
+          // damit automatisch auf den richtigen Fortsetzungs-Index (kein eigener Code nötig).
+          lockName={continueName !== null}
           // Löst den Sätze-Zählerstand GEGEN DIE GELADENE LISTE auf — reaktiv nach dem im
           // Dialog GETIPPTEN Namen (trimmed + case-insensitiv), nicht gegen einen fest
           // verdrahteten Default. Sonst würde z. B. Person Bs Profil (unterschieden von „gast"
@@ -746,8 +1002,10 @@ export function SpeakerSection() {
           samplesForName={(candidate) => samplesForNameIn(speakers, candidate)}
           onClose={() => {
             setDialogOpen(false);
+            setContinueName(null);
             // Server-Wahrheit nachladen — auch nach Abbruch (Teil-Profil verworfen?).
             void load();
+            void loadDiagnostics();
           }}
           onEnrolled={handleEnrolled}
           onAborted={() => setNote(SPEAKER_TEXTS.abortedNote)}

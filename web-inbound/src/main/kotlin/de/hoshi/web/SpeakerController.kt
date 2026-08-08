@@ -125,6 +125,13 @@ data class SpeakerProfileDiagnostics(
  *    Anomalien wie „Person Bs Abdruck aehnelt Andi mehr als ihr selbst" (Live-Befund 07.07)
  *    sofort ablesbar und jedes Re-Enroll direkt bewertbar.
  *  - `DELETE /api/v1/speakers/{name}` → `204` (Profil + Embedding wirklich weg) / `404` / `400`.
+ *  - `DELETE /api/v1/speakers/{name}/samples/{index}` (Reparatur-Naht, Vorfall 07.08: Kreuz-
+ *    Kontamination durch gleichzeitiges Anlernen im selben Raum, s.
+ *    [SpeakerProfileStore.deleteSample]) → loescht EINE Aufnahme (0-basierter Index),
+ *    Zentroid wird aus den VERBLEIBENDEN neu gemittelt+normiert. `204` bei Erfolg / `404`
+ *    unbekanntes Profil / `400` ungueltiger Name ODER Index ausserhalb der Aufnahmen /
+ *    `409` bei der LETZTEN Aufnahme eines Profils — nie ein leeres Profil mit kaputtem
+ *    Zentroid hinterlassen, der Client loescht in dem Fall stattdessen das ganze Profil.
  *
  * **Log-Disziplin (Tom):** nur `name` + Vektor-Groesse, nie Namen zusammen mit Werten, nie der
  * Vektor. Der `embed`-Aufruf ist blockierend (java.net.http) ⇒ auf [Schedulers.boundedElastic]
@@ -354,6 +361,33 @@ class SpeakerController(
         !VALID_NAME.matches(name) -> ResponseEntity.badRequest().build()
         store.delete(name) -> ResponseEntity.noContent().build()
         else -> ResponseEntity.notFound().build()
+    }
+
+    /**
+     * Einzel-Aufnahme-Loeschung (Reparatur-Naht, s. Klassen-KDoc + [SpeakerProfileStore.deleteSample]).
+     * `index` ist der Pfad-Parameter aus `/samples/{index}` — bindet Spring ihn nicht als `Int`
+     * (Junk wie „abc"), antwortet WebFlux bereits VOR diesem Code ehrlich mit `400`.
+     */
+    @DeleteMapping("/api/v1/speakers/{name}/samples/{index}")
+    fun deleteSample(
+        @PathVariable("name") name: String,
+        @PathVariable("index") index: Int,
+    ): ResponseEntity<Any> {
+        if (!VALID_NAME.matches(name)) return badRequest("name ungueltig")
+        return try {
+            when (val p = store.deleteSample(name, index)) {
+                null -> ResponseEntity.notFound().build<Any>()
+                else -> {
+                    log.info("[speaker-sample-delete] Aufnahme aus '{}' entfernt (samples={})", p.name, p.samples.size)
+                    ResponseEntity.noContent().build<Any>()
+                }
+            }
+        } catch (e: IndexOutOfBoundsException) {
+            badRequest("index ungueltig: ${e.message}")
+        } catch (e: IllegalStateException) {
+            ResponseEntity.status(HttpStatus.CONFLICT)
+                .body<Any>(mapOf("error" to "letzte Aufnahme — bitte stattdessen das ganze Profil loeschen"))
+        }
     }
 
     private fun badRequest(msg: String): ResponseEntity<Any> =

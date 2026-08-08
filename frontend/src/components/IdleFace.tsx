@@ -14,6 +14,7 @@ import {
 import type { DiaryTurn } from '../hooks/useDiary';
 import {
   useWeatherToday,
+  type HourlyPoint,
   type WeatherToday,
   type WeatherTodayState,
 } from '../hooks/useWeatherToday';
@@ -66,14 +67,25 @@ export const SHOPPING_VISIBLE_COUNT = 4;
  *  1. **Kopfzeile**: links die typo-first Uhr + tageszeitbewusster Gruß
  *     ({@link dayPartForHour} + `idleFace.greeting`) + echtes Datum; RECHTS
  *     das **Jetzt-Band** — die frühere „Wetter"-Kachel ist keine Kachel mehr,
- *     sondern läuft prominent neben der Uhr: ein dezentes Lage-Icon
- *     ({@link weatherCategory}/{@link WeatherGlyph} — feste Zuordnung auf den
- *     deutschen WMO-Text, kein buntes Wetter-App-Icon) + Wetterlage (groß),
- *     Tagesspanne, und ENDLICH `precipMm` gerendert (kam im FE an, wurde nie
- *     gezeigt) als warme Zeile „3 mm Regen heute" / „trocken"
- *     ({@link weatherNowContent}). KEIN Settings-Zahnrad mehr hier (Andi-
- *     Korrektur 26.07: das Zahnrad oben rechts in der Top-Nav reicht — ein
- *     zweites an derselben Stelle war redundant).
+ *     sondern läuft prominent neben der Uhr, seit dem „Flur wird fertig"-
+ *     Auftrag (2026-07-27) mit fertig zu Ende geführter Kette (das BE fragte
+ *     `current`/Morgen/Sonnenzeiten/`hourly` schon lange ab, verwarf sie aber):
+ *     Zeile 1 dezentes Lage-Icon ({@link weatherCategory}/{@link WeatherGlyph})
+ *     + Jetzt-Temperatur groß + Jetzt-Lage; Zeile 2 die Tagesspanne (ex-
+ *     Hauptzeile); Zeile 3 `precipMm` als warme Zeile „3 mm Regen heute" /
+ *     „trocken"; danach je EINZELN nur bei echten Daten: Morgen („morgen
+ *     12–22°, sonnig"), die Regen-ab-Uhrzeit ({@link rainOnsetEpochMs}, nur
+ *     >20 % Regenwahrscheinlichkeit — kein Zahlenfriedhof) und eine sehr
+ *     leise Sonnenauf-/-untergangs-Zeile ({@link weatherNowContent}). BEWUSST
+ *     KEINE `StageSparkline` für den Stunden-Verlauf: die existiert für
+ *     Latenz-Serien (p50/p95-Referenzlinien, Ausreißer-Dreieck, Fehler-Punkte)
+ *     — für 12 Temperatur-/Regenwerte ohne Achsen wäre sie aus Flur-Distanz
+ *     kaum lesbar und bräuchte eine zweite, andersartige Bedeutung ihrer
+ *     Props; EINE ehrliche Zeile ist hier das dezentere, dem „kein
+ *     Zahlenfriedhof"-Gesetz treuere Mittel. KEIN
+ *     Settings-Zahnrad mehr hier (Andi-Korrektur 26.07: das Zahnrad oben
+ *     rechts in der Top-Nav reicht — ein zweites an derselben Stelle war
+ *     redundant).
  *  2. **Wecker-Zeile**: ⏰ + „Wecker 07:00 · noch X h" + 2px-Fortschritts-
  *     Haarlinie in accent + rechts der Vertrauens-Satz „klingelt auch offline".
  *     Kein Wecker gestellt ⇒ die Zeile sagt das ehrlich.
@@ -263,7 +275,40 @@ function WeatherGlyph({ category, className }: { category: WeatherCategory; clas
 /** Der Inhalt des Jetzt-Bands: entweder eine ehrliche Lücke (Text) oder die echten Wetter-Zeilen + Icon-Kategorie. */
 export type WeatherNowContent =
   | { kind: 'gap'; text: string }
-  | { kind: 'live'; cond: string; span: string; precip: string; category: WeatherCategory };
+  | {
+      kind: 'live';
+      /**
+       * Jetzt-Temperatur, z.B. „22°" — `null` NUR wenn `current` beim Backend
+       * fehlt/kaputt war (Timeout, altes BE ohne die additiven Felder): die
+       * Kopfzeile zeigt dann ehrlich NUR {@link cond} (Fallback: die
+       * Tagesbedingung), statt eine erfundene Zahl zu zeigen.
+       */
+      nowTemp: string | null;
+      /** Jetzt-Lage bei vorhandener Jetzt-Temperatur, SONST die Tagesbedingung (ehrlicher Fallback, ex-Hauptzeile vor dieser Erweiterung). */
+      cond: string;
+      category: WeatherCategory;
+      /** Tagesspanne („18–29°") — jetzt die ZWEITE Zeile (Flur-Auftrag 2026-07-27), vorher die Hauptzeile. */
+      span: string;
+      precip: string;
+      /** „morgen 12–22°, sonnig" — `null` wenn Min/Max/Bedingung nicht ALLE drei da sind. */
+      tomorrow: string | null;
+      /** „Regen ab ~17:00" — `null` ohne Stunden-Daten ODER wenn keine Stunde >20% Regenwahrscheinlichkeit hat. */
+      rainFrom: string | null;
+      /** „hell bis 21:34"/„hell ab 05:32" — `null` ohne Sonnenauf-/-untergangsdaten. */
+      sun: string | null;
+    };
+
+/**
+ * **Regen-ab-Logik** (Flur-Fertigstellung 2026-07-27): die ERSTE Stunde im
+ * kompakten `hourly`-Fenster mit einer Regenwahrscheinlichkeit über
+ * [thresholdPercent] (Default 20 — Andi-Vorgabe „kein Zahlenfriedhof": eine
+ * 12%-Chance verdient keine Zeile). Kein Treffer ODER keine `hourly`-Daten ⇒
+ * `null`, die Zeile verschwindet dann ehrlich statt „0% Regen" zu behaupten.
+ */
+export function rainOnsetEpochMs(hourly: HourlyPoint[] | undefined, thresholdPercent = 20): number | null {
+  const hit = (hourly ?? []).find((h) => h.precipProbability > thresholdPercent);
+  return hit ? hit.epochMs : null;
+}
 
 /**
  * Leitet den Inhalt des Jetzt-Bands aus dem ehrlichen Wetter-Endpoint-Zustand
@@ -271,16 +316,21 @@ export type WeatherNowContent =
  *  - `null` (erster Fetch läuft) / `off` (404, Wetter beim Deploy aus) /
  *    `unreachable` (401/5xx/Netz) ⇒ EINE ehrliche Lücken-Zeile — exakt dieselben
  *    Texte wie die frühere gestrichelte Kachel, nur ohne Kachel-Rahmen.
- *  - `live` ⇒ Icon-Kategorie ({@link weatherCategory}) + Wetterlage
- *    (`codeText`), Tagesspanne („18–29°"), und die warme Niederschlags-Zeile
- *    (`precipMm > 0` ⇒ „3 mm Regen heute" via {@link fmtPrecip}, sonst
- *    „trocken" — der Wert kam im FE zwar an, wurde vor diesem Umbau aber nie
- *    gerendert). `codeText` bleibt deutsch, unabhängig von der UI-Sprache
- *    (kommt vom Backend, s. `hooks/useWeatherToday.ts`) — nur die Icon-
- *    Zuordnung liest ihn, nichts wird übersetzt.
+ *  - `live` ⇒ Jetzt-Temperatur + Jetzt-Lage (Flur-Auftrag 2026-07-27: der
+ *    `current`-Node wurde schon immer angefragt, aber bis heute verworfen),
+ *    Icon-Kategorie ({@link weatherCategory}), Tagesspanne („18–29°", jetzt
+ *    Zeile 2), die warme Niederschlags-Zeile (`precipMm > 0` ⇒ „3 mm Regen
+ *    heute" via {@link fmtPrecip}, sonst „trocken"), plus DREI neue optionale
+ *    Zeilen — Morgen, Regen-ab-Uhrzeit ({@link rainOnsetEpochMs}) und
+ *    Sonnenauf-/-untergang (relativ zu [nowMs]) —, die JEDE EINZELN nur
+ *    erscheinen, wenn ihre Rohdaten da sind (additive BE-Felder, s.
+ *    `hooks/useWeatherToday.ts`). `cond`/`tomorrow`-Bedingungstexte kommen
+ *    bereits in der Anzeigesprache vom Backend — hier wird nichts übersetzt,
+ *    nur die Icon-Zuordnung liest den Text.
  */
 export function weatherNowContent(
   weather: WeatherTodayState | null,
+  nowMs: number,
   t: IdleFaceStrings = IDLE_FACE_TEXTS,
   locale: string = de.locale,
 ): WeatherNowContent {
@@ -289,12 +339,35 @@ export function weatherNowContent(
   if (weather.kind === 'unreachable') return { kind: 'gap', text: t.wetter.unreachableNote };
   const w: WeatherToday = weather.data;
   const precip = w.precipMm > 0 ? t.wetter.precipSome(fmtPrecip(w.precipMm, locale)) : t.wetter.precipNone;
+
+  const nowTemp = w.nowTemp !== undefined ? `${w.nowTemp}°` : null;
+  const cond = w.nowCodeText !== undefined ? w.nowCodeText : w.codeText;
+
+  const tomorrow =
+    w.tomorrowMin !== undefined && w.tomorrowMax !== undefined && w.tomorrowCodeText !== undefined
+      ? t.wetter.tomorrow(`${w.tomorrowMin}–${w.tomorrowMax}°`, w.tomorrowCodeText)
+      : null;
+
+  const rainAt = rainOnsetEpochMs(w.hourly);
+  const rainFrom = rainAt === null ? null : t.wetter.rainFrom(dueClock(rainAt, locale));
+
+  const sun =
+    w.sunriseEpochMs === undefined || w.sunsetEpochMs === undefined
+      ? null
+      : nowMs < w.sunriseEpochMs
+        ? t.wetter.sunFrom(dueClock(w.sunriseEpochMs, locale))
+        : t.wetter.sunUntil(dueClock(w.sunsetEpochMs, locale));
+
   return {
     kind: 'live',
-    cond: w.codeText,
+    nowTemp,
+    cond,
+    category: weatherCategory(cond),
     span: `${w.todayMin}–${w.todayMax}°`,
     precip,
-    category: weatherCategory(w.codeText),
+    tomorrow,
+    rainFrom,
+    sun,
   };
 }
 
@@ -367,7 +440,7 @@ export function IdleFace({ nowMs, health, voice, scheduled, weather, shopping }:
   });
   const alarm = nextAlarm(scheduled);
   const chips = statusChips(health, voice, idleFace);
-  const now = weatherNowContent(weather, idleFace, locale);
+  const now = weatherNowContent(weather, nowMs, idleFace, locale);
   const hasHouseholdCards = scheduled.length > 0 || shopping.length > 0;
   const clock = clockParts(nowMs, locale);
 
@@ -393,12 +466,23 @@ export function IdleFace({ nowMs, health, voice, scheduled, weather, shopping }:
             <span className="idle__nowgap">{now.text}</span>
           ) : (
             <>
+              {/* Zeile 1 — Jetzt: Lage-Icon + Jetzt-Temperatur groß, die Jetzt-
+                  Lage daneben (Andi-Auftrag 2026-07-27). Fehlt `current` (altes
+                  BE/Timeout) ⇒ ehrlicher Fallback auf die bisherige Ansicht: nur
+                  die Tagesbedingung, ohne die kleinere Zusatz-Klasse. */}
               <span className="idle__nowcond">
                 <WeatherGlyph category={now.category} className="idle__nowicon" />
-                {now.cond}
+                {now.nowTemp && <span className="idle__nowtemp">{now.nowTemp}</span>}
+                <span className={now.nowTemp ? 'idle__nowcondtext' : undefined}>{now.cond}</span>
               </span>
+              {/* Zeile 2 — Tagesspanne (ex-Hauptzeile, rückt jetzt runter). */}
               <span className="idle__nowspan">{now.span}</span>
               <span className="idle__nowprecip">{now.precip}</span>
+              {/* Zeile 3+ — Morgen / Regen-ab / Sonne: JEDE erscheint nur mit
+                  echten Rohdaten (s. weatherNowContent-KDoc), sonst weg. */}
+              {now.tomorrow && <span className="idle__nowline">{now.tomorrow}</span>}
+              {now.rainFrom && <span className="idle__nowline">{now.rainFrom}</span>}
+              {now.sun && <span className="idle__nowline idle__nowline--sun">{now.sun}</span>}
             </>
           )}
         </div>

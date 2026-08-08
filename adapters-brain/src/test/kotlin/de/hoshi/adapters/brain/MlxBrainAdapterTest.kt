@@ -217,4 +217,42 @@ class MlxBrainAdapterTest {
             // das Feld, trägt das LlmDelta es — MESSEN/loggen tut bei Flag OFF niemand.
             assertEquals(listOf(-0.5), deltas.map { it.logprob })
         }
+
+    // ---- Sidecar-Token-Wand (opt-in, Commit 62fccc7): Property gesetzt ⇒ Header,
+    // Property leer ⇒ KEIN Header (byte-identisch zu vor der Wand). ----
+
+    /** Wie [withBrain], liefert zusätzlich den `X-Hoshi-Token`-Header des Requests. */
+    private fun withBrainCapturingToken(block: (url: String, capturedToken: AtomicReference<String?>) -> Unit) {
+        val capturedToken = AtomicReference<String?>(null)
+        val server = com.sun.net.httpserver.HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/v1/chat") { ex ->
+            capturedToken.set(ex.requestHeaders.getFirst("X-Hoshi-Token"))
+            val bytes = "data: {\"delta\":\"ok\"}\n\ndata: [DONE]\n\n".toByteArray()
+            ex.responseHeaders.add("Content-Type", "text/event-stream")
+            ex.sendResponseHeaders(200, bytes.size.toLong())
+            ex.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            block("http://127.0.0.1:${server.address.port}", capturedToken)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `Token konfiguriert - Request traegt X-Hoshi-Token`() =
+        withBrainCapturingToken { url, capturedToken ->
+            MlxBrainAdapter(baseUrl = url, token = "geheim-123")
+                .streamChat(prompt = "hi").collectList().block(Duration.ofSeconds(5))
+            assertEquals("geheim-123", capturedToken.get(), "gesetzter Token muss als X-Hoshi-Token mitgehen")
+        }
+
+    @Test
+    fun `Token leer (Default) - KEIN X-Hoshi-Token-Header (byte-neutral)`() =
+        withBrainCapturingToken { url, capturedToken ->
+            MlxBrainAdapter(baseUrl = url)
+                .streamChat(prompt = "hi").collectList().block(Duration.ofSeconds(5))
+            assertEquals(null, capturedToken.get(), "leerer Token darf KEINEN Header senden")
+        }
 }

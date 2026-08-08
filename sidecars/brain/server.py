@@ -36,20 +36,20 @@ Start (Voice-Stack runter + Klassifikation pausiert → RAM frei):
 import argparse
 import copy
 import gc
-import glob
+import hmac
 import json
 import os
 import re
-import shutil
+import subprocess
+import sys
 import time
 from typing import List, Optional
 
 import uvicorn
 import mlx.core as mx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from huggingface_hub import snapshot_download
 from mlx_lm import load, stream_generate
 from mlx_lm.models.cache import make_prompt_cache, LRUPromptCache
 
@@ -93,12 +93,12 @@ ALLOWED_SWITCH_MODELS = {
     "mlx-community/gemma-4-e4b-it-4bit",
     "mlx-community/gemma-4-12B-it-4bit",
 }
-# Serialisiert NUR die kurze Check-und-Setz-Entscheidung eines /switch-model-Aufrufs
-# (Whitelist/Already-active/Cache/Pin/Disk) — NICHT den langen Download/Swap selbst
-# (der laeuft ggf. in einem Hintergrund-Thread weiter, s. _download_and_swap).
+# Serialisiert nur Check-und-Setz sowie den Wechsel-State. Der potentiell mehrere
+# Sekunden lange Vollhash laeuft ausserhalb dieses Locks; das alte Modell bedient
+# dabei weiter Turns. Ein zweiter Wechsel sieht `_switching` und bekommt 409.
 _SWITCH_LOCK = threading.Lock()
-_switching = False                     # True waehrend Download ODER Swap laeuft
-_switch_phase: Optional[str] = None    # "downloading" | "loading" | None
+_switching = False                     # True waehrend Verifikation ODER Swap
+_switch_phase: Optional[str] = None    # "verifying" | "loading" | None
 _switch_target: Optional[str] = None   # Ziel-Modell des laufenden Wechsels
 _switch_error: Optional[str] = None    # letzter Fehlertext (ueberlebt bis zum naechsten Versuch)
 # time.time() bei Beginn des GERADE laufenden Wechsels (None = kein Wechsel aktiv).
@@ -120,14 +120,19 @@ _SWITCH_GEN_LOCK_TIMEOUT_S = 120
 # KEINE stille Auto-Raeumung des Zustands ohne Beleg (Andi-Vorgabe). Watchdog/heal
 # entscheidet auf Basis dieser Telemetrie, nicht der Server selbst.
 _SWITCH_STUCK_THRESHOLD_S = 5 * 60
-# Revisions-Incident 3.0 (2026-07-20 14:24): ein ungepinnter snapshot_download() hat
-# real refs/main verbogen + .incomplete-Leichen hinterlassen. Downloads via
-# /switch-model laufen deshalb NUR gegen die in models.json gepinnte Revision —
-# fehlt der Pin, wird bewusst NICHT blind heruntergeladen (409 statt Risiko).
-_MODELS_JSON_PATH = os.path.normpath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "models.json")
+# Revisions-Incident 3.0 (2026-07-20 14:24): ein Runtime-Download hat real
+# refs/main verbogen + .incomplete-Leichen hinterlassen. `/switch-model` lädt
+# deshalb gar nicht mehr: Es akzeptiert nur einen v2-Lock und einen vollständig
+# offline verifizierten Snapshot. Beschaffung bleibt ein separater menschlicher
+# Zug über tools/verified_fetch.py (Lizenzentscheidung nie im Server).
+_REPO_ROOT = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 )
-_MIN_FREE_DISK_BYTES = 8 * 1024 ** 3   # 8 GB Sicherheitsmarge vor einem Modell-Download
+_MODELS_JSON_PATH = os.path.normpath(
+    os.path.join(_REPO_ROOT, "models.json")
+)
+_VERIFIED_FETCH_PATH = os.path.join(_REPO_ROOT, "tools", "verified_fetch.py")
+_MODEL_VERIFY_TIMEOUT_S = 120
 
 # ── T372: MLX-Streams sind thread-gebunden ──────────────────────────────────
 # mlx_lm legt seinen `generation_stream` beim Import im MAIN-Thread an
@@ -343,6 +348,27 @@ class ScoreRequest(BaseModel):
 
 
 app = FastAPI(title="hoshi-e4b-llm")
+
+# ── Optionale Token-Wand (HOSHI_SIDECAR_TOKEN, Codex-Sicherheits-P0 2026-07-27) ──
+# Alle 6 Sidecars binden 0.0.0.0 ohne Auth (vom LAN aus tokenlos abfragbar).
+# Diese Wand ist BEWUSST opt-in: HOSHI_SIDECAR_TOKEN leer/ungesetzt ⇒ exakt
+# heutiges Verhalten (offen, NULL Verhaltensänderung — das Produktiv-Setup
+# ct-106↔Mac-Sidecars läuft unverändert weiter). Gesetzt ⇒ jeder Request AUSSER
+# /health (Watchdogs/doctor/IP-Sync/pipeline/stack-lib.sh dürfen nie sterben)
+# muss den Header X-Hoshi-Token exakt tragen — hmac.compare_digest (timing-
+# sicher) statt `==`, sonst 401 mit knappem JSON-Body. Gleiche Wand/Env-Var/
+# Header/health-Ausnahme in allen 6 Sidecars (server.py je brain/stt/speaker/
+# knowledge/piper/say) — hier als FastAPI-Middleware.
+_HOSHI_SIDECAR_TOKEN = os.environ.get("HOSHI_SIDECAR_TOKEN", "")
+
+
+@app.middleware("http")
+async def _hoshi_token_wall(request: Request, call_next):
+    if _HOSHI_SIDECAR_TOKEN and request.url.path != "/health":
+        supplied = request.headers.get("x-hoshi-token", "")
+        if not hmac.compare_digest(supplied, _HOSHI_SIDECAR_TOKEN):
+            return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+    return await call_next(request)
 
 
 def build_prompt(messages: List[Msg], tools=None) -> str:
@@ -606,7 +632,7 @@ def _build_opener_bias_processor():
     return _processor
 
 
-# ── POST /switch-model: Whitelist, Cache-Guard, Download+Swap ───────────────
+# ── POST /switch-model: Whitelist, Lock-Verify, Swap ───────────────────────
 def _load_model(model_id: str):
     """Injektionspunkt fuers Laden — der EINZIGE Aufrufer von mlx_lm.load() im
     ganzen Server (main() beim Start, _do_swap() beim Wechsel). Tests patchen
@@ -646,77 +672,96 @@ def _unload_model() -> None:
         print(f"  [e4b] switch-model: clear_cache fehlgeschlagen ({e}) → weiter")
 
 
-def _model_fully_cached(model_id: str) -> bool:
-    """Python-Nachbau des run.sh-Start-Guards (Brief-15-Prinzip): NIE das laufende
-    Brain fuer ein Ziel opfern, das nur unvollstaendig im HF-Cache liegt. Gleiche
-    Pruefung wie dort: Snapshot ueberhaupt vorhanden, keine *.incomplete-Reste,
-    *.safetensors vorhanden, refs/main zeigt auf einen echten Snapshot-Ordner.
-    local_files_only=True -> rein lesend, kein Netz-Zugriff."""
-    try:
-        path = snapshot_download(model_id, local_files_only=True)
-    except Exception:
-        return False  # kein Snapshot lokal
-    repo_root = os.path.dirname(os.path.dirname(path))  # …/models--org--name
-    if glob.glob(os.path.join(repo_root, "blobs", "*.incomplete")):
-        return False  # abgebrochener Download
-    if not glob.glob(os.path.join(path, "*.safetensors")):
-        return False  # keine Gewichte
-    refs_main = os.path.join(repo_root, "refs", "main")
-    if os.path.isfile(refs_main):
-        try:
-            with open(refs_main, "rb") as f:
-                raw = f.read()
-            ref_hash = raw.strip().decode("ascii", "replace")
-        except Exception:
-            return False  # refs/main nicht lesbar
-        if not ref_hash or not os.path.isdir(os.path.join(repo_root, "snapshots", ref_hash)):
-            return False  # refs/main leer/kaputt oder zeigt ins Leere
-    return True
-
-
-def _lookup_pinned_revision(model_id: str) -> Optional[str]:
-    """Liest models.json (Repo-Root) und liefert die pinned_revision des Eintrags
-    mit hf_repo == model_id. None = kein Eintrag ODER kein Pin gesetzt — der
-    Aufrufer MUSS dann mit 409 ablehnen statt blind zu downloaden (s. Revisions-
-    Incident-Kommentar bei _MODELS_JSON_PATH oben)."""
+def _lookup_model_lock(model_id: str) -> Optional[dict]:
+    """Liefert nur einen vollstaendigen v2-HF-Lock fuer die konkrete Repo-ID."""
     try:
         with open(_MODELS_JSON_PATH, "r", encoding="utf-8") as f:
             manifest = json.load(f)
+        if manifest.get("version") != 2:
+            return None
         for entry in manifest.get("models", []):
             if entry.get("hf_repo") == model_id:
-                return entry.get("pinned_revision")
+                artifact_id = entry.get("id")
+                pin = entry.get("pinned_revision")
+                if entry.get("type") != "hf":
+                    return None
+                if not isinstance(artifact_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", artifact_id):
+                    return None
+                if not isinstance(pin, str) or not re.fullmatch(r"[0-9a-f]{40}", pin):
+                    return None
+                return {
+                    "id": artifact_id,
+                    "pinned_revision": pin,
+                    "license_acceptance": entry.get("license_acceptance"),
+                }
     except Exception as e:  # noqa: BLE001
-        print(f"  [e4b] switch-model: models.json nicht lesbar ({e}) → kein Pin")
+        print(f"  [e4b] switch-model: models.json nicht lesbar ({type(e).__name__}) → kein Lock")
     return None
 
 
-def _free_disk_bytes() -> int:
-    """Freier Speicherplatz auf dem Dateisystem, das den HF-Cache traegt (dort
-    landet der Download). Existiert der Cache-Ordner noch nicht, wird gegen
-    $HOME geprueft (dieselbe Partition im Normalfall)."""
+def _verify_model_artifact(artifact_id: str) -> bool:
+    """Vollhash ueber den zentralen Fetcher; garantiert ohne Netz/Mutation."""
+    env = os.environ.copy()
+    env["HF_HUB_OFFLINE"] = "1"
     try:
-        from huggingface_hub.constants import HF_HUB_CACHE
-        path = HF_HUB_CACHE if os.path.isdir(HF_HUB_CACHE) else os.path.expanduser("~")
-    except Exception:  # noqa: BLE001
-        path = os.path.expanduser("~")
-    return shutil.disk_usage(path).free
+        result = subprocess.run(
+            [sys.executable, _VERIFIED_FETCH_PATH, "verify", artifact_id],
+            cwd=_REPO_ROOT,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=_MODEL_VERIFY_TIMEOUT_S,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"  [e4b] switch-model: Lock-Verifikation nicht ausführbar ({type(e).__name__})")
+        return False
+    return result.returncode == 0
 
 
-def _switch_download_progress_bytes(model_id: Optional[str]) -> Optional[int]:
-    """Billige Fortschritts-Naeherung waehrend eines laufenden Downloads: Summe der
-    Bytes, die schon im HF-Cache-Blobs-Ordner liegen (inkl. *.incomplete-Teilstuecke).
-    BEWUSST kein Prozent/Total — das braeuchte eine Netz-Anfrage (Andi-Vorgabe:
-    "kein Overengineering"). None = (noch) nichts lesbar, nie ein Fehler."""
-    if not model_id:
-        return None
+def _fetch_instruction(lock: dict) -> str:
+    gate = lock.get("license_acceptance")
+    suffix = f" --accept-license {gate}" if isinstance(gate, str) and gate else ""
+    return (
+        "sidecars/brain/.venv/bin/python tools/verified_fetch.py fetch "
+        f"{lock['id']}{suffix}"
+    )
+
+
+def _verify_and_swap(target: str, lock: dict) -> None:
+    """Hintergrund-Worker: offline vollhashen, erst bei PASS tauschen."""
+    global _switching, _switch_phase, _switch_target, _switch_error, _switch_started_ts
+    if not _verify_model_artifact(lock["id"]):
+        instruction = _fetch_instruction(lock)
+        _switch_error = (
+            f"Ziel '{target}' ist nicht vollständig gegen models.json verifiziert. "
+            f"Nach Prüfung der Lizenzbedingungen bewusst ausführen: {instruction}"
+        )
+        print(f"  [e4b] switch-model: Lock-Verifikation fehlgeschlagen → altes Modell bleibt")
+        _switching = False
+        _switch_phase = None
+        _switch_target = None
+        _switch_started_ts = None
+        return
     try:
-        from huggingface_hub.constants import HF_HUB_CACHE
-        folder = "models--" + model_id.replace("/", "--")
-        blobs_dir = os.path.join(HF_HUB_CACHE, folder, "blobs")
-        return sum(os.path.getsize(p) for p in glob.glob(os.path.join(blobs_dir, "*"))
-                   if os.path.isfile(p))
-    except Exception:  # noqa: BLE001
-        return None
+        result = _do_swap(target)
+        print(
+            f"  ✓ [e4b] switch-model: Vollhash+Wechsel zu '{target}' "
+            f"erfolgreich ({result['loadMs']}ms Ladezeit)"
+        )
+    except HTTPException as e:
+        print(f"  [e4b] switch-model: Wechsel nach Vollhash fehlgeschlagen ({e.detail})")
+    except Exception as e:  # noqa: BLE001
+        print(f"  [e4b] switch-model: Wechsel nach Vollhash unerwarteter Fehler ({type(e).__name__})")
+
+
+def _start_verify_worker(target: str, lock: dict) -> None:
+    threading.Thread(
+        target=_verify_and_swap,
+        args=(target, lock),
+        name="switch-model-verify",
+        daemon=True,
+    ).start()
 
 
 def _do_swap(target: str) -> dict:
@@ -724,8 +769,8 @@ def _do_swap(target: str) -> dict:
     (bestehender _GEN_LOCK, s. _SWITCH_GEN_LOCK_TIMEOUT_S), dann ZUERST entladen
     (16-GB-Wand), DANN laden. Erwartet, dass der Aufrufer _switching/_switch_target
     bereits gesetzt hat (Zusicherung: kein zweiter Wechsel laeuft parallel — s.
-    _SWITCH_LOCK am Aufrufer). Wird sowohl synchron (Ziel bereits im Cache) als auch
-    aus dem Hintergrund-Download-Thread (Ziel musste erst geladen werden) aufgerufen.
+    _SWITCH_LOCK am Aufrufer). Der Ziel-Snapshot wurde davor vollständig über
+    `_verify_model_artifact` gehasht; diese Funktion beschafft keine Bytes.
 
     Gibt die Sperre die haengende Generierung nicht innerhalb von
     _SWITCH_GEN_LOCK_TIMEOUT_S frei, wird 503 geworfen und der Wechsel-Zustand
@@ -790,44 +835,6 @@ def _do_swap(target: str) -> dict:
         _GEN_LOCK.release()
 
 
-def _download_and_swap(target: str, pinned_revision: str) -> None:
-    """Hintergrund-Worker (eigener Thread): laedt das ZIEL NUR ueber die in
-    models.json gepinnte Revision (nie 'main'/HEAD — Revisions-Incident 3.0, s.o.),
-    dann — nur bei Erfolg — der eigentliche Tausch via _do_swap. Waehrend des
-    Downloads bleibt das ALTE Modell voll im Einsatz (kein Entladen, kein 503):
-    genau das ist der Zweck dieses Pfads — es gibt IMMER ein funktionierendes Brain.
-    Jeder Fehler hier laesst das alte Modell unangetastet und meldet ehrlich via
-    _switch_error (sichtbar in /health)."""
-    global _switching, _switch_phase, _switch_target, _switch_error, _switch_started_ts
-    try:
-        snapshot_download(target, revision=pinned_revision)
-    except Exception as e:  # noqa: BLE001
-        _switch_error = f"Download fehlgeschlagen: {type(e).__name__}: {e}"
-        print(f"  [e4b] switch-model: {_switch_error} → altes Modell bleibt unveraendert im Einsatz")
-        _switching = False
-        _switch_phase = None
-        _switch_target = None
-        _switch_started_ts = None
-        return
-    if not _model_fully_cached(target):
-        _switch_error = ("Download gemeldet abgeschlossen, aber Cache-Check danach "
-                          "weiterhin unvollstaendig")
-        print(f"  [e4b] switch-model: {_switch_error} → Abbruch, altes Modell bleibt")
-        _switching = False
-        _switch_phase = None
-        _switch_target = None
-        _switch_started_ts = None
-        return
-    try:
-        result = _do_swap(target)
-        print(f"  ✓ [e4b] switch-model: Hintergrund-Download+Wechsel zu '{target}' "
-              f"erfolgreich ({result['loadMs']}ms Ladezeit)")
-    except HTTPException as e:
-        print(f"  [e4b] switch-model: Wechsel nach Download fehlgeschlagen ({e.detail})")
-    except Exception as e:  # noqa: BLE001
-        print(f"  [e4b] switch-model: Wechsel nach Download unerwarteter Fehler ({e})")
-
-
 class SwitchModelRequest(BaseModel):
     model: str
 
@@ -837,10 +844,10 @@ def switch_model(req: SwitchModelRequest):
     """Modellwechsel e2b↔e4b im selben Prozess. Whitelist HART (422 sonst).
     Ziel bereits aktiv -> 200 changed:false. Zweiter Aufruf waehrend eines
     laufenden Wechsels -> 409 (Text traegt die Dauer "seit Xs", damit man Haengen
-    von normalem Arbeiten unterscheiden kann). Ziel schon vollstaendig im Cache ->
-    synchroner Tausch (entladen->laden, s. _do_swap). Ziel fehlt/unvollstaendig ->
-    NICHT das laufende Brain opfern: Download NUR gegen den models.json-Pin im
-    Hintergrund (202), das ALTE Modell bedient waehrenddessen unveraendert weiter."""
+    von normalem Arbeiten unterscheiden kann). Vor jedem Tausch wird der konkrete
+    v2-Lock vollständig offline gehasht. Der Endpoint bestätigt den gestarteten
+    Verify-Zug mit 202; fehlt/driftet der Snapshot, bleiben altes Modell und
+    `switch_error` mit bewusstem Fetch-Befehl erhalten. Kein Runtime-Download."""
     global _switching, _switch_phase, _switch_target, _switch_error, _switch_started_ts
     target = req.model
     if target not in ALLOWED_SWITCH_MODELS:
@@ -862,44 +869,38 @@ def switch_model(req: SwitchModelRequest):
         if target == MODEL_ID and _loaded:
             return {"status": "ok", "model": MODEL_ID, "changed": False}
 
-        pin = None
-        if _model_fully_cached(target):
-            phase = "loading"
-        else:
-            pin = _lookup_pinned_revision(target)
-            if pin is None:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Ziel '{target}' liegt nicht vollstaendig im Cache UND hat "
-                           "keinen Pin in models.json — bewusst kein ungepinnter Download "
-                           "(Revisions-Incident 3.0).",
-                )
-            free = _free_disk_bytes()
-            if free < _MIN_FREE_DISK_BYTES:
-                raise HTTPException(
-                    status_code=507,
-                    detail=f"Nur {free // (1024 ** 3)} GB frei, mind. "
-                           f"{_MIN_FREE_DISK_BYTES // (1024 ** 3)} GB fuer den Download "
-                           "noetig — Wechsel abgebrochen, aktuelles Modell bleibt geladen.",
-                )
-            phase = "downloading"
+        lock = _lookup_model_lock(target)
+        if lock is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ziel '{target}' hat keinen vollständigen v2-Lock in models.json — "
+                       "bewusst kein ungepinnter Modellwechsel.",
+            )
 
         _switching = True
-        _switch_phase = phase
+        _switch_phase = "verifying"
         _switch_target = target
         _switch_error = None
         _switch_started_ts = time.time()
 
-    if phase == "loading":
-        return _do_swap(target)
-
-    # Ziel fehlt/unvollstaendig: Download im Hintergrund, ALTES Modell laeuft weiter.
-    threading.Thread(
-        target=_download_and_swap, args=(target, pin),
-        name="switch-model-download", daemon=True,
-    ).start()
+    # Vollhash + Swap im Hintergrund: Der BE-Client hat einen 5s-Accept-Timeout,
+    # grosse Modelle brauchen fuer Hash+Load laenger. Waehrend "verifying"
+    # bedient das alte Brain weiter; erst `_do_swap` setzt kurz "loading".
+    try:
+        _start_verify_worker(target, lock)
+    except Exception as e:  # noqa: BLE001 — kein haengender Wechsel-State
+        with _SWITCH_LOCK:
+            _switch_error = (
+                "Verify-Worker konnte nicht gestartet werden "
+                f"({type(e).__name__}). Altes Modell bleibt geladen."
+            )
+            _switching = False
+            _switch_phase = None
+            _switch_target = None
+            _switch_started_ts = None
+        raise HTTPException(status_code=503, detail=_switch_error) from e
     return JSONResponse(status_code=202, content={
-        "status": "downloading", "model": MODEL_ID, "target": target, "changed": False,
+        "status": "verifying", "model": MODEL_ID, "target": target, "changed": False,
     })
 
 
@@ -910,17 +911,15 @@ def health():
         "model": MODEL_ID,
         "loaded": _loaded,
         # POST /switch-model-Telemetrie (ehrlich statt still, s. Endpoint oben):
-        # switch_phase unterscheidet "downloading" (altes Modell bedient normal
+        # switch_phase unterscheidet "verifying" (altes Modell bedient normal
         # weiter) von "loading" (echter Tausch, /v1/chat lehnt kurz mit 503 ab).
         # switch_error ueberlebt bis zum naechsten Versuch (Betreiber-Diagnose).
         "switching": _switching,
         "switch_phase": _switch_phase,
         "switch_target": _switch_target,
         "switch_error": _switch_error,
-        "switch_download_bytes": (
-            _switch_download_progress_bytes(_switch_target)
-            if _switch_phase == "downloading" else None
-        ),
+        # Kompatibilitaetsfeld: Runtime-Downloads gibt es nicht mehr.
+        "switch_download_bytes": None,
         # Dead-Man-Sichtbarkeit (KEINE Auto-Raeumung, s. _SWITCH_STUCK_THRESHOLD_S):
         # nur gesetzt, wenn `switching=true` seit mehr als der Schwelle ansteht —
         # das ist der ehrliche Beleg fuer Watchdog/heal, dass hier etwas haengt
@@ -1003,9 +1002,7 @@ def _persona_fetch(tokens: List[int]):
 def chat(req: ChatRequest):
     # POST /switch-model: waehrend der echten Lade-Phase ist _model/_tok kurz WEG
     # (entladen, noch nicht ersetzt) — ehrlich 503 statt gegen _tok=None zu crashen.
-    # Waehrend eines reinen Hintergrund-DOWNLOADS bedient das alte Modell unveraendert
-    # weiter (kein Guard hier — genau das ist der Zweck des Downloads-im-Hintergrund:
-    # es gibt IMMER ein funktionierendes Brain).
+    # Waehrend des reinen Vollhashs bedient das alte Modell unveraendert weiter.
     if _switching and _switch_phase == "loading":
         raise HTTPException(
             status_code=503,

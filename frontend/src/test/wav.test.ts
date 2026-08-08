@@ -1,12 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   ENROLL_SAMPLE_RATE,
+  WavConvertError,
   downsampleTo,
   encodeWavPcm16,
   mixToMono,
   wavBlobFromPcm,
   type MonoMixSource,
 } from '../audio/wav';
+import { getActiveUiLanguage, setActiveUiLanguage } from '../i18n';
 
 /** Vier ASCII-Bytes ab `offset` als String lesen (RIFF/WAVE/fmt /data-Marker prüfen). */
 function ascii(buf: ArrayBuffer, offset: number, len = 4): string {
@@ -79,6 +81,31 @@ describe('mixToMono — Mehrkanal → ein Kanal', () => {
     expect(out[0]).toBeCloseTo(0.5, 6);
     expect(out[1]).toBeCloseTo(0, 6);
     expect(out[2]).toBeCloseTo(0, 6);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Fünf-Sprachen-Sweep 2026-07-27: `WavConvertError.message` landet wörtlich im
+//  Anlern-Dialog (der reguläre Voice-Turn fängt sie still ab), die Standard-
+//  Nachricht kam bisher hart deutsch statt aus dem aktiven UI-Katalog.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('WavConvertError — Default-Nachricht folgt der aktiven UI-Sprache', () => {
+  afterEach(() => setActiveUiLanguage('de'));
+
+  it('Deutsch (Default): byte-gleich zum Bestand', () => {
+    expect(getActiveUiLanguage()).toBe('de');
+    expect(new WavConvertError().message).toBe('Aufnahme ließ sich nicht in WAV umwandeln.');
+  });
+
+  it.each([
+    ['es', 'No se pudo convertir la grabación a WAV.'],
+    ['fr', "Impossible de convertir l'enregistrement en WAV."],
+    ['it', 'Impossibile convertire la registrazione in WAV.'],
+    ['en', 'Could not convert the recording to WAV.'],
+  ] as const)('%s: übersetzte Default-Nachricht', (lang, expected) => {
+    setActiveUiLanguage(lang);
+    expect(new WavConvertError().message).toBe(expected);
   });
 });
 

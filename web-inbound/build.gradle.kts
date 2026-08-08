@@ -98,7 +98,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test") {
         exclude(group = "ch.qos.logback", module = "logback-classic")
     }
-    testImplementation("io.projectreactor:reactor-test:3.6.9")
+    testImplementation("io.projectreactor:reactor-test:3.6.17")
 }
 
 tasks.test {

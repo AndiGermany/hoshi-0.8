@@ -704,6 +704,15 @@
   flex-direction: column;
   gap: 10px;
 }
+/* Karten-Titel-Regel (bündig-Sweep, Andi-Auftrag): `.settings__label` trägt IMMER
+   dieselbe Optik, aber zwei verschiedene Tags — welches Tag, entscheidet NICHT
+   der Geschmack, sondern die Beschriftungs-Beziehung:
+    - `<label htmlFor>`, wenn der Titel GENAU EIN Control beschriftet (Select/
+      Input/Toggle) — a11y-Gewinn, das Control ist per Klick auf den Titel
+      fokussierbar.
+    - `<h3>`, wenn der Titel eine GRUPPE beschriftet (Radiogroup mit mehreren
+      Karten, eine Liste von Zeilen/Skills/Privacy-Reihen) — kein einzelnes
+      Control, das ein `for` tragen könnte. */
 .settings__label {
   margin: 0;
   font-size: 13px;
@@ -716,12 +725,15 @@
   font-size: 12px;
   color: var(--text-4);
 }
-/* Text-Hörprobe im Persona-Picker: Beispielsatz im Ton der Auswahl, kursiv/dezent. */
+/* Text-Hörprobe im Persona-Picker: Beispielsatz im Ton der Auswahl. Sonderstil
+   NUR noch kursiv (Zitat-Kennzeichnung) — Größe/Farbe sind an `.settings__hint`
+   angeglichen (bündig-Sweep: vorher eigene, hellere Farbe `--text-3` statt
+   `--text-4`, sonst byte-gleich zu .settings__hint). */
 .settings__sample {
   margin: 0;
   font-size: 12px;
   font-style: italic;
-  color: var(--text-3);
+  color: var(--text-4);
 }
 
 /* ── Theme-Auswahl: DREI GRUPPEN statt einer 8er-Liste ──────────────────────
@@ -769,7 +781,10 @@
   grid-template-columns: 56px 1fr;
   gap: 2px 12px;
   align-items: center;
-  padding: 10px;
+  /* Innenabstand vereinheitlicht auf 10px 12px (bündig-Sweep, Mehrheitswert
+     unter den „Karte in Karte"-Containern — s. .settings__skill/.settings__
+     privacyrow/.settings__thinkmode). Vorher 10px rundum. */
+  padding: 10px 12px;
   border: 1px solid var(--bg-hairline);
   border-radius: var(--radius, 12px);
   background: var(--bg-base);
@@ -863,6 +878,8 @@
 }
 
 /* ── Wecker-Eskalation: Zahl-Input + Einheit ───────────────────────────── */
+/* Zeilen-Gap 8px — Control+Nebenelement-Zeile (die Zwei-Klassen-Regel steht
+   ausführlich bei .settings__nightdimrow weiter unten). */
 .settings__escrow {
   display: flex;
   align-items: center;
@@ -1304,6 +1321,58 @@
   outline-offset: 2px;
 }
 
+/* Aktions-Spalte einer Profil-Zeile: „Weiter anlernen" + Löschen nebeneinander,
+   vertikal zentriert wie vorher der einzelne Lösch-Knopf (Andi-Auftrag 07.08). */
+.settings__speakeractions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings__continuebtn {
+  align-self: center;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+/* Aufklappbare Aufnahmen-Liste je Profil-Zeile (Reparatur-Auftrag 07.08, Muster
+   `.feed__details`: kein eigener JS-Auf/Zu-State, native <details>/<summary>). */
+.settings__recordings {
+  margin-top: 4px;
+}
+.settings__recordings > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.settings__recordings > summary::-webkit-details-marker {
+  display: none;
+}
+.settings__recordinglist {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings__recordingrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--bg-hairline);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+.settings__recordingmeta {
+  font-size: 12px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
 /* ── Anlern-Dialog (inline, geführt) ─────────────────────────────────────────── */
 .settings__enroll {
   margin-top: 10px;
@@ -1457,7 +1526,10 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 14px;
+  /* Innenabstand vereinheitlicht auf 10px 12px (bündig-Sweep, Mehrheitswert —
+     s. .settings__skill/.settings__privacyrow/.settings__thinkmode/.settings__
+     theme). Vorher 14px rundum. */
+  padding: 10px 12px;
   border: 1px solid var(--bg-hairline);
   border-radius: var(--radius, 12px);
   background: var(--bg-base);
@@ -1556,10 +1628,20 @@
   flex-direction: column;
   gap: 8px;
 }
+/* Zeilen-Gap-Regel (bündig-Sweep): zwei Klassen, zwei Werte — NICHT Geschmack,
+   sondern was in der Zeile steht.
+    - 8px für eine reine Control+Nebenelement-Zeile: EIN Eingabe-Control plus
+      genau EIN kleines Begleit-Element (Einheit/Knopf/Vorschau-Swatch) — hier
+      Slider + Dimm-Vorschau, ebenso .settings__escrow (Zahl+Einheit) und
+      .settings__weatherrow (Text+Speichern-Knopf).
+    - 12px für eine Listen-Zeile mit Meta+Toggle: mehrzeiliges Meta (Name +
+      Detail/Badges) neben einem Schalter — .settings__skill, .settings__
+      privacyrow. Die zwei Textzeilen brauchen mehr Luft zum Schalter als ein
+      einzelnes Begleit-Element zu seinem Control. */
 .settings__nightdimrow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 .settings__range {
   flex: 1;

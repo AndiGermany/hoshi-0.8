@@ -5,6 +5,78 @@ Alle nennenswerten Änderungen an Hoshi. Format lose an
 noch keine erste stabile Version, Einträge sind daher grob nach Thema statt
 nach Release sortiert.
 
+## 0.8.4 — Einladung 🌠 (2026-08-08)
+
+Die Version, die Fremde hereinbittet: ein Befehl statt einer Abschrift, eine
+Wahrheit statt dreier Meinungen, ein Schloss mit Schlüssel auf beiden Seiten —
+und eine Anlern-UI, die aus einem chaotischen Familien-Abend gelernt hat.
+
+### Installierbar: der kürzeste Weg wird ein Vierzeiler
+
+- **`bin/hoshi preflight`** sagt read-only, ob diese Maschine Hoshi fahren kann
+  (Tools, JDK, Platte, RAM, Ports, Modelle) — mit `--profile split` für den
+  Zwei-Maschinen-Fall, der nur druckt, was zu setzen wäre, statt zu raten.
+- **`bin/hoshi setup`** orchestriert die bisherige Abtipp-Folge idempotent:
+  zweiter Lauf in unter einer Sekunde, alles „schon da". Modelle lädt er nie
+  selbst — Lizenz-Klicks bleiben menschlich.
+- **Verifizierte Beschaffung:** `models.json` v2 trägt volle Revision, Bytes
+  und SHA-256 je Modell; `tools/verified_fetch.py` holt Hash-geprüft, mit
+  Resume, Lizenz-Gates und atomarer Aktivierung (Codex-Paket). Auch die zwei
+  Beschaffungswege zur Laufzeit sind jetzt fail-closed: `/switch-model` lädt
+  nur noch hash-verifizierte Snapshots, und der STT-Erstpull läuft nicht mehr
+  lautlos an den Pins vorbei.
+- **Frischklon-CI:** drei Jobs beweisen, dass ein nackter Checkout baut, die
+  Suiten grün sind und die echte Version im Bundle steckt.
+- **Eine Modell-Wahrheit:** models.json sagt e4b, die Skripte sagen e4b, und
+  der neue doctor-Check `model-truth` meldet DEGRADED, falls je wieder eine
+  Seite ohne die andere dreht. Die Version kommt überall aus gradle.properties
+  — die Kopfzeile von `bin/hoshi` behauptete zuletzt „0.8.2".
+
+### Sicherheit: die Tür bekommt ein Schloss (opt-in)
+
+- Alle sechs Sidecars kennen jetzt eine Token-Wand (`HOSHI_SIDECAR_TOKEN` /
+  `X-Hoshi-Token`, timing-sicher, `/health` bleibt immer offen), und das
+  Backend kann den Schlüssel auf allen Client-Pfaden tragen. Ungesetzt ändert
+  sich nichts; der Live-Flip folgt bewusst erst, wenn auch Werkzeuge und
+  Deploy denselben Schlüssel beweisen können (Red-Team-Checkliste, Codex).
+
+### Bedienbar: Settings, Räume, Sprecher
+
+- **Räume S1:** ehrliche Kopfzeile („x von y zugeordnet"), Suche als primäre
+  Navigation, vier Domänen-Chips, „Braucht dich"-Inbox mit vorbelegtem
+  Raum-Vorschlag — geschrieben wird erst auf „Bestätigen". Und „living room"
+  findet das Wohnzimmer wieder (die englischen Aliase waren seit dem 16.07.
+  in Prod verloren).
+- **Turn-Feed** zeigt die letzten 25 mit Tages-Trennern und lädt Frühere auf
+  Wunsch nach — statt einfach nur zu wachsen.
+- **TTS-Engine ist ein Dropdown**, Stimm-Details erscheinen nur zur passenden
+  Engine; das Nachschlag-Modell erscheint nur, wenn Online überhaupt an ist.
+  Dazu ein Bündigkeits-Pass: ein Raster, eine Titel-Regel, ein Innenabstand.
+- **Sprecher-Anlernen nach dem 08.08.-Abend:** „Weiter anlernen" per Klick
+  (kein Namen-Tippen mehr), aufklappbare Aufnahmen-Liste mit ehrlichem
+  „passt gut/mäßig/nicht" und Einzel-Löschen (neue BE-Naht mit Zentroid-
+  Neumittelung), Riegel gegen den stillen Profil-Ersatz am vollen Profil,
+  und der Hinweis, der den Abend gerettet hätte: eine Person, ein Raum.
+
+### Betrieb: bewiesen statt behauptet
+
+- **Graceful Shutdown am echten Turn gemessen:** ein Restart wartet auf den
+  laufenden Turn (17 s beobachtet), der Stream endet mit sauberem `done`.
+- Zwei Zeitbomben-Tests entschärft (TTL gegen die Wanduhr — dritter Vorfall
+  dieser Klasse, jetzt mit injizierter Uhr), grüne Dependency-Bumps mit
+  `--rerun-tasks`-Beweis, Vitest 4/jsdom 30 bei byte-gleichem Bundle.
+- Der Frischklon ist 0.5-frei (Audit über 12 Dateien); was nur auf der
+  Referenz-Maschine läuft, ist jetzt ehrlich so beschriftet.
+
+### Satellit: aufgeräumt für Fremde
+
+- Eigenes Repo überarbeitet: **ein Substitutions-Kopf statt 626 Zeilen
+  anfassen**, bewiesene Version-Pins, XMOS-Reflash nur noch als Opt-in,
+  OTA-Passwort scharf, WLAN-Rettungsweg, `secrets.yaml.example` — und das
+  trainierte „Hey Hoshi"-Wake-Modell als **GitHub-Release-Asset**
+  (`hey-hoshi-v1`), Blobs bleiben aus dem Git. Der Export dorthin ist jetzt
+  ein wiederholbares Skript mit blockierendem Sanitize-Scan statt Handarbeit.
+
 ## 0.8.3 — Suisei ☄ (2026-07-26)
 
 Ein einziger Tag, aber ein dichter: die Wissens-Kette geht live, die Modelle wählen sich selbst,

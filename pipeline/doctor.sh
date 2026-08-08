@@ -55,6 +55,79 @@ case "$BRAIN_STATUS" in
     WEDGE|LOADING)  note_degraded ;;
 esac
 
+# ── Modell-Wahrheit (models.json required vs. stack-lib.sh-Default) ────────
+# EINE Wahrheit (Codex' P0-Fund 2026-07-27, „EINE Modell-Wahrheit"): models.json
+# markiert per required=true, welches Brain-Modell der Stack tatsaechlich
+# faehrt (0.8.3: brain-e4b). Hier gegen den echten HOSHI_BRAIN_MODEL-Default
+# in stack-lib.sh gegengelesen (JSON-Parse via python3 -c, NICHT jq — dessen
+# Verfuegbarkeit ist nicht garantiert). Divergenz heisst: eine Seite wurde
+# geaendert, ohne die andere nachzuziehen — DEGRADED, KEIN Hard-Fail (der
+# Stack laeuft ja trotzdem, nur Manifest und Betriebs-Default sind
+# auseinandergelaufen — genau das Muster, das den Fund ausgeloest hat).
+model_truth_check() {
+    local models_json="$REPO_ROOT/models.json"
+    local stacklib="$REPO_ROOT/pipeline/stack-lib.sh"
+    if [ ! -f "$models_json" ]; then
+        row "model-truth" "-" "$(st DEGRADED)" "models.json fehlt — Wahrheit nicht pruefbar"
+        note_degraded
+        return
+    fi
+    local required
+    required="$(python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as exc:
+    print("ERROR:" + str(exc))
+    sys.exit(0)
+ids = [m.get("id", "?") for m in data.get("models", [])
+       if str(m.get("id", "")).startswith("brain-") and m.get("required") is True]
+if len(ids) == 1:
+    print(ids[0])
+elif not ids:
+    print("NONE")
+else:
+    print("MULTI:" + ",".join(ids))
+' "$models_json" 2>/dev/null)"
+
+    local default_tok
+    default_tok="$(sed -n 's/^HOSHI_BRAIN_MODEL="\${HOSHI_BRAIN_MODEL:-\([^}]*\)}".*/\1/p' "$stacklib" 2>/dev/null | head -1)"
+
+    case "$required" in
+        ERROR:*)
+            row "model-truth" "-" "$(st DEGRADED)" "models.json nicht lesbar (${required#ERROR:})"
+            note_degraded
+            ;;
+        ""|NONE)
+            row "model-truth" "-" "$(st DEGRADED)" "kein required=true Brain-Modell in models.json markiert"
+            note_degraded
+            ;;
+        MULTI:*)
+            row "model-truth" "-" "$(st DEGRADED)" "mehrere required=true Brain-Modelle markiert (uneindeutig): ${required#MULTI:}"
+            note_degraded
+            ;;
+        *)
+            if [ -z "$default_tok" ]; then
+                row "model-truth" "-" "$(st DEGRADED)" "stack-lib.sh HOSHI_BRAIN_MODEL-Default nicht gefunden (grep leer)"
+                note_degraded
+            else
+                local req_tok req_tok_lc default_tok_lc
+                req_tok="${required#brain-}"
+                req_tok_lc="$(printf '%s' "$req_tok" | tr '[:upper:]' '[:lower:]')"
+                default_tok_lc="$(printf '%s' "$default_tok" | tr '[:upper:]' '[:lower:]')"
+                if [ "$req_tok_lc" = "$default_tok_lc" ]; then
+                    row "model-truth" "-" "$(st OK)" "models.json required=$required == stack-lib.sh Default ($default_tok)"
+                else
+                    row "model-truth" "-" "$(st DEGRADED)" "DIVERGENZ: models.json required=$required, stack-lib.sh Default=$default_tok — eine Seite nachziehen"
+                    note_degraded
+                fi
+            fi
+            ;;
+    esac
+}
+model_truth_check
+
 # ── Ollama (Embeddings) — kritisch ──────────────────────────────────────────
 OLLAMA_PS="$(curl -s -m 3 "$OLLAMA_URL/api/ps" 2>/dev/null || true)"
 if [ -n "$OLLAMA_PS" ] && printf '%s' "$OLLAMA_PS" | grep -q '"models"'; then

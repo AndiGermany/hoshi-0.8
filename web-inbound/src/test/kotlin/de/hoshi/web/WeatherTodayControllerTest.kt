@@ -102,6 +102,63 @@ class WeatherTodayControllerTest {
             assertTrue((captured.get() ?: "").contains("daily"), "Open-Meteo wurde angefragt: ${captured.get()}")
         }
 
+    /**
+     * **Flur-Fertigstellung 2026-07-27:** dieselbe Antwort wie [forecastJson], aber
+     * mit `current.time`, `daily.sunrise`/`sunset` und einem `hourly`-Block —
+     * beweist, dass die additiven Felder bis zum HTTP-Body durchgereicht werden
+     * (nicht nur im Provider, s. `WeatherGroundingProviderTest`).
+     */
+    private val richForecastJson = """
+        {
+          "latitude": 52.52,
+          "longitude": 13.41,
+          "current": { "temperature_2m": 14.2, "weathercode": 61, "time": "2026-07-05T12:00" },
+          "daily": {
+            "time": ["2026-07-05", "2026-07-06"],
+            "temperature_2m_max": [19.4, 22.1],
+            "temperature_2m_min": [11.3, 13.0],
+            "precipitation_sum": [3.4, 0.0],
+            "weathercode": [61, 2],
+            "sunrise": ["2026-07-05T05:20"],
+            "sunset": ["2026-07-05T21:20"]
+          },
+          "hourly": {
+            "time": ["2026-07-05T12:00", "2026-07-05T13:00"],
+            "temperature_2m": [18, 19],
+            "precipitation_probability": [15, 25]
+          }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `200 - additive Felder (nowTemp, morgen, hourly, sunrise-sunset) kommen bis in den HTTP-Body durch`() =
+        withOpenMeteo(richForecastJson) { url, _ ->
+            val body = get(controller(url)).body as WeatherGroundingProvider.TodayForecast
+
+            assertEquals(14, body.nowTemp, "14.2 gerundet")
+            assertEquals("leichter Regen", body.nowCodeText)
+            assertEquals(13, body.tomorrowMin)
+            assertEquals(22, body.tomorrowMax)
+            assertEquals("teilweise bewölkt", body.tomorrowCodeText)
+            assertEquals(2, body.hourly.size)
+            assertTrue(body.sunriseEpochMs != null && body.sunsetEpochMs != null, "Sonnenzeiten da")
+        }
+
+    @Test
+    fun `200 - additive Felder bleiben null-leer, wenn Open-Meteo sie (noch) nicht liefert (Alt-Format)`() =
+        withOpenMeteo(forecastJson) { url, _ ->
+            // forecastJson hat current OHNE "time", KEIN hourly, KEIN sunrise/sunset —
+            // ehrliches Weglassen statt erfundener Werte, die Bestandsfelder bleiben da.
+            val body = get(controller(url)).body as WeatherGroundingProvider.TodayForecast
+
+            assertEquals(14, body.nowTemp, "current.temperature_2m ist trotzdem da")
+            assertEquals("leichter Regen", body.nowCodeText)
+            assertEquals(13, body.tomorrowMin, "Tag 1 steckt im Alt-JSON schon drin")
+            assertTrue(body.hourly.isEmpty(), "kein hourly-Block ⇒ leere Liste")
+            assertNull(body.sunriseEpochMs)
+            assertNull(body.sunsetEpochMs)
+        }
+
     @Test
     fun `Store-Ort gewinnt - dieselbe Wahrheit wie Grounding und Settings-Rand`(@TempDir dir: Path) =
         withOpenMeteo(forecastJson) { url, captured ->

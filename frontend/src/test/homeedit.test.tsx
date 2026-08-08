@@ -99,7 +99,9 @@ describe('assignEntityArea — PUT-Vertrag + Fehlerpfade', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  RaeumeView — Picker-Render (flag-gated, nur auf „Nicht zugeordnet")
+//  RaeumeView — Picker-Render (flag-gated, nur in der „Braucht dich"-Inbox,
+//  ex-„Nicht zugeordnet" — Scheibe 1 des Räume-Verwaltungs-Konzepts hat die
+//  Karte umgebaut, der Schreibweg/die Flag-Gate-Logik selbst ist unverändert)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const snapshot = (over: Partial<HomeRegistrySnapshot> = {}): HomeRegistrySnapshot => ({
@@ -127,7 +129,7 @@ const editProp = (over: Partial<RaeumeEdit> = {}): RaeumeEdit => ({
 describe('RaeumeView — Picker flag-gated', () => {
   it('ohne edit-Prop ⇒ KEIN Picker (byte-neutral zu Scheibe 1)', () => {
     const out = renderToStaticMarkup(<RaeumeView state={{ kind: 'live', data: snapshot() }} />);
-    expect(out).not.toContain('room__pickerselect');
+    expect(out).not.toContain('inbox__select');
     expect(out).not.toContain('<select');
   });
 
@@ -135,25 +137,28 @@ describe('RaeumeView — Picker flag-gated', () => {
     const out = renderToStaticMarkup(
       <RaeumeView state={{ kind: 'live', data: snapshot() }} edit={editProp({ enabled: false })} />,
     );
-    expect(out).not.toContain('room__pickerselect');
+    expect(out).not.toContain('inbox__select');
   });
 
-  it('edit.enabled=true ⇒ Picker NUR auf „Nicht zugeordnet"-Zeilen, mit Area-Optionen', () => {
+  it('edit.enabled=true ⇒ Picker NUR in der „Braucht dich"-Inbox, mit Area-Optionen', () => {
     const out = renderToStaticMarkup(
       <RaeumeView state={{ kind: 'live', data: snapshot() }} edit={editProp()} />,
     );
     // Genau EIN Picker (das eine unassigned-Gerät), nicht auf der Wohnzimmer-Karte.
-    expect(out.split('room__pickerselect').length - 1).toBe(1);
+    expect(out.split('inbox__select').length - 1).toBe(1);
+    expect(out).toContain('Braucht dich');
     expect(out).toContain('Raum wählen');
+    expect(out).toContain('Bestätigen');
     expect(out).toContain('>Wohnzimmer<');
     expect(out).toContain('>Küche<');
   });
 
-  it('busyEntityId ⇒ der Picker dieser Zeile ist disabled', () => {
+  it('busyEntityId ⇒ Picker + Bestätigen-Knopf dieser Zeile sind disabled', () => {
     const out = renderToStaticMarkup(
       <RaeumeView state={{ kind: 'live', data: snapshot() }} edit={editProp({ busyEntityId: 'light.hue_iris' })} />,
     );
-    expect(out).toMatch(/room__pickerselect[^>]*disabled/);
+    expect(out).toMatch(/inbox__select[^>]*disabled/);
+    expect(out).toMatch(/inbox__confirm[^>]*disabled/);
     expect(out).toContain('wird zugeordnet…');
   });
 
@@ -171,6 +176,13 @@ describe('RaeumeView — Picker flag-gated', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  RaeumeViewLive — Picker-Flow (injizierte load/assign, kein Live-Backend)
+//
+//  Andere Interaktion als vor Scheibe 1 des Räume-Verwaltungs-Konzepts: der
+//  `<select>` schreibt NICHT mehr per `onChange` selbst (der alte „RoomPicker"-
+//  Fix, der sich nach jeder Wahl selbst auf '' zurücksetzte, ist damit hinfällig
+//  — s. `roomsInbox.tsx`-KDoc). Erst ein Klick auf „Bestätigen" löst
+//  `edit.onAssign` aus; `chooseAndConfirm` bildet GENAU das nach: Area wählen
+//  (falls nötig), dann den Bestätigen-Knopf der Zeile antippen.
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('RaeumeViewLive — Zuordnungs-Flow (PUT → Reload → Karte wandert)', () => {
@@ -190,18 +202,20 @@ describe('RaeumeViewLive — Zuordnungs-Flow (PUT → Reload → Karte wandert)'
       await new Promise((r) => setTimeout(r, 0));
     });
   };
-  const pickArea = async (value: string): Promise<void> => {
-    const select = container.querySelector('.room__pickerselect') as HTMLSelectElement;
+  const chooseAndConfirm = async (value: string): Promise<void> => {
+    const select = container.querySelector('.inbox__select') as HTMLSelectElement;
     if (!select) throw new Error('Kein Picker gerendert');
     await act(async () => {
-      // Echtes Browser-Verhalten nachbilden: ein <select> feuert `change` NUR,
-      // wenn sich der ausgewählte Wert wirklich ändert — dieselbe Option
-      // nochmal "wählen" ist beim echten Nutzer ein No-Op (kein Event). Ein
-      // simples "value setzen + Event feuern" würde den RoomPicker-Fix
-      // (controlled, reset auf '' nach jedem Pick) nicht wirklich prüfen.
-      if (select.value === value) return;
-      select.value = value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
+      if (select.value !== value) {
+        select.value = value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const confirmBtn = container.querySelector('.inbox__confirm') as HTMLButtonElement;
+    if (!confirmBtn) throw new Error('Kein Bestätigen-Knopf gerendert');
+    await act(async () => {
+      confirmBtn.click();
       await new Promise((r) => setTimeout(r, 0));
     });
   };
@@ -220,7 +234,7 @@ describe('RaeumeViewLive — Zuordnungs-Flow (PUT → Reload → Karte wandert)'
     vi.restoreAllMocks();
   });
 
-  it('Flag an: Raum wählen ⇒ assign(entityId, areaId) ⇒ Reload ⇒ Gerät wandert in den Raum', async () => {
+  it('Flag an: Raum wählen + Bestätigen ⇒ assign(entityId, areaId) ⇒ Reload ⇒ Gerät wandert in den Raum', async () => {
     const before = snapshot();
     const after: HomeRegistrySnapshot = {
       areas: [
@@ -244,14 +258,14 @@ describe('RaeumeViewLive — Zuordnungs-Flow (PUT → Reload → Karte wandert)'
     );
     await flush();
     // Vor dem Wählen: Hue Iris ist unassigned, Picker da.
-    expect(container.querySelector('.room__pickerselect')).not.toBeNull();
+    expect(container.querySelector('.inbox__select')).not.toBeNull();
 
-    await pickArea('wohnzimmer');
+    await chooseAndConfirm('wohnzimmer');
 
     expect(assign).toHaveBeenCalledWith('light.hue_iris', 'wohnzimmer');
-    // read-first: neu geladen ⇒ „Nicht zugeordnet" ist leer, kein Picker mehr.
-    expect(container.textContent).toContain('Aktuell hat jedes gemeldete Gerät einen Raum');
-    expect(container.querySelector('.room__pickerselect')).toBeNull();
+    // read-first: neu geladen ⇒ „Braucht dich" ist leer, kein Picker mehr.
+    expect(container.textContent).toContain('Nichts zu tun.');
+    expect(container.querySelector('.inbox__select')).toBeNull();
   });
 
   it('Fehler beim Schreiben ⇒ ehrliche Meldung, Gerät bleibt unassigned', async () => {
@@ -262,15 +276,15 @@ describe('RaeumeViewLive — Zuordnungs-Flow (PUT → Reload → Karte wandert)'
       <RaeumeViewLive loadRegistry={loadRegistry} loadStatus={async () => true} assign={assign} />,
     );
     await flush();
-    await pickArea('wohnzimmer');
+    await chooseAndConfirm('wohnzimmer');
 
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
     expect(container.textContent).toContain('HA hat nicht bestätigt.');
-    // Gerät bleibt in „Nicht zugeordnet" — der Picker ist weiterhin da.
-    expect(container.querySelector('.room__pickerselect')).not.toBeNull();
+    // Gerät bleibt in „Braucht dich" — der Picker ist weiterhin da.
+    expect(container.querySelector('.inbox__select')).not.toBeNull();
   });
 
-  it('Fehlschlag ⇒ DIESELBE Area erneut wählen löst einen zweiten PUT aus (RoomPicker-Fix)', async () => {
+  it('Fehlschlag ⇒ „Bestätigen" erneut antippen (ohne den Raum neu zu wählen) löst einen zweiten PUT aus', async () => {
     const loadRegistry = vi.fn(async () => live(snapshot())); // bleibt gleich (kein Wandern, Fehler)
     const assign = vi.fn().mockRejectedValue(new Error('HA hat nicht bestätigt.'));
 
@@ -279,18 +293,22 @@ describe('RaeumeViewLive — Zuordnungs-Flow (PUT → Reload → Karte wandert)'
     );
     await flush();
 
-    await pickArea('wohnzimmer');
+    await chooseAndConfirm('wohnzimmer');
     expect(assign).toHaveBeenCalledTimes(1);
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
 
-    // Der Picker muss sich nach dem Fehlschlag SELBST auf den Platzhalter
-    // zurückgesetzt haben (controlled) — sonst würde das erneute "Wählen"
-    // derselben, bereits ausgewählten Option beim echten Nutzer kein
-    // change-Event auslösen (s. `pickArea`-Nachbau des Browser-Verhaltens).
-    const select = container.querySelector('.room__pickerselect') as HTMLSelectElement;
-    expect(select.value).toBe('');
+    // Anders als der alte RoomPicker: der Select bleibt NACH einem Fehlschlag
+    // auf der gewählten Area stehen (kein Reset auf den Platzhalter) — das
+    // Schreiben ist jetzt ein expliziter Knopf, kein Auto-Write mehr per
+    // bloßem Auswählen, darum braucht ein Retry kein erneutes „Wählen".
+    const select = container.querySelector('.inbox__select') as HTMLSelectElement;
+    expect(select.value).toBe('wohnzimmer');
 
-    await pickArea('wohnzimmer');
+    const confirmBtn = container.querySelector('.inbox__confirm') as HTMLButtonElement;
+    await act(async () => {
+      confirmBtn.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
     expect(assign).toHaveBeenCalledTimes(2);
   });
 
@@ -299,6 +317,6 @@ describe('RaeumeViewLive — Zuordnungs-Flow (PUT → Reload → Karte wandert)'
       <RaeumeViewLive loadRegistry={async () => live(snapshot())} loadStatus={async () => false} assign={async () => ({})} />,
     );
     await flush();
-    expect(container.querySelector('.room__pickerselect')).toBeNull();
+    expect(container.querySelector('.inbox__select')).toBeNull();
   });
 });

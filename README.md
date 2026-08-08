@@ -1,235 +1,100 @@
 # Hoshi 星
 
-**[English](#hoshi--english)** · **[Deutsch](#hoshi--deutsch)**
+**English (this page)** · **[Deutsch](README.de.md)**
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
   <img src="docs/assets/hero-light.svg" alt="Hoshi 星 — ad astra per aspera" width="100%">
 </picture>
 
-<p align="center">
-  <img src="docs/screenshots/hoshi-overview-en.png" alt="Hoshi overview screen: clock, alarm line, live tiles for today, planned items and weather" width="49%">
-  <img src="docs/screenshots/hoshi-chat-en.png" alt="Hoshi chat screen: a turn with its honest step line — route chosen, answering, speaking — and a 'local' badge" width="49%">
-</p>
-
-<p align="center">
-  <sub>
-    Übersicht und Chat, hier auf Englisch — die Oberfläche folgt der gewählten Sprache (DE/EN/ES/FR/IT).<br>
-    Die Häkchen über jeder Antwort zeigen, was der Turn <em>wirklich</em> getan hat; das Schloss, ob er lokal blieb.
-  </sub>
-</p>
-
----
-
-## Hoshi — Deutsch
-
-> Ein privater, deutschsprachig gewachsener, **lokal-first** Voice-Assistent, dem man vertrauen kann.
-> Läuft auf einem einzelnen Apple-Silicon-Mac (16 GB). Keine Cloud-Pflicht, keine projektseitige Telemetrie,
-> deine Stimme bleibt bei dir.
-
-**Status:** 0.8.2 „Suisei" (彗星, der Komet) — aktiv in Entwicklung, Richtung 1.0.
-Der Vorgänger-Codename *Nagareboshi* (流れ星, die Sternschnuppe) war der kurze helle Streifen; ein
-Komet hat eine Bahn und kommt wieder. Nagareboshi lebt als Farbthema weiter.
-Diese Runde brachte: fünf Sprachen bis in die Antworten hinein, zwei neue Farbwelten und einen
-Spiel-Modus, der ein Gedankenexperiment nicht mehr wie eine Wissensfrage behandelt. Der ehrliche
-Stand mitsamt offenen Kanten steht im [`CHANGELOG.md`](CHANGELOG.md).
-
-### Was Hoshi kann
-
-- **Lokaler Voice-Turn verfügbar.** Wake-Word on-device (ESP32-S3) → Whisper-STT →
-  Gemma-4-Brain (MLX, Metal-GPU) → TTS mit satzweisem Streaming — warm ab ~3 s bis zum ersten Ton.
-- **Sprechererkennung mit Sicherheits-Gate.** Geführtes 3-Satz-Enroll und lokale CAM++-Embeddings
-  sind gebaut; nach einer reproduzierten Fehlbindung ist die Erkennung derzeit bewusst abgeschaltet.
-  Unbekannte Stimmen werden nie automatisch enrollt. Ein separat aktivierbarer Diagnose-Mitschnitt
-  kann während einer Testphase rohes Audio lokal speichern und wird deshalb ausdrücklich als
-  Privacy-Ausnahme dokumentiert.
-- **Eigene Satelliten-Firmware.** HA Voice PE mit eigener ESPHome-Komponente: LED-Ring als
-  Sprache (Stimm-VU, Denk-Swirl, Stop-Quittung), Volume-Dial, „Stop"-Wake, Nachtmodus pro Raum
-  (Ring dimmt, wenn das Haus schläft).
-- **Reflexe ohne Denkpause.** Timer, Wecker und Smart-Home-Kommandos werden über
-  deterministische, brain-freie Fastpaths geroutet; externe Geräte-Readbacks bleiben echte
-  Netzwerk-Roundtrips.
-- **Wetter, ehrlich geerdet.** Ort per Geocoding (keyless open-meteo), Tages-Szenarien,
-  Idle-Kachel, Rückfrage bei unklarem Ort.
-- **Online-Wissen nur auf Wunsch.** Wenn lokal die Antwort fehlt, kann Hoshi das ehrlich sagen
-  und um Erlaubnis zum Nachsehen bitten; ein expliziter Recherche-Befehl ist selbst die Freigabe
-  (Quelle wird genannt, Kosten-Cap, Lookup-Default: erst fragen).
-- **Ein Tagebuch aus Messwerten, nie aus Inhalten.** Das Nutzungs-Diary speichert Zeitpunkt,
-  Kategorie und Latenzen — keine Gesprächsinhalte. Der Aktivität-Tab zeigt p50/p95 je
-  Pipeline-Stufe und die Zerlegung jedes Turns.
-- **Spricht fünf Sprachen — antwortet, versteht aber noch nicht in allen fünf.** Oberfläche und
-  Antworten gibt es in Deutsch, Englisch, Spanisch, Französisch und Italienisch: rund 770 Sätze im
-  Backend (Smart-Home-Bestätigungen, Ehrlichkeits-Sätze, Fehlermeldungen und die Wissens-Blöcke, die
-  intern ans Sprachmodell gehen) plus 119 Stellen im Frontend; Zeit- und Datumsformate folgen der
-  Sprache. **Ehrliche Grenze:** die *Erkenner* — was Hoshi als Befehl versteht — sind in großen Teilen
-  noch deutsch. Wer auf Spanisch stellt, bekommt spanische Antworten, sagt Befehle aber weiter auf
-  Deutsch oder Englisch. Das steht auch im Produkt (Hinweis im Sprach-Panel, „Beta" an allem außer
-  Deutsch), und daran wird gearbeitet. ES/FR/IT sind zudem nicht muttersprachlich gegengelesen.
-- **Acht Farbwelten.** Aoi (青, Blau) · Yoru (夜, Nacht) · Asa (朝, Morgen) · Natsu no Hi (夏の日,
-  Sommertag) · Kasumi (霞, Dunst) · Nagareboshi (流れ星, Sternschnuppe) · Yoake (夜明け, Tagesanbruch) ·
-  Sora (空, Himmel — folgt automatisch der Uhrzeit; Nagareboshi ist dort die tiefste Nacht,
-  02:00–05:59). Über gemeinsame Design-Tokens gesteuert, `prefers-reduced-motion` wird respektiert.
-
-### Was Hoshi besonders macht
-
-1. **Ehrlichkeit ist Architektur, nicht Stil.** Wenn Hoshi etwas nicht weiß, sagt es das —
-   deterministisch, statt zu halluzinieren. Die UI zeigt „—" statt erfundener Zahlen, leere
-   Zustände sind ehrlich leer, und der interne Leitsatz `grün ≠ lebt` (ein grüner Test ist noch
-   kein lebendes Feature) prägt jede Abnahme.
-2. **Vertrauen liegt im Code, nicht im Prompt.** Capability-Kernel mit *default-deny* für jede
-   schreibende Aktion; biometrische Stimm-Profile verlassen das Gerät nie; unbekannte Stimmen
-   werden nicht automatisch zu Profilen. Der lokale Diagnose-Mitschnitt ist eine explizite,
-   temporäre Ausnahme für Roh-Audio — kein stiller Dauerpfad.
-3. **Das Modell ist eine tauschbare Zelle.** Hexagonale Ports, Modellwahl per Config-Zeile,
-   messbare A/B-Kandidaten und Ohren-Abnahme bei Stimmenwechseln — Hoshi ist gebaut, um mit jeder Modell-Generation
-   besser zu werden, ohne seine Seele zu verlieren.
-4. **Die 16-GB-Wand als Design-Lehrmeister.** Ein Brain resident, Admission-Steuerung,
-   Latenz-Budgets pro Stufe — Genügsamkeit ist hier ein Feature, kein Kompromiss.
-5. **Gebaut von einem Menschen mit einem KI-Team.** So ist Hoshi entstanden, und so wird
-   es weitergebaut — Mensch und KI als ein Team, das etwas Dauerhaftes baut. (Die
-   Projekt-Grundlagen liegen LLM-lesbar im [`vault/`](vault/00-INDEX.md); die private
-   Werkstatt dahinter gehört dem Haus.)
-
-### Gebaut mit Codex und GPT-5.6
-
-Hoshi 0.8 gab es schon vor der Build Week. Im Wettbewerbsfenster arbeitete **Codex mit GPT-5.6** in zwei
-Rollen: als bauende Instanz und als kritischer Gegenblick.
-
-Von Codex stammen das Mess- und Sicherheitswerkzeug der Sprechererkennung, der optionale lokale
-Piper-TTS-Sidecar, der Repo-Port der Wissens-Brücke und die Frontend-Mehrsprachigkeit. Ein getrennter
-Orchestrator hat geprüft, integriert und unabhängig nachgemessen — und wurde dabei mehr als einmal von
-Codex korrigiert, unter anderem, als eine zu weit gehende Mess-Behauptung zurückgenommen werden musste.
-Produktrichtung sowie jedes Privatsphäre-, Deploy- und Produktions-Gate blieben bei Andi.
-
-Die Agenten koordinieren sich über **CollabOS**: ein kleines, nachlesbares, dateibasiertes Protokoll — ein
-Verzeichnis mit Briefen. Jeder Agent liest seinen Posteingang, schreibt in seinen Ausgang, und alles landet
-in der Versionsgeschichte. Kein Dienst, kein Protokoll-Server; Dateien, die man später lesen kann. Auch die
-Fehler.
-
-Dazu kam ein **opt-in GPT-5.6-Recherchepfad** zur Laufzeit: OpenAI-Websuche hinter einer ausdrücklichen
-Zustimmung, mit genannten Quellen, ehrlichem Modell-Label und einem Tagesbudget.
-
-### Architektur (kurz)
-
-Hexagonal (Ports & Adapters) — STT-, TTS- und LLM-Engines sind austauschbar; nur DTOs queren
-die Grenze. Ein dünnes Backend (Kotlin/Spring WebFlux) orchestriert die ML-Sidecars (Python/MLX)
-und spricht über einen authentifizierten `/ws/audio`-Vertrag mit den Satelliten (ESPHome/HA Voice).
-
-### Roadmap (ehrlich)
-
-**0.9:** Die Erkenner mehrsprachig nachziehen (Hoshi antwortet in fünf Sprachen, versteht Befehle
-aber noch überwiegend deutsch) · Wake-Word-Kalibrierung und robustere deutsche Trainingsdaten (der
-erste lokale microWakeWord-Pfad läuft bereits experimentell) · Wecker klingeln am
-Ursprungs-Satelliten · geführtes Setup (`SETUP.md` gibt es; ein `hoshi setup`-Kommando noch nicht) ·
-Multi-Room mit Wake-Arbitrierung · Metriken-Sparklines.
-
-**Bekannte Kanten, ungeschönt:**
-
-- Die **Erkenner sind teilweise noch deutsch** — die größte offene Kante der Mehrsprachigkeit.
-- **ES/FR/IT sind nicht muttersprachlich gegengelesen** und haben keine Piper-Stimme (sie werden vom
-  macOS-`say`-Sidecar gesprochen).
-- Die **Sprecher-Erkennung ist abgeschaltet**, weil das lokale Sicherheits-Gate keinen tragfähigen
-  Betriebspunkt gefunden hat. Anlernen und Profile bleiben, das Erkennen nicht.
-- Der **sanfte Neustart** (20 s für laufende Gespräche) ist konfiguriert und plausibel, aber nicht an
-  einem echten laufenden Gespräch bewiesen.
-- Hoshi ist auf **genau einer Maschine** gehärtet — siehe „Ehrlichkeit zuerst" unten.
-
----
-
-## Hoshi — English
-
-> A private, German-first, **local-first** voice assistant you can trust.
+> **A private, local-first voice assistant you can trust.**
 > Runs on a single Apple Silicon Mac (16 GB). No cloud requirement, no project telemetry —
 > your voice stays home.
 
 <p align="center">
-  <img src="docs/screenshots/hoshi-overview-en.png" alt="Hoshi overview screen in English" width="49%">
-  <img src="docs/screenshots/hoshi-chat-en.png" alt="Hoshi chat screen in English" width="49%">
+  <img src="docs/screenshots/hoshi-overview-en.png" alt="Hoshi overview: clock, now-band with live weather, honest tiles" width="49%">
+  <img src="docs/screenshots/hoshi-chat-en.png" alt="Hoshi chat: a turn with its honest step line and a 'local' badge" width="49%">
 </p>
 
 <p align="center">
   <sub>
-    Overview and chat. The interface follows the chosen language (DE/EN/ES/FR/IT).<br>
-    The ticks above each answer show what the turn <em>actually</em> did; the lock shows whether it stayed local.
+    The ticks above each answer show what the turn <em>actually</em> did; the lock shows whether it stayed local.<br>
+    Interface in five languages (EN/DE/ES/FR/IT) · <a href="README.de.md">Deutsche Kurzfassung</a>
   </sub>
 </p>
 
-**Status:** 0.8.2 "Suisei" (彗星, the comet) — under active development, heading toward 1.0.
-The previous codename *Nagareboshi* (流れ星, the shooting star) was the brief bright streak; a comet
-has an orbit and comes back. Nagareboshi lives on as a colour theme.
-This round brought five languages all the way into the answers, two new colour worlds, and a playful
-mode that stops treating a thought experiment like a factual question. The honest state, open edges
-included, is in [`CHANGELOG.md`](CHANGELOG.md).
+**Status:** 0.8.3 "Suisei" (彗星, the comet) — under active development, heading toward 1.0.
+The honest state of every release, known edges included, lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-### What Hoshi does
+---
 
-- **A local voice turn is available.** On-device wake word (ESP32-S3) → Whisper STT →
-  Gemma 4 brain (MLX on the Metal GPU) → TTS with sentence streaming — first audio from ~3 s.
-- **Speaker recognition with a safety gate.** Guided 3-sentence enrollment and local CAM++
-  embeddings are implemented; recognition is currently disabled after a reproduced cross-binding.
-  Unknown voices are never auto-enrolled. A separately enabled diagnostic capture can store raw
-  audio locally during a test window and is documented as an explicit privacy exception.
-- **Its own satellite firmware.** HA Voice PE running a custom ESPHome component: an LED ring
-  that speaks (voice VU, thinking swirl, stop acknowledgment), a volume dial, a "stop" wake model,
-  and a per-room night mode that dims the ring while the house sleeps.
-- **Reflexes without thinking pauses.** Timers, alarms and smart-home commands use deterministic,
-  brain-free fast paths; external device readbacks remain real network round trips.
-- **Weather, honestly grounded.** Location via keyless open-meteo geocoding, day scenarios,
-  an idle tile, and a follow-up question when the place is ambiguous.
-- **Online knowledge only on request.** When the local brain doesn't know, Hoshi can say so and
-  ask permission to look it up; an explicit research command is itself the opt-in (source cited,
-  cost cap, quick-lookup default: ask first).
-- **A diary of measurements, never of content.** The usage diary stores timestamps, categories
-  and latencies — no conversation content. The activity tab shows p50/p95 per pipeline stage and
-  a per-turn breakdown.
-- **Speaks five languages — but does not yet *understand* in all five.** Interface and replies come
-  in German, English, Spanish, French and Italian: roughly 770 backend sentences (smart-home
-  confirmations, the honesty phrases, error messages, and the knowledge blocks that go to the language
-  model internally) plus 119 frontend strings; time and date formats follow the language.
-  **Honest limit:** the *recognizers* — what Hoshi understands as a command — are still largely
-  German. Switch to Spanish and you get Spanish answers, but you still phrase commands in German or
-  English. The product says so itself (a notice in the language panel, and everything but German is
-  labelled beta), and it is being worked on. ES/FR/IT have also not been reviewed by native speakers.
-- **Eight color worlds.** Aoi (青, blue) · Yoru (夜, night) · Asa (朝, morning) · Natsu no Hi (夏の日,
-  summer day) · Kasumi (霞, haze) · Nagareboshi (流れ星, shooting star) · Yoake (夜明け, daybreak) ·
-  Sora (空, sky — follows the clock automatically; Nagareboshi holds the deepest night there,
-  02:00–05:59). Driven by shared design tokens, `prefers-reduced-motion` respected.
+## What is Hoshi?
 
-### What makes it different
+Hoshi is a voice assistant for one household, built on one principle: **everything that can
+happen at home, happens at home.** Wake word on the satellite, speech recognition, the language
+model, the knowledge base, the voice — all local. The internet is an explicit, consented
+exception, never a dependency.
 
-1. **Honesty as architecture, not tone.** Unknowns produce a deterministic "I don't know"
-   instead of hallucination; the UI shows "—" rather than invented numbers; empty states are
-   honestly empty. The house rule `green ≠ alive` (a green test is not yet a living feature)
-   governs every acceptance.
+- **A full local voice turn.** On-device wake word (ESP32-S3) → Whisper STT → Gemma 4 brain
+  (MLX on the Metal GPU) → streaming TTS — first audio from ~3 s.
+- **Knowledge looks home first.** Questions ground against a local Wikipedia index in ~100 ms.
+  If that doesn't cover it, Hoshi *says so* and offers to look it up online — and tells you
+  afterwards where the answer came from: "had a quick look at what I've got here" vs.
+  "checked online". A four-stage control (off / offline / ask first / automatic) puts you in
+  charge, from the settings or by voice.
+- **Two brains, chosen automatically.** Typing gets the thorough model (Gemma-4-12B — runs via
+  a bundled MLX architecture patch), speaking gets the fast one; the swap hides inside your own
+  speaking time. Optional, off by default.
+- **Reflexes without thinking pauses.** Timers, alarms, lights and color temperatures route
+  through deterministic, brain-free fast paths — no LLM between "Licht an" and the light.
+- **A hallway display.** The home screen is built for an iPad on the wall: big clock, live
+  weather with a rain answer ("6.1 mm today" / "dry"), real countdowns, the shopping list —
+  and empty cards disappear instead of claiming "nothing planned".
+- **Speaks five languages — and since 0.8.3 *understands* commands in five, too.** Roughly 770
+  backend sentences, streamed phrase pools so replies don't repeat, honest provenance in every
+  language. Time and date formats follow along.
+- **Nine color worlds,** from Aoi (青) to Amayadori (雨宿り, sheltering from the rain — the rain
+  ends visibly at the edge of the reading column). Driven by shared design tokens;
+  `prefers-reduced-motion` respected.
+- **A diary of measurements, never of content.** Timestamps, categories, latencies — no
+  conversation content, ever. The activity tab shows p50/p95 per pipeline stage.
+
+## What makes it different
+
+1. **Honesty is architecture, not tone.** Unknowns produce a deterministic "I don't know"
+   instead of hallucination; the UI shows "—" rather than invented numbers; a cached answer
+   says it is one; an online answer carries its source. The house rule `green ≠ alive`
+   (a green test is not yet a living feature) governs every acceptance.
 2. **Trust lives in code, not in prompts.** A capability kernel with default-deny for every
    writing action; biometric voice profiles never leave the device; unknown voices are never
-   auto-enrolled. Local raw-audio capture is a separately enabled, temporary diagnostic exception.
-3. **The model is a replaceable cell.** Hexagonal ports, model selection as a config line,
-   measurable A/B candidates and human-ear acceptance for voice swaps — built to get better with each model
-   generation without losing its soul.
-4. **The 16 GB wall as a design teacher.** One resident brain, admission control, per-stage
-   latency budgets — frugality is a feature here, not a compromise.
-5. **Built by one human with an AI team.** That is how Hoshi came to be, and how it keeps
-   being built — human and AI as one team, making something that lasts. (Project foundations
-   live LLM-readable in [`vault/`](vault/00-INDEX.md); the private workshop behind them
-   belongs to the house.)
+   auto-enrolled; the private knowledge library is `egress: never` by design.
+3. **The model is a replaceable cell.** Hexagonal ports, model choice as a config line,
+   measured A/B candidates, human-ear acceptance for voice swaps — built to get better with
+   each model generation without losing its soul.
+4. **The 16 GB wall as a design teacher.** One resident brain, admission control, honest
+   memory-pressure display ("memory is tight — voice replies may feel sluggish") — frugality
+   is a feature, not a compromise.
+5. **Built by one human with an AI team.** That is how Hoshi came to be and how it keeps being
+   built — with the human as the measure: blind-labeled test sets, taste gates, and the
+   finding that ten minutes of real use beats four review agents. (Project foundations live
+   LLM-readable in [`vault/`](vault/00-INDEX.md).)
 
-### Known edges (honest)
+## Known edges (honest)
 
-- The **recognizers are still largely German** — Hoshi answers in five languages but understands
-  commands mostly in German or English. This is the biggest open edge of the multilingual work.
-- **ES/FR/IT have not been reviewed by native speakers** and have no Piper voice; they are spoken by
-  the macOS `say` sidecar.
-- **Speaker recognition is switched off** because the local safety gate found no viable operating
-  point. Enrollment and profiles remain; recognizing does not.
-- **Graceful shutdown** (20 s for in-flight conversations) is configured and plausible, but has not
-  been proven against a real running turn.
-- Hoshi is hardened on **exactly one machine** — expect edges when adapting it (see the German
-  "Ehrlichkeit zuerst" section).
+- **Speaker recognition is switched off.** Enrollment (three sessions on three days, with a
+  per-sample diagnosis) and profiles exist; recognition stays off until a sealed holdout
+  proves the profiles actually separate. Unknown voices are never auto-enrolled.
+- **ES/FR/IT are real translations but not native-reviewed**, and have no Piper voice yet
+  (spoken by the macOS `say` sidecar).
+- **Graceful shutdown** is configured but has never been proven against a live turn.
+- The 12B brain **requires the bundled mlx-lm patch** — no released mlx-lm knows its
+  architecture yet.
+- Hoshi is hardened on **exactly one machine**; expect edges when adapting it. Making it
+  genuinely installable for others is the current focus (0.8.4).
 
-### Architecture & build (at a glance)
+## Architecture & quickstart
 
-Hexagonal (ports & adapters); a thin Kotlin/Spring WebFlux backend orchestrates Python/MLX
+Hexagonal (ports & adapters): a thin Kotlin/Spring WebFlux backend orchestrates Python/MLX
 sidecars and talks to satellites over an authenticated `/ws/audio` contract (ESPHome/HA Voice).
 
 ```bash
@@ -240,50 +105,25 @@ bin/hoshi doctor   # honest, read-only stack status (OK/DEGRADED/DOWN)
 ```
 
 Requires an Apple Silicon Mac (MLX needs the Metal GPU); the Gradle wrapper auto-provisions
-JDK 21. Brain, Whisper STT, speaker ID, the knowledge bridge, and the `say`/Piper local-TTS
-sidecars live in [`sidecars/`](sidecars/) with pinned bootstrap paths. A fresh install defaults
-to macOS `say` (local, no API key and no voice-model download); Piper remains an explicit
-GPL/model opt-in. Large models and the
-Wikipedia database remain external artifacts; the legacy Voxtral server still comes from a
-separate local checkout and is deliberately disabled. Full German guide: [Build & Run](#build--run).
+JDK 21. All sidecars live in [`sidecars/`](sidecars/) with pinned bootstrap paths; a fresh
+install defaults to macOS `say` (no API key, no model download) — Piper remains an explicit
+GPL/model opt-in. Large models and the Wikipedia database are external artifacts.
+Full setup guide: [`SETUP.md`](SETUP.md) · German overview: [`README.de.md`](README.de.md).
 
-### Built with Codex and GPT-5.6
+## Built with Codex and GPT-5.6
 
-Hoshi 0.8 predates Build Week. During the competition window, **Codex with GPT-5.6** worked as both an
-implementation agent and an adversarial reviewer.
+Hoshi predates Build Week. Since then, **Codex with GPT-5.6** has worked as both an
+implementation agent and an adversarial reviewer — it owns the local knowledge chain
+end-to-end, contributed the speaker-recognition safety tooling, the Piper sidecar, themes,
+and the private knowledge library groundwork. A separate orchestrator reviews, integrates and
+independently re-measures every delivery — and has been corrected by Codex more than once,
+including a withdrawn measurement claim. Andi remains responsible for product direction and
+for every privacy, deployment and production gate.
 
-Codex contributed the speaker-recognition evaluation and safety tooling, the optional local Piper TTS
-sidecar, the Knowledge Bridge repository port, and frontend internationalization. A separate orchestrator
-reviewed, integrated, and independently tested these changes — and was corrected by Codex more than once,
-including a case where an over-stated measurement claim had to be withdrawn. Andi remained responsible for
-product direction and for every privacy, deployment, and production gate.
-
-The agents coordinated through **CollabOS**: a small, inspectable, file-based protocol — a directory of
-letters. Every agent reads its inbox, writes to its outbox, and all of it lands in version history. No
-service, no daemon; just files you can still read later. Including the mistakes.
-
-Hoshi also gained an **opt-in GPT-5.6 research path** at runtime: OpenAI web search behind an explicit
-consent step, with cited sources, honest model labels, and a daily spending limit.
-
-### For reviewers: verify in 5 minutes
-
-This project's house rule is `green ≠ alive` — central technical claims come with runnable checks, not screenshots
-of test output. On any machine with JDK auto-provisioning (see above):
-
-```bash
-./gradlew build            # all Kotlin modules + tests + ArchUnit boundary guards
-cd frontend && npm install && npm test
-python3 tools/speaker-ab/run_ab.py --smoke   # speaker A/B eval harness, self-contained proof
-```
-
-Then read, in this order: [`AGENTS.md`](AGENTS.md) (the core executable-truth claims and their commands) ·
-[`CHANGELOG.md`](CHANGELOG.md) (dated, honest scope) · [`SECURITY.md`](SECURITY.md)
-(default-deny kernel, open findings listed rather than hidden) · [`tools/speaker-ab/`](tools/speaker-ab/)
-(offline FAR/FRR evaluation — measurement before any live threshold change). A full voice turn
-needs the ML sidecars on Apple Silicon; without them, `bin/hoshi doctor` reports DOWN honestly
-instead of faking green — that behavior itself is part of the design.
-
----
+The agents coordinate through **CollabOS**: a small, inspectable, file-based protocol — a
+directory of letters. Every agent reads its inbox, writes its outbox, and all of it lands in
+version history. No service, no daemon; just files you can still read later. Including the
+mistakes.
 
 ## Stack
 - **Backend:** Kotlin · Spring WebFlux · Java 21

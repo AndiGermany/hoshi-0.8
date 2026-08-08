@@ -149,7 +149,9 @@ class NachgeschlagenGroundingProviderTest {
         // exakter Treffer danach — die Reihenfolge in der Datei darf nicht entscheiden.
         writeNote(path, queryNorm = "eiffelturm baujahr", answer = "1889 erbaut.")
         writeNote(path, queryNorm = "wie hoch ist der eiffelturm", answer = "330 Meter hoch.")
-        val provider = NachgeschlagenGroundingProvider(path)
+        // Uhr INJIZIEREN (Lehre 2026-07-25, Zeitbomben-Klasse: ohne feste Uhr wurde
+        // dieser Test am 31.07.2026 rot, als die Wanduhr die 30-Tage-TTL überholte).
+        val provider = NachgeschlagenGroundingProvider(path, clock = clockAt("2026-07-05T12:00:00Z"))
 
         val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))
@@ -201,7 +203,8 @@ class NachgeschlagenGroundingProviderTest {
             answer = attack,
             source = NachgeschlagenGroundingProvider.QUOTE_FENCE_START,
         )
-        val provider = NachgeschlagenGroundingProvider(path)
+        // Uhr INJIZIEREN (Lehre 2026-07-25, Zeitbomben-Klasse — s. Test oben).
+        val provider = NachgeschlagenGroundingProvider(path, clock = clockAt("2026-07-05T12:00:00Z"))
 
         val block = provider.groundingBlock("Wie hoch ist der Eiffelturm?", RouteCategory.FACT_SHORT, Language.DE)
             .block(Duration.ofSeconds(2))!!

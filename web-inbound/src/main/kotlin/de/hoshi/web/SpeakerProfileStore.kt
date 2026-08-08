@@ -200,6 +200,47 @@ class SpeakerProfileStore(
     }
 
     /**
+     * Loescht EIN Roh-Sample (0-basierter Index in `samples`) eines BESTEHENDEN Profils und
+     * rechnet den Zentroid ([SpeakerProfile.embedding]) NEU (L2-renormalisiertes Mittel der
+     * VERBLEIBENDEN Samples) — Reparatur-Naht fuer den Kreuz-Kontaminations-Vorfall vom 07.08
+     * (zwei Haushaltsmitglieder lernten gleichzeitig im selben Raum an, beide Profile mussten komplett
+     * gewiped werden, weil es bis dahin nur die Ganz-Profil-Loeschung gab, obwohl oft nur
+     * EINE verkorkste Aufnahme das Problem ist). `sampleMeta` wird SYNCHRON am selben Index
+     * mitentfernt (bleibt 1:1 zu `samples`). Persist-then-commit wie [upsert]/[appendSample].
+     *
+     * Unbekannter Name ⇒ `null` OHNE Datei-I/O (analog [appendSample] — der Aufrufer
+     * unterscheidet daran 404 „Profil weg" von 400 „Index falsch").
+     *
+     * @throws IndexOutOfBoundsException wenn [index] ausserhalb von `0 until samples.size` liegt.
+     * @throws IllegalStateException wenn [index] das EINZIGE/LETZTE Sample eines Profils waere —
+     *   ein Profil mit 0 Samples/kaputtem (Nullvektor-)Zentroid darf NIE entstehen; der Aufrufer
+     *   muss stattdessen das GANZE Profil loeschen ([delete]).
+     * @throws IOException wenn die Persistenz fehlschlaegt (Cache dann NICHT veraendert).
+     */
+    @Synchronized
+    fun deleteSample(name: String, index: Int): SpeakerProfile? {
+        val existing = profiles[name] ?: return null
+        if (index !in existing.samples.indices) {
+            throw IndexOutOfBoundsException("index $index ausserhalb 0..${existing.samples.size - 1}")
+        }
+        check(existing.samples.size > 1) { "letzte Aufnahme — Profil stattdessen komplett loeschen" }
+        val samples = existing.samples.filterIndexed { i, _ -> i != index }.map { it.copyOf() }
+        val sampleMeta = existing.sampleMeta.filterIndexed { i, _ -> i != index }
+        val profile = SpeakerProfile(
+            name = name,
+            embedding = renormalizedMean(samples),
+            enrolledAtEpochMs = existing.enrolledAtEpochMs,
+            samples = samples,
+            sampleMeta = sampleMeta,
+        )
+        val desired = HashMap(profiles)
+        desired[name] = profile
+        writeSnapshot(desired.values)
+        profiles[name] = profile
+        return profile
+    }
+
+    /**
      * Volle Profile INKL. Vektor — nur fuer die spaetere server-seitige Erkennung (S3: `/verify`
      * bekommt alle enrolled-Vektoren mit). Bewusst NICHT ueber das Web exponiert. Kopien nach
      * aussen (der interne Cache bleibt unveraenderlich).

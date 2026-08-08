@@ -1,4 +1,6 @@
 import { API_BASE, TOKEN } from './config';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 
 /**
  * Typisierter Client für den SCHREIB-Rand (Scheibe 2 des Geräte-Zuordnungs-
@@ -100,8 +102,9 @@ export async function assignEntityArea(
   if (res.status === 400) {
     throw new HomeEditValidationError(entityId, await readErrorMessage(res, 'Ungültige Area.'));
   }
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(await readErrorMessage(res, `Backend antwortete HTTP ${res.status}`));
+  const t = resolveUiStrings(getActiveUiLanguage()).apiErrors;
+  if (res.status === 401) throw new Error(t.authWall);
+  if (!res.ok) throw new Error(await readErrorMessage(res, t.httpStatus(res.status)));
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
   const resultEntityId = typeof body?.entityId === 'string' && body.entityId ? body.entityId : entityId;
   const resultAreaId = typeof body?.areaId === 'string' && body.areaId ? body.areaId : areaId;

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # run-overnight.sh — Hoshi-Stimme-LoRA v0: QLoRA-Training auf dem 16GB-Mac (nachts).
 #
+# Betriebsweg: läuft nur auf Andis Maschine (VENV/BRAIN_RUN sind hart auf
+# /Users/andi/IdeaProjects/Hoshi_0.5 verdrahtet) — Frischklon: nicht nötig.
+#
 # ABLAUF (Andi-Gate 2026-07-01 gezogen: "Lokal ueber Nacht"):
 #   1. Brain stoppen (16-GB-Wand: Training braucht den RAM; ct-106-Turns fallen
 #      solange auf die ehrliche Brain-Admission-Absage — akzeptierter Nacht-Modus).

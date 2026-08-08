@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import de.hoshi.core.dto.ChatMessage
 import de.hoshi.core.dto.LlmDelta
 import de.hoshi.core.port.BrainPort
+import de.hoshi.core.security.SidecarTokenHeader
 import org.slf4j.LoggerFactory
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Flux
@@ -87,12 +88,20 @@ class MlxBrainAdapter(
     // byte-identisch. `true` ⇒ `logprobs:true` im Body + mittlerer Surprisal
     // wird am Stream-Ende geloggt (NUR messen, kein Verhalten — s. Klassen-KDoc).
     private val entropyEnabled: Boolean = false,
+    // Sidecar-Token-Wand (opt-in, s. SidecarTokenHeader-KDoc): leer (Default) ⇒ KEIN
+    // Header ⇒ byte-identisch zu vor der Wand. Gesetzt ⇒ jeder Request traegt ihn,
+    // sonst weist der Sidecar (HOSHI_SIDECAR_TOKEN gesetzt) mit 401 ab.
+    private val token: String = "",
 ) : BrainPort {
     private val log = LoggerFactory.getLogger(javaClass)
 
     private val client = WebClient.builder()
         .baseUrl(baseUrl)
         .codecs { it.defaultCodecs().maxInMemorySize(4 * 1024 * 1024) }
+        // `.let` statt `.apply`: WebClient.Builder hat SELBST eine Member-Methode
+        // `apply(Consumer<Builder>)` — die würde Kotlins `apply`-Extension
+        // verdecken und den Lambda-Empfänger von `this` auf `it` umbiegen.
+        .let { b -> if (token.isNotBlank()) b.defaultHeader(SidecarTokenHeader.NAME, token) else b }
         .build()
 
     /**

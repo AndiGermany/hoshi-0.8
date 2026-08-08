@@ -293,6 +293,11 @@ class PipelineConfig {
         // Der Brain liest das logprobs-Feld seit dem Restart 15.07 (beide Sensoren
         // entsperrt, /v1/score liefert Logprobs) — Flip bleibt ein Mess-Gate.
         @Value("\${HOSHI_ANSWER_ENTROPY_ENABLED:false}") entropyEnabled: Boolean,
+        // Sidecar-Token-Wand (opt-in, Commit 62fccc7): leer (Default) ⇒ kein Header ⇒
+        // byte-neutral. Gesetzt ⇒ MUSS mitgeschickt werden, sonst weist der Sidecar
+        // (HOSHI_SIDECAR_TOKEN gesetzt) mit 401 ab — dieselbe Property wie an JEDER
+        // anderen Sidecar-Wiring-Stelle (eine Wahrheit, s. SidecarTokenHeader-KDoc).
+        @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String,
     ): BrainPort = MlxBrainAdapter(
         baseUrl = baseUrl,
         samplingEnabled = samplingEnabled,
@@ -303,6 +308,7 @@ class PipelineConfig {
         xtcProbability = xtcProbability,
         xtcThreshold = xtcThreshold,
         openerBias = openerBias,
+        token = sidecarToken,
     )
 
     /**
@@ -412,8 +418,11 @@ class PipelineConfig {
         // bekannt-DOWN (aus dem Ops-Watchdog-Snapshot): sofort leeres Transkript → warmer
         // no_input-Pfad, statt 30s ins Whisper-Timeout zu laufen. UNKNOWN/OK/Watchdog-aus → normal.
         @Value("\${HOSHI_VOICE_STT_READINESS_GATE_ENABLED:false}") readinessGateEnabled: Boolean,
+        // Sidecar-Token-Wand (opt-in) — dieselbe Property wie brainPort/groundingPort/…
+        // (eine Wahrheit, s. SidecarTokenHeader-KDoc). Leer (Default) ⇒ byte-neutral.
+        @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String,
     ): SttPort = SttReadinessGate(
-        delegate = WhisperSttAdapter(baseUrl = baseUrl),
+        delegate = WhisperSttAdapter(baseUrl = baseUrl, token = sidecarToken),
         healthStatus = sidecarHealth::statusOf,
         enabled = readinessGateEnabled,
     )
@@ -524,8 +533,11 @@ class PipelineConfig {
         // java.net.http — 0.5-Lehre: WebClient.block() wirft auf netty-Threads) → Anti-Konfabulation.
         @Value("\${HOSHI_HONESTY_PROBE_ENABLED:false}") honestyProbeEnabled: Boolean,
         @Value("\${hoshi.knowledge.bridge.base-url:http://localhost:8035}") bridgeBaseUrl: String,
+        // Sidecar-Token-Wand (opt-in) — dieselbe Property wie an jeder anderen
+        // Sidecar-Wiring-Stelle (eine Wahrheit, s. SidecarTokenHeader-KDoc).
+        @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String,
     ): HonestyGate {
-        val (existenceClaim, namedEntity) = HonestyProbeAdapters.signals(honestyProbeEnabled, bridgeBaseUrl)
+        val (existenceClaim, namedEntity) = HonestyProbeAdapters.signals(honestyProbeEnabled, bridgeBaseUrl, sidecarToken)
         return HonestyGate(
             weakDomain = WeakDomainDetector(),
             onlineRequest = OnlineRequestDetector(),
@@ -592,6 +604,11 @@ class PipelineConfig {
         // H1 Zitat-Zaun (Injection-Härtung 08.07): Default AN (Security-Fix) —
         // OFF ist der byte-identische Kill-Switch, kein Feature-Flip.
         @Value("\${HOSHI_LOOKUP_QUOTE_FENCE_ENABLED:true}") quoteFenceEnabled: Boolean,
+        // Sidecar-Token-Wand (opt-in) — dieselbe Property wie an jeder anderen
+        // Sidecar-Wiring-Stelle (eine Wahrheit, s. SidecarTokenHeader-KDoc). Default ""
+        // (Muster numberContractEnabled/knowledgePackV1Enabled oben): [PipelineConfigWeatherTest]
+        // ruft dieses Bean als reinen Konstruktor-Aufruf OHNE Spring-Context auf.
+        @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String = "",
     ): GroundingPort {
         val wiki: GroundingPort =
             if (groundingEnabled) {
@@ -599,6 +616,7 @@ class PipelineConfig {
                     baseUrl = bridgeBaseUrl,
                     enableNumberContract = numberContractEnabled,
                     useKnowledgePackV1 = knowledgePackV1Enabled,
+                    token = sidecarToken,
                 )
             } else {
                 GroundingStubAdapter()
@@ -1149,7 +1167,10 @@ class PipelineConfig {
     @ConditionalOnProperty(name = ["HOSHI_SPEAKER_ENROLL_ENABLED"], havingValue = "true")
     fun speakerEmbedPort(
         @Value("\${hoshi.speaker.base-url:http://localhost:9002}") baseUrl: String,
-    ): SpeakerEmbedPort = CamppSpeakerAdapter(baseUrl)
+        // Sidecar-Token-Wand (opt-in) — dieselbe Property wie an jeder anderen
+        // Sidecar-Wiring-Stelle (eine Wahrheit, s. SidecarTokenHeader-KDoc).
+        @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String,
+    ): SpeakerEmbedPort = CamppSpeakerAdapter(baseUrl, token = sidecarToken)
 
     /**
      * **SpeakerProfileStore** — file-backed Registry der Enroll-Profile (Muster:
@@ -1654,6 +1675,11 @@ class PipelineConfig {
         // KEIN Call). Der Score-Endpoint lebt am SELBEN Brain-Sidecar wie MlxBrainAdapter.
         @Value("\${HOSHI_STT_SURPRISAL_ENABLED:false}") sttSurprisalEnabled: Boolean,
         @Value("\${hoshi.brain.base-url:http://localhost:8041}") sttScoreBaseUrl: String,
+        // Sidecar-Token-Wand (opt-in) — dieselbe Property wie an jeder anderen
+        // Sidecar-Wiring-Stelle (eine Wahrheit, s. SidecarTokenHeader-KDoc). Der
+        // MlxScoreAdapter unten (sttSurprisal) spricht denselben Brain-Sidecar wie
+        // brainPort — derselbe Token gilt.
+        @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String,
         // Sprecher-Vertrauens-Gate (P1-Privacy, SpeakerTrust) — schließt die WorkingSession-
         // Recall-Lücke (TurnOrchestrator.effectiveSession, s. dessen KDoc): DASSELBE Flag/
         // DIESELBE Schwelle wie turnPromptAssembler (Entity-/Episodic-Recall) UND
@@ -1736,7 +1762,7 @@ class PipelineConfig {
         factLowTemp = factLowTempEnabled,
         // Verhör-Detektor S1 (default OFF ⇒ null ⇒ byte-neutral). Bis der /v1/score-Patch
         // im Prod-Brain lebt (Andi-Restart-Gate), liefert der Adapter ehrlich leer.
-        sttSurprisal = if (sttSurprisalEnabled) MlxScoreAdapter(baseUrl = sttScoreBaseUrl) else null,
+        sttSurprisal = if (sttSurprisalEnabled) MlxScoreAdapter(baseUrl = sttScoreBaseUrl, token = sidecarToken) else null,
         // Sprecher-Vertrauens-Gate (P1-Privacy) — schließt die WorkingSession-Recall-Lücke
         // (siehe SpeakerTrust-KDoc + TurnOrchestrator.effectiveSession). Default OFF ⇒
         // byte-neutral, identisch zu turnPromptAssembler/ChatStreamController.

@@ -4,11 +4,13 @@ import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+  LOOKUP_MODEL_TEXTS,
   SETTINGS_CATEGORIES,
   SettingsCategoryNav,
   SettingsPanel,
   type SettingsCategoryId,
 } from '../components/SettingsPanel';
+import type { EscalationModeWire } from '../api/extendedThink';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Kategorie-Navigation (Andi 15.07: „hier müssen wir zu weit scrollen, daher
@@ -299,5 +301,126 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
 
     const visible = SETTINGS_CATEGORIES.filter((c) => !panel(c.id).hidden);
     expect(visible.map((c) => c.id)).toEqual(['sprache-stimme']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Nachschlag-Modell-Kaskade (bündig-Sweep, Muster-Übertrag „TTS-Dropdown"):
+//  die Nachschlag-Modell-Karte betrifft nur, WOMIT Hoshi online nachschaut —
+//  bei Extended-Think-Stufe „Aus" schaut sie NIE nach, die Karte war vorher
+//  trotzdem immer da („heute beziehungslos"). Jetzt blendet sie sich aus,
+//  sobald der Server-Ist-Zustand das sicher bestätigt (effectiveMode==='AUS'),
+//  bleibt aber sichtbar, solange die Stufe noch unbekannt ist (lädt/Fehler) —
+//  nie fälschlich verstecken. Getrennte Fetches (extended-think/lookup-model)
+//  bleiben getrennt, s. `OnlineNachschlagenGroup` in SettingsPanel.tsx.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Online & Nachschlagen — Nachschlag-Modell-Kaskade', () => {
+  let container: HTMLDivElement;
+  let root: Root | null = null;
+
+  const baseProps = {
+    open: true,
+    onClose: () => {},
+    theme: 'yoru' as const,
+    language: 'de' as const,
+    persona: 'Standard' as const,
+    voice: 'coral',
+    onTheme: () => {},
+    onLanguage: () => {},
+    onPersona: () => {},
+    onVoice: () => {},
+  };
+
+  const flush = async (): Promise<void> => {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', memoryStorage());
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
+
+  afterEach(async () => {
+    if (root) {
+      const r = root;
+      await act(async () => r.unmount());
+      root = null;
+    }
+    container.remove();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const lookupModelBody = {
+    aktiv: 'gpt-5.4-nano',
+    modelle: [{ id: 'gpt-5.4-nano', label: 'OpenAI Nano', centsProLookup: 0.1 }],
+  };
+
+  /** Routing-Fake: `/extended-think` liefert die Stufe (oder scheitert), `/lookup-model` antwortet fest. */
+  const stubFetch = (extendedThink: 'error' | EscalationModeWire) => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/settings/extended-think')) {
+        if (extendedThink === 'error') throw new Error('kaskaden-test: kein Netz');
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            mode: extendedThink,
+            ceilingOpen: true,
+            locked: false,
+            effectiveMode: extendedThink,
+          }),
+        };
+      }
+      if (url.includes('/settings/lookup-model')) {
+        return { ok: true, status: 200, json: async () => lookupModelBody };
+      }
+      throw new Error(`Kaskaden-Test: unerwartete URL ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  };
+
+  const openOnlineNachschlagen = async (): Promise<HTMLElement> => {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<SettingsPanel {...baseProps} />);
+    });
+    await flush();
+    const tab = container.querySelector('#settings-tab-online-nachschlagen') as HTMLButtonElement;
+    await act(async () => {
+      tab.click();
+    });
+    await flush();
+    return container.querySelector('#settings-panel-online-nachschlagen') as HTMLElement;
+  };
+
+  it('Stufe AUTOMATISCH (≠ Aus): die Nachschlag-Modell-Karte ist sichtbar', async () => {
+    stubFetch('AUTOMATISCH');
+    const panel = await openOnlineNachschlagen();
+    expect(panel.querySelector('#settings-lookup-model')).not.toBeNull();
+    // LOOKUP_MODEL_TEXTS.hint ist eindeutig (anders als .label, das als Teilstring
+    // auch im Extended-Think-Hinweis vorkommt: „…schnellen Online-Nachschlag…").
+    expect(panel.textContent).toContain(LOOKUP_MODEL_TEXTS.hint);
+  });
+
+  it('Stufe AUS: die Nachschlag-Modell-Karte ist am Ende unsichtbar (kein disabled Select, echtes Ausblenden)', async () => {
+    // Im kurzen Fenster VOR dem Extended-Think-GET ist die Stufe noch unbekannt —
+    // die Karte darf da (richtigerweise) kurz mitmounten/fetchen, s. den
+    // „unbekannt"-Test unten. Hier zählt der Endzustand NACH dem Settle.
+    stubFetch('AUS');
+    const panel = await openOnlineNachschlagen();
+    expect(panel.querySelector('#settings-lookup-model')).toBeNull();
+    expect(panel.textContent).not.toContain(LOOKUP_MODEL_TEXTS.hint);
+  });
+
+  it('Stufe unbekannt (Extended-Think-Fetch scheitert): die Karte bleibt sichtbar — nie fälschlich verstecken', async () => {
+    stubFetch('error');
+    const panel = await openOnlineNachschlagen();
+    expect(panel.querySelector('#settings-lookup-model')).not.toBeNull();
   });
 });

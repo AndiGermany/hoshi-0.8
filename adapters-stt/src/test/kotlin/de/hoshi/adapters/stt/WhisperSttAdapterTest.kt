@@ -33,6 +33,7 @@ class WhisperSttAdapterTest {
                     contentType = ex.requestHeaders.getFirst("Content-Type") ?: "",
                     bodyLen = raw.size,
                     bodyText = String(raw, Charsets.ISO_8859_1),
+                    token = ex.requestHeaders.getFirst("X-Hoshi-Token"),
                 ),
             )
             val bytes = body.toByteArray()
@@ -47,7 +48,13 @@ class WhisperSttAdapterTest {
         }
     }
 
-    data class RequestMeta(val query: String, val contentType: String, val bodyLen: Int, val bodyText: String)
+    data class RequestMeta(
+        val query: String,
+        val contentType: String,
+        val bodyLen: Int,
+        val bodyText: String,
+        val token: String? = null,
+    )
 
     @Test
     fun `WAV liefert Transkript aus der Sidecar-Antwort`() =
@@ -136,4 +143,23 @@ class WhisperSttAdapterTest {
         val adapter = WhisperSttAdapter(baseUrl = "http://127.0.0.1:1", timeoutSeconds = 2)
         assertEquals("", adapter.transcribe("FAKE".toByteArray(), Language.DE).block(Duration.ofSeconds(5)))
     }
+
+    // ---- Sidecar-Token-Wand (opt-in, Commit 62fccc7): Property gesetzt ⇒ Header,
+    // Property leer ⇒ KEIN Header (byte-identisch zu vor der Wand). ----
+
+    @Test
+    fun `Token konfiguriert - Request traegt X-Hoshi-Token`() =
+        withWhisper("""{"text":"ok"}""") { url, captured ->
+            val adapter = WhisperSttAdapter(baseUrl = url, token = "geheim-123")
+            adapter.transcribe("FAKE".toByteArray(), Language.DE).block(Duration.ofSeconds(5))
+            assertEquals("geheim-123", captured.get()!!.token, "gesetzter Token muss als X-Hoshi-Token mitgehen")
+        }
+
+    @Test
+    fun `Token leer (Default) - KEIN X-Hoshi-Token-Header (byte-neutral)`() =
+        withWhisper("""{"text":"ok"}""") { url, captured ->
+            val adapter = WhisperSttAdapter(baseUrl = url)
+            adapter.transcribe("FAKE".toByteArray(), Language.DE).block(Duration.ofSeconds(5))
+            assertEquals(null, captured.get()!!.token, "leerer Token darf KEINEN Header senden")
+        }
 }

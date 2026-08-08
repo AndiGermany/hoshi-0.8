@@ -16,16 +16,23 @@
 **Der kürzeste Weg** — was ein frischer Klon wirklich erlebt, wenn alles gut geht:
 
 ```bash
-./gradlew build && (cd frontend && npm install && npm run build)
-tools/models-verify.sh          # sagt read-only, welche Modelle noch fehlen
-sidecars/say/bootstrap.sh       # die Sprachausgabe — einmalig, kein Schlüssel, kein Modell
-sidecars/brain/bootstrap.sh     # das Sprachmodell (Modell-Download läuft über HuggingFace)
-bin/hoshi up                    # Stack hoch + ehrlicher Status
-bin/hoshi voice                 # der Beweis: Hoshi spricht wirklich
+bin/hoshi preflight   # kann diese Maschine Hoshi fahren? (read-only, startet nichts)
+bin/hoshi setup       # baut/installiert idempotent alles, was fehlt — Wiederholen immer sicher
+bin/hoshi up          # Stack hoch + ehrlicher Status
+bin/hoshi voice       # der Beweis: Hoshi spricht wirklich
 ```
 
+`setup` orchestriert exakt die Schritte, die früher hier zum Abtippen standen
+(Gradle-Build → npm → Sidecar-Bootstraps → Modell-Prüfung) und tut beim zweiten
+Lauf nur noch das Fehlende — auf einer fertigen Maschine meldet er in unter
+einer Sekunde „schon da". Zwei ehrliche Grenzen: **Modelle lädt er nie selbst**
+(der Abschluss-Report sagt dir, was fehlt und wo du es holst — Lizenz-Klicks
+bei HuggingFace bleiben deine, siehe Schritt 3), und **Piper** bleibt ein
+Opt-in (`bin/hoshi setup --with-piper`, GPL-Begründung unten). `--dry-run`
+zeigt den Plan, ohne irgendetwas zu tun.
+
 Alles darunter erklärt dieselben Schritte langsam, inklusive der Stellen, an denen sie
-schiefgehen.
+schiefgehen — und ist zugleich der Handweg, falls du `setup` nicht magst.
 
 ## 0. Für wen das hier ist
 
@@ -61,21 +68,26 @@ cd frontend && npm install && npm run build && cd ..
 
 ## 3. Modelle besorgen
 
-`models.json` im Repo-Root ist das Manifest: welche Modelle, woher (HuggingFace-Repo,
-Ollama-Name oder Direct-Download), unter welcher Lizenz, welche Dateien erwartet werden.
-`tools/models-verify.sh` prüft **read-only**, ob dein lokaler Cache vollständig ist —
-lauf es zuerst, bevor du irgendetwas startest:
+`models.json` im Repo-Root ist das Manifest — seit v2 mit **voller Revision,
+Dateiliste, Bytes und SHA-256 je Modell**: welche Modelle, woher (HuggingFace-Repo,
+Ollama-Name oder Direct-Download), unter welcher Lizenz. `tools/models-verify.sh`
+prüft **read-only** gegen genau diese Pins — lauf es zuerst, bevor du irgendetwas
+startest. Zum Beschaffen gibt es den **verifizierten Fetcher** (Hash-Prüfung vor
+Aktivierung, Resume, Lizenz-Gates — er akzeptiert Lizenzen NIE stellvertretend
+für dich):
 
 ```bash
-tools/models-verify.sh
+tools/models-verify.sh                          # was fehlt? (read-only)
+python3 tools/verified_fetch.py plan            # was würde geholt? (read-only)
+python3 tools/verified_fetch.py fetch --accept-license gemma   # holen, Hash-geprüft
 ```
 
 Was du brauchst (Details + Lizenzen in `models.json`):
 
 | Modell | Rolle | Woher | Pflicht? |
 |---|---|---|---|
-| `mlx-community/gemma-4-e2b-it-4bit` | Brain (Default) | HuggingFace (Gemma-Lizenz — Terms auf HF akzeptieren) | ja |
-| `mlx-community/gemma-4-e4b-it-4bit` | Brain (Alt/Komfort) | HuggingFace (Gemma-Lizenz) | nein |
+| `mlx-community/gemma-4-e4b-it-4bit` | Brain (Default seit 0.8.3) | HuggingFace (Gemma-Lizenz — Terms auf HF akzeptieren) | ja |
+| `mlx-community/gemma-4-e2b-it-4bit` | Brain (Rückweg, retired) | HuggingFace (Gemma-Lizenz) | nein |
 | `mlx-community/whisper-large-v3-turbo` | STT-Modellgewicht | HuggingFace (lazy beim ersten Request, siehe `sidecars/stt`) | ja, für Sprache-als-Eingabe |
 | `Wespeaker/wespeaker-voxceleb-campplus` | Speaker-ID-Gewicht | Direct-Download (Apache-2.0, `sidecars/speaker/bootstrap.sh`) | nur fürs Anlernen — die Erkennung ist aus, siehe §8 |
 | `embeddinggemma:300m` | Episodic-Memory-Embedding | Ollama (`ollama pull embeddinggemma:300m`) | ja, für Memory |

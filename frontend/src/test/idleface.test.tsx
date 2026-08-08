@@ -10,6 +10,7 @@ import {
   fmtP50,
   fmtPrecip,
   nextAlarm,
+  rainOnsetEpochMs,
   statusChips,
   todayTileValue,
   weatherCategory,
@@ -141,27 +142,119 @@ describe('IdleFace-Helfer — pur, ohne DOM', () => {
     expect(fmtPrecip(1.2, 'en-US')).toBe('1.2');
   });
 
-  it('weatherNowContent: live liefert Lage/Spanne/Regen-Zeile + Icon-Kategorie getrennt', () => {
-    const live = weatherNowContent(liveWeather);
+  it('weatherNowContent: live liefert Lage/Spanne/Regen-Zeile + Icon-Kategorie getrennt (ohne current/morgen/sonne: alle Zusatzzeilen null)', () => {
+    const live = weatherNowContent(liveWeather, NOW);
     expect(live).toEqual({
       kind: 'live',
+      nowTemp: null,
       cond: 'bedeckt',
       span: '18–29°',
       precip: 'trocken',
       category: 'cloudy',
+      tomorrow: null,
+      rainFrom: null,
+      sun: null,
     });
 
-    const withRain = weatherNowContent({
-      kind: 'live',
-      data: { ...heute29, codeText: 'leichter Regen', precipMm: 3 },
-    });
+    const withRain = weatherNowContent(
+      { kind: 'live', data: { ...heute29, codeText: 'leichter Regen', precipMm: 3 } },
+      NOW,
+    );
     expect(withRain).toEqual({
       kind: 'live',
+      nowTemp: null,
       cond: 'leichter Regen',
       span: '18–29°',
       precip: '3 mm Regen heute',
       category: 'rain',
+      tomorrow: null,
+      rainFrom: null,
+      sun: null,
     });
+  });
+
+  it('weatherNowContent: Jetzt-Temperatur/-Lage aus current, wenn das Backend sie liefert', () => {
+    const withNow = weatherNowContent(
+      { kind: 'live', data: { ...heute29, nowTemp: 22, nowCodeText: 'starker Regen' } },
+      NOW,
+    );
+    expect(withNow.kind).toBe('live');
+    if (withNow.kind !== 'live') throw new Error('unreachable');
+    expect(withNow.nowTemp).toBe('22°');
+    expect(withNow.cond).toBe('starker Regen'); // Jetzt-Lage, NICHT die Tagesbedingung (bedeckt)
+    expect(withNow.category).toBe('rain'); // Icon folgt der Jetzt-Lage, nicht der Tagesbedingung
+  });
+
+  it('weatherNowContent: Morgen-Zeile NUR mit allen drei Morgen-Feldern, sonst null', () => {
+    const complete = weatherNowContent(
+      { kind: 'live', data: { ...heute29, tomorrowMin: 12, tomorrowMax: 22, tomorrowCodeText: 'sonnig' } },
+      NOW,
+    );
+    if (complete.kind !== 'live') throw new Error('unreachable');
+    expect(complete.tomorrow).toBe('morgen 12–22°, sonnig');
+
+    const partial = weatherNowContent(
+      { kind: 'live', data: { ...heute29, tomorrowMin: 12 } }, // max/codeText fehlen
+      NOW,
+    );
+    if (partial.kind !== 'live') throw new Error('unreachable');
+    expect(partial.tomorrow).toBeNull();
+  });
+
+  it('rainOnsetEpochMs: erste Stunde >20% Regenwahrscheinlichkeit, sonst null (kein Zahlenfriedhof)', () => {
+    expect(rainOnsetEpochMs(undefined)).toBeNull();
+    expect(rainOnsetEpochMs([])).toBeNull();
+    expect(
+      rainOnsetEpochMs([
+        { epochMs: 1, tempC: 10, precipProbability: 15 },
+        { epochMs: 2, tempC: 10, precipProbability: 20 }, // genau 20 zählt NICHT (Schwelle ist ">")
+        { epochMs: 3, tempC: 10, precipProbability: 25 },
+        { epochMs: 4, tempC: 10, precipProbability: 90 },
+      ]),
+    ).toBe(3); // die ERSTE Stunde über der Schwelle, nicht die höchste
+  });
+
+  it('weatherNowContent: Regen-ab-Zeile erscheint nur, wenn eine Stunde die 20%-Schwelle überschreitet', () => {
+    const noRain = weatherNowContent(
+      { kind: 'live', data: { ...heute29, hourly: [{ epochMs: 1, tempC: 10, precipProbability: 15 }] } },
+      NOW,
+    );
+    if (noRain.kind !== 'live') throw new Error('unreachable');
+    expect(noRain.rainFrom).toBeNull();
+
+    const withRainHour = new Date(2026, 6, 4, 17, 0).getTime();
+    const rain = weatherNowContent(
+      {
+        kind: 'live',
+        data: { ...heute29, hourly: [{ epochMs: withRainHour, tempC: 10, precipProbability: 45 }] },
+      },
+      NOW,
+    );
+    if (rain.kind !== 'live') throw new Error('unreachable');
+    expect(rain.rainFrom).toBe('Regen ab ~17:00');
+  });
+
+  it('weatherNowContent: Sonnen-Zeile — „hell ab" vor Sonnenaufgang, „hell bis" danach, null ohne Daten', () => {
+    const sunrise = new Date(2026, 6, 4, 5, 32).getTime();
+    const sunset = new Date(2026, 6, 4, 21, 34).getTime();
+
+    const beforeSunrise = weatherNowContent(
+      { kind: 'live', data: { ...heute29, sunriseEpochMs: sunrise, sunsetEpochMs: sunset } },
+      new Date(2026, 6, 4, 4, 0).getTime(), // vor Sonnenaufgang
+    );
+    if (beforeSunrise.kind !== 'live') throw new Error('unreachable');
+    expect(beforeSunrise.sun).toBe('hell ab 05:32');
+
+    const afterSunrise = weatherNowContent(
+      { kind: 'live', data: { ...heute29, sunriseEpochMs: sunrise, sunsetEpochMs: sunset } },
+      NOW, // 07:04 — nach Sonnenaufgang
+    );
+    if (afterSunrise.kind !== 'live') throw new Error('unreachable');
+    expect(afterSunrise.sun).toBe('hell bis 21:34');
+
+    const noSunData = weatherNowContent({ kind: 'live', data: heute29 }, NOW);
+    if (noSunData.kind !== 'live') throw new Error('unreachable');
+    expect(noSunData.sun).toBeNull();
   });
 
   it('weatherCategory: feste Zuordnung gegen die 28 bekannten WMO-Texte + Fallback', () => {
@@ -182,15 +275,15 @@ describe('IdleFace-Helfer — pur, ohne DOM', () => {
   });
 
   it('weatherNowContent (Gap-Zustände): off/unreachable/lädt liefern je eine ehrliche Lücken-Zeile', () => {
-    expect(weatherNowContent({ kind: 'off' })).toEqual({
+    expect(weatherNowContent({ kind: 'off' }, NOW)).toEqual({
       kind: 'gap',
       text: 'Kommt — ehrlich leer statt erfunden. Wetter ist bei diesem Deploy ausgeschaltet.',
     });
-    expect(weatherNowContent({ kind: 'unreachable' })).toEqual({
+    expect(weatherNowContent({ kind: 'unreachable' }, NOW)).toEqual({
       kind: 'gap',
       text: 'Wetter grad nicht lesbar — hier steht nichts Erfundenes.',
     });
-    expect(weatherNowContent(null)).toEqual({ kind: 'gap', text: 'Wird gerade gelesen.' });
+    expect(weatherNowContent(null, NOW)).toEqual({ kind: 'gap', text: 'Wird gerade gelesen.' });
   });
 
   it('statusChips: Health immer ehrlich, Stimme-Chip NUR mit echtem voice-Feld', () => {
@@ -272,6 +365,79 @@ describe('IdleFace — das Flur-Display-Layout', () => {
     const html = render({ weather: liveWeather });
     expect(html).toContain('trocken');
     expect(html).not.toContain('0 mm');
+  });
+
+  // ── Neu (Flur-Fertigstellung 2026-07-27): Jetzt-Temperatur, Morgen, Regen-ab
+  // und Sonnenzeiten erscheinen/verschwinden EINZELN ehrlich — je nachdem, ob
+  // das Backend die additiven Felder liefert. ────────────────────────────────
+
+  it('Jetzt-Band: Jetzt-Temperatur + Jetzt-Lage groß, wenn das Backend current liefert', () => {
+    const html = render({
+      weather: { kind: 'live', data: { ...heute29, nowTemp: 22, nowCodeText: 'leichter Regen' } },
+    });
+    expect(html).toContain('idle__nowtemp');
+    expect(html).toContain('22°');
+    expect(html).toContain('leichter Regen'); // Jetzt-Lage, nicht „bedeckt" (Tagesbedingung)
+    expect(html).toContain('18–29°'); // Tagesspanne bleibt als zweite Zeile da
+  });
+
+  it('Jetzt-Band: OHNE current-Daten bleibt der ehrliche Fallback (nur Tagesbedingung, keine erfundene Jetzt-Temperatur)', () => {
+    const html = render({ weather: liveWeather }); // heute29 hat kein nowTemp/nowCodeText
+    expect(html).not.toContain('idle__nowtemp');
+    expect(html).toContain('bedeckt'); // Tagesbedingung bleibt die Kopfzeile
+  });
+
+  it('Jetzt-Band: Morgen-Zeile erscheint mit allen drei Morgen-Feldern, sonst nicht', () => {
+    const withTomorrow = render({
+      weather: {
+        kind: 'live',
+        data: { ...heute29, tomorrowMin: 12, tomorrowMax: 22, tomorrowCodeText: 'sonnig' },
+      },
+    });
+    expect(withTomorrow).toContain('morgen 12–22°, sonnig');
+
+    const without = render({ weather: liveWeather });
+    expect(without).not.toContain('morgen');
+  });
+
+  it('Jetzt-Band: Regen-ab-Zeile NUR bei einer Stunde über der 20%-Schwelle', () => {
+    const withRain = render({
+      weather: {
+        kind: 'live',
+        data: {
+          ...heute29,
+          hourly: [{ epochMs: new Date(2026, 6, 4, 17, 0).getTime(), tempC: 15, precipProbability: 45 }],
+        },
+      },
+    });
+    expect(withRain).toContain('Regen ab ~17:00');
+
+    const belowThreshold = render({
+      weather: {
+        kind: 'live',
+        data: { ...heute29, hourly: [{ epochMs: 1, tempC: 15, precipProbability: 15 }] },
+      },
+    });
+    expect(belowThreshold).not.toContain('Regen ab');
+  });
+
+  it('Jetzt-Band: leise Sonnen-Zeile „hell bis …" mit Sonnenauf-/-untergangsdaten, sonst weg', () => {
+    const withSun = render({
+      weather: {
+        kind: 'live',
+        data: {
+          ...heute29,
+          sunriseEpochMs: new Date(2026, 6, 4, 5, 32).getTime(),
+          sunsetEpochMs: new Date(2026, 6, 4, 21, 34).getTime(),
+        },
+      },
+    });
+    expect(withSun).toContain('hell bis 21:34');
+    expect(withSun).toContain('idle__nowline--sun');
+
+    const withoutSun = render({ weather: liveWeather });
+    expect(withoutSun).not.toContain('hell bis');
+    expect(withoutSun).not.toContain('hell ab');
   });
 
   it('Jetzt-Band: Wetter beim Deploy aus (404) ⇒ ehrliche Lücken-Zeile, keine erfundenen Grade', () => {

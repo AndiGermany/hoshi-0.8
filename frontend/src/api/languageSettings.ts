@@ -1,4 +1,6 @@
 import { API_BASE, TOKEN } from './config';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 
 /**
  * Typisierter Client für den Sprach-Settings-Rand (Andi-Auftrag 2026-07-20:
@@ -75,8 +77,8 @@ export async function fetchLanguageSettings(signal?: AbortSignal): Promise<Langu
     headers: authHeaders(),
     signal,
   });
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   return toSetting(await res.json());
 }
 
@@ -94,7 +96,7 @@ export async function saveLanguageSetting(code: string, signal?: AbortSignal): P
     signal,
   });
   if (res.status === 422) throw new UnknownLanguageError(code);
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   return toSetting(await res.json());
 }

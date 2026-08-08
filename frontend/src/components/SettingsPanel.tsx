@@ -479,8 +479,7 @@ export function SettingsPanel({
             es für die Stufen KEIN UI-Element — nur GET/PUT
             /api/v1/settings/extended-think im Backend. */}
         <SettingsCategoryPanel id="online-nachschlagen" active={activeCategory}>
-          <ExtendedThinkSection />
-          <LookupModelSection />
+          <OnlineNachschlagenGroup />
         </SettingsCategoryPanel>
 
         {/* ═══ Modell & Leistung (Andi-Auftrag: Brain-Modell live umschaltbar,
@@ -935,7 +934,21 @@ export const EXTENDED_THINK_TEXTS = de.extendedThink;
  * ⇒ die Karten bleiben sichtbar, aber gesperrt + ein ehrlicher Hinweis — kein
  * Fake-Schalter, der nichts schaltet.
  */
-export function ExtendedThinkSection() {
+export function ExtendedThinkSection({
+  onModeChange,
+}: {
+  /**
+   * Meldet JEDEN bekannten Server-Zustand nach oben (initialer Load + jeder
+   * erfolgreiche PUT/Reload) — `null` bedeutet „noch unbekannt" (lädt/Fehler,
+   * NICHT dasselbe wie AUS). {@link OnlineNachschlagenGroup} nutzt das, um die
+   * Nachschlag-Modell-Karte nur zu zeigen, wenn Extended Think wirklich wirken
+   * kann (Muster {@link ModelPerformanceGroup}/{@link BrainAutoSwitchSection}
+   * — getrennte Fetches bleiben getrennt, nur der Stufen-Wert wird geteilt).
+   * Trägt `effectiveMode`, nicht das rohe `mode`: die Decke kollabiert eine
+   * gewählte Stufe serverseitig ohnehin auf AUS (s. {@link ExtendedThinkSetting}).
+   */
+  onModeChange?: (mode: EscalationModeWire | null) => void;
+} = {}) {
   const t = useUiStrings();
   const EXTENDED_THINK_TEXTS = t.extendedThink;
   const [current, setCurrent] = useState<ExtendedThinkSetting | null>(null);
@@ -954,6 +967,7 @@ export function ExtendedThinkSection() {
         if (aliveRef.current) {
           setCurrent(next);
           setError(null);
+          onModeChange?.(next.effectiveMode);
         }
       } catch {
         if (aliveRef.current) setError(EXTENDED_THINK_TEXTS.loadError);
@@ -965,6 +979,7 @@ export function ExtendedThinkSection() {
       aliveRef.current = false;
       controller.abort();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onModeChange kann sich pro Render ändern, ein einmaliger Mount-Fetch reicht (Muster BrainAutoSwitchSection).
   }, []);
 
   const onSelect = (mode: EscalationModeWire) => {
@@ -976,6 +991,7 @@ export function ExtendedThinkSection() {
         const updated = await saveExtendedThinkMode(mode);
         if (!aliveRef.current) return;
         setCurrent(updated);
+        onModeChange?.(updated.effectiveMode);
       } catch (e) {
         if (!aliveRef.current) return;
         if (e instanceof UnknownEscalationModeError) setNote(EXTENDED_THINK_TEXTS.unknown);
@@ -986,7 +1002,10 @@ export function ExtendedThinkSection() {
         // (Muster {@link LookupModelSection}/{@link TtsAndVoiceSection}).
         try {
           const next = await fetchExtendedThink();
-          if (aliveRef.current) setCurrent(next);
+          if (aliveRef.current) {
+            setCurrent(next);
+            onModeChange?.(next.effectiveMode);
+          }
         } catch {
           /* die Notiz steht schon */
         }
@@ -1231,6 +1250,30 @@ export function LookupModelSectionView({
   );
 }
 
+/**
+ * Hält die Extended-Think-Stufenwahl UND das Nachschlag-Modell zusammen
+ * (bündig-Sweep, Muster {@link ModelPerformanceGroup}): die Nachschlag-Modell-
+ * Karte betrifft nur, WOMIT Hoshi online nachschaut — bei Stufe „Aus" (oder
+ * effektiv „Aus" durch die Deploy-Decke, s. {@link ExtendedThinkSetting.effectiveMode})
+ * schaut sie NIE nach, die Karte war bis hierher „heute beziehungslos" sichtbar.
+ * Jetzt blendet sie sich aus, statt sich zu deaktivieren — Werte/Endpoint
+ * bleiben unangetastet, ein späteres Einblenden zeigt wieder den echten
+ * Server-Zustand (kein Reset). `null` (noch unbekannt: lädt oder Fehler) zeigt
+ * die Karte weiter — nie fälschlich verstecken, solange die Stufe nicht sicher
+ * feststeht. Getrennte Fetches bleiben getrennt (kein Zusammenlegen) — nur der
+ * Stufen-Wert wandert als Prop von {@link ExtendedThinkSection} hoch.
+ */
+function OnlineNachschlagenGroup() {
+  const [thinkMode, setThinkMode] = useState<EscalationModeWire | null>(null);
+  const showLookup = thinkMode === null || thinkMode !== 'AUS';
+  return (
+    <>
+      <ExtendedThinkSection onModeChange={setThinkMode} />
+      {showLookup && <LookupModelSection />}
+    </>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  TTS-Engine — welcher Adapter spricht (Andi-Video-Auftrag)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1259,9 +1302,16 @@ export interface TtsEngineSectionViewProps {
 
 /**
  * Präsentations-Sektion der TTS-Engine (prop-getrieben, Muster
- * {@link SkillsSection}): eine Zeile pro Engine mit ehrlichem Status-Badge
- * (aktiv/verfügbar/nicht gestartet) — Auswahl NUR bei `verfuegbar`, kein
- * Fake-Schalter, der nichts schaltet.
+ * {@link LookupModelSectionView}): ein natives `<select>` — dieselbe
+ * Formsprache wie Sprache/Persönlichkeit/Online-Nachschlag (Andi-Auftrag
+ * „die TTS-Engine soll ein Dropdown werden … alles bündig"). Vorher eine
+ * Liste von Zeilen mit Zwei-Stufen-Toggle (Muster {@link SkillsSection}) —
+ * das passte für „mehrere unabhängig an/aus" (Skills), aber die TTS-Engine
+ * ist eine EINZIGE exklusive Wahl aus einer festen Liste, wie Sprache/
+ * Persönlichkeit auch. Nicht verfügbare Engines bleiben in der Liste, aber
+ * als `<option disabled>` MIT ihrem ehrlichen Hinweis im Options-Text (z.B.
+ * „OpenAI (Cloud) — Kein OPENAI_API_KEY gesetzt.") — kein Fake-Auswählbares,
+ * das nichts schaltet.
  */
 export function TtsEngineSectionView({
   current,
@@ -1275,7 +1325,9 @@ export function TtsEngineSectionView({
   const TTS_ENGINE_TEXTS = t.ttsEngine;
   return (
     <section className="settings__group">
-      <h3 className="settings__label">{TTS_ENGINE_TEXTS.label}</h3>
+      <label className="settings__label" htmlFor="settings-tts-engine">
+        {TTS_ENGINE_TEXTS.label}
+      </label>
       {loading && !current && <p className="settings__hint">{TTS_ENGINE_TEXTS.loading}</p>}
       {error && (
         <p className="settings__hint" role="alert">
@@ -1283,44 +1335,22 @@ export function TtsEngineSectionView({
         </p>
       )}
       {current && (
-        <div className="settings__skills">
+        <select
+          id="settings-tts-engine"
+          className="settings__select"
+          value={current.aktiv}
+          disabled={busy}
+          onChange={(e) => onSelect(e.target.value)}
+        >
           {current.engines.map((e) => {
-            const isActive = e.id === current.aktiv;
+            const label = TTS_ENGINE_TEXTS.engineLabels[e.id] ?? e.id;
             return (
-              <div className="settings__skill" key={e.id}>
-                <div className="settings__skillmeta">
-                  <span className="settings__skillname">
-                    {TTS_ENGINE_TEXTS.engineLabels[e.id] ?? e.id}
-                  </span>
-                  <span className="settings__skillbadges">
-                    {isActive && (
-                      <span className="settings__badge settings__badge--egress">{TTS_ENGINE_TEXTS.active}</span>
-                    )}
-                    {!isActive && e.verfuegbar && (
-                      <span className="settings__badge settings__badge--locked">{TTS_ENGINE_TEXTS.available}</span>
-                    )}
-                    {!e.verfuegbar && (
-                      <span className="settings__badge settings__badge--locked">
-                        {e.hinweis || TTS_ENGINE_TEXTS.notStarted}
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={isActive}
-                  aria-label={TTS_ENGINE_TEXTS.engineLabels[e.id] ?? e.id}
-                  className={`settings__toggle ${isActive ? 'is-on' : ''}`}
-                  disabled={isActive || !e.verfuegbar || busy}
-                  onClick={() => onSelect(e.id)}
-                >
-                  <span className="settings__toggleknob" aria-hidden="true" />
-                </button>
-              </div>
+              <option key={e.id} value={e.id} disabled={!e.verfuegbar}>
+                {e.verfuegbar ? label : `${label} — ${e.hinweis || TTS_ENGINE_TEXTS.notStarted}`}
+              </option>
             );
           })}
-        </div>
+        </select>
       )}
       {busy && <p className="settings__hint">{TTS_ENGINE_TEXTS.switching}</p>}
       <p className="settings__hint">{TTS_ENGINE_TEXTS.hint}</p>

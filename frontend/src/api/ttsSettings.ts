@@ -1,4 +1,6 @@
 import { API_BASE, TOKEN } from './config';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 
 /**
  * Typisierter Client für den TTS-Engine-Settings-Rand (Andi-Video-Auftrag:
@@ -147,8 +149,8 @@ export async function fetchTtsSettings(signal?: AbortSignal): Promise<TtsSetting
     headers: authHeaders(),
     signal,
   });
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   return toSetting(await res.json());
 }
 
@@ -168,8 +170,8 @@ export async function saveTtsEngine(id: string, signal?: AbortSignal): Promise<T
   });
   if (res.status === 422) throw new UnknownEngineError(id);
   if (res.status === 409) throw new EngineUnavailableError(id, await readErrorMessage(res));
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   return toSetting(await res.json());
 }
 
@@ -195,7 +197,7 @@ export async function saveTtsVoice(id: string, voice: string, signal?: AbortSign
     throw new UnknownEngineError(id, body.message);
   }
   if (res.status === 409) throw new EngineUnavailableError(id, await readErrorMessage(res));
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   return toSetting(await res.json());
 }

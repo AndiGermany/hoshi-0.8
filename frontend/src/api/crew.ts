@@ -1,4 +1,6 @@
 import { API_BASE, TOKEN } from './config';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 
 /**
  * Ein Crew-Mitglied der "Stellar Bloom" — Spiegel der Backend-`Crewmate`
@@ -33,7 +35,7 @@ export async function fetchCrew(signal?: AbortSignal): Promise<CrewMember[]> {
   if (TOKEN.trim()) headers['X-Hoshi-Token'] = TOKEN;
 
   const res = await fetch(`${API_BASE}/api/v1/crew`, { headers, signal });
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   const body: unknown = await res.json();
   if (!Array.isArray(body)) throw new Error('Crew-Antwort ist kein Array.');
   return body.map(toMember).filter((m): m is CrewMember => m !== null);

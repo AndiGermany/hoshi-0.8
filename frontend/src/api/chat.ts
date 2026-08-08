@@ -78,10 +78,22 @@ export async function streamChat(text: string, opts: StreamChatOptions): Promise
   const settings = loadSettings();
 
   // Sprach-Wahl → Wire: `languagePolicy` trägt die Wahl (AUTO/DE/EN), das Backend
-  // erkennt bei AUTO pro Eingabe; `language` bleibt KONKRET (DE/EN) als Legacy-
-  // Fallback — bei 'auto' fällt es auf DE, sonst auf die gewählte Sprache.
+  // erkennt bei AUTO pro Eingabe; `language` bleibt KONKRET (DE/EN/ES/FR/IT) als
+  // Legacy-Fallback — bei 'auto' fällt es auf DE, sonst auf die gewählte Sprache.
+  //
+  // Andi-Auftrag 2026-07-27 („fünf Sprachen ohne Sternchen"): Español/Français/
+  // Italiano sind seither AUCH FE-seitig wählbar (s. `Language` in api/types.ts),
+  // aber das Backend-Enum `LanguagePolicy` kennt WEITERHIN nur AUTO/DE/EN — ein
+  // `languagePolicy:"ES"` würde Jackson nicht deserialisieren können (422/400,
+  // der ganze Turn bräche). Darum lassen wir das Feld für es/fr/it bewusst WEG
+  // (`undefined` fällt beim JSON.stringify raus): der Backend-Resolver behandelt
+  // eine fehlende Policy wie einen Legacy-Client OHNE Policy und liest direkt das
+  // konkrete `language`-Feld — das trägt den VOLLEN 5-Sprachen-Enum
+  // (`de.hoshi.core.dto.Language`) und funktioniert bereits heute, ganz ohne
+  // Backend-Änderung.
   const langChoice = opts.language ?? settings.language;
-  const languagePolicy = langChoice.toUpperCase();
+  const isPolicyLanguage = langChoice === 'auto' || langChoice === 'de' || langChoice === 'en';
+  const languagePolicy = isPolicyLanguage ? langChoice.toUpperCase() : undefined;
   const concreteLanguage = (langChoice === 'auto' ? 'de' : langChoice).toUpperCase();
 
   const res = await fetch(`${API_BASE}/api/v1/chat/stream`, {

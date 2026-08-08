@@ -12,7 +12,9 @@ import reactor.core.scheduler.Schedulers
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
@@ -24,10 +26,18 @@ import java.time.format.DateTimeFormatter
  *    Datei — `ts`, `category`, `persona`, `ttftMs`, `deflected`, `error`, …); das Diary
  *    trägt bewusst KEINE Gesprächs-Inhalte (Privacy by Design), also exponiert auch
  *    dieser Endpoint keine.
+ *  - `GET /api/v1/diary/recent?limit=25&before=<ISO-8601-ts>` — additive Paginierung
+ *    (Andi-Auftrag „Frühere laden" 2026-07-27, FE-Befund: der Turn-Feed rendert bisher
+ *    JEDEN geladenen Turn ungegliedert): liefert die `limit` jüngsten Zeilen STRIKT VOR
+ *    `before`, rückwärts Tag für Tag gesucht (nicht nur heute+gestern — genau dafür
+ *    braucht es diese Erweiterung, sonst kommt ein Diagnose-Tab, der monatelang läuft,
+ *    nie an ältere Turns heran). Ein ALTER Client, der `before` gar nicht sendet, sieht
+ *    exakt das alte Verhalten (Default-Zweig unverändert) — reiner additiver Vertrag.
  *
  * Ehrlichkeits-Regeln:
  *  - Datei/Verzeichnis fehlt (Diary OFF oder noch kein Turn) ⇒ `[]` (HTTP 200, kein Fehler).
  *  - Kaputte Zeilen werden übersprungen (best-effort lesen, nie 500 wegen einer Zeile).
+ *  - Ein kaputter/unparsbarer `before`-Wert ⇒ ehrlich `[]` (kein Fehler, keine geratene Seite).
  *
  * Verzeichnis-Auflösung EXAKT wie die `turnTracePort`-Bean in [PipelineConfig]
  * (eine Wahrheit, hier nur gespiegelt): explizit (`hoshi.diary.dir` /
@@ -53,19 +63,59 @@ class DiaryController(
     @GetMapping("/api/v1/diary/recent")
     fun recent(
         @RequestParam(name = "limit", defaultValue = "$DEFAULT_LIMIT") limit: Int,
+        @RequestParam(name = "before", required = false) before: String?,
     ): Mono<List<Map<String, Any?>>> =
-        Mono.fromCallable { readRecent(limit.coerceIn(1, MAX_LIMIT)) }
+        Mono.fromCallable { readRecent(limit.coerceIn(1, MAX_LIMIT), before) }
             .subscribeOn(Schedulers.boundedElastic())
 
-    /** Gestern + heute chronologisch einlesen, Tail [limit], dann neueste zuerst. */
-    internal fun readRecent(limit: Int): List<Map<String, Any?>> {
+    /**
+     * Ohne `before` (Alt-Vertrag, UNVERÄNDERT): gestern + heute chronologisch
+     * einlesen, Tail [limit], dann neueste zuerst.
+     *
+     * Mit `before` (additive Paginierung — s. Klassendoc): die [limit] jüngsten
+     * Zeilen STRIKT VOR dem `before`-Zeitpunkt, rückwärts Tag für Tag gesucht
+     * (Anker-Tag von `before` zuerst, dann immer weiter zurück), bis genug
+     * Zeilen beisammen sind oder [MAX_LOOKBACK_DAYS] erreicht ist (Kosten-Deckel
+     * — ein manueller „Frühere laden"-Klick, kein Dauerpoll). Ein unparsbarer
+     * `before`-Wert liefert ehrlich `[]`.
+     */
+    internal fun readRecent(limit: Int, before: String? = null): List<Map<String, Any?>> {
         val dir = resolveDirectory()
-        val today = LocalDate.now()
-        return listOf(today.minusDays(1), today) // chronologisch: gestern vor heute
-            .flatMap { day -> readDay(dir, day) }
-            .takeLast(limit)
-            .asReversed()
+        if (before == null) {
+            val today = LocalDate.now()
+            return listOf(today.minusDays(1), today) // chronologisch: gestern vor heute
+                .flatMap { day -> readDay(dir, day) }
+                .takeLast(limit)
+                .asReversed()
+        }
+        val beforeInstant = parseInstant(before) ?: return emptyList()
+        val anchorDay = LocalDate.ofInstant(beforeInstant, ZoneId.systemDefault())
+        // Chronologisch aufsteigend gesammelt (ältere Tage werden VORNE angehängt),
+        // damit `takeLast(limit)` am Ende exakt dieselbe Semantik wie oben hat.
+        val collected = mutableListOf<Map<String, Any?>>()
+        var day = anchorDay
+        var scanned = 0
+        while (scanned < MAX_LOOKBACK_DAYS && collected.size < limit) {
+            val olderLines = readDay(dir, day).filter { row ->
+                val ts = tsOf(row) ?: return@filter false // unlesbares/fehlendes ts ⇒ raus, nie geraten
+                ts.isBefore(beforeInstant)
+            }
+            collected.addAll(0, olderLines)
+            day = day.minusDays(1)
+            scanned++
+        }
+        return collected.takeLast(limit).asReversed()
     }
+
+    /** ISO-8601-Instant oder `null` bei Junk — nie eine geratene Seite. */
+    private fun parseInstant(raw: String): Instant? = try {
+        Instant.parse(raw)
+    } catch (_: Exception) {
+        null
+    }
+
+    /** `ts`-Feld einer geparsten Diary-Zeile als [Instant], oder `null` bei Junk/Fehlen. */
+    private fun tsOf(row: Map<String, Any?>): Instant? = (row["ts"] as? String)?.let(::parseInstant)
 
     /** Spiegel der `turnTracePort`-Bean-Auflösung in [PipelineConfig] — bitte synchron halten. */
     internal fun resolveDirectory(): Path = when {
@@ -103,5 +153,13 @@ class DiaryController(
 
         /** Hartes Limit — mehr als das gibt der Endpoint nie zurück (Day-Files können groß sein). */
         const val MAX_LIMIT: Int = 500
+
+        /**
+         * Kosten-Deckel für die `before`-Rückwärtssuche: mehr Tage als das werden nie
+         * gescannt, selbst wenn [limit] nie erreicht wird (ein „Frühere laden"-Klick ist
+         * ein einzelner Request, kein Dauerpoll — aber Datei-I/O bleibt trotzdem endlich).
+         * ~14 Monate decken das „das Diary wächst monatelang"-Szenario komfortabel ab.
+         */
+        const val MAX_LOOKBACK_DAYS: Int = 430
     }
 }

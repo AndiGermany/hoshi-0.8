@@ -4,10 +4,13 @@ import {
   ENROLL_TOTAL_SAMPLES,
   SPEAKER_TEXTS,
   SpeakerListView,
+  fitLabel,
   formatEnrolledDate,
+  formatSampleDuration,
+  formatSampleTimestamp,
   micSupport,
 } from '../components/SpeakerSection';
-import type { SpeakerSummary } from '../api/speakers';
+import type { SpeakerDiagnostics, SpeakerSummary } from '../api/speakers';
 
 const speaker = (over: Partial<SpeakerSummary> = {}): SpeakerSummary => ({
   name: 'andi',
@@ -17,7 +20,14 @@ const speaker = (over: Partial<SpeakerSummary> = {}): SpeakerSummary => ({
 
 const render = (props: Partial<Parameters<typeof SpeakerListView>[0]> = {}) =>
   renderToStaticMarkup(
-    <SpeakerListView speakers={[speaker()]} onDelete={() => {}} onEnroll={() => {}} {...props} />,
+    <SpeakerListView
+      speakers={[speaker()]}
+      onDelete={() => {}}
+      onEnroll={() => {}}
+      onContinue={() => {}}
+      onDeleteSample={() => {}}
+      {...props}
+    />,
   );
 
 describe('SpeakerListView — Liste rendert aus GET-Daten', () => {
@@ -100,6 +110,82 @@ describe('SpeakerListView — Liste rendert aus GET-Daten', () => {
   it('Notiz (angelernt / Löschen fehlgeschlagen) wird ehrlich gerendert', () => {
     expect(render({ note: SPEAKER_TEXTS.enrolledNote })).toContain(SPEAKER_TEXTS.enrolledNote);
     expect(render({ note: SPEAKER_TEXTS.deleteFailed })).toContain('unverändert');
+  });
+
+  it('„Weiter anlernen"-Knopf steht an JEDER Profil-Zeile (Andi-Auftrag 07.08)', () => {
+    const html = render({ speakers: [speaker({ name: 'andi' }), speaker({ name: 'mira' })] });
+    expect((html.match(new RegExp(SPEAKER_TEXTS.continueButton, 'g')) ?? []).length).toBe(2);
+    expect(html).toContain(SPEAKER_TEXTS.continueAria('andi'));
+    expect(html).toContain(SPEAKER_TEXTS.continueAria('mira'));
+  });
+
+  it('Aufnahmen-Liste (Reparatur-Auftrag 07.08): ohne Diagnose-Daten ehrlich „lädt…", NIE geraten', () => {
+    // diagnostics-Prop fehlt (noch nicht geladen) ⇒ jede Zeile zeigt die Lade-Zeile statt Unsinn.
+    expect(render()).toContain(SPEAKER_TEXTS.loading);
+  });
+
+  it('Aufnahmen-Liste: Datum · Dauer · „passt zu mir" + Rohwert im title, Einzel-Löschen gesperrt bei der letzten Aufnahme', () => {
+    const diagnostics: SpeakerDiagnostics = {
+      profiles: [
+        {
+          name: 'andi',
+          samples: 2,
+          selfCohesion: 0.9,
+          leaveOneOutSimilarity: [0.75, 0.2],
+          bestForeignSimilarity: {},
+          sampleOrigins: [
+            { recordedAt: 1720000000000, session: 1, device: 'mac', durationSeconds: 2.3, rms: 0.1 },
+            { recordedAt: null, session: null, device: null, durationSeconds: null, rms: null },
+          ],
+        },
+      ],
+      crossSimilarity: {},
+    };
+    const html = render({ diagnostics });
+    expect(html).toContain(SPEAKER_TEXTS.recordingsToggle(2));
+    expect(html).toContain(SPEAKER_TEXTS.fitGood); // 0.75 > 0.6
+    expect(html).toContain(SPEAKER_TEXTS.fitPoor); // 0.2 < 0.35
+    expect(html).toContain('title="0.750"');
+    expect(html).toContain(formatSampleDuration(2.3));
+    expect(html).toContain(formatSampleTimestamp(1720000000000));
+    // Unbekannte Herkunft (Alt-Aufnahme) ⇒ ehrlich „unbekannt", nie geraten.
+    expect(html).toContain(SPEAKER_TEXTS.recordingUnknown);
+    // 2 Aufnahmen (nicht die letzte) ⇒ KEIN Löschen-Knopf gesperrt.
+    expect(html).not.toContain('disabled=""');
+  });
+
+  it('Aufnahmen-Liste: letzte/einzige Aufnahme ⇒ Löschen-Knopf gesperrt mit Hinweis, fitUnknown ohne Vergleichswert', () => {
+    const diagnostics: SpeakerDiagnostics = {
+      profiles: [
+        {
+          name: 'andi',
+          samples: 1,
+          selfCohesion: null,
+          leaveOneOutSimilarity: [], // <2 Samples ⇒ leer, nicht geraten
+          bestForeignSimilarity: {},
+          sampleOrigins: [
+            { recordedAt: 1720000000000, session: null, device: null, durationSeconds: 1.5, rms: 0.05 },
+          ],
+        },
+      ],
+      crossSimilarity: {},
+    };
+    const html = render({ diagnostics });
+    expect(html).toContain(SPEAKER_TEXTS.fitUnknown);
+    expect(html).toContain(SPEAKER_TEXTS.deleteRecordingLastHint);
+    expect(html).toContain('disabled=""');
+  });
+});
+
+describe('fitLabel — „passt zu mir"-Text aus leaveOneOutSimilarity, Rohwert im title', () => {
+  it('> 0.6 ⇒ fitGood, 0.35..0.6 ⇒ fitMedium, < 0.35 ⇒ fitPoor, undefined ⇒ fitUnknown ohne title', () => {
+    expect(fitLabel(SPEAKER_TEXTS, 0.75).text).toBe(SPEAKER_TEXTS.fitGood);
+    expect(fitLabel(SPEAKER_TEXTS, 0.5).text).toBe(SPEAKER_TEXTS.fitMedium);
+    expect(fitLabel(SPEAKER_TEXTS, 0.6).text).toBe(SPEAKER_TEXTS.fitMedium); // Grenzwert: inklusive
+    expect(fitLabel(SPEAKER_TEXTS, 0.1).text).toBe(SPEAKER_TEXTS.fitPoor);
+    const unknown = fitLabel(SPEAKER_TEXTS, undefined);
+    expect(unknown.text).toBe(SPEAKER_TEXTS.fitUnknown);
+    expect(unknown.title).toBeUndefined();
   });
 });
 

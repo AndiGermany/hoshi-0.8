@@ -16,6 +16,11 @@ SERVER_PY="$KNOWLEDGE_DIR/server.py"
 HOST="${HOSHI_KNOWLEDGE_HOST:-0.0.0.0}"
 PORT="${HOSHI_KNOWLEDGE_PORT:-${HOSHI_BRIDGE_PORT:-8035}}"
 DB_PATH="${HOSHI_WIKI_DB_PATH:-$HOME/.hoshi/knowledge/wiki-de/articles.db}"
+# HOSHI_SIDECAR_TOKEN (optional, Codex-Sicherheits-P0 2026-07-27): server.py
+# liest diese Var SELBST per os.environ.get() (kein run.sh-Durchreichen
+# noetig). Leer/ungesetzt (Default) = heutiges offenes Verhalten, NULL
+# Aenderung fuers Produktiv-Setup. Gesetzt: jeder Request ausser /health
+# braucht den Header X-Hoshi-Token mit exakt diesem Wert, sonst 401.
 
 fail() { echo "[knowledge-run] FATAL: $*" >&2; exit 1; }
 say()  { echo "[knowledge-run] $*" >&2; }

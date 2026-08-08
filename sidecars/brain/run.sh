@@ -6,14 +6,18 @@
 # aber SELBSTSTAENDIG: kein Sourcen von hoshi-lib.sh/stack-lib.sh, kein
 # ~/.hoshi/run/brain.model-Datei-Mechanismus. Modell-Wahl folgt stattdessen
 # EXAKT dem Env-Muster von Hoshi_0.8/pipeline/stack-lib.sh::resolve_brain_model
-# (HOSHI_BRAIN_MODEL=e4b|e2b|12b|volle-HF-Repo-ID) — nur der DEFAULT weicht
-# bewusst ab: stack-lib.sh defaultet global auf "e2b" (dokumentierte BE-weite
-# Default-Wahl vom 2026-06-30, s. pipeline/stack-lib.sh-Kommentar), dieser
-# Sidecar IST aber der e4b-Brain (server.py's eigener
-# MODEL_ID-Default) und vault/tracks/LEDGER-sidecars.md haelt fest: "0.8 = ein
-# e4b-Brain, keine Doppel-Default-Drift" (e2b fuers 0.8-Ziel retired). Darum
-# hier Default=e4b. Sobald Scheibe 3 (stack-lib-Umstellung auf dieses Sidecar-
-# Verzeichnis) kommt, muss diese Divergenz bewusst aufgeloest werden.
+# (HOSHI_BRAIN_MODEL=e4b|e2b|12b|volle-HF-Repo-ID).
+#
+# DIVERGENZ AUFGELOEST (2026-07-27, Codex' P0-Fund „EINE Modell-Wahrheit"):
+# hier stand frueher, dass dieser Default (e4b) bewusst vom globalen
+# stack-lib.sh-Default (damals "e2b") abweicht. Das war Stand vor 0.8.3 und
+# nie nachgezogen worden. Jetzt gilt: models.json ist die EINE Wahrheit
+# (brain-e4b: required=true, brain-e2b: required=false/retired seit 0.8.3,
+# brain-12b: required=false/Chat-Brain hinter Auto-Modellwahl) — und
+# stack-lib.sh defaultet ebenfalls auf e4b, also KEINE Divergenz mehr. Der
+# neue Check "model-truth" in pipeline/doctor.sh liest beide Seiten (models.json
+# per required=true, stack-lib.sh per grep auf die HOSHI_BRAIN_MODEL-Default-
+# Zeile) und meldet DEGRADED, falls sie je wieder auseinanderlaufen.
 #
 # GARANTIE (wie im 0.5-Original):
 #   - Startet IMMER ueber das sidecars/brain/.venv-Python (absolut, kein PATH-Glueck).
@@ -47,8 +51,9 @@ say()  { echo "[brain-run] $*" >&2; }
 [ -f "$SERVER_PY" ] || fail "server.py fehlt: $SERVER_PY"
 
 # ── Modell-Aufloesung (Kurz-Token -> kanonische mlx-community-Repo-ID) ───────
-# Identische case-Logik wie pipeline/stack-lib.sh::resolve_brain_model — s.
-# Kopf-Kommentar fuer den bewussten Default-Unterschied (e4b statt e2b hier).
+# Identische case-Logik UND identischer e4b-Default wie pipeline/
+# stack-lib.sh::resolve_brain_model — models.json ist die eine Wahrheit,
+# pipeline/doctor.sh (Check "model-truth") wacht ueber Gleichlauf.
 resolve_brain_model() {
     local choice="${HOSHI_BRAIN_MODEL:-e4b}"
     case "$choice" in
@@ -62,6 +67,12 @@ resolve_brain_model() {
 MODEL="$(resolve_brain_model)"
 PORT="${HOSHI_BRAIN_PORT:-8041}"
 HOST="${HOSHI_BRAIN_HOST:-0.0.0.0}"
+
+# HOSHI_SIDECAR_TOKEN (optional, Codex-Sicherheits-P0 2026-07-27): server.py
+# liest diese Var SELBST per os.environ.get() (kein run.sh-Durchreichen
+# noetig). Leer/ungesetzt (Default) = heutiges offenes Verhalten, NULL
+# Aenderung fuers Produktiv-Setup. Gesetzt: jeder Request ausser /health
+# braucht den Header X-Hoshi-Token mit exakt diesem Wert, sonst 401.
 
 # Cold-Fix/KV-Freeze-Feintuning: EXAKT dieselben Env-Namen wie server.py sie
 # selbst liest (os.environ.get("HOSHI_E4B_...")) — NICHT umbenennen, sonst

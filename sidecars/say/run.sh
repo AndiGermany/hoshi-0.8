@@ -44,6 +44,10 @@ HOST="${HOSHI_SAY_HOST:-0.0.0.0}"
 PORT="${HOSHI_SAY_PORT:-8044}"
 # HOSHI_SAY_DEFAULT_VOICE wird von server.py SELBST per os.environ.get()
 # gelesen (s. argparse-Default dort) — hier nur durchgereicht, kein Doppel-Resolver.
+# HOSHI_SIDECAR_TOKEN (optional, Codex-Sicherheits-P0 2026-07-27): ebenfalls
+# server.py-eigenes os.environ.get(). Leer/ungesetzt (Default) = heutiges
+# offenes Verhalten, NULL Aenderung fuers Produktiv-Setup. Gesetzt: jeder
+# Request ausser /health braucht den Header X-Hoshi-Token exakt, sonst 401.
 
 # ── Trust-but-verify: das venv-Python MUSS fastapi/uvicorn sehen ────────────
 "$VENV_PY" -c "import fastapi, uvicorn" >/dev/null 2>&1 \

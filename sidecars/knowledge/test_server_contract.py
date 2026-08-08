@@ -1,4 +1,5 @@
 """Kleine Vertrags- und Read-only-Tests ohne echte Wikipedia-Datenbank."""
+import asyncio
 import hashlib
 import json
 import os
@@ -7,6 +8,8 @@ import sys
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
+from starlette.responses import Response
 
 os.environ.setdefault("HOSHI_WIKI_DB_PATH", "/dev/null")
 sys.path.insert(0, os.path.dirname(__file__))
@@ -160,3 +163,72 @@ def test_v1_search_refuses_legacy_database_before_retrieval():
 
     assert exc.value.status_code == 409
     assert "knowledge-pack-required" in exc.value.detail
+
+
+# ── HOSHI_SIDECAR_TOKEN-Wand (Codex-Sicherheits-P0 2026-07-27) ──────────────
+# Diese Suite ruft Endpunkt-Funktionen sonst direkt auf (kein TestClient/httpx
+# im .venv, s. bootstrap.sh) — die Middleware laeuft aber nur auf dem echten
+# ASGI-Request-Pfad. Deshalb hier gezielt server._hoshi_token_wall() selbst
+# ueber ein minimales, handgebautes Request-Scope aufgerufen (starlette ist
+# bereits eine FastAPI-Abhaengigkeit, kein neues Package).
+
+def _make_request(path: str, token: str | None = None) -> Request:
+    headers = []
+    if token is not None:
+        headers.append((b"x-hoshi-token", token.encode()))
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "headers": headers,
+        "client": ("127.0.0.1", 12345),
+        "server": ("127.0.0.1", 8035),
+        "scheme": "http",
+    }
+    return Request(scope)
+
+
+def test_token_wall_open_without_token_when_env_empty(monkeypatch):
+    """Leer/ungesetzt (Default) ⇒ heutiges offenes Verhalten, NULL Aenderung —
+    kein X-Hoshi-Token-Header noetig, auch nicht fuer Nicht-/health-Pfade."""
+    monkeypatch.setattr(server, "_HOSHI_SIDECAR_TOKEN", "")
+
+    async def call_next(_request):
+        return Response("ok", status_code=200)
+
+    response = asyncio.run(server._hoshi_token_wall(_make_request("/search"), call_next))
+    assert response.status_code == 200
+
+
+def test_token_wall_rejects_missing_or_wrong_token_with_401_when_set(monkeypatch):
+    monkeypatch.setattr(server, "_HOSHI_SIDECAR_TOKEN", "geheimwert-test")
+
+    async def boom(_request):
+        raise AssertionError("call_next darf bei falschem/fehlendem Token NIE erreicht werden")
+
+    missing = asyncio.run(server._hoshi_token_wall(_make_request("/search"), boom))
+    assert missing.status_code == 401
+    assert json.loads(missing.body) == {"detail": "unauthorized"}
+
+    wrong = asyncio.run(server._hoshi_token_wall(_make_request("/search", token="falsch"), boom))
+    assert wrong.status_code == 401
+
+    async def call_next(_request):
+        return Response("ok", status_code=200)
+
+    correct = asyncio.run(
+        server._hoshi_token_wall(_make_request("/search", token="geheimwert-test"), call_next)
+    )
+    assert correct.status_code == 200
+
+
+def test_token_wall_never_blocks_health_even_when_token_is_set(monkeypatch):
+    monkeypatch.setattr(server, "_HOSHI_SIDECAR_TOKEN", "geheimwert-test")
+
+    async def call_next(_request):
+        return Response("ok", status_code=200)
+
+    response = asyncio.run(server._hoshi_token_wall(_make_request("/health"), call_next))
+    assert response.status_code == 200

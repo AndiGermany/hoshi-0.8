@@ -260,6 +260,15 @@ sanitize_allowed() {
                 *51.43247*|*6.76516*|*30.06263*|*31.24967*) return 0 ;;
             esac
             ;;
+        privkey)
+            # pipeline/publish-satellite.sh trägt die privkey-SCAN-REGEX als
+            # Literal (Scanner scannt Scanner, 2026-08-08) — das Muster
+            # '-----BEGIN [A-Z ]*PRIVATE KEY' in einer run_scan_rule-Zeile ist
+            # Erkennungs-Code, kein Schlüssel. Nur exakt diese Datei.
+            case "$file" in
+                pipeline/publish-satellite.sh) return 0 ;;
+            esac
+            ;;
         apikey|secret-literal)
             # Test-Fixtures der Sanitizer/TTS-Tests. Offensichtlich synthetisch:
             #   sk-ABCDEF…  — der Dummy-Key, gegen den NeverSpeakTtsSanitizer,

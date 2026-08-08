@@ -99,6 +99,10 @@ class TtsRuntimeConfig {
         // ist crest-faktor-bedingt (peakige Sätze) und bräuchte einen Limiter (Andi-Call).
         @Value("\${hoshi.tts.loudness.max-gain-db:12.0}") loudnessMaxGainDb: Double,
         @Value("\${hoshi.tts.loudness.silence-floor-db:-50.0}") loudnessSilenceFloorDb: Double,
+        // Sidecar-Token-Wand (opt-in) — dieselbe Property wie an jeder anderen
+        // Sidecar-Wiring-Stelle (eine Wahrheit, s. SidecarTokenHeader-KDoc). Gilt nur
+        // für say/piper (s. TtsEngineFactory-KDoc, sidecarToken).
+        @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String,
     ): TtsEngineFactory = TtsEngineFactory(
         voxtralBaseUrl = voxtralBaseUrl,
         voxtralVoice = voxtralVoice,
@@ -117,6 +121,7 @@ class TtsRuntimeConfig {
         loudnessPeakCeilingDb = loudnessPeakCeilingDb,
         loudnessMaxGainDb = loudnessMaxGainDb,
         loudnessSilenceFloorDb = loudnessSilenceFloorDb,
+        sidecarToken = sidecarToken,
     )
 
     @Bean
@@ -134,7 +139,11 @@ class TtsRuntimeConfig {
     fun ttsVoiceCatalog(
         @Value("\${hoshi.tts.say.base-url:http://127.0.0.1:8044}") sayBaseUrl: String,
         @Value("\${hoshi.tts.piper.base-url:http://127.0.0.1:8045}") piperBaseUrl: String,
-    ): TtsVoiceCatalog = HttpTtsVoiceCatalog(sayBaseUrl = sayBaseUrl, piperBaseUrl = piperBaseUrl)
+        // Sidecar-Token-Wand (opt-in) — `/voices` ist KEIN `/health`-Ausnahme-Pfad,
+        // braucht den Header also genauso wie `/tts` (eine Wahrheit, s.
+        // SidecarTokenHeader-KDoc).
+        @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String,
+    ): TtsVoiceCatalog = HttpTtsVoiceCatalog(sayBaseUrl = sayBaseUrl, piperBaseUrl = piperBaseUrl, token = sidecarToken)
 
     @Bean
     fun delegatingTtsPort(

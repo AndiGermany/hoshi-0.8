@@ -11,9 +11,15 @@ import {
   useUiStrings,
 } from '../i18n';
 import { LanguageSectionView } from '../components/LanguageSection';
-import { SpeakerListView } from '../components/SpeakerSection';
+import {
+  EnrollDialog,
+  SpeakerListView,
+  formatEnrolledDate,
+  micSupport,
+  sampleProgress,
+} from '../components/SpeakerSection';
 import { NightModeDeviceListView } from '../components/NightModeSection';
-import { WeatherLocationSectionView } from '../components/SettingsPanel';
+import { SettingsPanel, WeatherLocationSectionView } from '../components/SettingsPanel';
 import { FiredToast } from '../components/FiredToast';
 import type { FiredItem } from '../hooks/useFiredItems';
 import { IdleFace } from '../components/IdleFace';
@@ -92,7 +98,13 @@ describe('i18n — de ist byte-gleich zum bisherigen Stand', () => {
     );
 
     const speaker = renderToStaticMarkup(
-      <SpeakerListView speakers={null} onDelete={() => {}} onEnroll={() => {}} />,
+      <SpeakerListView
+        speakers={null}
+        onDelete={() => {}}
+        onEnroll={() => {}}
+        onContinue={() => {}}
+        onDeleteSample={() => {}}
+      />,
     );
     expect(speaker).toContain('Erkannte Sprecher');
     expect(speaker).toContain('Meine Stimme anlernen');
@@ -130,7 +142,13 @@ describe('i18n — ein Sprachwechsel rendert die andere Sprache', () => {
     );
 
     const speaker = renderToStaticMarkup(
-      <SpeakerListView speakers={null} onDelete={() => {}} onEnroll={() => {}} />,
+      <SpeakerListView
+        speakers={null}
+        onDelete={() => {}}
+        onEnroll={() => {}}
+        onContinue={() => {}}
+        onDeleteSample={() => {}}
+      />,
     );
     expect(speaker).toContain('Enroll my voice');
 
@@ -283,5 +301,203 @@ describe('i18n — setActiveUiLanguage("en") macht den ersten Bildschirm wirklic
     expect(html).not.toContain('Übersicht');
     expect(html).not.toContain('Räume');
     expect(html).not.toContain('Aktivität');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Andi-Auftrag 2026-07-27 „fünf Sprachen ohne Sternchen": Español/Français/
+//  Italiano waren als UI-Katalog schon vollständig (CATALOGS.es/fr/it), aber die
+//  lokale Chat-/STT-Sprachwahl (Settings → Sprache & Stimme) bot bisher nur
+//  Automatisch/Deutsch/English an. Stichproben über mehrere Bildschirme, dass
+//  ein Wechsel der UI-Sprache (activeLanguageStore, wie bisher NUR über „Hoshi
+//  spricht (Server-Standard)" gesetzt) auch in den drei neuen Sprachen wirklich
+//  übersetzten Text zeigt — UND dass das SettingsPanel-Sprache-Select (Chat+STT)
+//  jetzt sechs Optionen mit den korrekten Endonymen führt.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('i18n — Español/Français/Italiano rendern echte Übersetzungen (Stichproben)', () => {
+  const renderPanel = () =>
+    renderToStaticMarkup(
+      <SettingsPanel
+        open={true}
+        onClose={() => {}}
+        theme="yoru"
+        language="auto"
+        persona="Standard"
+        voice="coral"
+        onTheme={() => {}}
+        onLanguage={() => {}}
+        onPersona={() => {}}
+        onVoice={() => {}}
+      />,
+    );
+
+  it('Español (es): IdleFace, TopNav und das Sprache-Select zeigen echtes Spanisch', () => {
+    setActiveUiLanguage('es');
+
+    const idle = renderToStaticMarkup(
+      <IdleFace nowMs={IDLE_NOW} health="up" voice={null} scheduled={[]} weather={null} shopping={[]} />,
+    );
+    expect(idle).toContain('Buenos días');
+
+    const nav = renderToStaticMarkup(
+      <TopNav tab="overview" onTab={() => {}} onOpenSettings={() => {}} />,
+    );
+    expect(nav).toContain('Actividad');
+
+    const panel = renderPanel();
+    expect(panel).toContain('>Idioma y voz<'); // Reiter „Sprache & Stimme"
+    expect(panel).toContain('Automático (alemán / inglés)'); // Chat-/STT-Select, Option 'auto'
+    expect(panel).toContain('>Español<');
+    expect(panel).toContain('>Français<');
+    expect(panel).toContain('>Italiano<');
+    expect(panel).toContain('Hoshi habla (valor por defecto del servidor)'); // „Hoshi spricht"-Sektion
+  });
+
+  it('Français (fr): IdleFace, TopNav und das Sprache-Select zeigen echtes Französisch', () => {
+    setActiveUiLanguage('fr');
+
+    const idle = renderToStaticMarkup(
+      <IdleFace nowMs={IDLE_NOW} health="up" voice={null} scheduled={[]} weather={null} shopping={[]} />,
+    );
+    expect(idle).toContain('Bonjour');
+
+    const nav = renderToStaticMarkup(
+      <TopNav tab="overview" onTab={() => {}} onOpenSettings={() => {}} />,
+    );
+    expect(nav).toContain('Activité');
+
+    const panel = renderPanel();
+    expect(panel).toContain('>Langue et voix<');
+    expect(panel).toContain('Automatique (allemand / anglais)');
+    expect(panel).toContain('>Español<');
+    expect(panel).toContain('>Français<');
+    expect(panel).toContain('>Italiano<');
+    expect(panel).toContain('Hoshi parle (valeur par défaut du serveur)');
+  });
+
+  it('Italiano (it): IdleFace, TopNav und das Sprache-Select zeigen echtes Italienisch', () => {
+    setActiveUiLanguage('it');
+
+    const idle = renderToStaticMarkup(
+      <IdleFace nowMs={IDLE_NOW} health="up" voice={null} scheduled={[]} weather={null} shopping={[]} />,
+    );
+    expect(idle).toContain('Buongiorno');
+
+    const nav = renderToStaticMarkup(
+      <TopNav tab="overview" onTab={() => {}} onOpenSettings={() => {}} />,
+    );
+    expect(nav).toContain('Attività');
+
+    const panel = renderPanel();
+    expect(panel).toContain('>Lingua e voce<');
+    expect(panel).toContain('Automatico (tedesco / inglese)');
+    expect(panel).toContain('>Español<');
+    expect(panel).toContain('>Français<');
+    expect(panel).toContain('>Italiano<');
+    expect(panel).toContain('Hoshi parla (predefinito del server)');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Sprecher-Anlern-Flow (Teil 2 des Auftrags 2026-07-27): ENROLL_SENTENCES waren
+//  schon fünfsprachig, aber `formatEnrolledDate`/`sampleProgress`/`micSupport`
+//  (SpeakerSection.tsx) lasen bisher hart Deutsch bzw. eine feste Modul-
+//  Referenz, unabhängig von der aktiven UI-Sprache. Jetzt lesen alle drei aus
+//  dem aktiven Katalog (Muster: `getActiveUiLanguage` in api/chat.ts).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('i18n — Sprecher-Anlern-Flow folgt der aktiven Sprache (Stichproben)', () => {
+  const speaker = { name: 'andi', enrolledAt: 1720000000000, samples: 3 };
+
+  it('Español: Fortschritt, Anlern-Datum, Profil-Zeile, Anführungszeichen und Mikro-Hinweis', () => {
+    setActiveUiLanguage('es');
+    expect(sampleProgress(1)).toBe('Frase 1 de 3');
+    expect(formatEnrolledDate(0)).toBe('justo ahora');
+
+    const list = renderToStaticMarkup(
+      <SpeakerListView
+        speakers={[speaker]}
+        onDelete={() => {}}
+        onEnroll={() => {}}
+        onContinue={() => {}}
+        onDeleteSample={() => {}}
+      />,
+    );
+    expect(list).toContain('registrado el'); // enrolledOn-Präfix
+    expect(list).toContain('3 frases'); // sentenceCount
+    expect(list).toContain('Eliminar perfil andi'); // deleteProfileAria
+
+    expect(micSupport().ok).toBe(false); // jsdom kennt kein navigator.mediaDevices
+    const dialog = renderToStaticMarkup(<EnrollDialog onClose={() => {}} onEnrolled={() => {}} />);
+    expect(dialog).toContain('«'); // Anführungszeichen der Anlern-Sätze
+    expect(dialog).toContain(CATALOGS.es.speaker.noMic);
+  });
+
+  it('Français : progression, date d’enregistrement, ligne de profil, guillemets et message micro', () => {
+    setActiveUiLanguage('fr');
+    expect(sampleProgress(1)).toBe('Phrase 1 sur 3');
+    expect(formatEnrolledDate(0)).toBe('à l’instant');
+
+    const list = renderToStaticMarkup(
+      <SpeakerListView
+        speakers={[speaker]}
+        onDelete={() => {}}
+        onEnroll={() => {}}
+        onContinue={() => {}}
+        onDeleteSample={() => {}}
+      />,
+    );
+    expect(list).toContain('enregistré le');
+    expect(list).toContain('3 phrases');
+    expect(list).toContain('Supprimer le profil andi');
+
+    expect(micSupport().ok).toBe(false);
+    const dialog = renderToStaticMarkup(<EnrollDialog onClose={() => {}} onEnrolled={() => {}} />);
+    expect(dialog).toContain('«');
+    expect(dialog).toContain(CATALOGS.fr.speaker.noMic);
+  });
+
+  it('Italiano: avanzamento, data di registrazione, riga del profilo, virgolette e messaggio microfono', () => {
+    setActiveUiLanguage('it');
+    expect(sampleProgress(1)).toBe('Frase 1 di 3');
+    expect(formatEnrolledDate(0)).toBe('proprio ora');
+
+    const list = renderToStaticMarkup(
+      <SpeakerListView
+        speakers={[speaker]}
+        onDelete={() => {}}
+        onEnroll={() => {}}
+        onContinue={() => {}}
+        onDeleteSample={() => {}}
+      />,
+    );
+    expect(list).toContain('registrato il');
+    expect(list).toContain('3 frasi');
+    expect(list).toContain('Elimina il profilo andi');
+
+    expect(micSupport().ok).toBe(false);
+    const dialog = renderToStaticMarkup(<EnrollDialog onClose={() => {}} onEnrolled={() => {}} />);
+    expect(dialog).toContain('«');
+    expect(dialog).toContain(CATALOGS.it.speaker.noMic);
+  });
+
+  it('Deutsch (Gegenprobe): Fortschritt/Datum/Zähler/Aria bleiben byte-gleich zum Bestand', () => {
+    expect(getActiveUiLanguage()).toBe('de');
+    expect(sampleProgress(1)).toBe('Satz 1 von 3');
+    expect(formatEnrolledDate(0)).toBe('gerade eben');
+
+    const list = renderToStaticMarkup(
+      <SpeakerListView
+        speakers={[speaker]}
+        onDelete={() => {}}
+        onEnroll={() => {}}
+        onContinue={() => {}}
+        onDeleteSample={() => {}}
+      />,
+    );
+    expect(list).toContain('angelernt');
+    expect(list).toContain('3 Sätze');
+    expect(list).toContain('Profil andi löschen');
   });
 });

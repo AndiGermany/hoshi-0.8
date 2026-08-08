@@ -1,4 +1,6 @@
 import { API_BASE, TOKEN } from './config';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 
 /**
  * Typisierter Client für den Nachtmodus-Settings-Rand (Scheibe 3 von 3, FE-Seite
@@ -110,8 +112,8 @@ export async function fetchNightModeDevices(signal?: AbortSignal): Promise<Night
     headers: authHeaders(),
     signal,
   });
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   const body: unknown = await res.json();
   if (!Array.isArray(body)) throw new Error('Nachtmodus-Geräteliste ist kein Array.');
   return body.map(toDevice).filter((d): d is NightModeDevice => d !== null);
@@ -130,8 +132,8 @@ export async function fetchNightModeDevice(
     headers: authHeaders(),
     signal,
   });
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   const device = toDevice(await res.json());
   if (!device) throw new Error('Nachtmodus-Antwort unlesbar.');
   return device;
@@ -164,8 +166,8 @@ export async function saveNightModeDevice(
   if (res.status === 400) {
     throw new NightModeValidationError(satelliteId, await readErrorMessage(res, 'Ungültige Eingabe.'));
   }
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   const device = toDevice(await res.json());
   if (!device) throw new Error('Nachtmodus-Antwort unlesbar.');
   return device;

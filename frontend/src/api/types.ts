@@ -4,7 +4,24 @@
 // 'auto' = bilinguale Auto-Erkennung (DE/EN) pro Eingabe. Es ist KEIN Backend-
 // Enum-Wert: das FE schickt es als `languagePolicy` (AUTO/DE/EN); das konkrete
 // `language`-Feld bleibt DE/EN (Fallback) — siehe api/chat.ts & api/voice.ts.
-export type Language = 'auto' | 'de' | 'en';
+//
+// 'es'/'fr'/'it' (Andi-Auftrag 2026-07-27, „fünf Sprachen ohne Sternchen"): die
+// drei restlichen Sprachen des Sprachpakets (`de.hoshi.core.dto.Language` hat
+// sie längst — DE/EN/ES/FR/IT, strukturell UND inhaltlich fertig, s. dortiges
+// KDoc), aber NUR explizit wählbar, NIE Teil von 'auto'. Zwei Gründe:
+//  1. 'auto' bleibt bewusst die bilinguale DE/EN-Erkennung (LanguageDetector
+//     kennt nur diese zwei) — eine dritte/vierte/fünfte Sprache liefe still auf
+//     DE zurück, was ehrlicher als „Auto erkennt jetzt 5 Sprachen" ist, wenn es
+//     das (noch) nicht tut.
+//  2. Wer Español/Français/Italiano EXPLIZIT wählt, tippt vermutlich (STT/
+//     Whisper versteht die Sprachen zwar technisch, aber der ganze Voice-Flow
+//     dieser Scheibe ist am DE/EN-Paar erprobt) — eine bewusste Wahl statt einer
+//     geratenen Auto-Erkennung ist hier die ehrlichere Grundannahme.
+// Wire-Konsequenz: `languagePolicy` (Backend-Enum `LanguagePolicy`) kennt WEITER
+// nur AUTO/DE/EN — für es/fr/it lassen api/chat.ts & api/voice.ts dieses Feld
+// bewusst WEG (Legacy-null-Pfad) und schicken nur das konkrete `language`-Feld,
+// das den vollen 5-Sprachen-Backend-Enum trägt. KEIN Backend-Umbau nötig.
+export type Language = 'auto' | 'de' | 'en' | 'es' | 'fr' | 'it';
 
 /** Sprecher-Kontext, damit das Backend Entity-/Episodic-Memory pro Sprecher führt. */
 export interface SpeakerContext {

@@ -25,6 +25,7 @@ Quelle:
 """
 import argparse
 import hashlib
+import hmac
 import json
 import logging
 import math
@@ -39,7 +40,8 @@ from pathlib import Path
 from typing import Optional
 
 import zstandard as zstd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import pack_manifest as _pack_manifest_module
@@ -1492,6 +1494,29 @@ def to_fts_match_query(query: str) -> str:
 
 # ── FastAPI ─────────────────────────────────────────────────────────────────
 app = FastAPI(title="hoshi-knowledge-bridge", version="0.1.0")
+
+# ── Optionale Token-Wand (HOSHI_SIDECAR_TOKEN, Codex-Sicherheits-P0 2026-07-27) ──
+# Alle 6 Sidecars binden 0.0.0.0 ohne Auth (vom LAN aus tokenlos abfragbar).
+# Diese Wand ist BEWUSST opt-in: HOSHI_SIDECAR_TOKEN leer/ungesetzt ⇒ exakt
+# heutiges Verhalten (offen, NULL Verhaltensänderung — das Produktiv-Setup
+# ct-106↔Mac-Sidecars läuft unverändert weiter). Gesetzt ⇒ jeder Request AUSSER
+# /health (Watchdogs/doctor/IP-Sync dürfen nie sterben, s. tools/mac-ip-sync-
+# 0.8.sh + pipeline/services.sh) muss den Header X-Hoshi-Token exakt tragen —
+# hmac.compare_digest (timing-sicher) statt `==`, sonst 401 mit knappem JSON-
+# Body. Gleiche Wand/Env-Var/Header/health-Ausnahme in allen 6 Sidecars
+# (server.py je brain/stt/speaker/knowledge/piper/say) — hier als FastAPI-
+# Middleware. Hinweis: /v1/health ist NICHT ausgenommen (nur der historische
+# /health-Pfad, s. Auftrag) — kein bekannter Watchdog pollt /v1/health direkt.
+_HOSHI_SIDECAR_TOKEN = os.environ.get("HOSHI_SIDECAR_TOKEN", "")
+
+
+@app.middleware("http")
+async def _hoshi_token_wall(request: Request, call_next):
+    if _HOSHI_SIDECAR_TOKEN and request.url.path != "/health":
+        supplied = request.headers.get("x-hoshi-token", "")
+        if not hmac.compare_digest(supplied, _HOSHI_SIDECAR_TOKEN):
+            return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+    return await call_next(request)
 
 
 class HealthResponse(BaseModel):

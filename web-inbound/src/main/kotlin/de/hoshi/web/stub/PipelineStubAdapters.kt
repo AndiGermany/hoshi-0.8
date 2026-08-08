@@ -103,11 +103,19 @@ class NamedEntityStubAdapter : NamedEntitySignal {
  * [de.hoshi.web.PipelineConfig] konsumiert.
  */
 object HonestyProbeAdapters {
-    fun signals(enabled: Boolean, bridgeBaseUrl: String): Pair<ExistenceClaimSignal, NamedEntitySignal> =
+    /**
+     * [sidecarToken] reicht die opt-in Sidecar-Token-Wand an den [BridgeSearchClient]
+     * durch (Default `""` ⇒ byte-neutral, s. `de.hoshi.core.security.SidecarTokenHeader`-KDoc).
+     */
+    fun signals(
+        enabled: Boolean,
+        bridgeBaseUrl: String,
+        sidecarToken: String = "",
+    ): Pair<ExistenceClaimSignal, NamedEntitySignal> =
         if (!enabled) {
             ExistenceClaimStubAdapter() to NamedEntityStubAdapter()
         } else {
-            val probe = BridgeKnowledgeProbe(BridgeSearchClient(bridgeBaseUrl))
+            val probe = BridgeKnowledgeProbe(BridgeSearchClient(bridgeBaseUrl, token = sidecarToken))
             BridgeExistenceClaimAdapter(probe) to BridgeNamedEntityAdapter(probe)
         }
 }

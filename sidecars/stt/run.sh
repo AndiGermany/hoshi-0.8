@@ -2,11 +2,11 @@
 # sidecars/stt/run.sh — kanonischer, idiotensicherer Start des STT-Sidecars
 # (mlx-whisper, Port 9001).
 #
-# [0.8-Port] Struktur 1:1 aus sidecars/brain/run.sh uebernommen (symlink-
-# sichere absolute Pfade, exec-Garantie, venv-Import-Probe, Log via $HOME),
-# aber ABGESPECKT: kein Model-Cache-Preflight wie beim Brain — mlx_whisper
-# laedt sein Modell selbst lazy beim Warmup-Request in server.py's
-# @app.on_event("startup") (bestehendes Verhalten, hier NICHT neu gebaut).
+# [0.8-Port] Struktur aus sidecars/brain/run.sh: symlink-sichere absolute
+# Pfade, exec-Garantie, venv-Import-Probe und Log via $HOME. Vor dem Start setzt
+# run.sh HF_HUB_OFFLINE=1 und hasht den konkreten models.json-v2-Lock
+# vollständig offline. Ein Warmup darf deshalb nie mehr still die
+# jeweils neueste HF-Revision laden.
 #
 # GARANTIE (wie bei sidecars/brain):
 #   - Startet IMMER ueber das sidecars/stt/.venv-Python (absolut, kein PATH-Glueck).
@@ -27,26 +27,54 @@ while [ -h "$SOURCE" ]; do
     [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 STT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+REPO_ROOT="$(cd "$STT_DIR/../.." && pwd)"
 
 VENV_PY="$STT_DIR/.venv/bin/python"
 SERVER_PY="$STT_DIR/server.py"
+MODELS_JSON="$REPO_ROOT/models.json"
+VERIFIED_FETCH="$REPO_ROOT/tools/verified_fetch.py"
 
 fail() { echo "[stt-run] FATAL: $*" >&2; exit 1; }
 say()  { echo "[stt-run] $*" >&2; }
 
 [ -x "$VENV_PY" ] || fail ".venv-Python fehlt/nicht ausfuehrbar: $VENV_PY  (-> sidecars/stt/bootstrap.sh)"
 [ -f "$SERVER_PY" ] || fail "server.py fehlt: $SERVER_PY"
+[ -f "$MODELS_JSON" ] || fail "models.json fehlt: $MODELS_JSON"
+[ -f "$VERIFIED_FETCH" ] || fail "verified_fetch fehlt: $VERIFIED_FETCH"
 
 # ── Host/Port ueber Env (Default identisch zu server.py's eigenen argparse-Defaults) ─
 HOST="${HOSHI_STT_HOST:-0.0.0.0}"
 PORT="${HOSHI_STT_PORT:-9001}"
-# Optionale Modell-Wahl: leer = server.py's eigener Default
-# (mlx-community/whisper-large-v3-turbo). Nur gesetzt, wenn HOSHI_STT_MODEL
-# explizit gesetzt ist — kein neuer Resolver, reines Env->--model-Durchreichen.
-MODEL_ARGS=()
-if [ -n "${HOSHI_STT_MODEL:-}" ]; then
-    MODEL_ARGS=(--model "$HOSHI_STT_MODEL")
+# HOSHI_SIDECAR_TOKEN (optional, Codex-Sicherheits-P0 2026-07-27): server.py
+# liest diese Var SELBST per os.environ.get() (kein run.sh-Durchreichen
+# noetig). Leer/ungesetzt (Default) = heutiges offenes Verhalten, NULL
+# Aenderung fuers Produktiv-Setup. Gesetzt: jeder Request ausser /health
+# braucht den Header X-Hoshi-Token mit exakt diesem Wert, sonst 401.
+# Modell-ID kommt aus demselben Lock, den verified_fetch danach hasht. Ein
+# beliebiges HOSHI_STT_MODEL waere ein unbeschriebener Download-/Lizenzpfad und
+# wird deshalb fail-closed abgelehnt statt an mlx_whisper durchgereicht.
+if ! LOCKED_MODEL="$("$VENV_PY" - "$MODELS_JSON" <<'PYEOF'
+import json
+import re
+import sys
+
+manifest = json.loads(open(sys.argv[1], encoding="utf-8").read())
+entry = next((m for m in manifest.get("models", []) if m.get("id") == "stt-whisper"), None)
+if manifest.get("version") != 2 or not isinstance(entry, dict):
+    raise SystemExit("models.json hat keinen stt-whisper-v2-Lock")
+repo = entry.get("hf_repo")
+pin = entry.get("pinned_revision")
+if not isinstance(repo, str) or not re.fullmatch(r"[0-9a-f]{40}", pin or ""):
+    raise SystemExit("stt-whisper-Lock hat keine Repo-ID/volle Revision")
+print(repo)
+PYEOF
+)"; then
+    fail "stt-whisper-Lock konnte nicht gelesen werden"
 fi
+if [ -n "${HOSHI_STT_MODEL:-}" ] && [ "$HOSHI_STT_MODEL" != "$LOCKED_MODEL" ]; then
+    fail "HOSHI_STT_MODEL='$HOSHI_STT_MODEL' ist nicht der gelockte Runtimevertrag '$LOCKED_MODEL' — kein ungepinnter Start"
+fi
+MODEL_ARGS=(--model "$LOCKED_MODEL")
 
 # ── Trust-but-verify: das venv-Python MUSS mlx_whisper sehen ────────────────
 "$VENV_PY" -c "import mlx_whisper" >/dev/null 2>&1 \
@@ -55,6 +83,19 @@ fi
 # ── ffmpeg-Voraussetzung zur Laufzeit (server.py::_convert_to_wav) ───────────
 command -v ffmpeg >/dev/null 2>&1 \
     || fail "ffmpeg fehlt im PATH (server.py braucht es fuer Audio-Konvertierung) — brew install ffmpeg"
+
+# ── Modell-Lock: Netz hart aus + Vollhash VOR Warmup ─────────────────────────
+export HF_HUB_OFFLINE=1
+"$VENV_PY" "$VERIFIED_FETCH" verify stt-whisper \
+    || fail "stt-whisper fehlt/driftet. Bewusst beschaffen: sidecars/stt/.venv/bin/python tools/verified_fetch.py fetch stt-whisper"
+say "stt-whisper gegen models.json vollstaendig verifiziert; HF_HUB_OFFLINE=1"
+
+# Read-only Operator-/CI-Probe: beweist exakt den Start-Guard, startet aber
+# weder FastAPI noch Warmup und beruehrt keinen laufenden Prozess.
+if [ "${HOSHI_STT_VERIFY_ONLY:-0}" = "1" ]; then
+    say "Verify-only OK — kein STT-Prozess gestartet"
+    exit 0
+fi
 
 # ── Log-Pfad ueber Env/$HOME ableiten (NIE hart codierter Home-Pfad) ─────────
 LOG_DIR="${HOSHI_LOG_DIR:-$HOME/.hoshi/logs}"

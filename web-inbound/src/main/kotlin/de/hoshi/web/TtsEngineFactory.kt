@@ -192,6 +192,11 @@ class TtsEngineFactory(
     private val loudnessPeakCeilingDb: Double = -1.0,
     private val loudnessMaxGainDb: Double = 12.0,
     private val loudnessSilenceFloorDb: Double = -50.0,
+    // Sidecar-Token-Wand (opt-in, s. de.hoshi.core.security.SidecarTokenHeader-KDoc):
+    // gilt NUR für say/piper (eigene Hoshi-Sidecars) — openai (Cloud, eigener API-Key)
+    // und voxtral (Port 8042, kein Teil der Token-Wand) bleiben unberührt. Default ""
+    // ⇒ byte-neutral.
+    private val sidecarToken: String = "",
 ) {
     /** Baut den Adapter für [engineId] mit dem BOOT-Default (kein Stimm-Wunsch) — unverändertes Bestandsverhalten. */
     fun build(engineId: String): TtsPort = build(engineId, voice = null)
@@ -295,10 +300,12 @@ class TtsEngineFactory(
                 baseUrl = sayBaseUrl,
                 voice = (wish ?: sayVoice).ifBlank { null },
                 rate = sayRate.takeIf { it > 0 },
+                token = sidecarToken,
             )
             TtsEngineIds.PIPER -> PiperTtsAdapter(
                 baseUrl = piperBaseUrl,
                 voice = wish ?: piperVoice,
+                token = sidecarToken,
             )
             TtsEngineIds.VOXTRAL -> VoxtralTtsAdapter(baseUrl = voxtralBaseUrl, voice = wish ?: voxtralVoice)
             else -> error("TTS-Engine wurde trotz Build-Validierung unbekannt: $engineId")

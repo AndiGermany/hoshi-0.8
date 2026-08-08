@@ -276,8 +276,14 @@ export function NightModeDeviceCard({
   return (
     <div className="settings__nightcard">
       <div className="settings__nightmaster">
-        <span className="settings__label">{NIGHT_MODE_TEXTS.master}</span>
+        {/* Titel-Regel (settings__label): <label htmlFor> genau EIN Control (hier
+            der Master-Toggle) beschriftet — vorher ein `<span>`, das weder Karten-
+            Titel-Muster (h3) noch Feld-Label-Muster (label) folgte. */}
+        <label className="settings__label" htmlFor="nightmode-master-toggle">
+          {NIGHT_MODE_TEXTS.master}
+        </label>
         <button
+          id="nightmode-master-toggle"
           type="button"
           role="switch"
           aria-checked={draft.enabled}

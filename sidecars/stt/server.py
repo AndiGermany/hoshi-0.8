@@ -19,8 +19,10 @@ Start:
 """
 
 import argparse
+import hmac
 import io
 import logging
+import os
 import subprocess
 import tempfile
 import wave
@@ -29,7 +31,7 @@ from pathlib import Path
 import mlx_whisper
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, File, Form, Query, UploadFile
+from fastapi import FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 # Silence-Gate (RMS+Dauer) — eigenes Modul OHNE mlx_whisper-Import, damit
@@ -65,6 +67,29 @@ args, _ = parser.parse_known_args()
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="Hoshi MLX-STT", version="1.0.0")
+
+# ── Optionale Token-Wand (HOSHI_SIDECAR_TOKEN, Codex-Sicherheits-P0 2026-07-27) ──
+# Alle 6 Sidecars binden 0.0.0.0 ohne Auth (vom LAN aus tokenlos abfragbar).
+# Diese Wand ist BEWUSST opt-in: HOSHI_SIDECAR_TOKEN leer/ungesetzt ⇒ exakt
+# heutiges Verhalten (offen, NULL Verhaltensänderung — das Produktiv-Setup
+# ct-106↔Mac-Sidecars läuft unverändert weiter). Gesetzt ⇒ jeder Request AUSSER
+# /health (Watchdogs/doctor/IP-Sync dürfen nie sterben, s. pipeline/stack-lib.sh)
+# muss den Header X-Hoshi-Token exakt tragen — hmac.compare_digest (timing-
+# sicher) statt `==`, sonst 401 mit knappem JSON-Body. Gleiche Wand/Env-Var/
+# Header/health-Ausnahme in allen 6 Sidecars (server.py je brain/stt/speaker/
+# knowledge/piper/say) — hier als FastAPI-Middleware, dort ggf. anders je
+# Framework (Flask-before_request/http.server-Methoden-Hook gäbe es nicht,
+# hier ausschließlich FastAPI/http.server, s. jeweilige Kommentare).
+_HOSHI_SIDECAR_TOKEN = os.environ.get("HOSHI_SIDECAR_TOKEN", "")
+
+
+@app.middleware("http")
+async def _hoshi_token_wall(request: Request, call_next):
+    if _HOSHI_SIDECAR_TOKEN and request.url.path != "/health":
+        supplied = request.headers.get("x-hoshi-token", "")
+        if not hmac.compare_digest(supplied, _HOSHI_SIDECAR_TOKEN):
+            return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+    return await call_next(request)
 
 
 def _convert_to_wav(audio_bytes: bytes, source_mime: str) -> bytes:

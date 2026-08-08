@@ -301,6 +301,8 @@ describe('Emoji-Sweep — Chrome/Controls emoji-frei (SVG-Glyphs oder gestrichen
         speakers={[{ name: 'andi', enrolledAt: 1, samples: 3 }]}
         onDelete={() => {}}
         onEnroll={() => {}}
+        onContinue={() => {}}
+        onDeleteSample={() => {}}
       />,
     );
     expect(html).toContain('glyph--mic');

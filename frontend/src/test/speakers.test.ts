@@ -6,6 +6,7 @@ import {
   fetchSpeakers,
 } from '../api/speakers';
 import { wavBlobFromPcm } from '../audio/wav';
+import { setActiveUiLanguage } from '../i18n';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -132,6 +133,37 @@ describe('enrollSpeaker — POST-Contract-Shape (multipart, WAV, filename)', () 
   it('401 → SpeakerEnrollError(auth)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
     await expect(enrollSpeaker('andi', new Blob())).rejects.toMatchObject({ kind: 'auth' });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Fünf-Sprachen-Sweep 2026-07-27: `SpeakerEnrollError.message` landet wörtlich
+//  im Anlern-Dialog (EnrollDialog zeigt `err.message` direkt) — die Zeilen folgen
+//  jetzt der aktiven UI-Sprache statt einer hart deutschen Modul-Konstante.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('enrollSpeaker — Fehlermeldungen folgen der aktiven UI-Sprache', () => {
+  afterEach(() => setActiveUiLanguage('de'));
+
+  it.each([
+    ['es', 422, 'too-short', 'La grabación era demasiado corta o floja. Di la frase una vez más.'],
+    ['fr', 400, 'bad-name', 'Prénom invalide — seuls les lettres, chiffres, _ et - sont autorisés.'],
+    ['it', 502, 'no-embedding', 'Il riconoscimento vocale non è raggiungibile al momento. Riprova più tardi.'],
+  ] as const)('%s: HTTP %i → übersetzte Zeile (%s)', async (lang, status, kind, expected) => {
+    setActiveUiLanguage(lang);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status }));
+    const err = await enrollSpeaker('andi', new Blob()).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SpeakerEnrollError);
+    expect((err as SpeakerEnrollError).kind).toBe(kind);
+    expect((err as SpeakerEnrollError).message).toBe(expected);
+  });
+
+  it('Deutsch (Gegenprobe): 422 bleibt byte-gleich zum Bestand', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 422 }));
+    const err = await enrollSpeaker('andi', new Blob()).catch((e: unknown) => e);
+    expect((err as SpeakerEnrollError).message).toBe(
+      'Die Aufnahme war zu kurz oder zu leise. Sprich den Satz noch einmal.',
+    );
   });
 });
 

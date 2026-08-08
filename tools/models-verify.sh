@@ -8,12 +8,17 @@
 #
 # Geprüft wird ausschließlich der lokale Zustand:
 #   - HF-Cache-Einträge (~/.cache/huggingface/hub bzw. $HF_HOME/hub bzw.
-#     $HUGGINGFACE_HUB_CACHE): Snapshot vorhanden? expected_files da (Glob-Muster,
-#     KEINE Hashes in v1)? keine *.incomplete-Reste? refs/main byte-genau sauber
-#     (kein Newline-Müll — ein bekannter wiederkehrender Fehler)?
+#     $HUGGINGFACE_HUB_CACHE): gelockter Snapshot vorhanden? alle v2-Artefakte
+#     mit exakter Größe da? keine *.incomplete-Reste? refs/main byte-genau auf
+#     dem vollen Pin (kein Newline-Müll — ein bekannter wiederkehrender Fehler)?
 #   - "hf-direct-file"-Einträge (Modelle, die NICHT über snapshot_download
 #     laufen, sondern per direktem Download in einen Projektordner, z. B.
-#     CAM++ via Hoshi_0.5/hoshi-speaker-id/setup.sh): lokale Datei + Byte-Größe.
+#     CAM++): Repo-Sidecar-Datei + Byte-Größe + SHA-256.
+#
+# Der schnelle Betriebscheck hasht die großen HF-Modelle absichtlich NICHT bei
+# jedem doctor-Lauf. Der kryptografische Offline-Beweis ist explizit:
+# `python3 tools/verified_fetch.py verify <id>`. Downloads/Repairs laufen nur
+# über denselben Fetcher; dieses Skript bleibt strikt read-only.
 #   - "ollama"-Einträge: via `ollama list`, best-effort (ollama fehlt ⇒ WARN,
 #     kein Fail — siehe models.json).
 #
@@ -40,10 +45,6 @@ else
     HF_HUB_CACHE="$HOME/.cache/huggingface/hub"
 fi
 
-# Sidecar-Wurzel für "hf-direct-file"-Modelle (CAM++ liegt hier, nicht im
-# HF-Hub-Cache) — dieselbe Konfig-Variable wie pipeline/stack-lib.sh.
-HOSHI_05_ROOT="${HOSHI_05_ROOT:-$HOME/IdeaProjects/Hoshi_0.5}"
-
 if [ ! -f "$MANIFEST" ]; then
     echo "FATAL: Manifest nicht gefunden: $MANIFEST" >&2
     exit 2
@@ -51,16 +52,18 @@ fi
 
 # JSON-Handling in Python (wie stack-lib.sh _json_field, prod-probe-0.8.sh
 # Token-Parsing) statt bash-eigenem JSON-Gefummel — robuster für Glob/Bytes.
-exec python3 - "$MANIFEST" "$HF_HUB_CACHE" "$HOSHI_05_ROOT" <<'PYEOF'
+exec python3 - "$MANIFEST" "$HF_HUB_CACHE" "$REPO_ROOT" <<'PYEOF'
 import json
+import hashlib
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-manifest_path, hf_hub_cache, hoshi_05_root = sys.argv[1:4]
+manifest_path, hf_hub_cache, repo_root = sys.argv[1:4]
 HF_HUB_CACHE = Path(hf_hub_cache)
+REPO_ROOT = Path(repo_root)
 
 isatty = sys.stdout.isatty()
 def c(code, s):
@@ -71,16 +74,17 @@ STATUS_COLOR = {
     "REF-DEFEKT": "31", "WARN": "33",
 }
 
-def snapshot_download_fix(hf_repo):
-    return (
-        'python3 -c "from huggingface_hub import snapshot_download; '
-        f'print(snapshot_download(\'{hf_repo}\'))"'
-    )
+def verified_fetch_fix(entry):
+    interpreter = "sidecars/brain/.venv/bin/python" if entry["type"] == "hf" else "python3"
+    acceptance = entry.get("license_acceptance")
+    gate = f" --accept-license {acceptance}" if acceptance else ""
+    return f"{interpreter} tools/verified_fetch.py fetch {entry['id']}{gate}"
 
 def check_hf(entry):
     hf_repo = entry["hf_repo"]
     repo_dir = HF_HUB_CACHE / ("models--" + hf_repo.replace("/", "--"))
-    fix = snapshot_download_fix(hf_repo)
+    fix = verified_fetch_fix(entry)
+    pinned = entry.get("pinned_revision", "")
 
     if not repo_dir.is_dir():
         return "FEHLT", f"kein HF-Cache-Eintrag unter {repo_dir}", fix
@@ -103,37 +107,40 @@ def check_hf(entry):
             fix,
         )
     revision = stripped.decode("utf-8", errors="replace")
-    if not re.fullmatch(r"[0-9a-f]{7,40}", revision):
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
         return "REF-DEFEKT", f"refs/main enthält keinen gültigen Commit-Hash: {revision!r}", fix
+    if revision != pinned:
+        return "REF-DEFEKT", f"refs/main={revision}, Lock erwartet {pinned}", fix
 
     snapshot_dir = snapshots_dir / revision
     if not snapshot_dir.is_dir():
         return "REF-DEFEKT", f"refs/main zeigt auf {revision}, aber kein solcher Snapshot-Ordner existiert", fix
 
     missing = []
-    for pattern in entry.get("expected_files", []):
-        if "*" in pattern or "?" in pattern:
-            matches = [p for p in snapshot_dir.glob(pattern) if p.exists()]
-            if not matches:
-                missing.append(pattern)
-        else:
-            p = snapshot_dir / pattern
-            if not p.exists():
-                missing.append(pattern)
+    wrong_size = []
+    artifacts = entry.get("artifacts", [])
+    for artifact in artifacts:
+        relative = artifact["path"]
+        p = snapshot_dir / relative
+        if not p.is_file():
+            missing.append(relative)
+        elif p.stat().st_size != artifact["bytes"]:
+            wrong_size.append(f"{relative}={p.stat().st_size}, erwartet {artifact['bytes']}")
 
     if missing:
-        return "UNVOLLSTAENDIG", f"Snapshot {revision[:12]} — fehlende Datei(en)/Muster: {', '.join(missing)}", fix
+        return "UNVOLLSTAENDIG", f"Snapshot {revision[:12]} — fehlende gelockte Datei(en): {', '.join(missing)}", fix
+    if wrong_size:
+        return "UNVOLLSTAENDIG", f"Snapshot {revision[:12]} — falsche Größe(n): {', '.join(wrong_size)}", fix
     if incomplete:
         rel = ", ".join(str(p.relative_to(repo_dir)) for p in incomplete)
         return "UNVOLLSTAENDIG", f"*.incomplete-Reste im Cache (abgebrochener Download): {rel}", fix
 
-    return "OK", f"Snapshot {revision[:12]} vollständig ({len(entry.get('expected_files', []))} Muster erfüllt)", None
+    return "OK", f"Snapshot {revision[:12]} vollständig ({len(artifacts)} gelockte Dateien, Größen stimmen)", None
 
 def check_hf_direct_file(entry):
-    local_path = entry["local_path"].replace("$HOSHI_05_ROOT", hoshi_05_root)
+    local_path = REPO_ROOT / entry["sidecar_local_path"]
     p = Path(local_path)
-    setup_hint = entry.get("hf_repo", "?")
-    fix = f"bash {hoshi_05_root}/hoshi-speaker-id/setup.sh   # lädt {local_path} neu von huggingface.co/{setup_hint}"
+    fix = verified_fetch_fix(entry)
 
     if not p.exists():
         return "FEHLT", f"lokale Datei fehlt: {local_path}", fix
@@ -146,7 +153,16 @@ def check_hf_direct_file(entry):
             f"{local_path}: {actual} Bytes, erwartet {expected_bytes} Bytes (abgebrochener/korrupter Download)",
             fix,
         )
-    return "OK", f"{local_path}: {actual} Bytes, Größe stimmt", None
+    expected_sha256 = entry.get("expected_sha256")
+    if expected_sha256:
+        actual_sha256 = hashlib.sha256(p.read_bytes()).hexdigest()
+        if actual_sha256 != expected_sha256:
+            return (
+                "UNVOLLSTAENDIG",
+                f"{local_path}: SHA-256 {actual_sha256}, erwartet {expected_sha256}",
+                fix,
+            )
+    return "OK", f"{local_path}: {actual} Bytes, Größe + SHA-256 stimmen", None
 
 def check_ollama(entry):
     name = entry["ollama_name"]
@@ -179,11 +195,14 @@ def check_ollama(entry):
 CHECKERS = {"hf": check_hf, "hf-direct-file": check_hf_direct_file, "ollama": check_ollama}
 
 manifest = json.loads(Path(manifest_path).read_text())
+if manifest.get("version") != 2:
+    print(f"FATAL: models.json braucht Schema version=2, gefunden: {manifest.get('version')!r}", file=sys.stderr)
+    sys.exit(2)
 models = manifest.get("models", [])
 
 print(f"Modell-Verify — Manifest: {manifest_path}")
 print(f"  HF-Hub-Cache : {HF_HUB_CACHE}")
-print(f"  Hoshi_0.5    : {hoshi_05_root}")
+print(f"  Repo-Root    : {REPO_ROOT}")
 print()
 
 counts = {"OK": 0, "FEHLT": 0, "UNVOLLSTAENDIG": 0, "REF-DEFEKT": 0, "WARN": 0}

@@ -44,6 +44,10 @@ PORT="${HOSHI_SPEAKER_PORT:-9002}"
 # HOSHI_SPEAKER_MODEL_PATH / HOSHI_SPEAKER_THREADS werden von server.py SELBST
 # per os.environ.get() gelesen (s. argparse-Defaults dort) — hier nur
 # durchreichen, kein doppelter Resolver.
+# HOSHI_SIDECAR_TOKEN (optional, Codex-Sicherheits-P0 2026-07-27): ebenfalls
+# server.py-eigenes os.environ.get(). Leer/ungesetzt (Default) = heutiges
+# offenes Verhalten, NULL Aenderung fuers Produktiv-Setup. Gesetzt: jeder
+# Request ausser /health braucht den Header X-Hoshi-Token exakt, sonst 401.
 
 # ── Trust-but-verify: das venv-Python MUSS die Kern-Runtime sehen ───────────
 "$VENV_PY" -c "import onnxruntime, kaldi_native_fbank, soundfile" >/dev/null 2>&1 \

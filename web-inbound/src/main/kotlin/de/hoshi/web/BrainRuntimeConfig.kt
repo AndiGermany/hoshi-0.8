@@ -35,7 +35,11 @@ class BrainRuntimeConfig {
     @Bean
     fun brainSwitchModelPort(
         @Value("\${hoshi.brain.base-url:http://localhost:8041}") baseUrl: String,
-    ): BrainSwitchModelPort = HttpBrainSwitchModelPort(baseUrl = baseUrl)
+        // Sidecar-Token-Wand (opt-in) — dieselbe Property wie an jeder anderen
+        // Sidecar-Wiring-Stelle (eine Wahrheit, s. SidecarTokenHeader-KDoc).
+        // `/switch-model` ist KEIN `/health`-Ausnahmepfad.
+        @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String,
+    ): BrainSwitchModelPort = HttpBrainSwitchModelPort(baseUrl = baseUrl, token = sidecarToken)
 
     @Bean
     fun brainModelStore(

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import de.hoshi.adapters.tts.OpenAiTtsAdapter
 import de.hoshi.core.dto.Language
+import de.hoshi.core.security.SidecarTokenHeader
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Mono
 import java.time.Duration
@@ -75,6 +76,10 @@ class HttpTtsVoiceCatalog(
     private val piperBaseUrl: String,
     private val timeout: Duration = Duration.ofSeconds(2),
     private val mapper: ObjectMapper = jacksonObjectMapper(),
+    // Sidecar-Token-Wand (opt-in, s. de.hoshi.core.security.SidecarTokenHeader-KDoc):
+    // `/voices` ist KEIN `/health`-Pfad, braucht den Header also wie jeder andere
+    // Call. Leer (Default) ⇒ byte-neutral.
+    private val token: String = "",
 ) : TtsVoiceCatalog {
 
     override fun voicesFor(engineId: String): Mono<TtsVoiceCatalogResult> = when (engineId) {
@@ -104,7 +109,12 @@ class HttpTtsVoiceCatalog(
         )
 
     private fun fetch(baseUrl: String, parse: (JsonNode) -> List<TtsVoiceOption>): Mono<TtsVoiceCatalogResult> =
-        WebClient.builder().baseUrl(baseUrl).build()
+        WebClient.builder().baseUrl(baseUrl)
+            // `.let` statt `.apply`: WebClient.Builder hat SELBST eine Member-Methode
+            // `apply(Consumer<Builder>)`, die den Lambda-Empfänger auf `it` umbiegen würde
+            // (s. MlxBrainAdapter-KDoc).
+            .let { b -> if (token.isNotBlank()) b.defaultHeader(SidecarTokenHeader.NAME, token) else b }
+            .build()
             .get().uri("/voices")
             .retrieve()
             .bodyToMono(String::class.java)

@@ -3,6 +3,7 @@ package de.hoshi.adapters.ha
 import com.fasterxml.jackson.databind.ObjectMapper
 import de.hoshi.core.port.AreaCatalogPort
 import de.hoshi.core.port.AreaInfo
+import de.hoshi.core.tools.ToolAreas
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.http.HttpClient
@@ -36,6 +37,30 @@ import java.time.Instant
  * getrennt (bewusst KEIN JSON — dasselbe robuste Pipe-Format wie [HaToolPort]s
  * Readback-Templates, keine Abhängigkeit von einem bestimmten Jinja-JSON-Filter).
  * `area_name(a)` kann `none` liefern (Area ohne Namen) → dann der Slug als Label.
+ *
+ * **Aliase — die 2026-07-25-Regressions-Naht:** [parseAreas] baut die Alias-Menge
+ * je Area bisher NUR aus `{id, name.lowercase()}`. Die kuratierten englischen
+ * Aliase („living room"→wohnzimmer, „kitchen"→küche, …) leben ausschließlich in
+ * [ToolAreas.ROOMS] — sobald DIESER Adapter gewinnt (`HOSHI_AREAS_DYNAMIC_ENABLED`,
+ * heute in Prod AN), verlieren sie sonst ihr Raum-Mapping (die 0.8.2-Lehre „living
+ * room traf das Wohnzimmer nur, weil wohnzimmer der Default ist" käme zurück).
+ * [mergeStaticAliases] schließt die Lücke: die kuratierten Aliase aus [ToolAreas.ROOMS]
+ * werden pro `area_id` NACHTRÄGLICH in die dynamisch geladenen [AreaInfo]s gemischt.
+ *
+ * **HA-native Aliase (Area-Registry `aliases`-Feld) werden HEUTE NICHT gelesen** —
+ * geprüft und verworfen: HA's Jinja-Template-Umgebung (worauf dieser Adapter über
+ * `POST /api/template` sitzt) kennt `areas()`/`area_id()`/`area_name()`/
+ * `area_entities()`/`area_devices()`, aber KEINE `area_aliases()`-Funktion; das
+ * native Alias-Feld der Area-Registry ist nur über die WebSocket-Config-API
+ * (`config/area_registry/list`) erreichbar — ein ANDERES Protokoll als der
+ * heutige REST-Template-Call. Diese Naht bewusst NICHT gewechselt (Auftrag: kein
+ * Endpunkt-Wechsel ad-hoc) → **offene BE-Naht:** ein künftiger
+ * `HaAreaRegistryAdapter` (oder eine WebSocket-Erweiterung dieses Adapters) müsste
+ * `config/area_registry/list` lesen, um echte HA-native Aliase zu liefern; bis
+ * dahin ist [mergeStaticAliases] die einzige Alias-Quelle jenseits von id/Label.
+ * [mergeStaticAliases] ist bereits SO geschrieben, dass native Aliase (sobald sie
+ * eines Tages als Teil von `dynamic` ankommen) die statische Brücke schlagen —
+ * s. Kollisionsregel dort.
  */
 class HaAreaCatalogAdapter(
     baseUrl: String,
@@ -92,7 +117,7 @@ class HaAreaCatalogAdapter(
                 log.warn("[ha-areas] POST /api/template → HTTP {} (Katalog unveraendert)", resp.statusCode())
                 return null
             }
-            parseAreas(resp.body()).ifEmpty { null }
+            mergeStaticAliases(parseAreas(resp.body())).ifEmpty { null }
         } catch (e: Exception) {
             // never-throw: Netz/Timeout/Parse-Fehler → null (Caller faellt auf Cache/Fallback zurueck).
             log.warn("[ha-areas] POST /api/template warf: {} (Katalog unveraendert)", e.message)
@@ -111,6 +136,39 @@ class HaAreaCatalogAdapter(
             val name = part.substring(idx + 2).trim()
             if (id.isBlank()) return@mapNotNull null
             AreaInfo(areaId = id, label = name.ifBlank { id }, aliases = setOf(id, name.lowercase()).filter { it.isNotBlank() }.toSet())
+        }
+    }
+
+    /**
+     * **Die statische Brücke** (s. Klassen-KDoc „Aliase"): mischt die kuratierten
+     * [ToolAreas.ROOMS]-Aliase pro `area_id` in die dynamisch geladenen [dynamic]-
+     * Areas — NUR für `area_id`s, die im statischen Mapping bekannt sind (unbekannte
+     * dynamische Areas, z.B. eine neu in HA angelegte, bleiben unangetastet: für sie
+     * gibt es keine kuratierten Wörter).
+     *
+     * **Kollisionsregel: dynamisch/HA-nativ gewinnt, statisch füllt nur Lücken.**
+     * Ein Alias-WORT wird nur dann aus der statischen Brücke übernommen, wenn es
+     * NOCH VON KEINER ANDEREN dynamischen Area beansprucht wird — beansprucht eine
+     * andere Area (dynamisch/HA-nativ) dasselbe Wort bereits, gewinnt SIE, die
+     * statische Brücke fügt es nicht hinzu (kein Diebstahl/Überschreiben eines vom
+     * Live-Katalog vergebenen Worts). Beansprucht dieselbe Area das Wort schon
+     * selbst, ist es ein No-op (Mengen-Vereinigung). So gilt dieselbe Regel bereits
+     * heute (die dynamischen Aliase sind nur `{id, name.lowercase()}`) UND später,
+     * sobald echte HA-native Aliase (s. Klassen-KDoc) Teil von [dynamic] werden.
+     */
+    internal fun mergeStaticAliases(dynamic: List<AreaInfo>): List<AreaInfo> {
+        if (dynamic.isEmpty()) return dynamic
+        val staticAliasesByArea: Map<String, Set<String>> =
+            ToolAreas.ROOMS.entries.groupBy({ it.value }, { it.key }).mapValues { it.value.toSet() }
+        // Jedes Alias-Wort, das IRGENDEINE dynamische Area schon traegt -> deren area_id
+        // (bei doppelter Vergabe gewinnt die zuerst gesehene Area; praktisch kollisionsfrei,
+        // da jede Area-Alias-Menge heute schon disjunkt ist).
+        val claimedBy = LinkedHashMap<String, String>()
+        for (area in dynamic) for (alias in area.aliases) claimedBy.putIfAbsent(alias, area.areaId)
+        return dynamic.map { area ->
+            val bridge = staticAliasesByArea[area.areaId].orEmpty()
+            val gapFillers = bridge.filter { alias -> claimedBy[alias] == null || claimedBy[alias] == area.areaId }
+            if (gapFillers.isEmpty()) area else area.copy(aliases = area.aliases + gapFillers)
         }
     }
 

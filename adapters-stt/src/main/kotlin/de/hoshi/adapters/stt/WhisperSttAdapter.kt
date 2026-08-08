@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import de.hoshi.core.dto.Language
 import de.hoshi.core.port.SttPort
+import de.hoshi.core.security.SidecarTokenHeader
 import org.slf4j.LoggerFactory
 import org.springframework.core.io.ByteArrayResource
 import org.springframework.http.MediaType
@@ -36,6 +37,9 @@ class WhisperSttAdapter(
     baseUrl: String,
     private val timeoutSeconds: Long = 30,
     private val mapper: ObjectMapper = jacksonObjectMapper(),
+    // Sidecar-Token-Wand (opt-in, s. SidecarTokenHeader-KDoc): leer (Default) ⇒ KEIN
+    // Header ⇒ byte-identisch zu vor der Wand.
+    private val token: String = "",
 ) : SttPort {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -43,6 +47,10 @@ class WhisperSttAdapter(
         .baseUrl(baseUrl)
         // Mic-WAV einer Frage kann ~100–300 KB sein — großzügiger In-Memory-Puffer.
         .codecs { it.defaultCodecs().maxInMemorySize(16 * 1024 * 1024) }
+        // `.let` statt `.apply` (s. MlxBrainAdapter-KDoc): WebClient.Builder hat SELBST
+        // eine Member-Methode `apply(Consumer<Builder>)`, die den Lambda-Empfänger
+        // auf `it` umbiegen würde.
+        .let { b -> if (token.isNotBlank()) b.defaultHeader(SidecarTokenHeader.NAME, token) else b }
         .build()
 
     override fun transcribe(audioWav: ByteArray, language: Language?): Mono<String> {

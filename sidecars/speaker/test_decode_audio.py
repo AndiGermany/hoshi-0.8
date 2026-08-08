@@ -176,6 +176,53 @@ def test_bad_base64_rejected_422():
     assert r.status_code == 422
 
 
+# ── HOSHI_SIDECAR_TOKEN-Wand (Codex-Sicherheits-P0 2026-07-27) ──────────────
+# server.py liest _HOSHI_SIDECAR_TOKEN EINMAL beim Modul-Import aus os.environ
+# (leer im Testlauf) — die Tests setzen/restaurieren deshalb direkt das
+# Modul-Attribut (try/finally, kein monkeypatch-Fixture in diesem pytest-losen
+# Standalone-File, s. Moduldoc oben).
+
+def test_token_wall_open_without_token_when_env_empty():
+    """Leer/ungesetzt (Default) ⇒ heutiges offenes Verhalten, NULL Aenderung —
+    kein X-Hoshi-Token-Header noetig, auch nicht fuer Nicht-/health-Pfade."""
+    assert server._HOSHI_SIDECAR_TOKEN == "", "Testvoraussetzung: Token-Wand ist im Testlauf aus"
+    r = _post_embed(_wav_bytes(_speechish_float()))
+    assert r.status_code == 200, r.text
+
+
+def test_token_wall_rejects_missing_or_wrong_token_with_401_when_set():
+    server._HOSHI_SIDECAR_TOKEN = "geheimwert-test"
+    try:
+        missing = _post_embed(_wav_bytes(_speechish_float()))
+        assert missing.status_code == 401, missing.text
+        assert missing.json() == {"detail": "unauthorized"}
+
+        wrong = client.post(
+            "/embed",
+            json={"audio": _b64(_wav_bytes(_speechish_float())), "sampleRate": SR},
+            headers={"X-Hoshi-Token": "falsch"},
+        )
+        assert wrong.status_code == 401, wrong.text
+
+        correct = client.post(
+            "/embed",
+            json={"audio": _b64(_wav_bytes(_speechish_float())), "sampleRate": SR},
+            headers={"X-Hoshi-Token": "geheimwert-test"},
+        )
+        assert correct.status_code == 200, correct.text
+    finally:
+        server._HOSHI_SIDECAR_TOKEN = ""
+
+
+def test_token_wall_never_blocks_health_even_when_token_is_set():
+    server._HOSHI_SIDECAR_TOKEN = "geheimwert-test"
+    try:
+        r = client.get("/health")
+        assert r.status_code == 200, r.text
+    finally:
+        server._HOSHI_SIDECAR_TOKEN = ""
+
+
 # ── Standalone-Runner (kein pytest im venv — bewusst nichts installiert) ─────
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

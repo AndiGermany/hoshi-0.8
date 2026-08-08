@@ -15,6 +15,8 @@
 // Aufnahme voran, bevor daraus das Upload-WAV entsteht.
 
 import { PRE_ROLL_MS, createPreRollRing, drainPreRoll, pushPreRoll, type PreRollRing } from './preRoll';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 
 /**
  * Chunk-Größe des Pre-Roll-`ScriptProcessorNode` in Samples (Web-Audio-Vorgabe:
@@ -92,33 +94,28 @@ export function rmsLevel(timeDomain: Uint8Array): number {
   return Math.sqrt(sum / n); // 0..1
 }
 
-/** Bildet einen `getUserMedia`-Reject auf einen typisierten Fehler ab. */
+/**
+ * Bildet einen `getUserMedia`-Reject auf einen typisierten Fehler ab. Fünf-Sprachen-
+ * Sweep 2026-07-27: die Zeilen kommen jetzt aus dem AKTIVEN UI-Katalog
+ * (`UiStrings.micErrors`) statt einer hart deutschen Modul-Konstante — `recorder.ts`
+ * hat keinen React-Hook-Zugriff, darum der synchrone Modul-Singleton-Read (Muster von
+ * `api/chat.ts`/`api/voice.ts`). DE bleibt byte-gleich zum bisherigen Stand.
+ */
 function mapGetUserMediaError(err: unknown): VoiceRecorderError {
   if (err instanceof VoiceRecorderError) return err;
+  const t = resolveUiStrings(getActiveUiLanguage()).micErrors;
   const name = (err as { name?: string } | null)?.name ?? '';
   switch (name) {
     case 'NotAllowedError':
     case 'PermissionDeniedError':
-      return new VoiceRecorderError(
-        'permission-denied',
-        'Mikro-Zugriff abgelehnt. Erlaube das Mikrofon, dann sprich mit Hoshi.',
-      );
+      return new VoiceRecorderError('permission-denied', t.permissionDenied);
     case 'NotFoundError':
     case 'DevicesNotFoundError':
-      return new VoiceRecorderError(
-        'no-device',
-        'Kein Mikrofon gefunden. Schließ eines an, dann probier es erneut.',
-      );
+      return new VoiceRecorderError('no-device', t.noDevice);
     case 'SecurityError':
-      return new VoiceRecorderError(
-        'insecure-context',
-        'Mikro-Zugriff braucht eine sichere Verbindung (https oder localhost).',
-      );
+      return new VoiceRecorderError('insecure-context', t.insecureContext);
     default:
-      return new VoiceRecorderError(
-        'unknown',
-        'Das Mikrofon ließ sich nicht öffnen. Probier es noch einmal.',
-      );
+      return new VoiceRecorderError('unknown', t.unknown);
   }
 }
 
@@ -203,11 +200,10 @@ export class VoiceRecorder {
     const md = globalThis.navigator?.mediaDevices;
     if (!md || typeof md.getUserMedia !== 'function') {
       const insecure = globalThis.isSecureContext === false;
+      const t = resolveUiStrings(getActiveUiLanguage()).micErrors;
       throw new VoiceRecorderError(
         insecure ? 'insecure-context' : 'unsupported',
-        insecure
-          ? 'Mikro-Zugriff braucht eine sichere Verbindung (https oder localhost).'
-          : 'Dieser Browser unterstützt keine Mikro-Aufnahme.',
+        insecure ? t.insecureContext : t.noApi,
       );
     }
 
@@ -227,7 +223,10 @@ export class VoiceRecorder {
 
     if (typeof globalThis.MediaRecorder === 'undefined') {
       this.teardown();
-      throw new VoiceRecorderError('unsupported', 'Dieser Browser kann kein Audio aufnehmen.');
+      throw new VoiceRecorderError(
+        'unsupported',
+        resolveUiStrings(getActiveUiLanguage()).micErrors.noRecorder,
+      );
     }
 
     this.mimeType = this.opts.mimeType ?? pickMimeType();
@@ -256,7 +255,12 @@ export class VoiceRecorder {
   async stop(): Promise<Blob> {
     const recorder = this.recorder;
     if (!recorder) {
-      throw new VoiceRecorderError('unknown', 'stop() ohne aktive Aufnahme.');
+      // Dev-Assertion (Programmierfehler „stop() vor start()") — über die UI nie
+      // erreichbar, s. KDoc `MicErrorStrings.stopWithoutRecording`.
+      throw new VoiceRecorderError(
+        'unknown',
+        resolveUiStrings(getActiveUiLanguage()).micErrors.stopWithoutRecording,
+      );
     }
     const type = this.mimeType || recorder.mimeType || 'audio/webm';
     const blob = await new Promise<Blob>((resolve) => {

@@ -348,4 +348,97 @@ class SpeakerProfileStoreTest {
         assertNull(p2.sampleMeta[1].session)
         assertNull(p2.sampleMeta[1].device)
     }
+
+    // ── Einzel-Aufnahme-Loeschung (Reparatur-Naht, Vorfall 07.08) ────────────
+
+    @Test
+    fun `deleteSample entfernt EIN Sample und mittelt den Zentroid aus den VERBLEIBENDEN neu`(@TempDir dir: Path) {
+        val store = store(dir)
+        store.upsert("andi", vec(1f, 0f), nowMs = 1_000)
+        store.appendSample("andi", vec(0f, 1f), nowMs = 2_000) // wird geloescht (Index 1)
+        store.appendSample("andi", vec(1f, 0f), nowMs = 3_000)
+
+        val after = store.deleteSample("andi", 1)!!
+        assertEquals(2, after.samples.size, "genau ein Sample weg")
+        assertArrayEquals(vec(1f, 0f), after.samples[0], 1e-6f)
+        assertArrayEquals(vec(1f, 0f), after.samples[1], 1e-6f)
+        // Mittel aus (1,0)+(1,0) ⇒ (1,0), renormiert bleibt (1,0) (schon Einheitsvektor).
+        assertArrayEquals(vec(1f, 0f), after.embedding, 1e-6f, "Zentroid aus den VERBLEIBENDEN neu gemittelt")
+        assertArrayEquals(after.embedding, store.get("andi")!!.embedding, 1e-6f, "Cache-Wahrheit stimmt")
+    }
+
+    @Test
+    fun `deleteSample entfernt sampleMeta SYNCHRON am selben Index`(@TempDir dir: Path) {
+        val store = store(dir)
+        store.upsert("andi", vec(1f, 0f), nowMs = 1_000, session = 1)
+        store.appendSample("andi", vec(0f, 1f), nowMs = 2_000, session = 2)
+        store.appendSample("andi", vec(1f, 1f), nowMs = 3_000, session = 3)
+
+        val after = store.deleteSample("andi", 0)!! // Session 1 verschwindet
+        assertEquals(2, after.sampleMeta.size)
+        assertEquals(listOf(2, 3), after.sampleMeta.map { it.session }, "sampleMeta folgt samples 1:1")
+    }
+
+    @Test
+    fun `deleteSample auf einziges Sample - wirft IllegalStateException, Cache unveraendert`(@TempDir dir: Path) {
+        val store = store(dir)
+        store.upsert("andi", vec(1f, 0f))
+        assertThrows(IllegalStateException::class.java) { store.deleteSample("andi", 0) }
+        val p = store.get("andi")!!
+        assertEquals(1, p.samples.size, "nichts geloescht")
+        assertArrayEquals(vec(1f, 0f), p.embedding, 1e-6f)
+    }
+
+    @Test
+    fun `deleteSample mit Index ausserhalb Bereich - wirft IndexOutOfBoundsException, Cache unveraendert`(@TempDir dir: Path) {
+        val store = store(dir)
+        store.upsert("andi", vec(1f, 0f))
+        store.appendSample("andi", vec(0f, 1f))
+        assertThrows(IndexOutOfBoundsException::class.java) { store.deleteSample("andi", 2) }
+        assertThrows(IndexOutOfBoundsException::class.java) { store.deleteSample("andi", -1) }
+        assertEquals(2, store.get("andi")!!.samples.size, "nichts geloescht")
+    }
+
+    @Test
+    fun `deleteSample auf unbekannten Namen - null ohne Datei-Write`(@TempDir dir: Path) {
+        val file = dir.resolve("speaker-profiles.json")
+        val store = SpeakerProfileStore(file)
+        assertNull(store.deleteSample("gibt-es-nicht", 0))
+        assertFalse(Files.exists(file), "no-op ⇒ kein Datei-Write")
+    }
+
+    @Test
+    fun `deleteSample ueberlebt den Neustart - verbleibende Samples und Zentroid byte-genau`(@TempDir dir: Path) {
+        val file = dir.resolve("speaker-profiles.json")
+        val store = SpeakerProfileStore(file)
+        store.upsert("andi", vec(1f, 0f))
+        store.appendSample("andi", vec(0f, 1f))
+        store.appendSample("andi", vec(1f, 0f))
+        store.deleteSample("andi", 1)
+
+        val reloaded = SpeakerProfileStore(file)
+        val p = reloaded.get("andi")!!
+        assertEquals(2, p.samples.size)
+        assertArrayEquals(vec(1f, 0f), p.samples[0], 1e-6f)
+        assertArrayEquals(vec(1f, 0f), p.samples[1], 1e-6f)
+        assertArrayEquals(vec(1f, 0f), p.embedding, 1e-6f)
+    }
+
+    @Test
+    fun `deleteSample Persist-Fehler - wirft und committet den Cache NICHT`(@TempDir dir: Path) {
+        val file = dir.resolve("speaker-profiles.json")
+        val store = SpeakerProfileStore(file)
+        store.upsert("andi", vec(1f, 0f))
+        store.appendSample("andi", vec(0f, 1f))
+        // Verzeichnis schreibgeschuetzt ⇒ das Anlegen der Temp-Datei in writeSnapshot scheitert.
+        val chmodOk = dir.toFile().setWritable(false)
+        try {
+            if (chmodOk) {
+                assertThrows(IOException::class.java) { store.deleteSample("andi", 0) }
+                assertEquals(2, store.get("andi")!!.samples.size, "Persist-Fehler ⇒ Cache unveraendert")
+            }
+        } finally {
+            dir.toFile().setWritable(true) // sonst kann @TempDir sich hinterher nicht aufraeumen
+        }
+    }
 }

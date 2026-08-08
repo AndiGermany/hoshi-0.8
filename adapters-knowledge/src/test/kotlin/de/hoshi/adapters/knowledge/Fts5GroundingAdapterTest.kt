@@ -421,4 +421,46 @@ class Fts5GroundingAdapterTest {
                 .block(Duration.ofSeconds(5)) ?: ""
             assertTrue(block.contains("Albert Einstein"), "Freitext-Frage groundet ohne exakten Titel: $block")
         }
+
+    // ---- Sidecar-Token-Wand (opt-in, Commit 62fccc7): Property gesetzt ⇒ Header,
+    // Property leer ⇒ KEIN Header (byte-identisch zu vor der Wand). ----
+
+    /** Wie [withBridge], liefert zusätzlich den `X-Hoshi-Token`-Header des Requests. */
+    private fun withBridgeCapturingToken(
+        json: String,
+        block: (String, java.util.concurrent.atomic.AtomicReference<String?>) -> Unit,
+    ) {
+        val capturedToken = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/search") { ex ->
+            capturedToken.set(ex.requestHeaders.getFirst("X-Hoshi-Token"))
+            val bytes = json.toByteArray()
+            ex.sendResponseHeaders(200, bytes.size.toLong())
+            ex.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            block("http://127.0.0.1:${server.address.port}", capturedToken)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `Token konfiguriert - Request traegt X-Hoshi-Token`() =
+        withBridgeCapturingToken(adenauerJson) { url, capturedToken ->
+            Fts5GroundingAdapter(baseUrl = url, token = "geheim-123")
+                .groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT, Language.DE)
+                .block(Duration.ofSeconds(5))
+            assertEquals("geheim-123", capturedToken.get(), "gesetzter Token muss als X-Hoshi-Token mitgehen")
+        }
+
+    @Test
+    fun `Token leer (Default) - KEIN X-Hoshi-Token-Header (byte-neutral)`() =
+        withBridgeCapturingToken(adenauerJson) { url, capturedToken ->
+            Fts5GroundingAdapter(baseUrl = url)
+                .groundingBlock("Wer war Konrad Adenauer?", RouteCategory.FACT_SHORT, Language.DE)
+                .block(Duration.ofSeconds(5))
+            assertEquals(null, capturedToken.get(), "leerer Token darf KEINEN Header senden")
+        }
 }

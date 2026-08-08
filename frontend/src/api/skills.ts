@@ -1,4 +1,6 @@
 import { API_BASE, TOKEN } from './config';
+import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
+import { resolveUiStrings } from '../i18n/catalogs';
 import type { Skill, SkillTier } from './types';
 
 /**
@@ -61,8 +63,8 @@ export async function fetchSkills(signal?: AbortSignal): Promise<Skill[]> {
     headers: authHeaders(),
     signal,
   });
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   const body: unknown = await res.json();
   if (!Array.isArray(body)) throw new Error('Skills-Antwort ist kein Array.');
   return body.map(toSkill).filter((s): s is Skill => s !== null);
@@ -82,9 +84,9 @@ export async function setSkill(id: string, enabled: boolean, signal?: AbortSigna
     signal,
   });
   if (res.status === 409) throw new SkillLockedError(id);
-  if (res.status === 401) throw new Error('401 — Token fehlt oder ist ungültig (Auth-Wand).');
+  if (res.status === 401) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.authWall);
   if (res.status === 404) throw new Error(`Unbekannter Skill: ${id}`);
-  if (!res.ok) throw new Error(`Backend antwortete HTTP ${res.status}`);
+  if (!res.ok) throw new Error(resolveUiStrings(getActiveUiLanguage()).apiErrors.httpStatus(res.status));
   const updated = toSkill(await res.json());
   if (!updated) throw new Error('Skill-Antwort unlesbar.');
   return updated;

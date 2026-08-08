@@ -3,6 +3,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   DEFAULT_SETTINGS,
+  LANGUAGE_IDS,
+  LANGUAGES,
   PERSONAS,
   SETTINGS_STORAGE_KEY,
   THEMES,
@@ -162,9 +164,12 @@ describe('useSettings — Persistenz + Defaults', () => {
   it('ignoriert ungültiges Theme/Sprache/Stimme und kaputtes JSON → Defaults', () => {
     const store = memoryStorage();
     vi.stubGlobal('localStorage', store);
+    // 'pt' (Portugiesisch) ist bewusst gewählt: KEINE der sechs gültigen Sprachen
+    // (auto/de/en/es/fr/it, s. LANGUAGE_IDS) — 'fr' wäre seit dem Sprachen-Auftrag
+    // 2026-07-27 kein gutes Beispiel für „ungültig" mehr, weil es das jetzt ist.
     store.setItem(
       SETTINGS_STORAGE_KEY,
-      JSON.stringify({ theme: 'bogus', language: 'fr', voice: 'darth-vader' }),
+      JSON.stringify({ theme: 'bogus', language: 'pt', voice: 'darth-vader' }),
     );
     expect(loadSettings().theme).toBe('aoi');
     expect(loadSettings().language).toBe('auto'); // ungültige Sprache → Default 'auto'
@@ -177,6 +182,40 @@ describe('useSettings — Persistenz + Defaults', () => {
     expect(() => loadSettings()).not.toThrow();
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Sprachwahl (Chat + STT) — Andi-Auftrag 2026-07-27 „fünf Sprachen ohne
+//  Sternchen": Español/Français/Italiano sind seither NEBEN Automatisch/
+//  Deutsch/English wählbar (bewusst NICHT Teil von 'auto' — s. KDoc `Language`
+//  in api/types.ts).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('LANGUAGE_IDS/LANGUAGES — sechs wählbare Chat-/STT-Sprachen', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('genau sechs Codes, auto/de/en zuerst, es/fr/it NEU dazu', () => {
+    expect(LANGUAGE_IDS).toEqual(['auto', 'de', 'en', 'es', 'fr', 'it']);
+    expect(LANGUAGES.map((l) => l.id)).toEqual(['auto', 'de', 'en', 'es', 'fr', 'it']);
+  });
+
+  it('jede Sprache hat ein nicht-leeres Label aus dem Text-Katalog', () => {
+    for (const l of LANGUAGES) {
+      expect(l.label.trim().length, l.id).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(['es', 'fr', 'it'] as const)(
+    "'%s' persistiert + wird aus localStorage wiederhergestellt (wie de/en)",
+    (code) => {
+      vi.stubGlobal('localStorage', memoryStorage());
+      saveSettings({ theme: 'yoru', language: code, persona: 'Standard', voice: 'coral' });
+      expect(loadSettings().language).toBe(code);
+    },
+  );
 });
 
 describe('PERSONAS — self-demonstrating Picker (Text-Hörprobe)', () => {
@@ -296,4 +335,26 @@ describe('Verdrahtung — Settings fließen in den Chat-Request', () => {
     expect(body.persona).toBe('Forscherin');
     expect(body.voice).toBe('marin');
   });
+
+  // Andi-Auftrag 2026-07-27 („fünf Sprachen ohne Sternchen"): Español/Français/
+  // Italiano sind explizit wählbar, aber NIE als `languagePolicy` verschickt —
+  // das Backend-Enum `LanguagePolicy` kennt nur AUTO/DE/EN; ein `languagePolicy:
+  // "ES"` würde die ganze Jackson-Deserialisierung zum Scheitern bringen. Der
+  // Turn muss trotzdem in ES/FR/IT laufen — über das konkrete `language`-Feld
+  // (voller 5-Sprachen-Backend-Enum), das der LanguageResolver bei fehlender
+  // Policy als Legacy-Fallback liest.
+  it.each(['es', 'fr', 'it'] as const)(
+    "language:'%s' → konkretes language-Feld GROSS, languagePolicy bleibt WEG (kein 400 möglich)",
+    async (code) => {
+      vi.stubGlobal('localStorage', memoryStorage());
+      const fetchMock = vi.fn().mockResolvedValue(okEmptyStream());
+      vi.stubGlobal('fetch', fetchMock);
+
+      await streamChat('hi', { onEvent: () => {}, language: code });
+
+      const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+      expect(body.language).toBe(code.toUpperCase());
+      expect(body).not.toHaveProperty('languagePolicy'); // JSON.stringify ließ den undefined-Key weg
+    },
+  );
 });

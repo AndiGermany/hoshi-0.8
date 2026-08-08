@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import hmac
 import io
 import logging
 import os
@@ -45,6 +46,7 @@ from typing import Optional, Union
 import numpy as np
 import soundfile as sf
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from embedder import CamPlusEmbedder, EMBED_DIM, SAMPLE_RATE
@@ -288,6 +290,27 @@ def _decide(best_score: float, high: float, low: float) -> str:
 
 # ── FastAPI-App ──────────────────────────────────────────────────────────────
 app = FastAPI(title="hoshi-speaker-id", version="0.1.0")
+
+# ── Optionale Token-Wand (HOSHI_SIDECAR_TOKEN, Codex-Sicherheits-P0 2026-07-27) ──
+# Alle 6 Sidecars binden 0.0.0.0 ohne Auth (vom LAN aus tokenlos abfragbar).
+# Diese Wand ist BEWUSST opt-in: HOSHI_SIDECAR_TOKEN leer/ungesetzt ⇒ exakt
+# heutiges Verhalten (offen, NULL Verhaltensänderung — das Produktiv-Setup
+# ct-106↔Mac-Sidecars läuft unverändert weiter). Gesetzt ⇒ jeder Request AUSSER
+# /health (Watchdogs/doctor/IP-Sync dürfen nie sterben) muss den Header
+# X-Hoshi-Token exakt tragen — hmac.compare_digest (timing-sicher) statt `==`,
+# sonst 401 mit knappem JSON-Body. Gleiche Wand/Env-Var/Header/health-Ausnahme
+# in allen 6 Sidecars (server.py je brain/stt/speaker/knowledge/piper/say) —
+# hier als FastAPI-Middleware.
+_HOSHI_SIDECAR_TOKEN = os.environ.get("HOSHI_SIDECAR_TOKEN", "")
+
+
+@app.middleware("http")
+async def _hoshi_token_wall(request: Request, call_next):
+    if _HOSHI_SIDECAR_TOKEN and request.url.path != "/health":
+        supplied = request.headers.get("x-hoshi-token", "")
+        if not hmac.compare_digest(supplied, _HOSHI_SIDECAR_TOKEN):
+            return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+    return await call_next(request)
 
 
 @app.get("/health", response_model=HealthResponse)

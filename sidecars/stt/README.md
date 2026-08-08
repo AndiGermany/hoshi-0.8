@@ -31,8 +31,15 @@ Zusätzlich zu den pip-Paketen braucht `_convert_to_wav()` ein installiertes
 prüfen das jeweils und brechen laut ab, wenn es fehlt.
 
 Das Whisper-Modell selbst (Default `mlx-community/whisper-large-v3-turbo`)
-kommt über den HuggingFace-Cache (`mlx_whisper` lädt es lazy beim ersten
-Warmup-Request in `server.py`'s `startup`-Hook) — nicht über pip.
+kommt über den HuggingFace-Cache, aber nicht mehr implizit beim Warmup:
+`run.sh` liest den `stt-whisper`-v2-Lock aus `models.json`, setzt
+`HF_HUB_OFFLINE=1` und führt vor jedem Start den vollständigen Offline-Hash
+über `tools/verified_fetch.py verify` aus. Fehlt oder driftet der Snapshot, startet
+kein Server. Die bewusste Beschaffung ist ein separater Befehl:
+
+```bash
+sidecars/stt/.venv/bin/python tools/verified_fetch.py fetch stt-whisper
+```
 
 Env-Variablen (`run.sh`):
 
@@ -40,7 +47,8 @@ Env-Variablen (`run.sh`):
 |---|---|---|
 | `HOSHI_STT_HOST` | `0.0.0.0` | Bind-Adresse |
 | `HOSHI_STT_PORT` | `9001` | Port |
-| `HOSHI_STT_MODEL` | (leer → `server.py`-Default) | reicht `--model <repo>` durch |
+| `HOSHI_STT_MODEL` | (leer → `models.json`) | darf nur der gelockten `stt-whisper`-Repo-ID entsprechen; andere Werte brechen fail-closed ab |
+| `HOSHI_STT_VERIFY_ONLY` | `0` | `1` prüft Runtime, Lock und Vollhash, startet aber weder FastAPI noch Warmup |
 | `HOSHI_LOG_DIR` | `$HOME/.hoshi/logs` | Log-Ablage |
 
 ## Dateien
@@ -52,7 +60,7 @@ Env-Variablen (`run.sh`):
 | `test_silence_gate.py` | aus `hoshi-stt-mlx/test_silence_gate.py` portiert (pytest, keine mlx_whisper-Abhängigkeit) |
 | `requirements.txt` | `hoshi-stt-mlx/requirements.txt`, ersetzt durch die vollen Kern-Pins aus dem echten 0.5-venv (`pip freeze`) |
 | `bootstrap.sh` | neu, nach dem Muster aus `sidecars/brain/bootstrap.sh` |
-| `run.sh` | neu, nach dem Muster aus `sidecars/brain/run.sh` (ohne Model-Cache-Preflight — mlx_whisper lädt selbst lazy) |
+| `run.sh` | neu, nach dem Muster aus `sidecars/brain/run.sh`; v2-Lock-Vollhash + `HF_HUB_OFFLINE=1` vor Warmup |
 
 Nicht portiert: `setup.sh` (durch `bootstrap.sh` ersetzt, siehe oben).
 

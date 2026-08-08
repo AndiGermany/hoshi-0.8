@@ -203,6 +203,27 @@ export type EnrollSentences = readonly [
   string,
 ];
 
+/**
+ * Fehltexte von `api/speakers.ts` (`enrollSpeaker`, Shape von
+ * `SpeakerEnrollErrorKind`) — s. KDoc bei {@link SpeakerStrings.enrollErrors}.
+ */
+export interface SpeakerEnrollErrorStrings {
+  /** 401 — Token fehlt/ungültig. */
+  auth: string;
+  /** 400 — Name passt nicht auf `SPEAKER_NAME_PATTERN`. */
+  badName: string;
+  /** 409 — Folge-Sample ohne bestehendes Profil (Satz 1 fehlt/verloren). */
+  outOfSync: string;
+  /** 422 — Audio zu kurz/leise. */
+  tooShort: string;
+  /** 502 — der Sidecar lieferte kein Embedding. */
+  noEmbedding: string;
+  /** Sonstiger `!ok`-Status. */
+  unknown: (status: number) => string;
+  /** 2xx, aber die Antwort ließ sich nicht als {@link ../api/speakers.SpeakerSummary} lesen. */
+  unreadable: string;
+}
+
 /** Alle sichtbaren Texte der Sprecher-Sektion (Shape von SPEAKER_TEXTS). */
 export interface SpeakerStrings {
   groupTitle: string;
@@ -251,6 +272,72 @@ export interface SpeakerStrings {
   statusInProgress: string;
   /** Status-Badge in der Profil-Liste: Profil hat alle 9 Sätze (3 Sitzungen komplett). */
   statusComplete: string;
+  /**
+   * Fehltexte von {@link ../api/speakers.SpeakerEnrollError} (`api/speakers.ts`,
+   * `enrollSpeaker`) — landen WÖRTLICH im Anlern-Dialog (`EnrollDialog.
+   * finishRecording`s Catch zeigt `err.message` direkt). `api/speakers.ts` hat
+   * keinen React-Hook-Zugriff — liest darum synchron aus dem AKTIVEN UI-Katalog
+   * (Muster {@link ApiErrorStrings}/`api/chat.ts`).
+   */
+  enrollErrors: SpeakerEnrollErrorStrings;
+  /**
+   * Fünf-Sprachen-Sweep 2026-07-27: die Restschuld aus SpeakerSection.tsx, die
+   * bisher hart im JSX/in Modul-Funktionen stand (byte-gleich zum Bestand nach
+   * `de`, s. `formatEnrolledDate`/`sampleProgress` dort).
+   */
+  /** Fallback von {@link ../components/SpeakerSection.formatEnrolledDate}, wenn kein/kein gültiges Datum da ist. */
+  justNow: string;
+  /** Datums-Zeile in der Profil-Liste, z. B. „angelernt 15. Juli 2026". */
+  enrolledOn: (date: string) => string;
+  /** Sätze-Zähler in der Profil-Liste, sprachrichtig gebeugt: „1 Satz" / „3 Sätze". */
+  sentenceCount: (count: number) => string;
+  /** „Satz i von n" (Anlern-Knopf/Status) — ersetzt {@link ../components/SpeakerSection.sampleProgress}. */
+  progress: (sample: number, total: number) => string;
+  /** Umschließt einen Anlern-Satz mit den sprachtypischen Anführungszeichen. */
+  quote: (text: string) => string;
+  /** aria-label des Lösch-Knopfs einer Profil-Zeile, z. B. „Profil Andi löschen". */
+  deleteProfileAria: (name: string) => string;
+
+  // ── Reparatur-Auftrag 07.08 (Kreuz-Kontaminations-Vorfall: zwei Haushaltsmitglieder lernten gleichzeitig
+  // im selben Raum an, Löschen war zu leichtgängig, ein Profil ließ sich nicht per Klick
+  // fortsetzen, es gab nur Ganz-Profil-Löschung) ─────────────────────────────────────────
+
+  /** „Weiter anlernen"-Knopf einer Profil-Zeile — öffnet den Dialog vorausgefüllt+gesperrt. */
+  continueButton: string;
+  /** Tooltip am disabled „Weiter anlernen" eines vollen Profils (9/9) — stiller Ersatz-Neustart ist verboten. */
+  continueFullHint: string;
+  /** aria-label des Fortsetzen-Knopfs, z. B. „Andi weiter anlernen". */
+  continueAria: (name: string) => string;
+  /**
+   * Fester Hinweis im Anlern-Dialog (Intro-Schritt) — der Kreuz-Kontaminations-Vorfall:
+   * ZWEI Menschen lernten gleichzeitig im selben Raum an, beide Profile mussten gewiped
+   * werden. Ruhig, nicht alarmistisch.
+   */
+  soloEnrollHint: string;
+  /** <summary>-Text des aufklappbaren Aufnahmen-Bereichs einer Profil-Zeile. */
+  recordingsToggle: (count: number) => string;
+  /** Fehlzeile, wenn die Aufnahmen-Diagnose (GET .../diagnostics) grad nicht lesbar ist. */
+  recordingsLoadError: string;
+  /** leaveOneOutSimilarity > 0.6 — ruhiger Text statt Rohzahl (die steht im `title`). */
+  fitGood: string;
+  /** leaveOneOutSimilarity 0.35..0.6. */
+  fitMedium: string;
+  /** leaveOneOutSimilarity < 0.35 — mögliches Warnsignal (kontaminiert/verrutscht). */
+  fitPoor: string;
+  /** Kein Vergleichswert da (Profil hat nur 1 Aufnahme — nichts zu leaven). */
+  fitUnknown: string;
+  /** Fallback für fehlendes Datum/Dauer EINER Aufnahme (Alt-Aufnahme, WAV nicht geparst). */
+  recordingUnknown: string;
+  /** Dauer EINER Aufnahme, z. B. „2,3 s". */
+  recordingDuration: (seconds: number) => string;
+  /** Einzel-Löschen-Knopf EINER Aufnahme. */
+  deleteRecording: string;
+  /** aria-label des Einzel-Löschen-Knopfs, z. B. „Aufnahme 2 löschen". */
+  deleteRecordingAria: (index: number) => string;
+  /** Hinweis/Tooltip, wenn der Einzel-Löschen-Knopf gesperrt ist (letzte Aufnahme). */
+  deleteRecordingLastHint: string;
+  /** Fehlzeile, wenn das Einzel-Löschen einer Aufnahme fehlschlägt. */
+  deleteRecordingFailed: string;
 }
 
 /** Alle sichtbaren Texte des Nachtmodus (Shape von NIGHT_MODE_TEXTS). */
@@ -498,6 +585,17 @@ export interface ApiErrorStrings {
   unauthorized: string;
   unsupportedAudioType: string;
   httpStatus: (status: number) => string;
+  /**
+   * Fünf-Sprachen-Sweep 2026-07-27: derselbe generische 401-Satz wie {@link
+   * unauthorized}, aber OHNE den Entwickler-Hinweis „Setze VITE_TOKEN." — das ist
+   * der Wortlaut, den die ÜBRIGEN Settings-Clients (skills.ts, speakers.ts,
+   * nightMode.ts, weatherLocation.ts, lookupModel.ts, brainSettings.ts,
+   * ttsSettings.ts, extendedThink.ts, privacy.ts, languageSettings.ts,
+   * brainAutoSwitch.ts, homeEdit.ts) schon immer geworfen haben (byte-gleich zum
+   * Bestand) — ein eigenes Feld statt {@link unauthorized} wiederzuverwenden,
+   * damit sich an chat.ts/voice.ts nichts ändert.
+   */
+  authWall: string;
 }
 
 /** Sichtbare Texte des „Wer sprach"-Chips ({@link ../components/SpeakerChip}). */
@@ -599,6 +697,16 @@ export interface ActivityStrings {
    */
   diagnoseTitle: string;
   diagnoseHint: string;
+  /**
+   * Tages-Trenner + „Frühere laden" (Andi-Auftrag 2026-07-27: der Turn-Feed
+   * zeigt standardmäßig nur die letzten `FEED_PAGE_SIZE` Turns, gruppiert
+   * unter „Heute"/„Gestern"/Datum — kein Endlos-Scroll, s. `feedDays.ts`).
+   */
+  dayToday: string;
+  dayYesterday: string;
+  /** Unlesbarer/fehlender Zeitstempel — eigenes ehrliches Segment statt Rateversuch. */
+  dayUnknown: string;
+  loadEarlier: string;
 }
 
 /** Sichtbare Texte der Raumansicht. */
@@ -626,6 +734,32 @@ export interface RoomsStrings {
   idea: string;
   ideaHint: string;
   assignFailed: string;
+  /**
+   * Scheibe 1 des Räume-Verwaltungs-Konzepts (`.orch-bus/inbox/20260727-2223-
+   * cowork-raeume-verwaltung-konzept.md`, §6): Kopfzeilen-Wahrheit, Suche,
+   * Domänen-Chips und die „Braucht dich"-Inbox (ersetzt die alte „Nicht
+   * zugeordnet"-Darstellung, s. `RoomsInbox.tsx`/`RoomsToolbar.tsx`).
+   */
+  assignedSummary: (assigned: number, total: number, roomCount: number) => string;
+  searchPlaceholder: string;
+  searchAria: string;
+  /** Ehrliche Leermeldung bei aktivem Filter/Suche ohne einen einzigen Treffer. */
+  noMatches: (query: string) => string;
+  domainFilterAria: string;
+  domainAll: string;
+  domainLight: string;
+  domainClimate: string;
+  domainSensors: string;
+  domainOther: string;
+  inboxTitle: string;
+  /** Echt nichts offen (kein Amber, ruhige Zeile statt Dauer-Aufmerksamkeit). */
+  inboxEmpty: string;
+  inboxConfirm: string;
+  inboxHintEditable: string;
+  inboxHintReadOnly: string;
+  /** Raum-Karte: ab `ROOM_COLLAPSE_AT` Zeilen bleibt der Rest eingeklappt. */
+  roomShowMore: (hiddenCount: number) => string;
+  roomShowLess: string;
 }
 
 /**
@@ -730,6 +864,14 @@ export interface IdleFaceStrings {
     precipSome: (mm: string) => string;
     /** Niederschlag exakt 0 ⇒ „trocken" statt „0 mm". */
     precipNone: string;
+    /** Morgen-Zeile (Flur-Fertigstellung 2026-07-27): „morgen 12–22°, sonnig". */
+    tomorrow: (span: string, cond: string) => string;
+    /** „Regen ab ~17:00" — nur gezeigt, wenn eine Stunde >20% Regenwahrscheinlichkeit hat. */
+    rainFrom: (clock: string) => string;
+    /** „hell bis 21:34" — Tageszeit, solange die Sonne heute noch nicht unter ist. */
+    sunUntil: (clock: string) => string;
+    /** „hell ab 05:32" — vor dem heutigen Sonnenaufgang. */
+    sunFrom: (clock: string) => string;
   };
   status: {
     online: string;
@@ -778,6 +920,42 @@ export interface VoiceChatStrings {
   noAudioHeard: string;
 }
 
+/**
+ * Fehlertexte der Mikro-Aufnahme (Shape von {@link ../audio/recorder.VoiceRecorderError}).
+ * Fünf-Sprachen-Sweep 2026-07-27: diese Zeilen landen WÖRTLICH als Mikro-Fehlzeile im
+ * Chat/Voice-Orb (`useVoiceChatSession.humanMicError`) UND im Anlern-Dialog
+ * (SpeakerSection — `err instanceof Error ? err.message : …`), waren aber bisher eine
+ * hart deutsche Modul-Konstante in `audio/recorder.ts`, unabhängig von der UI-Sprache.
+ * `recorder.ts` selbst hat keinen React-Hook-Zugriff — es liest darum synchron aus dem
+ * Modul-Singleton (`resolveUiStrings(getActiveUiLanguage())`), exakt das Muster von
+ * `api/chat.ts`/`api/voice.ts`.
+ */
+export interface MicErrorStrings {
+  /** NotAllowedError/PermissionDeniedError — Nutzer hat das Mikro abgelehnt. */
+  permissionDenied: string;
+  /** NotFoundError/DevicesNotFoundError — kein Mikrofon gefunden. */
+  noDevice: string;
+  /** SecurityError beim Öffnen ODER `getUserMedia` fehlt UND die Seite läuft unsicher. */
+  insecureContext: string;
+  /** Browser kennt `navigator.mediaDevices.getUserMedia` gar nicht (und ist NICHT unsicher). */
+  noApi: string;
+  /** Browser kennt kein `MediaRecorder` (Mikro-Stream stand schon). */
+  noRecorder: string;
+  /** Alles andere (unbekannter `getUserMedia`-Fehlername). */
+  unknown: string;
+  /** Dev-Assertion — `stop()` ohne vorheriges `start()`; über die UI nie erreichbar. */
+  stopWithoutRecording: string;
+  /**
+   * {@link ../audio/wav.WavConvertError} — Browser kennt keinen `AudioContext`
+   * (kann also gar nicht dekodieren). Nur im Anlern-Dialog sichtbar; der reguläre
+   * Voice-Turn (`voiceTurnUploadBlob`) fängt {@link ../audio/wav.WavConvertError}
+   * still ab und schickt die rohen Recorder-Bytes weiter (kein UI-Fehler dort).
+   */
+  decodeUnsupported: string;
+  /** {@link ../audio/wav.WavConvertError} — Default-Nachricht, alles andere schlug beim Dekodieren/Umwandeln fehl. */
+  convertFailed: string;
+}
+
 /** Der komplette UI-Text-Katalog EINER Sprache — jede Sprache implementiert exakt diese Form. */
 export interface UiStrings {
   locale: string;
@@ -801,6 +979,7 @@ export interface UiStrings {
   overview: OverviewStrings;
   chat: ChatStrings;
   voiceChat: VoiceChatStrings;
+  micErrors: MicErrorStrings;
   turnAnatomy: TurnAnatomyStrings;
   voiceOrb: VoiceOrbStrings;
   settings: SettingsPanelStrings;

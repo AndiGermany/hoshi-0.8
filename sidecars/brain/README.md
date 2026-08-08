@@ -46,8 +46,18 @@ kommt über den HuggingFace-Cache (`huggingface_hub.snapshot_download`), nicht
 liegt, statt still auf einen toten Port zu laufen (Brief-15-Prinzip).
 
 Modell-Wahl: `HOSHI_BRAIN_MODEL=e4b|e2b|12b|<volle HF-Repo-ID>` (Default
-`e4b` — siehe Kopf-Kommentar in `run.sh` für die Begründung des Defaults
-und die bewusste Divergenz zu `pipeline/stack-lib.sh`s globalem `e2b`-Default).
+`e4b`, überall gleich — `models.json` ist die eine Modell-Wahrheit
+(brain-e4b `required:true`), `pipeline/stack-lib.sh` defaultet identisch,
+und `pipeline/doctor.sh` (Check „model-truth") meldet DEGRADED, falls die
+beiden Seiten je wieder auseinanderlaufen; Konsolidierung 2026-07-27).
+
+`POST /switch-model` beschafft keine Modelle zur Laufzeit. Vor dem Entladen des
+aktiven Brains muss der Ziel-Snapshot den vollständigen Offline-Hash seines
+`models.json`-v2-Locks über `tools/verified_fetch.py verify` bestehen. Bei
+Fehlen oder Drift bleibt das alte Brain aktiv; `switch_error` nennt den
+separaten, lizenzbewussten Fetch-Befehl. Der Vollhash läuft als
+`switch_phase=verifying` im Hintergrund, damit das alte Brain währenddessen
+weiter antwortet und der Settings-Client nicht in seinen Accept-Timeout läuft.
 
 ## Dateien
 
