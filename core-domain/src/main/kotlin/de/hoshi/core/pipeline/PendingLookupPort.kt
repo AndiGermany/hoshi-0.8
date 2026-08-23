@@ -46,6 +46,27 @@ data class PendingLookup(
     val ts: Instant = Instant.now(),
     val awaitsTopic: Boolean = false,
     val retryLocalKnowledge: Boolean = false,
+    /**
+     * **The referent that [query] does not name** (Andi live bug 2026-08-15):
+     * „Wozu isst man ihn denn?" was parked verbatim and escalated verbatim, so
+     * the cloud saw a pronoun without a referent. When
+     * [AnaphoraRecognizer.carriesUnresolvedReference] fires at the offer point,
+     * this carries the last exchange compactly ([ContextHint.of], hard-capped at
+     * [ContextHint.MAX_CHARS]); the cloud does the resolving, not us.
+     *
+     * **Privacy contract (binding):**
+     *  - filled ONLY on a detected anaphora — otherwise `null`, and every path
+     *    behaves byte for byte as before;
+     *  - travels ONLY into the already opt-in escalation path
+     *    ([ContextHint.escalationQuery]) — never into a [de.hoshi.core.dto.ChatEvent],
+     *    therefore never into the diary (which is derived from those events alone);
+     *  - never into the 30-day lookup-note store: an anaphoric query is an
+     *    ambiguous cache key, so a hinted lookup is deliberately not cached
+     *    (see [TurnOrchestrator.escalationTurn]);
+     *  - TTL and one-shot semantics of the pending are untouched — the hint dies
+     *    with the offer it belongs to.
+     */
+    val contextHint: String? = null,
 )
 
 /**
@@ -59,15 +80,10 @@ data class PendingLookup(
  * nie ein alter „ja"-Köder liegen). Zusätzlich TTL [DEFAULT_TTL] (~120 s):
  * ein Angebot von vorhin ist kein Consent von jetzt.
  *
- * **Key-Entscheid (S2, größte Design-Unbekannte des PREP):**
- * `key = chatId ?: speakerId ?: "local"` — der Voice-Pfad baut den ChatRequest
- * heute OHNE `chatId` und OHNE `speakerContext` (VoiceInboundController), fällt
- * also auf den einen [LOCAL_KEY]-Slot. Im Ein-Haushalt-Betrieb ist dieser
- * Single-Slot ehrlich und sicher: es gibt maximal EIN offenes Angebot, TTL +
- * one-shot verhindern Alt-Consent. **Upgrade-Pfad (dokumentiert, nicht gebaut):**
- * sobald die Sprecher-ID-Lane (deren S3) den Voice-Pfad mit einer echten
- * `speakerId` befüllt, greift automatisch die mittlere Stufe des Schlüssels —
- * das Angebot wird pro Sprecher isoliert, ohne dass sich dieser Port ändert.
+ * **Key-Vertrag:** [ConversationKeys] namespaced Kanal und lokale Geräte-/Session-
+ * Identität. Ein Sprecher-Claim wird erst nach erzwungener Trust-Prüfung genutzt.
+ * Der [PendingTurnArbiter] sorgt zusätzlich dafür, dass pro Key niemals mehrere
+ * Rückfrage-Arten nebeneinander produktiv offen bleiben.
  *
  * **Wiederverwendbar geschnitten:** der Port kennt nur „Angebot gemerkt/geholt" —
  * er ist NICHT an den FactCoverage-Deflect gebunden. Der zweite Angebots-Pfad
@@ -95,7 +111,7 @@ interface PendingLookupPort {
             override fun consume(key: String): PendingLookup? = null
         }
 
-        /** Der Ein-Haushalt-Single-Slot, wenn weder chatId noch speakerId da sind (Voice-Pfad heute). */
+        /** Legacy-Konstante für isolierte Store-Tests/Altbestand; neue Turns nutzen [ConversationKeys.local]. */
         const val LOCAL_KEY: String = "local"
 
         /** Angebots-TTL: ein „ja" zählt nur ~120 s — ein Angebot von vorhin ist kein Consent von jetzt. */

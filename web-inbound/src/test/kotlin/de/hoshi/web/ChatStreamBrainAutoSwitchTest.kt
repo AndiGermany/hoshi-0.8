@@ -7,6 +7,7 @@ import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteDecision
 import de.hoshi.core.dto.RouteProvider
 import de.hoshi.core.pipeline.EntityMemoryWriter
+import de.hoshi.core.pipeline.ConversationKeys
 import de.hoshi.core.pipeline.ExistenceClaimSignal
 import de.hoshi.core.pipeline.GroundingPort
 import de.hoshi.core.pipeline.HeuristicLanguageDetector
@@ -18,6 +19,8 @@ import de.hoshi.core.pipeline.NamedEntitySignal
 import de.hoshi.core.pipeline.OnlineRequestSignal
 import de.hoshi.core.pipeline.PersonaResolver
 import de.hoshi.core.pipeline.PersonaService
+import de.hoshi.core.pipeline.PendingLookup
+import de.hoshi.core.pipeline.PendingLookupPort
 import de.hoshi.core.pipeline.ResponseFormatter
 import de.hoshi.core.pipeline.RoutingPolicy
 import de.hoshi.core.pipeline.TtsStage
@@ -75,7 +78,7 @@ class ChatStreamBrainAutoSwitchTest {
         }
     }
 
-    private fun orchestrator(): TurnOrchestrator {
+    private fun orchestrator(pendingLookup: PendingLookupPort = PendingLookupPort.NONE): TurnOrchestrator {
         val persona = PersonaService()
         return TurnOrchestrator(
             routing = RoutingPolicy(
@@ -103,11 +106,15 @@ class ChatStreamBrainAutoSwitchTest {
             persona = persona,
             formatter = ResponseFormatter(),
             brain = FakeBrainPort(),
+            pendingLookup = pendingLookup,
         )
     }
 
-    private fun controller(autoSwitch: BrainAutoSwitchPort) = ChatStreamController(
-        orchestrator = orchestrator(),
+    private fun controller(
+        autoSwitch: BrainAutoSwitchPort,
+        pendingLookup: PendingLookupPort = PendingLookupPort.NONE,
+    ) = ChatStreamController(
+        orchestrator = orchestrator(pendingLookup),
         ttsStage = TtsStage(tts = TtsPort { _, _ -> Mono.empty() }),
         languageResolver = LanguageResolver(HeuristicLanguageDetector(), autoEnabled = false),
         personaResolver = PersonaResolver(personaEnabled = false),
@@ -151,5 +158,36 @@ class ChatStreamBrainAutoSwitchTest {
             .block(Duration.ofSeconds(5))!!
 
         assertTrue(events.isNotEmpty())
+    }
+
+    @Test
+    fun `Chat-Rand ueberschreibt behaupteten WS-Key mit seinem Geraete-Key`() {
+        val consumedKeys = mutableListOf<String>()
+        val pending = object : PendingLookupPort {
+            override fun offer(key: String, pending: PendingLookup) = Unit
+            override fun consume(key: String): PendingLookup? {
+                consumedKeys += key
+                return null
+            }
+        }
+
+        controller(BrainAutoSwitchPort.NOOP, pending)
+            .stream(
+                ChatRequest(
+                    text = "hallo",
+                    speak = false,
+                    deviceId = "browser-a",
+                    source = "ws",
+                    conversationKey = ConversationKeys.forSession("vom-body-behauptet"),
+                ),
+            )
+            .collectList()
+            .block(Duration.ofSeconds(5))!!
+
+        assertEquals(
+            listOf(ConversationKeys.forDevice(ConversationKeys.Channel.CHAT, "browser-a")),
+            consumedKeys,
+            "JSON-Body darf weder Kanal noch Pending-Session behaupten",
+        )
     }
 }

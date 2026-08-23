@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { VoiceStar, type StarState } from './VoiceStar';
 import { ThinkingDots } from './ChatView';
 import { StreamingBody } from './StreamingText';
@@ -32,7 +32,29 @@ import '../styles/voicebar.css';
  * Die Karte zeigt NUR den letzten Turn (Transkript + Antwort) — kein zweiter
  * Verlauf: die volle Historie bleibt im Chat-Reiter, gespeist aus DERSELBEN
  * `session.turns` (App.tsx reicht eine einzige Session an beide Ansichten).
+ * The card has a LIFETIME since Andi's iPad finding (2026-08-14) — {@link cardTtlMs}.
  */
+
+/* ── Bubble lifetime ─────────────────────────────────────────────────────── */
+
+/** Floor: even a two-word answer stays readable at hallway distance. */
+export const CARD_TTL_MIN_MS = 8_000;
+/** Ceiling: Home is a glance surface — the full text keeps living in the chat tab. */
+export const CARD_TTL_MAX_MS = 30_000;
+/** ~16 chars/s reading speed, deliberately slower than desk reading. */
+export const CARD_MS_PER_CHAR = 60;
+
+/**
+ * Reading time of one bubble, clamped to [{@link CARD_TTL_MIN_MS},
+ * {@link CARD_TTL_MAX_MS}]. `chars` = the visible text (transcript + answer).
+ * An error bubble always gets the ceiling: its shortness says nothing about
+ * its weight.
+ */
+export function cardTtlMs(chars: number, isError = false): number {
+  if (isError) return CARD_TTL_MAX_MS;
+  const read = Math.max(0, chars) * CARD_MS_PER_CHAR;
+  return Math.min(CARD_TTL_MAX_MS, Math.max(CARD_TTL_MIN_MS, read));
+}
 
 function orbState(micState: MicState, speaking: boolean): StarState {
   if (speaking) return 'speaking';
@@ -121,6 +143,27 @@ export function VoiceOrb({ session }: { session: VoiceChatSession }) {
   const showCard = !!lastAssistant && lastAssistant.role === 'assistant' && lastUser?.role === 'user';
   const streamingAnswer = busy && showCard && !lastAssistant?.error;
 
+  // Bubble lifetime (Andi's iPad finding 2026-08-14: the hallway display kept
+  // the last answer next to the live home screen forever, which read as if the
+  // home texts had flooded the bubble). Contract:
+  //  - the clock starts only once the turn is FINISHED (`!busy && !speaking`) —
+  //    a long spoken answer is never cut off mid-sentence;
+  //  - every new turn re-runs this effect (turns.length/text change) and thus
+  //    RE-ARMS the clock on the replaced content — one bubble, never a stack;
+  //  - expiry is time-based, not hover-based (touch/iPad has no hover).
+  // Component-local on purpose: leaving and re-entering the Home tab remounts
+  // the orb and grants the last turn one more window — the turn itself is not
+  // lost, it lives in the chat tab and in the diary.
+  const cardChars = (lastUser?.text.length ?? 0) + (lastAssistant?.text.length ?? 0);
+  const cardIsError = !!lastAssistant?.error;
+  const [cardExpired, setCardExpired] = useState(false);
+  useEffect(() => {
+    setCardExpired(false);
+    if (!showCard || busy || speaking) return;
+    const id = window.setTimeout(() => setCardExpired(true), cardTtlMs(cardChars, cardIsError));
+    return () => window.clearTimeout(id);
+  }, [turns.length, showCard, busy, speaking, cardChars, cardIsError]);
+
   return (
     <section className="voiceorb" aria-label={orb.sectionAria}>
       <button
@@ -138,22 +181,49 @@ export function VoiceOrb({ session }: { session: VoiceChatSession }) {
         {hint}
       </p>
 
-      {micError && (
-        <div className="chat__micerror voiceorb__error" role="status">
-          <MicGlyph /> {micError}
-        </div>
-      )}
+      {/* **Die Sprech-Schicht** (23.08., Andi: „Das overlay für das
+          eingesprochene und ausgegebene auf dem homescreen verschiebt wieder
+          die größe von allen widgets.").
 
-      {showCard && lastUser && lastAssistant && (
-        <div className="voiceorb__card" aria-live="polite">
-          <div className="voiceorb__row voiceorb__row--user">
-            {lastUser.pending ? <ThinkingDots /> : lastUser.text || '…'}
+          Beides — die Blase mit dem letzten Turn UND der Mikrofon-Fehler —
+          stand vorher als gewöhnliches Flex-Kind IM Orb-Block. Der Block ist
+          `flex: none` in einer Spalte, deren einziges dehnbares Kind die Bühne
+          ist: jeder Pixel, den die Blase nahm, wurde der Bühne abgezogen.
+          Gemessen bei 1366 × 1024 (`tools/zuhause-probe/sprechen.mjs`):
+          Orb-Block 140 → 236 px, Kachel-Kasten 669 → 574 px, Zeilenhöhe
+          153 → 177 px, Seiten 4 → 5 — ALLE Kacheln wurden größer, zwei
+          rutschten auf die nächste Seite. Genau Andis Satz.
+
+          Jetzt liegt beides in einer eigenen, absolut positionierten Schicht
+          ÜBER der Bühne (dasselbe Idiom, mit dem `.idle__editlayer` im
+          Edit-Modus dieselbe Falle gelöst hat, s. HomeStage-KDoc): der
+          Orb-Block behält seine Höhe, egal ob gesprochen wird oder nicht, und
+          die Bühne rechnet über den ganzen Turn hinweg mit derselben Fläche.
+          Die Schicht selbst ist zeigerdurchlässig — nur ihre Kinder fangen
+          Zeiger, sonst wäre die halbe Bühne tot, solange eine Blase steht. */}
+      {/* KEIN `aria-hidden` an der Schicht: sie trägt die `aria-live`-Region
+          der Blase. Eine Region, deren Vorfahre beim Erscheinen des Textes von
+          `true` auf `false` kippt, lesen die meisten Screenreader nicht vor —
+          dieselbe Falle wie bei einer erst mit ihrem Text entstehenden Region
+          (s. `HomeEditBar`). Leer ist sie ohnehin unsichtbar für die Ohren. */}
+      <div className="voiceorb__say">
+        {micError && (
+          <div className="chat__micerror voiceorb__error" role="status">
+            <MicGlyph /> {micError}
           </div>
-          <div className="voiceorb__row voiceorb__row--assistant">
-            {streamingAnswer ? <StreamingBody text={lastAssistant.text} /> : lastAssistant.text}
+        )}
+
+        {showCard && !cardExpired && lastUser && lastAssistant && (
+          <div className="voiceorb__card" aria-live="polite">
+            <div className="voiceorb__row voiceorb__row--user">
+              {lastUser.pending ? <ThinkingDots /> : lastUser.text || '…'}
+            </div>
+            <div className="voiceorb__row voiceorb__row--assistant">
+              {streamingAnswer ? <StreamingBody text={lastAssistant.text} /> : lastAssistant.text}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }

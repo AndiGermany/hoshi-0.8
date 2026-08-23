@@ -84,6 +84,8 @@ object LangEs {
             "Hm, mi libro de consulta no está accesible en este momento. No quiero adivinar — pregúntamelo otra vez en un momento y lo miro como es debido.",
             "Aquí me he quedado colgado — mi archivo de conocimiento no responde. Dame un momento y te lo digo con sinceridad.",
         ),
+        executionClaimAskBack =
+            "No lo he entendido con seguridad como una orden para encender o apagar — ¿me lo repites?",
         factCoverageOfflineDisclaimer = "Sinceramente, no tengo una fuente para esto — pero por lo que sé yo: ",
         localLookupFoundPrefix = "He mirado en lo que tengo aquí — ",
         // ── Andi-Auftrag 2026-07-26 „las frases de buscar online son malas" — hasta
@@ -119,6 +121,9 @@ object LangEs {
         dailyNoteUpdated = "Actualizado: hoy un $SCORE_PLACEHOLDER. ¡Gracias!",
         workshopNoteRecorded = "Anotado para el taller. ¡Gracias!",
         probeReceipt = "Te oigo alto y claro — oídos, cable y voz están en pie.",
+        currentAffairsBriefingPrefix = "Actualizado a las $TIME_PLACEHOLDER: ",
+        currentAffairsBriefingStalePrefix = "Actualizado a las $TIME_PLACEHOLDER, más antiguo de lo habitual: ",
+        currentAffairsNone = "Ahora mismo no tengo ninguna noticia para ti.",
         intentPatterns = IntentPatternNotes(
             lookupVerbs = listOf(
                 "busca", "busco", "mira", "miro", "comprueba", "compruebo",
@@ -324,6 +329,17 @@ object LangEs {
         temperatureInArea = "En {room} hay ahora mismo {value} grados.",
         temperatureHouseAverage = "En casa hay ahora mismo {value} grados de media.",
         temperatureUnavailable = "Ahora mismo no llego a la temperatura — inténtalo otra vez enseguida.",
+        freshnessJustNow = "hace un momento",
+        freshnessMinutesAgo = "hace $MINUTES_PLACEHOLDER minutos",
+        freshnessOverAnHourAgo = "hace más de una hora",
+        temperatureInAreaStale = "En {room} había {value} grados $FRESHNESS_PLACEHOLDER.",
+        temperatureHouseAverageStale = "En casa había {value} grados de media $FRESHNESS_PLACEHOLDER.",
+        // Additiv am Zeilenende (LL-additive-Regel), s. HaExecutorPack.roomFallbackName:
+        // der ehrliche Ersatz, wenn KEIN echter HA-Anzeigename auffindbar ist —
+        // nie ein kapitalisierter Slug („Kuche"), lieber vage als verstümmelt.
+        // Passt zu „en {room}"/„de {room}" (kein Kontraktions-Problem) —
+        // „La luz en la habitación indicada está apagada."
+        roomFallbackName = "la habitación indicada",
         decimalSeparator = ",",
     )
 

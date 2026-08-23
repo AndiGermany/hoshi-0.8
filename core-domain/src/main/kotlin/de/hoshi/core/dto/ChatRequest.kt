@@ -86,4 +86,25 @@ data class ChatRequest(
      * NIE an den Brain/die Cloud.
      */
     val source: String? = null,
+    /**
+     * The room this turn was SPOKEN IN — the `room` field of the `/ws/audio` `start`
+     * frame, set ONLY by the `de.hoshi.web.AudioWebSocketHandler` (same per-session
+     * pattern as [originSatelliteId]). Chat/FE/old clients ⇒ `null` (byte-neutral
+     * default). Carries the RAW device string ("kueche"), NOT a verified HA area:
+     * the orchestrator resolves it against the live area catalog before it may
+     * target a room — an unknown room stays unresolved and gets asked about.
+     * Never passed to the brain/cloud. Additive line end (LL-2026-08-11-additive-line-end).
+     */
+    val originAreaId: String? = null,
+    /**
+     * Lokaler, kanalgebundener Schlüssel für genau die Gesprächskette dieses Turns.
+     * Er wird am vertrauenswürdigen Inbound-Rand gebaut (Chat/Voice aus der stabilen
+     * Geräte-ID, WebSocket aus der serverseitigen Session-ID) und trennt gleichlautende
+     * Folgeantworten wie „ja" oder „Wohnzimmer" zwischen Kanälen und Geräten.
+     *
+     * Bewusst NULLABLE und additiv am Zeilenende: alte Clients/Tests fallen im Kern auf
+     * [de.hoshi.core.pipeline.ConversationKeys.resolve] zurück. Der Schlüssel bleibt
+     * rein lokal, wird weder ins Prompt noch in Diary/Cloud geschrieben.
+     */
+    val conversationKey: String? = null,
 )

@@ -20,13 +20,25 @@ import java.time.Clock
  *    READ-ONLY: beliebig oft abrufbar, konsumiert nichts (wie inzwischen auch der
  *    idempotente fired-GET des [FiredItemsController]). Das FE pollt und rendert daraus
  *    die ruhige Timer-Zeile ueber der Compose-Bar.
- *  - `DELETE /api/v1/scheduled/{id}` — storniert GENAU EIN aktives Item
- *    ([ScheduledItemPort.cancel]). 204 wenn entfernt, 404 bei unbekannter id (z.B. schon
- *    gefeuert oder von einem anderen Tab storniert — fuers FE gleichwertig: weg ist weg).
- *  - `DELETE /api/v1/scheduled` — storniert ALLE aktiven Items
- *    ([ScheduledItemPort.cancelAll]); 200 mit `{count}` (wie viele entfernt wurden;
- *    leerer Store ⇒ `{count:0}`). Beruehrt gefeuert-unbestaetigte Items NICHT (das ist
- *    die fired/ack-Naht des [FiredItemsController]).
+ *  - `DELETE /api/v1/scheduled/{id}` — **loescht diesen Timer/Wecker in JEDER Wahrheit**:
+ *    den geplanten Eintrag ([ScheduledItemPort.cancel]) UND ein bereits laufendes Klingeln
+ *    derselben id ([FiredItemsStore.ack]). 204 wenn eines von beiden entfernt wurde, 404
+ *    nur wenn wirklich NICHTS zu dieser id existierte.
+ *  - `DELETE /api/v1/scheduled` — loescht ALLE aktiven Items ([ScheduledItemPort.cancelAll])
+ *    UND stoppt alle laufenden Klingeln; 200 mit `{count}` (wie viele der Mensch losgeworden
+ *    ist — geplante + gestoppte; leer ⇒ `{count:0}`).
+ *
+ * **Warum das Klingeln mitgeht (Andi-Live-Befund 23.08.2026, „Wecker gestellt, geloescht —
+ * und heute morgen beim Ausklappen ging er trotzdem"):** ein gefeuertes Item hat den
+ * [ScheduledItemPort] verlassen und lebt im [FiredItemsStore] weiter (unbestaetigt, Datei-
+ * persistent, ueber Neustarts hinweg — jeder FE-Poll liefert es erneut aus). Der FE-Poll ist
+ * bis zu 15 s alt (bei dunklem Display pausiert sein Intervall ganz), die Loesch-Zeile steht
+ * also noch da, wenn der Fire-Service laengst gefeuert hat. Frueher antwortete der Loeschweg
+ * dann 404 — was das FE laut eigenem Contract als „weg is weg" wertet — und das Klingeln
+ * ueberlebte seinen Wecker. Der VOICE-Loeschweg vereinheitlicht beide Wahrheiten seit dem
+ * 15.07-Fix ([de.hoshi.core.pipeline.TimerFastpath] + [de.hoshi.core.port.RingingItemPort]:
+ * „stoppe den Timer" beendet auch ein laufendes Klingeln); dieser HTTP-Weg zieht damit
+ * gleich — EINE Loesch-Semantik fuer beide Wege. Riegel: DeletedAlarmNeverRingsTest.
  *
  * GET-Format: `[{id, kind, label?, dueAtEpochMs, remainingSeconds}]` ([ScheduledItemView];
  * `label` fehlt bei null — NON_NULL, derselbe Contract wie [FiredItem]). `remainingSeconds`
@@ -45,6 +57,13 @@ import java.time.Clock
 @RestController
 class ScheduledItemsController(
     private val store: ScheduledItemPort,
+    /**
+     * Die ZWEITE Wahrheit derselben Wecker: bereits gefeuerte, noch unbestaetigte Klingeln.
+     * Der Loeschweg muss sie mitraeumen, sonst ueberlebt das Klingeln seinen Wecker (s.
+     * Klassen-KDoc). Dieselbe Bean, die auch der [FiredItemsController] bedient — bei
+     * eingeschalteter Persistenz ist es sogar dasselbe Objekt wie [store].
+     */
+    private val fired: FiredItemsStore,
 ) {
 
     private val clock: Clock = Clock.systemUTC()
@@ -63,13 +82,33 @@ class ScheduledItemsController(
         }
     }
 
+    /**
+     * Loescht diesen Timer/Wecker vollstaendig: geplant UND (falls er in der Zwischenzeit
+     * gefeuert hat) klingelnd. Bewusst BEIDE Aufrufe — nicht `||`-kurzgeschlossen: eine id
+     * kann nicht in beiden Wahrheiten stehen, aber ein stiller Rest waere genau der Bug.
+     * 404 nur, wenn zu dieser id wirklich nichts (mehr) existierte.
+     */
     @DeleteMapping("/api/v1/scheduled/{id}")
-    fun cancel(@PathVariable id: String): ResponseEntity<Void> =
-        if (store.cancel(id)) ResponseEntity.noContent().build()
+    fun cancel(@PathVariable id: String): ResponseEntity<Void> {
+        val geplantEntfernt = store.cancel(id)
+        val klingelnGestoppt = fired.ack(id)
+        return if (geplantEntfernt || klingelnGestoppt) ResponseEntity.noContent().build()
         else ResponseEntity.notFound().build()
+    }
 
+    /**
+     * Loescht ALLES, was der Mensch als „laufend" sieht: geplante Items UND laufende
+     * Klingeln. `count` zaehlt beides zusammen (was er losgeworden ist). Das Klingeln wird
+     * ueber einen Snapshot von [FiredItemsStore.pending] quittiert — ein in derselben
+     * Sekunde neu gefeuertes Item bleibt damit ehrlich erhalten (es war beim Loeschen noch
+     * nicht sichtbar), statt blind alles zu schlucken.
+     */
     @DeleteMapping("/api/v1/scheduled")
-    fun cancelAll(): CancelAllResponse = CancelAllResponse(count = store.cancelAll())
+    fun cancelAll(): CancelAllResponse {
+        val geplant = store.cancelAll()
+        val gestoppt = fired.pending(clock.millis()).count { fired.ack(it.id) }
+        return CancelAllResponse(count = geplant + gestoppt)
+    }
 }
 
 /**
@@ -90,7 +129,8 @@ data class ScheduledItemView(
 )
 
 /**
- * Antwort von `DELETE /api/v1/scheduled` (alle stornieren): `{count}` — die Anzahl der
- * tatsaechlich entfernten aktiven Items (leerer Store ⇒ `{count:0}`).
+ * Antwort von `DELETE /api/v1/scheduled` (alle stornieren): `{count}` — die Anzahl dessen,
+ * was der Mensch tatsaechlich losgeworden ist: entfernte aktive Items PLUS gestoppte
+ * laufende Klingeln (leerer Store ⇒ `{count:0}`).
  */
 data class CancelAllResponse(val count: Int)

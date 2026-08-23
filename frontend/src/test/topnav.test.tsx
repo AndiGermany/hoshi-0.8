@@ -149,4 +149,27 @@ describe('App — Übersicht ist die Start-Ansicht, der Orb sitzt dort', () => {
     expect(container.querySelector('.compose__input')).not.toBeNull();
     expect(container.querySelector('.voiceorb')).toBeNull();
   });
+
+  /**
+   * Scheibe S1 „Ein-Fenster-Deckel" (DESIGN-widgets-settings-2026-08-15 §2.2):
+   * der Deckel (`overflow:hidden`) und die breitere Home-Spalte hängen an
+   * `.app[data-tab='overview']`. Die Regeln selbst prüft `onewindow.test.ts` am
+   * ausgelieferten CSS — HIER wird bewiesen, dass der Marker überhaupt existiert
+   * UND beim Reiter-Wechsel mitwandert. Ohne das Mitwandern bliebe der Deckel
+   * auf dem Chat-Reiter kleben und schnitte lange Verläufe ab.
+   */
+  it('markiert den aktiven Reiter am .app-Element (Anker des Ein-Fenster-Deckels)', async () => {
+    await mount(<App />);
+    const app = () => container.querySelector<HTMLElement>('.app');
+    expect(app()?.dataset.tab).toBe('overview');
+
+    const chatTab = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav__tab')).find(
+      (b) => b.textContent === 'Chat',
+    )!;
+    await act(async () => {
+      chatTab.click();
+      await flush();
+    });
+    expect(app()?.dataset.tab).toBe('chat');
+  });
 });

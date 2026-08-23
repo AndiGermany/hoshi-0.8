@@ -90,6 +90,67 @@ class HttpBrainHealthSource(
 }
 
 /**
+ * **HaHealthSource** — the narrow seam for the READ-ONLY Home Assistant probe.
+ * Functional interface ⇒ tests inject a canned verdict without a live HA.
+ *
+ * Contract: `null` means "HA is not part of this install" (deploy flag off or no
+ * token) ⇒ the Ops report carries NO `home-assistant` row at all. An HA-less box
+ * must never show a permanent fake DOWN.
+ */
+fun interface HaHealthSource {
+    /** Reachability verdict, or `null` when HA is not configured (see interface KDoc). */
+    fun probe(): SidecarHealth?
+}
+
+/**
+ * Live impl: synchronous `java.net.http` GET on `{haBaseUrl}/api/` with the Bearer
+ * token — HA's own liveness endpoint (`200 {"message":"API running."}`).
+ *
+ * READ-ONLY and visibility-only: no service call, no state write, no remediation.
+ * Same JDK-client idiom as the HA adapters (`HaSceneCatalogAdapter`), deliberately
+ * NOT WebClient — the call runs on the scheduler thread, where `block()` is
+ * forbidden. Never-throw: every error becomes DOWN. The token is NEVER logged.
+ *
+ * Known limit: base URL + token are read ONCE at construction, exactly like every
+ * other HA seam today (`HomeRegistryConfig`, `PipelineConfig`) — an HA address that
+ * moves (DHCP) is only picked up on restart.
+ */
+class HttpHaHealthSource(
+    baseUrl: String,
+    private val token: String?,
+    private val enabled: Boolean,
+    private val timeout: Duration = Duration.ofSeconds(2),
+) : HaHealthSource {
+    private val apiUri: URI = URI.create(baseUrl.trimEnd('/') + "/api/")
+    private val client: HttpClient = HttpClient.newBuilder().connectTimeout(timeout).build()
+
+    override fun probe(): SidecarHealth? {
+        if (!enabled || token.isNullOrBlank()) return null
+        return runCatching {
+            val req = HttpRequest.newBuilder(apiUri)
+                .header("Authorization", "Bearer $token")
+                .timeout(timeout)
+                .GET()
+                .build()
+            val resp = client.send(req, HttpResponse.BodyHandlers.ofString())
+            val body = resp.body().orEmpty()
+            when {
+                // Non-2xx covers the honest auth case too (401/403 = token rejected ⇒
+                // Hoshi cannot act on the house, which is exactly what DOWN means here).
+                resp.statusCode() !in 200..299 -> SidecarHealth.down("$apiUri → HTTP ${resp.statusCode()}")
+                body.contains(API_RUNNING) -> SidecarHealth.ok("status=ok ($API_RUNNING)")
+                else -> SidecarHealth.degraded("2xx ohne \"$API_RUNNING\": ${body.take(60)}")
+            }
+        }.getOrElse { SidecarHealth.down("$apiUri — keine Antwort (${it.message?.take(60)})") }
+    }
+
+    private companion object {
+        /** HA's own liveness marker in the `GET /api/` body. */
+        const val API_RUNNING = "API running"
+    }
+}
+
+/**
  * **BrainMemoryHeuristic** — die REINE Ableitung des Mac-RAM-Drucks aus der
  * Brain-Health.
  *
@@ -221,6 +282,10 @@ object BrainMemoryHeuristic {
  *
  * **Best-effort:** jede Probe ist in `runCatching` gekapselt; ein Fehler wird zu DOWN/
  * UNKNOWN, nie zu einer Exception — der Scheduler darf den Betrieb nie stören.
+ *
+ * **Home Assistant (S4):** HA is not a sidecar with a `/health`, so it has its own
+ * seam ([HaHealthSource], READ-ONLY `GET /api/`) and is appended as the
+ * [HA_SIDECAR] row — present only when HA is configured (see [haStatus]).
  */
 @Component
 class SidecarHealthService(
@@ -257,6 +322,10 @@ class SidecarHealthService(
     // ([TtsSettingsController]/[JsonFileTtsEngineStore]) — dieselbe Wahrheit, die die
     // Settings-Sektion nutzt (b4844d0), NIE eine zweite, driftende Cloud/Lokal-Ableitung.
     private val ttsEngineStore: JsonFileTtsEngineStore? = null,
+    // Additive: the READ-ONLY Home Assistant probe (S4 "HA wird sichtbar"). The
+    // default seam yields `null` ⇒ no HA row, so HA-less installs and older tests
+    // stay byte-neutral. Prod gets the live bean from [OpsWatchdogConfig].
+    private val haHealth: HaHealthSource = HaHealthSource { null },
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -362,7 +431,7 @@ class SidecarHealthService(
             val raw = runCatching { probe.probe(spec) }
                 .getOrElse { SidecarHealth.down("Probe warf: ${it.message?.take(80)}") }
             smooth(spec.name, raw)
-        }
+        } + listOfNotNull(haStatus())
         val memory = runCatching { BrainMemoryHeuristic.classify(brainHealth.fetchHealthJson()) }
             .getOrElse {
                 MemoryStatus("UNKNOWN", BrainMemoryHeuristic.SOURCE, "Brain-Health-Abfrage warf — RAM-Druck unbekannt.")
@@ -377,6 +446,20 @@ class SidecarHealthService(
             ts = System.currentTimeMillis(),
         )
         log.debug("[ops-watch] overall={} mem={} sidecars={}", snapshot.overall, memory.level, sidecars)
+    }
+
+    /**
+     * The Home Assistant row (S4 "HA wird sichtbar"): READ-ONLY reachability of HA,
+     * smoothed like every other seam. `null` ⇒ HA is not configured for this install
+     * (deploy flag off / no token) ⇒ NO row at all, never a permanent fake DOWN.
+     *
+     * Visibility only: a failing HA is neither healed nor re-resolved here.
+     */
+    private fun haStatus(): SidecarStatus? {
+        val raw = runCatching { haHealth.probe() }
+            .getOrElse { SidecarHealth.down("HA-Probe warf: ${it.message?.take(80)}") }
+            ?: return null
+        return smooth(HA_SIDECAR, raw)
     }
 
     /**
@@ -406,6 +489,10 @@ class SidecarHealthService(
      * **Optionale Sidecars** ([OPTIONAL_SIDECARS]: Speaker-ID) dürfen bewusst aus sein
      * und treiben `overall` nicht. Der jeweils ausgewählte lokale TTS-Sidecar ist
      * dagegen Teil des kritischen Sprechpfads: sein DOWN muss sichtbar werden.
+     *
+     * [HA_SIDECAR] counts as critical too: the row only exists when HA is configured
+     * for this install, and a configured-but-unreachable HA means no light obeys —
+     * the silent OK dot would hide exactly the outage this row exists for.
      */
     private fun deriveOverall(sidecars: List<SidecarStatus>, memory: MemoryStatus): String {
         val critical = sidecars.filterNot { it.name in OPTIONAL_SIDECARS }
@@ -439,6 +526,12 @@ class SidecarHealthService(
          * Multi-User-Bedarf besteht. Die GEWÄHLTE lokale TTS ist nie optional.
          */
         val OPTIONAL_SIDECARS = setOf("speaker-id")
+
+        /**
+         * Wire name of the Home Assistant row (S4). Contract string — the FE renders
+         * sidecar names verbatim, so this must stay stable.
+         */
+        const val HA_SIDECAR = "home-assistant"
 
         /** Erster Tick kurz nach Boot — vorher liefert der Controller die Warmup-Zeile. */
         const val INITIAL_DELAY_MS = 5_000L

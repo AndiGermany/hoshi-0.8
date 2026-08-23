@@ -227,6 +227,10 @@ describe('EnrollDialog — getippter Name landet 1:1 im enroll-Call', () => {
       setInputValue(nameInput, 'mira'); // überschreibt den „andi"-Default
     });
 
+    // Redesign §3.3 (ein Schritt pro Bild): das Namensfeld steht auf Bild ①, der
+    // Aufnahme-Knopf auf Bild ② — „Weiter" liegt genau dazwischen.
+    await clickText(SPEAKER_TEXTS.nameNext);
+
     // Multi-Sample-Flow: Satz 1 aufnehmen + speichern reicht für den Namens-Beweis.
     await clickText(`${sampleProgress(1)} ${SPEAKER_TEXTS.recordSample}`);
     await clickText(SPEAKER_TEXTS.finish);

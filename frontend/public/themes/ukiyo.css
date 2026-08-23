@@ -1,0 +1,576 @@
+/* ════════════════ UKIYO (浮世) — die große Welle auf vergilbtem Papier ════════════════
+   Hoshi 0.8 · eigenständige Themen-Datei (dynamisch nachladbar, kein Import nötig)
+   ────────────────────────────────────────────────────────────────────────────────────
+   DAS BILD: Hokusais „Die große Welle vor Kanagawa" (神奈川沖浪裏), aber nicht als
+   Reproduktion an der Wand — als Oberfläche. Ein Holzschnitt, der zum Interface
+   geworden ist. Der Grund ist das Blatt selbst: gealtertes Washi, über Jahrzehnte
+   ins Warme gekippt, an den Rändern eine Spur stockfleckig. Links steigt die Welle
+   aus dem Seitenrand, ihr Kamm kräuselt sich zur Lesespalte hin, die Gischt bleibt
+   UNBEDRUCKTES PAPIER (so entsteht Weiß im Holzschnitt: man druckt es nicht).
+
+   ────────────────────────────────────────────────────────────────────────────────
+   DREI MEDIENWECHSEL, EINE EINSICHT (v1 → v2 → v3)
+   ────────────────────────────────────────────────────────────────────────────────
+   v1 baute den Druck aus radial-gradient-Ellipsen. Andis Befund am echten Bild:
+   die Welle las sich nicht als Welle, der conic-Fuji „als ob ein Kleinkind das
+   gestaltet hat". Die Ursache war kein Geschmacks-, sondern ein MEDIENFEHLER:
+   Verläufe können Dunst, Licht und Nebel — aber keine LINIE. Ukiyo-e ist genau
+   das Gegenteil von Dunst: eine Konturlinie (主版 omohan, der Schlüsselblock) und
+   flache, deckende Farbfelder. Ein Medium, das keine Kante kann, kann keinen
+   Holzschnitt.
+
+   v2 wechselte darum auf VEKTOR: zwei von Hand gezeichnete SVGs als data-URI,
+   Bézier-Rücken, Kreisbogen-Gischt, fünf Klauen. Das Medium stimmte jetzt — die
+   ZEICHNUNG nicht. Andis Urteil: „in KI-Fragmenten kaputt". Drei Klauen-
+   Iterationen später war klar, dass blind gesetzte Bézier-Kurven eine
+   gleichförmige Handschrift haben, die kein Holzschnitt je hätte.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   v3 — DAS ORIGINAL (2026-08-13/14)
+   ────────────────────────────────────────────────────────────────────────────────
+   Der dritte Wechsel ist kein neues Zeichenwerkzeug, sondern der Verzicht aufs
+   Zeichnen. Hokusais Welle ist seit 1831 gemeinfrei und in Museums-Auflösung
+   frei verfügbar. `ukiyo-wave.svg` NEBEN dieser Datei ist ein echter Scan —
+   posterisiert auf sieben flache Farben, je Farbe eine deckende Ebene
+   vektorisiert (hinten nach vorn, genau wie ein Holzschnitt gedruckt wird), und
+   danach exakt auf die Token dieses Themas umgefärbt. Keine Verläufe, keine
+   Transparenz, keine Filter im SVG — nur flache `fill`s, wie Druckblöcke.
+   Quelle, Lizenz und die vollständige Farbtabelle stehen im Kopf der SVG-Datei;
+   gebaut hat sie `scratchpad/ukiyoe/ukiyoe_pipeline.py`, das für die übrigen
+   Szenen der Reihe (Hanashigure, Natsumatsuri, Momiji, Asagiri) wiederverwendbar
+   ist — dort wird nur der `Scene`-Block getauscht.
+
+   Die Umfärbung ist die eigentliche Design-Entscheidung und KEIN Nearest-Color-
+   Snap. Jede Quellfarbe wird zuerst einer FAMILIE zugeordnet — warm (das Blatt,
+   der Himmel, der Grund) oder kalt (alles, was aufgedruckt wurde) — und erst
+   INNERHALB der Familie nach OKLab-Helligkeit auf ein Token gelegt. Das ist die
+   These dieses Themas als Mechanik: der Grund ist warm, ALLES Aufgetragene ist
+   kalt. Nearest-Color hätte den grauen Himmel-Bokashi ins Blau geschickt und das
+   helle Wasser ins Papier — die zwei Fehler, an denen ein posterisierter Druck
+   wie ein Filter aussieht statt wie ein neu geschnittener Block.
+
+   DIE WELLE ENDET NICHT AM CHAT (Andis zweite Forderung). v1 und v2 hielten den
+   Druck per Maske aus der Lesespalte heraus; er war Randschmuck. v3 ist
+   FULL-BLEED über die ganze Viewport-Fläche, und die Lesespalte bekommt statt
+   der harten Maske einen PAPIER-SCHLEIER (s. u.) — ein zweiter, frischerer Bogen
+   über dem Druck, durch den die Welle sichtbar bleibt.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   WAS DAS THEMA RADIKAL MACHT
+   ────────────────────────────────────────────────────────────────────────────────
+   Es ist das erste, das nicht Licht simuliert. Asagiri hat Nebel, Komorebi hat
+   Sonnenflecken, Momiji hat Nachmittagslicht — alle drei behaupten eine
+   Lichtquelle. Ukiyo behauptet keine. Ein Druck hat kein Licht, er hat
+   FARBFLÄCHEN und eine Linie.
+
+   MOTION (2026-08-14, Andi's brief): the print is no longer frozen — the SEA
+   breathes, on a minute scale. v1's 96 s heave comes back slower and PAIRED with
+   a second, longer rhythm, plus spray drifting in the margin. Details and the
+   contrast argument in „DAS MEER ATMET" below; the veil and both opacity
+   contracts stay exactly where the measurements left them.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   ABGRENZUNG ZU MOMIJI (das nächste Verwandte — beide „warmes Papier als Grund")
+   ────────────────────────────────────────────────────────────────────────────────
+   Momiji ist Herbst: Aprikosenpapier (H70) mit Rost-Akzent (H45) und rot getönter
+   Tinte (H34) — alles im selben warmen Viertel des Farbkreises, ein GESCHLOSSENES
+   Bild. Ukiyo ist das Gegenteil: ein GESPALTENES Bild. Das Papier ist gelb (H88–94,
+   nicht orange), die Tinte und der Akzent sind kalt (H248–255). Zwischen Grund und
+   Zeichen liegen ~160° Farbkreis — genau die Spannung, die einen Aizuri-Druck
+   (藍摺, „blau gedruckt") ausmacht. Momiji fühlt sich an wie warmes Licht auf
+   Papier, Ukiyo wie kalte Farbe IN Papier.
+     Papier:  Momiji oklch(0.925 0.048 70) ← → Ukiyo oklch(0.912 0.036 92)
+     Tinte:   Momiji H34 (rot)             ← → Ukiyo H255 (blau)
+     Akzent:  Momiji H45 Rost              ← → Ukiyo H248 Preußischblau
+
+   ────────────────────────────────────────────────────────────────────────────────
+   DIE PIGMENTE (die Palette ist eine echte, keine erfundene)
+   ────────────────────────────────────────────────────────────────────────────────
+   Hokusai druckte die Welle 1831 mit einem damals brandneuen importierten Pigment:
+   ベロ藍 bero-ai, Berliner/Preußischblau. Das ist der Akzent — #04548d, H248. Die
+   Die Wellenschatten tragen das ältere, tiefere 藍 ai (Indigo, H255–258).
+   Linie und Schrift sind 墨 sumi, aber sumi auf gelbem Papier: ein Schwarz mit
+   kaltem Stich (H250–255, C 0.024–0.03), sonst würde die Tinte im Papierton
+   ersaufen. Rot ist 紅 beni (H20), Gelb-Braun ist 黄土 ōdo/Ocker (H70), Grün ist
+   das gedämpfte 緑青 rokushō (H155).
+
+   DIE OCKER-vs-PAPIER-FRAGE (die eigentliche Design-Aufgabe hier):
+   Bei Momiji war es „Herbstrot vs. Fehlerrot" — hier ist es „gelbes Papier vs.
+   gelbe Warnung". Der Grund besetzt exakt den Farbraum, in dem sonst „Achtung"
+   wohnt. Gelöst über zwei Achsen:
+     1. SÄTTIGUNG IST DER SIGNALKANAL. Jede Papier-/Atmosphärenfläche bleibt unter
+        C 0.055; --warn liegt bei C 0.096 (2,3× so gesättigt wie das dunkelste
+        Papier). Nichts Dekoratives ist je gesättigt.
+     2. HELLIGKEIT. Das Papier lebt bei L 0.886–0.978, --warn bei L 0.455. Ein
+        dunkler Ocker auf blassem Gelb liest sich nie als „Papier", sondern immer
+        als AUFGETRAGENE Farbe — genau der Unterschied, den ein Druck macht.
+   Hue-Abstände: Akzent(248)↔Warn(70) 178°, Akzent↔Error(20) 132°, Warn↔Error 50°,
+   Akzent↔Success(155) 93°. Der Akzent steht dem gesamten Warm-Block maximal fern —
+   deshalb kann Preußischblau hier so laut sein, ohne mit Semantik zu kollidieren.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   KONTRASTE (selbst nachgerechnet: OKLCH → sRGB → WCAG-2.1-Relativluminanz)
+   ────────────────────────────────────────────────────────────────────────────────
+   Alle Textstufen gegen ALLE fünf Flächen (base/surface/elevated/subtle/user);
+   angegeben ist der SCHLECHTESTE Wert je Zeile (immer --bg-subtle):
+     text-1 11,84:1 · text-2 8,02:1 · text-3 5,62:1 · text-4 4,73:1
+   Akzent/Status als Text, schlechtester Fall (ebenfalls --bg-subtle):
+     accent 5,62:1 · success 5,24:1 · warn 5,29:1 · error 5,63:1
+   Chip-Fall (Farbe auf ihrer EIGENEN -soft-Füllung über --bg-base; das sind
+   .settings__badge--egress, .settings__speakerchip, .settings__deletebtn.is-armed):
+     accent 5,01 · success 4,71 · warn 4,78 · error 4,96 → AA.
+     Die -soft-Alpha liegt bei 0.13 (nicht 0.16 wie in den dunklen Themen): auf
+     hellem Papier DUNKELT eine kräftigere Tönung die Füllung ab und frisst genau
+     den Kontrast, den die Chip-Schrift braucht (gleiche Rechnung wie Momiji).
+   --accent-ink auf --accent (Button-Fill, Toggle-Knopf): 7,43:1.
+   Nicht-Text (WCAG 1.4.11 ≥ 3:1) — beide Haarlinien sind hier echte Control-/
+   Karten-Ränder (.settings__select/.settings__text/.settings__toggle bzw.
+   .idle__tile.tile--pending), darum gegen alle vier Kartenflächen geprüft:
+     --bg-hairline        elevated 4,54 · surface 4,24 · base 3,72 · subtle 3,43
+     --bg-hairline-dashed elevated 3,84 · surface 3,59 · base 3,16 · subtle 3,09
+   ────────────────────────────────────────────────────────────────────────────
+   DIE SCHLEIER-RECHNUNG (v3 — der Druck liegt jetzt hinter dem Text)
+   ────────────────────────────────────────────────────────────────────────────
+   In v1/v2 stand der Druck in der Kontrast-Rechnung NICHT: eine Maske hielt ihn
+   8 px vor der App-Spalte an. Full-bleed fällt diese Geometrie weg, und der
+   Kontrast hängt an genau einer Zahl — --ukiyo-veil.
+
+   Der Stapel unter einem Buchstaben in Hoshis Antwort (.msg--assistant hat
+   `background: none`), von unten nach oben:
+     1. body            --theme-atmosphere über --bg-base
+     2. body::before    ukiyo-wave.svg, `opacity: var(--ukiyo-print)` = 0.78
+     3. body::after     --bg-elevated mit alpha var(--ukiyo-veil) = 0.82
+   Die dunkelste Stelle des Drucks ist das Konturblau #14325d (16,5 % der
+   Bildfläche, und als Linie in JEDER Bildzeile vorhanden). Über dem Papier bei
+   0.78 und unter dem Schleier bei 0.82 bleibt davon #d9dad6 übrig.
+
+   GEMESSEN, NICHT MODELLIERT: die Zahlen unten kommen aus dem echten Render
+   (Chrome headless, die ausgelieferte Datei, App-Gerüst sichtbar ausgeblendet),
+   nicht aus einer Nachbildung des Stapels. Gesucht wurde der DUNKELSTE Pixel im
+   ganzen Band der App-Spalte (±460 px um die Mitte, ab Unterkante der Nav bis
+   zum Fensterboden) und dagegen --text-4 gerechnet — die leiseste Textstufe des
+   Themas ist der bindende Fall.
+     1440×900   dunkelster Punkt #d9dad6  →  --text-4  4,73:1  → AA
+     1920×1080  dunkelster Punkt #d9dad6  →  --text-4  4,73:1  → AA
+   Alle helleren Textstufen liegen darüber (--text-3 5,6 · --text-2 8,0 ·
+   --text-1 11,8 gegen dieselbe Fläche oder besser).
+
+   WARUM 0.82 UND NICHT WENIGER: die Kurve ist gemessen und flach —
+     Schleier  0.66 → 4,06 · 0.70 → 4,28 · 0.74 → 4,54 · 0.78 → 4,78 · 0.82 → 5,00
+   (bei --ukiyo-print 0.58; mit 0.78 verschiebt sich alles um ~0,27 nach unten).
+   Unter 0.74 fällt AA. 0.82 hält AA mit Luft und erlaubt gleichzeitig den lauten
+   Druck an den Rändern: Deckkraft und Schleier steigen GEMEINSAM, weil das, was
+   unter der Spalte durchscheint, ungefähr print × (1 − veil) ist — die Stärke
+   des Geistes ist durch AA fixiert, die Lautstärke der RÄNDER ist es nicht.
+   Deshalb ist die richtige Wahl: Schleier so hoch wie nötig, Druck so hoch, wie
+   der Schleier dann erlaubt.
+
+   EIN SENKRECHTER VERLAUF IM SCHLEIER WÄRE UMSONST. Naheliegende Idee: oben
+   (Himmel, Gischt, Kamm) ist der Druck hell, unten (tiefes Wasser) dunkel, also
+   oben weniger Schleier. Nachgemessen, Zeile für Zeile, ist der nötige Wert
+   praktisch konstant: 0,733 ganz oben gegen 0,747 ganz unten. Grund: die
+   Konturlinie läuft durch JEDE Bildzeile, und sie ist überall gleich dunkel.
+   Ein Verlauf hätte also nichts gebracht und die Rechnung verkompliziert.
+
+   UNBERÜHRT von alldem sind alle Flächen mit DECKENDEM Hintergrund: .tile und
+   .tile--pending stehen auf --bg-surface/--bg-base, die Nav auf ihrer eigenen
+   Insel, die Du-Blase auf --bg-user. Dort liegt kein Druck hinter Text, und die
+   Chip-/Haarlinien-Zahlen oben gelten unverändert weiter.
+   sRGB-Gamut: jeder Wert einzeln geprüft — Token wie Verlaufsstopp, 0 Klipper.
+   (--warn musste dafür von C 0.100 auf 0.096 zurück; bei L 0.455/H70 liegt der
+   sRGB-Rand bei C 0.0998.)
+
+   ────────────────────────────────────────────────────────────────────────────────
+   ZWEI SELEKTOREN je Token-Block (Projekt-Konvention, s. themes.css): `:root[…]`
+   für das Dokument, `[…]` ohne :root, damit die Vorschau-Kachel im Theme-Picker
+   (.settings__swatch setzt data-theme selbst) die ECHTEN Farben zeigt.
+   ════════════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='ukiyo'],
+[data-theme='ukiyo'] {
+  /* ── DAS BLATT (nicht der Druck) ───────────────────────────────────────────
+     Diese Ebene liegt UNTER Hoshis Antworten und ist NICHT maskiert — sie darf
+     den Grund darum nur aufhellen oder minimal tönen (dieselbe Regel, die auch
+     Momijis Atmosphäre bindet). Vier Schichten, erste = oberste:
+       1. Das Blatt ist in der Mitte am hellsten — so altert Papier tatsächlich:
+          außen mehr Luft, außen mehr Verfärbung.
+       2. 一文字ぼかし ichimonji-bokashi: der schmale dunklere Streifen am OBEREN
+          Blattrand, den der Drucker mit dem Ballen ausläuft. Ein Zitat, keine
+          Verzierung — fast jeder Hokusai-Druck hat ihn.
+       3. Dasselbe von unten, in Seeblau: das Wasser reicht bis an die Blattkante.
+       4. 焼け yake / Stockflecken: eine sehr leise warme Verdunkelung zu allen
+          Rändern hin. Das ist der Unterschied zwischen „hell" und „ALT".
+     Die dunkelsten Punkte dieser Kombination sind oben nachgerechnet (untere
+     Ecken 4,53:1 für --text-4, der Rest heller). Die WELLE mit echter Sättigung
+     steht deshalb NICHT hier, sondern in body::before — und der Text, der über
+     ihr liegt, wird vom Papier-Schleier in body::after getragen (s. unten). */
+  --theme-atmosphere:
+    radial-gradient(ellipse 82% 58% at 50% 30%, oklch(0.99 0.012 96 / 0.62), transparent 66%),
+    linear-gradient(180deg, oklch(0.775 0.045 246 / 0.18), transparent 30%),
+    linear-gradient(0deg, oklch(0.7 0.055 248 / 0.13), transparent 24%),
+    radial-gradient(ellipse 118% 96% at 50% 46%, transparent 54%, oklch(0.815 0.048 78 / 0.15)),
+    var(--bg-base);
+
+  /* ── Flächen: vier Alter desselben Papiers ─────────────────────────────────
+     --bg-base ist das offene Blatt (am stärksten vergilbt, weil am längsten
+     Luft und Licht ausgesetzt), --bg-surface ein Bogen, der im Stapel lag,
+     --bg-elevated der frischeste. --bg-subtle geht als einzige Fläche nach
+     unten — sie ist der Stockfleck und bleibt der harte Kontrast-Prüfstein
+     (alle Textstufen oben sind GEGEN sie gerechnet).
+     Die Haarlinie ist die 主版-Linie (omohan, der Schlüsselblock): in einem
+     Druck ist die Linie ein eigener Druckgang, kein Schatten — darum ist sie
+     hier sichtbar gezogen und nicht angedeutet. */
+  --bg-base: oklch(0.912 0.036 92); /* #eae2c8 — gealtertes Washi */
+  --bg-surface: oklch(0.955 0.024 92); /* #f6f0de — Bogen aus dem Stapel */
+  --bg-elevated: oklch(0.978 0.016 94); /* #fbf8ec — der frischeste Bogen */
+  --bg-subtle: oklch(0.886 0.042 88); /* #e5d8bb — Stockfleck, Hover/Füllung */
+  --bg-hairline: oklch(0.55 0.055 250); /* #597491 — die gedruckte Linie */
+  --bg-hairline-dashed: oklch(0.575 0.05 250); /* #637c96 — für „ehrlich leer" */
+
+  /* ── Schrift: sumi auf gelbem Papier ───────────────────────────────────────
+     Ein neutrales oder warmes Schwarz würde auf diesem Grund matschen — die
+     Tinte behält darum einen kalten Stich (H250–255) und bleibt damit derselben
+     Familie wie die Welle. Das ist der Kern des Bildes: der Grund ist warm,
+     ALLES Aufgetragene ist kalt. */
+  --text-1: oklch(0.235 0.024 255); /* #161f29 — 11,84:1 (schlechteste Fläche) */
+  --text-2: oklch(0.35 0.026 253); /* #313c48 —  8,02:1 */
+  --text-3: oklch(0.435 0.028 252); /* #465260 —  5,62:1 */
+  --text-4: oklch(0.475 0.03 250); /* #505e6d —  4,73:1, leise aber AA */
+
+  /* ── Akzent: ベロ藍 bero-ai, Hokusais Preußischblau ────────────────────────
+     Das importierte Pigment, das die Welle überhaupt erst möglich machte. Es ist
+     hier bewusst die LAUTESTE Farbe des Themas neben --error — auf gelbem Papier
+     ist ein tiefes Blau maximal weit weg vom Grund und braucht keine Sättigung
+     zu leihen. Er trägt Stimme, CTA und Auswahl, sonst nichts.
+     --accent-glow ist bewusst KEIN Leuchten, sondern die hellere Wasserfläche
+     (L0.55) — ein Druck hat kein Licht, er hat einen zweiten Farbton. */
+  --accent: oklch(0.435 0.115 248); /* #04548d */
+  --accent-soft: oklch(0.435 0.115 248 / 0.13);
+  --accent-faint: oklch(0.435 0.115 248 / 0.07);
+  --accent-glow: oklch(0.55 0.13 247 / 0.3); /* #2076b9 @30 % — der helle Zug */
+  --accent-ink: oklch(0.978 0.016 94); /* #fbf8ec — Papier auf dem Blau */
+
+  /* ── Status: drei weitere Blöcke aus demselben Kasten ──────────────────────
+     Alle drei liegen bei L 0.44–0.455 — in einem Druck haben alle Farbgänge
+     dieselbe Deckung; keine Statusfarbe ist heller oder „leichter" als die
+     andere. Unterschieden wird über Farbton, nicht über Helligkeit. */
+  --success: oklch(0.44 0.105 155); /* #096338 — 緑青 rokushō, Grünspan */
+  --success-soft: oklch(0.44 0.105 155 / 0.13);
+  --warn: oklch(0.455 0.096 70); /* #784c06 — 黄土 ōdo, Ocker (gamutgeklemmt) */
+  --warn-soft: oklch(0.455 0.096 70 / 0.13);
+  --error: oklch(0.455 0.16 20); /* #9c1e2f — 紅 beni, Saflorrot */
+  --error-soft: oklch(0.455 0.16 20 / 0.13);
+
+  /* Du-Blase: die einzige Stelle, an der das Wasser IN die Lesespalte läuft —
+     ein hell blau gedruckter Bogen (藍摺 aizuri). Kein Akzent-Fill (Projekt-
+     Konvention seit Yoru), sondern eine eigene Papierfarbe. Auf dem gelben Grund
+     ist das der stärkste Flächen-Kontrast des Themas — Du und Hoshi stehen hier
+     auf verschieden GEFÄRBTEM Papier, nicht auf verschieden hellem. */
+  --bg-user: oklch(0.888 0.03 242); /* #cadded */
+
+  color-scheme: light;
+}
+
+/* Der Grund gehört dem body. themes.css macht das generisch für jedes
+   [data-theme]; die Regel steht hier noch einmal, damit diese Datei ALLEIN
+   geladen vollständig ist (gleiche Deklaration, gleiche Spezifität, kein
+   Konflikt). */:root[data-theme='ukiyo'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+
+  /* ── DIE ZWEI REGLER DES BILDES ────────────────────────────────────────────
+     Beide sind hier deklariert und nicht in den Token-Block gewandert: sie sind
+     Bild-Regie, keine Farbe, und die Swatch-Kachel im Theme-Picker soll sie nicht
+     erben. Wer am Thema schraubt, schraubt an genau diesen zwei Zahlen — und muss
+     danach die Schleier-Rechnung im Datei-Kopf neu machen.
+
+     --ukiyo-print  Lautstärke des Drucks. 0 = leeres Blatt, 1 = Plakat. Bei 0.58
+                    stehen die Ränder als voller Holzschnitt, ohne dass das Blau
+                    den Papierton der Seite kippt.
+     --ukiyo-veil   Deckkraft des Papier-Schleiers über der Lesespalte. GERECHNET,
+                    nicht gefühlt (Rechnung im Kopf dieser Datei). Untergrenze aus
+                    dem Kontrast, Obergrenze aus dem Geschmack: darüber verschwindet
+                    die Welle unter der Spalte, und genau das soll sie nicht. */
+  --ukiyo-print: 0.78;
+  --ukiyo-veil: 0.82;
+}
+
+/* ── DER DRUCK — FULL BLEED ───────────────────────────────────────────────────
+   `ukiyo-wave.svg` liegt als echte Datei NEBEN dieser CSS: same-origin, vom
+   Browser cachebar, und die Build-Id hasht `public/` ohnehin. Als data-URI wäre
+   derselbe Inhalt ~1,37× so groß (Base64) und läge in JEDER geladenen Kopie der
+   Themen-CSS; als Datei lädt ihn nur, wer dieses Thema wirklich wählt.
+
+   `background-size: cover` statt eines Kastens im Seitenraum. Das Blatt hat 1,45:1
+   (1600×1104 im viewBox), ein 16:9-Fenster 1,78:1 — cover skaliert also auf die
+   BREITE und beschneidet oben/unten je ~9 %. Das ist der richtige Verlust: oben
+   liegt leeres Papier (余白 yohaku), unten auslaufendes Wasser. Die Komposition,
+   die dabei stehen bleibt, ist die des Originals — die große Welle links und
+   unten, der Himmel offen nach rechts oben, der Fuji klein in der Höhlung.
+   `center` als Anker hält den Kamm in der oberen Bildhälfte auf jeder
+   Fensterform; `bottom` würde auf breiten Fenstern den Kamm anschneiden.
+
+   STAPELUNG: `position: fixed; z-index: -1` — hinter jedem normalen In-Flow-
+   Inhalt, aber über dem body-Hintergrund (dieselbe Naht wie Amayadori/Nagori/
+   Momiji). `inset: 0` und NICHT wie in v2 `-3% 0`: der Schleier rechnet mit `50%`
+   der Breite DIESES Elements, und beide Ebenen müssen deckungsgleich liegen.
+
+   KONTRAST: der Druck liegt jetzt per Geometrie hinter JEDEM Text — die Maske,
+   die das in v1/v2 verhinderte, ist genau das, was hier fällt. Er trägt den
+   Kontrast deshalb nicht mehr über Geometrie, sondern über den Schleier
+   darunter; die Rechnung steht im Datei-Kopf. */
+:root[data-theme='ukiyo'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--ukiyo-print);
+  background-image: url('ukiyo-wave.svg');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+
+  /* Resting state = the `from` frames of both keyframe sets: with the animation
+     gone (reduced motion, or an engine without individual transform properties)
+     the print stands exactly where the swell starts instead of jumping. The
+     scale floor is also the overhang that keeps the viewport edge covered —
+     see „DAS MEER ATMET" below. */
+  translate: -2% -2.8%;
+  scale: 1.07;
+  /* Andi-Regie 14.08.: visible calm, not imperceptible — the wave WANDERS
+     (diagonal swell) at ~1px/s. Scale floor 1.07 = 3.5% overhang per edge,
+     covering the 2.8%/2% travel (edge contract below). Primes 73/109 stay
+     co-prime with the spray clocks. */
+  animation:
+    ukiyo-swell 73s var(--ease-standard, ease-in-out) infinite alternate,
+    ukiyo-breath 109s var(--ease-standard, ease-in-out) infinite alternate;
+}
+
+/* ── DER PAPIER-SCHLEIER — ein zweiter Bogen über der Lesespalte ──────────────
+   Was v2 mit einer harten Maske löste (Bild aus der Spalte heraushalten), löst v3
+   mit Papier: ein frischerer Bogen (--bg-elevated, der hellste der vier
+   Papier-Alter) liegt halbdeckend über dem Druck, dort wo gelesen wird. Der Druck
+   läuft darunter WEITER — man sieht die Welle durchs Papier, wie man einen
+   Durchdruck durch das obenauf liegende Blatt sieht. An den Rändern liegt kein
+   Blatt, dort steht der Holzschnitt voll.
+
+   DIE GEOMETRIE FOLGT DER APP-SPALTE, NICHT DER LESESPALTE. Das war der stille
+   Fehler von v1: `.app` ist `max-width: 920px; margin: auto`, die Lesespalte
+   `--measure` aber nur 672px. Wer nur `--measure` schützt, lässt Uhr, Gruß,
+   Kachelränder und Meta-Captions ungeschützt. `--ukiyo-column: 460px` ist die
+   halbe App-Breite; `max()` gegen die halbe Lesespalte + 24px hält die Zusage
+   auch, falls `--measure` einmal über 872px wächst.
+
+   DIE RÄNDER SIND WEICH. 128px Feder auf jeder Seite. Ohne sie steht dort eine
+   senkrechte Kante über die volle Höhe — derselbe Fehler, den v2 an seinem
+   Bildkasten hatte und mit einer Maske heilen musste. Beide Endfarben sind
+   DIESELBE Farbe mit Alpha 0 bzw. --ukiyo-veil, nicht `transparent`: das
+   Schlüsselwort ist rgba(0,0,0,0) und kann beim Interpolieren einen grauen Saum
+   erzeugen.
+
+   SCHMALE FENSTER: unter ~1176px werden die linken Stopps negativ, die Stopps
+   clampen, und der Schleier deckt die volle Breite. Richtig so — dort gibt es
+   keinen Seitenraum, in dem ein Bild stehen könnte, und der Text braucht den
+   ruhigen Grund erst recht.
+
+   Zwei Pseudoelemente, dieselbe z-index-Ebene: ::after wird nach ::before
+   gemalt (Baumreihenfolge), liegt also ÜBER dem Druck und UNTER dem Inhalt. */
+:root[data-theme='ukiyo'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  --ukiyo-column: max(460px, var(--measure, 42rem) / 2 + 24px);
+  --ukiyo-feather: 80px;
+  background-image: linear-gradient(
+    to right,
+    oklch(0.978 0.016 94 / 0) 0,
+    oklch(0.978 0.016 94 / 0) calc(50% - var(--ukiyo-column) - var(--ukiyo-feather)),
+    oklch(0.978 0.016 94 / var(--ukiyo-veil)) calc(50% - var(--ukiyo-column)),
+    oklch(0.978 0.016 94 / var(--ukiyo-veil)) calc(50% + var(--ukiyo-column)),
+    oklch(0.978 0.016 94 / 0) calc(50% + var(--ukiyo-column) + var(--ukiyo-feather)),
+    oklch(0.978 0.016 94 / 0) 100%
+  );
+}
+
+/* ── DAS MEER ATMET — motion contract (2026-08-14) ────────────────────────────
+   Andi's brief: a glance sees a picture, a long stay feels it live. Hokusai
+   freezes the moment; here it dreams. Everything below runs on MINUTES, animates
+   nothing but compositor properties (translate / scale / opacity — no filter, no
+   background-position, no width) and uses two nodes for the whole scene. The
+   iPad shows this 24/7, so „few nodes, long periods, GPU only" is the wall.
+
+   WHY THE ANIMATION IS NOT IN THE SVG. `ukiyo-wave.svg` arrives through
+   `background-image`, so no rule of this file can reach a path inside it — the
+   alternative would be a <style> block INSIDE the SVG. That is exactly what we
+   do not want here: an animated SVG background re-rasterises the whole drawing
+   (551 flat paths, 212 KB) on every frame, while a transform on the LAYER is a
+   single composited quad. The drawing also carries no ids or classes; it is
+   generated by ukiyoe_pipeline.py and must stay re-generatable.
+
+   TWO PERIODS ON ONE NODE. `translate` and `scale` are independent properties,
+   so one element can carry two rhythms without a second layer: swell 168 s
+   (vertical heave, 2,2 % of the viewport in total) and breath 233 s (2,5 %
+   zoom). Their beat repeats after ~21 h — a single 168 s `alternate` would come
+   round every 5,6 min, and that IS visible to someone sitting in front of it.
+
+   THE EDGE CAN NEVER SHOW. The layer is viewport-sized (`inset: 0` stays), so a
+   bare translate would uncover a strip at top or bottom. The overhang comes from
+   the scale FLOOR: at 1.03 each edge hangs over by 1,5 % of the box while
+   |translate| never exceeds 1,1 %. The margin therefore holds even in the worst
+   combination (swell at its extreme, breath at its minimum) — the two clocks do
+   drift into it.
+
+   THE CONTRAST CONTRACT IS UNTOUCHED. Neither --ukiyo-print nor --ukiyo-veil is
+   animated. The measured worst pixel under the column is the CONTOUR BLUE
+   #14325d through print 0.78 and veil 0.82, and that line runs through EVERY row
+   of the image (file header: „ein senkrechter Verlauf im Schleier wäre umsonst").
+   Shifting or zooming the print can only exchange which dark pixel sits under a
+   glyph, never create a darker one — --text-4 keeps its 4,73:1 floor. */
+@keyframes ukiyo-swell {
+  from {
+    translate: -2% -2.8%;
+  }
+  to {
+    translate: 2% 2.8%;
+  }
+}
+@keyframes ukiyo-breath {
+  from {
+    scale: 1.07;
+  }
+  to {
+    scale: 1.1;
+  }
+}
+
+/* ── GISCHT — foam drifting in the margin (the root's ::after) ────────────────
+   In a woodblock the white IS unprinted paper, so the spray is paper-coloured:
+   five drops of --bg-elevated over the wave's flank.
+
+   THEY ARE FLAT DISCS, NOT SOFT BLOBS. Each `radial-gradient` holds its colour
+   to ~86 % of the radius and then stops — a printed drop with an edge, not a
+   glow. A feathered speck would be exactly the medium error this theme was
+   rebuilt to escape (file header: „Verläufe können Dunst … aber keine LINIE").
+   Their alpha is 0.78 = --ukiyo-print, so a drop sits in the same register as
+   the print's own unprinted whites instead of glowing brighter than the sheet.
+
+   They live on `:root::after` because body's two pseudo elements are taken
+   (print, veil); tree order paints this layer above both, and `z-index: -1`
+   keeps it behind every in-flow box exactly like the other two. The
+   `:root`-bound selector also keeps it out of the theme picker's swatch, which
+   sets data-theme on a plain <div>.
+
+   IT NEVER CROSSES TEXT — BY CONSTRUCTION, NOT BY MEASUREMENT. The mask is the
+   negative of the veil and stops 40 px BEFORE the app column: opaque out to
+   `50% - column - 40px - feather`, fully transparent from `50% - column - 40px`
+   inward, and nothing at all on the right half (spray belongs to the wave, and
+   the wave is left). The drift is given in px (max 36 px) and not in %, so that
+   40 px of slack covers the mask's own movement on any screen width. Below
+   ~1176 px the stops clamp, the mask goes transparent and the foam is simply
+   gone — a narrow window has no margin to drift in.
+
+   Periods: 83 s drift (up and to the right, wind off the crest — 72 px of
+   travel, ~0,9 px/s) and 59 s thinning. Both are co-prime to 73/109 above, so
+   no two layers ever reach their extremes together. End stops are the paper
+   colour at alpha 0, never the `transparent` KEYWORD — that one is rgba(0,0,0,0)
+   and interpolates through grey (same rule as the veil above). */
+:root[data-theme='ukiyo']::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  --ukiyo-column: max(460px, var(--measure, 42rem) / 2 + 24px);
+  --ukiyo-feather: 80px;
+  background-image:
+    radial-gradient(circle 9px at 3% 54%, oklch(0.978 0.016 94 / 0.78) 88%, oklch(0.978 0.016 94 / 0)),
+    radial-gradient(circle 6px at 6.4% 61%, oklch(0.978 0.016 94 / 0.78) 86%, oklch(0.978 0.016 94 / 0)),
+    radial-gradient(circle 4.5px at 2.4% 68%, oklch(0.978 0.016 94 / 0.78) 85%, oklch(0.978 0.016 94 / 0)),
+    radial-gradient(circle 7px at 7.2% 75%, oklch(0.978 0.016 94 / 0.78) 87%, oklch(0.978 0.016 94 / 0)),
+    radial-gradient(circle 4px at 4.6% 83%, oklch(0.978 0.016 94 / 0.78) 84%, oklch(0.978 0.016 94 / 0));
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(50% - var(--ukiyo-column) - 40px - var(--ukiyo-feather)),
+    transparent calc(50% - var(--ukiyo-column) - 40px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(50% - var(--ukiyo-column) - 40px - var(--ukiyo-feather)),
+    transparent calc(50% - var(--ukiyo-column) - 40px),
+    transparent 100%
+  );
+  translate: -36px 28px; /* = the `from` frame, so nothing jumps without motion */
+  animation:
+    ukiyo-spray-drift 83s var(--ease-standard, ease-in-out) infinite alternate,
+    ukiyo-spray-thin 59s var(--ease-standard, ease-in-out) infinite alternate;
+}
+@keyframes ukiyo-spray-drift {
+  from {
+    translate: -36px 28px;
+  }
+  to {
+    translate: 36px -28px;
+  }
+}
+@keyframes ukiyo-spray-thin {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
+}
+
+/* Own reduced-motion gate: index.css brakes globally, but this file is loaded at
+   runtime and has to be correct on its own. The picture STAYS — print, spray and
+   veil all remain visible, they only stop moving. Resting values are the `from`
+   frames declared on the rules above, so the still image is the first frame of
+   the swell and not some half-finished pose. The veil in body::after never moved
+   in the first place; it is readability, not decoration. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='ukiyo'] body::before,
+  :root[data-theme='ukiyo']::after {
+    animation: none;
+  }
+}
+
+/* Die Kopfzeile ist der obere Blattrand: ein Bogen, der zum Betrachter hin eine
+   Spur heller wird, abgeschlossen durch eine gedruckte Linie in bero-ai statt
+   durch einen Schatten. Ein Druck wirft keinen Schatten — er hat eine Kante.
+   (Muster wie Natsu no Hi / Nagori / Momiji, die ihre Nav ebenfalls nur tönen
+   statt sie neu zu bauen.) Text auf dieser Fläche: --text-1 14,8–15,8:1,
+   --text-3 7,0–7,5:1. */
+:root[data-theme='ukiyo'] .nav {
+  background: linear-gradient(180deg, oklch(0.982 0.014 94), oklch(0.958 0.024 92));
+  box-shadow: 0 1px 0 oklch(0.435 0.115 248 / 0.28);
+}
+
+/* Der Sprachstern ist die Welle im Ausschnitt: Gischt oben links, bero-ai in
+   der Mitte, ai-Indigo an der Unterkante. LINEARER Verlauf, kein radialer — die
+   Flach-Korrektur (Andi 26.07: „ich möchte es flach, ruhig") gilt, und ein
+   Druck kennt ohnehin keine beleuchtete Kugel. Form, Größe und Bewegung bleiben
+   unverändert die des Basis-Orbs; das Thema ist Farbe. */
+:root[data-theme='ukiyo'] .vc-orb__core {
+  background: linear-gradient(152deg, oklch(0.93 0.03 100), oklch(0.55 0.13 247) 44%, oklch(0.34 0.088 258));
+}
+
+/* Der Bloom ist kein Leuchten, sondern ein zweiter Farbgang: eine flache,
+   gleichmäßige Wasserfläche in der helleren Blaustufe. Bewusst ohne Verlauf —
+   der Ring aus Farbe um den Kern ist genau das, was ein zweiter Block auf dem
+   Papier hinterlassen würde. */
+:root[data-theme='ukiyo'] .vc-orb__bloom {
+  background: var(--accent-glow, oklch(0.55 0.13 247 / 0.3));
+}
+
+/* Die Pegel-Ringe tragen die Schlüsselblock-Linie in bero-ai: sie zeichnen die
+   Kontur der Stimme, wie die Linie im Druck die Kontur der Welle zeichnet.
+   Keine neue Mechanik — nur Farbe auf dem bestehenden Ring. */
+:root[data-theme='ukiyo'] .vc-orb__ring {
+  border-color: oklch(0.435 0.115 248 / 0.42);
+  box-shadow: 0 0 0 5px oklch(0.435 0.115 248 / 0.1);
+}

@@ -1,19 +1,11 @@
 package de.hoshi.adapters.escalation
 
 /**
- * **Statische ca.-Preis-Tabelle der Eskalations-Modelle (Nano-/Recherche-Klasse).**
+ * Strict model whitelist and approximate-price catalog for escalation.
  *
- * Quelle: developers.openai.com/api/docs/pricing — die gpt-5.4-Zeilen
- * **verifiziert 2026-07-05**, die gpt-5.6-Zeilen (Recherche-Familie)
- * **verifiziert 2026-07-19** (Standard-Tier, USD, OHNE Cache-Rabatt). Alle
- * Werte sind bewusst als **„ca."-Schätzung** geführt — die Tabelle ist eine
- * ehrliche Orientierung für Settings-UI und Kosten-Buchung, KEINE
- * Abrechnungswahrheit (die hat nur OpenAIs Billing). USD≈EUR wird nicht
- * umgerechnet (Cent-Größenordnung).
- *
- * Konfigurierbar über `hoshi.escalation.model` (Standard-Lookup, ab S1) bzw.
- * `hoshi.escalation.research-model` (expliziter Recherche-Imperativ, ab
- * 2026-07-19); die Whitelist für BEIDE Properties ist genau diese Tabelle.
+ * ADR-004-modell-whitelist-und-preis-verifikationsdatum: only entries in this
+ * table are valid configuration. Prices guide UI and caps, not billing truth.
+ * Source: developers.openai.com/api/docs/pricing, Standard tier, no cache discount.
  */
 object EscalationModelCatalog {
 
@@ -35,27 +27,9 @@ object EscalationModelCatalog {
         val caPriceCentsPerLookup: Double,
     )
 
-    /**
-     * Die Whitelist. Stand 2026-07-05 führt die offizielle Preisseite die
-     * gpt-5.4-Serie; Nano ist die Auftrags-Klasse (Andi-Regel „Nano, Spend
-     * frei" + 0,50-€-Tages-Cap), Mini die eine dokumentierte Upgrade-Option.
-     * Ältere Nano-IDs (gpt-5-nano/gpt-4.1-nano) stehen nicht mehr auf der
-     * Preisseite und sind darum bewusst NICHT gelistet (keine unverifizierten
-     * Preise in der Tabelle).
-     *
-     * **gpt-5.6-Familie (Recherche-Modelle, Andi-Auftrag 2026-07-19, Preise
-     * verifiziert 2026-07-19 gegen developers.openai.com/api/docs/pricing):**
-     * für den expliziten Recherche-Imperativ („recherchiere online",
-     * s. [de.hoshi.core.pipeline.ResearchIntentRecognizer]) — gründlicher als
-     * Nano/Mini, darum deutlich teurer (5-25× Nano); NUR gerufen, wenn
-     * `hoshi.escalation.research-model` explizit einen dieser drei Einträge
-     * nennt (Default leer ⇒ Feature AUS). [caPriceCentsPerLookup] rechnet mit
-     * dem in dieser Datei etablierten Schätz-Muster (typischer Lookup
-     * ~800 Input-/~300 Output-Tokens): `(800×caInputCentsPer1M +
-     * 300×caOutputCentsPer1M) / 1_000_000` — für Sol z.B.
-     * `(800×500 + 300×3000) / 1_000_000 = 1.3` Cent.
-     */
+    /** ADR-004: the standard and explicit-research properties share this exact whitelist. */
     val MODELS: List<ModelInfo> = listOf(
+        // Pricing verified 2026-07-05; Standard tier, USD, no cache discount.
         ModelInfo(
             id = "gpt-5.4-nano",
             label = "OpenAI Nano (Standard, günstig)",
@@ -70,6 +44,7 @@ object EscalationModelCatalog {
             caOutputCentsPer1M = 450.0, // ca. $4.50 / 1M
             caPriceCentsPerLookup = 0.4,
         ),
+        // Pricing verified 2026-07-19; typical research lookup assumes 800 input + 300 output tokens.
         ModelInfo(
             id = "gpt-5.6-sol",
             label = "OpenAI 5.6 Sol (Recherche, gründlich)",
@@ -96,7 +71,7 @@ object EscalationModelCatalog {
         ),
     )
 
-    /** Default-Modell (`hoshi.escalation.model`, wenn nichts konfiguriert ist). NIE die 5.6-Familie (Andi-Vorgabe). */
+    /** ADR-004: standard lookups default to Nano; research models require explicit configuration. */
     const val DEFAULT_MODEL_ID: String = "gpt-5.4-nano"
 
     /** Tabellen-Lookup (exakte ID); unbekannt ⇒ null. */
@@ -115,15 +90,7 @@ object EscalationModelCatalog {
             "(bekannt: ${MODELS.joinToString(", ") { it.id }})",
     )
 
-    /**
-     * Kurzes Anzeige-Label im Stil der Bestandskonstante
-     * `TurnOrchestrator.LOOKUP_NOTE_PROVIDER` (`"openai-nano"` für
-     * `gpt-5.4-nano`) — der Teil der Modell-ID NACH dem letzten Bindestrich,
-     * `"openai-"` vorangestellt (`gpt-5.6-sol` → `"openai-sol"`). Ehrliche
-     * Diary-/Event-Beschriftung je nach TATSÄCHLICH gerufenem Modell
-     * (Andi-Auftrag 2026-07-19: „keine Nano-Beschriftung auf einer
-     * Sol-Antwort").
-     */
+    /** ADR-004: labels the actually called model as `openai-<last-id-segment>`. */
     fun providerLabel(modelId: String): String = "openai-" + modelId.trim().substringAfterLast('-')
 
     /**

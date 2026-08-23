@@ -1,0 +1,803 @@
+[
+  {
+    "scene": "klein",
+    "viewport": "1366x1024",
+    "ready": true,
+    "files": [
+      "vorher-klein-1366x1024.png"
+    ],
+    "tiles": [
+      {
+        "id": "uhr",
+        "hasHandle": true,
+        "size": "S",
+        "tile": {
+          "w": 285,
+          "h": 146
+        },
+        "inkPx": 8028,
+        "fill": 19.2,
+        "leaves": 1,
+        "clockPx": 52,
+        "clockW": 255,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wecker",
+        "hasHandle": true,
+        "size": "S",
+        "tile": {
+          "w": 285,
+          "h": 146
+        },
+        "inkPx": 5780,
+        "fill": 13.8,
+        "leaves": 3,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wetter",
+        "hasHandle": true,
+        "size": "S",
+        "tile": {
+          "w": 285,
+          "h": 146
+        },
+        "inkPx": 3403,
+        "fill": 8.2,
+        "leaves": 3,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": 32,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "laeuft",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 583,
+          "h": 146
+        },
+        "inkPx": 24015,
+        "fill": 28.2,
+        "leaves": 4,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 49,
+        "overflowX": 0
+      },
+      {
+        "id": "einkauf",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 583,
+          "h": 146
+        },
+        "inkPx": 14599,
+        "fill": 17.1,
+        "leaves": 6,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 86,
+        "overflowX": 0
+      },
+      {
+        "id": "news*",
+        "hasHandle": false,
+        "size": null,
+        "tile": {
+          "w": 285,
+          "h": 146
+        },
+        "inkPx": 16734,
+        "fill": 40.1,
+        "leaves": 5,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 173,
+        "overflowX": 0
+      }
+    ]
+  },
+  {
+    "scene": "mittel",
+    "viewport": "1366x1024",
+    "ready": true,
+    "files": [
+      "vorher-mittel-1366x1024-s1.png",
+      "vorher-mittel-1366x1024-s2.png"
+    ],
+    "tiles": [
+      {
+        "id": "uhr",
+        "hasHandle": true,
+        "size": "M",
+        "tile": {
+          "w": 583,
+          "h": 146
+        },
+        "inkPx": 14928,
+        "fill": 17.5,
+        "leaves": 2,
+        "clockPx": 68,
+        "clockW": 553,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wecker",
+        "hasHandle": true,
+        "size": "M",
+        "tile": {
+          "w": 583,
+          "h": 146
+        },
+        "inkPx": 15604,
+        "fill": 18.3,
+        "leaves": 3,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wetter",
+        "hasHandle": true,
+        "size": "M",
+        "tile": {
+          "w": 583,
+          "h": 146
+        },
+        "inkPx": 13180,
+        "fill": 15.5,
+        "leaves": 7,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": 32,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "laeuft",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 583,
+          "h": 146
+        },
+        "inkPx": 24015,
+        "fill": 28.2,
+        "leaves": 4,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 49,
+        "overflowX": 0
+      },
+      {
+        "id": "einkauf",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 583,
+          "h": 305
+        },
+        "inkPx": 21265,
+        "fill": 12,
+        "leaves": 10,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "news*",
+        "hasHandle": false,
+        "size": null,
+        "tile": {
+          "w": 285,
+          "h": 305
+        },
+        "inkPx": 36236,
+        "fill": 41.7,
+        "leaves": 11,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 14,
+        "overflowX": 0
+      }
+    ]
+  },
+  {
+    "scene": "gross",
+    "viewport": "1366x1024",
+    "ready": true,
+    "files": [
+      "vorher-gross-1366x1024-s1.png",
+      "vorher-gross-1366x1024-s2.png",
+      "vorher-gross-1366x1024-s3.png"
+    ],
+    "tiles": [
+      {
+        "id": "uhr",
+        "hasHandle": true,
+        "size": "L",
+        "tile": {
+          "w": 583,
+          "h": 410
+        },
+        "inkPx": 109932,
+        "fill": 46,
+        "leaves": 5,
+        "clockPx": 124,
+        "clockW": 553,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wecker",
+        "hasHandle": true,
+        "size": "M",
+        "tile": {
+          "w": 583,
+          "h": 199
+        },
+        "inkPx": 15604,
+        "fill": 13.5,
+        "leaves": 3,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wetter",
+        "hasHandle": true,
+        "size": "L",
+        "tile": {
+          "w": 583,
+          "h": 305
+        },
+        "inkPx": 17663,
+        "fill": 10,
+        "leaves": 9,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": 32,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "laeuft",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 583,
+          "h": 305
+        },
+        "inkPx": 51883,
+        "fill": 29.2,
+        "leaves": 8,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 3,
+        "overflowX": 0
+      },
+      {
+        "id": "einkauf",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 583,
+          "h": 199
+        },
+        "inkPx": 20181,
+        "fill": 17.4,
+        "leaves": 9,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 33,
+        "overflowX": 0
+      },
+      {
+        "id": "news*",
+        "hasHandle": false,
+        "size": null,
+        "tile": {
+          "w": 880,
+          "h": 199
+        },
+        "inkPx": 36670,
+        "fill": 20.9,
+        "leaves": 12,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      }
+    ]
+  },
+  {
+    "scene": "xl",
+    "viewport": "1366x1024",
+    "ready": true,
+    "files": [
+      "vorher-xl-1366x1024-s1.png",
+      "vorher-xl-1366x1024-s2.png"
+    ],
+    "tiles": [
+      {
+        "id": "uhr",
+        "hasHandle": true,
+        "size": "L",
+        "tile": {
+          "w": 583,
+          "h": 305
+        },
+        "inkPx": 109875,
+        "fill": 61.9,
+        "leaves": 5,
+        "clockPx": 124,
+        "clockW": 553,
+        "condPx": null,
+        "overflow": 17,
+        "overflowX": 0
+      },
+      {
+        "id": "wetter",
+        "hasHandle": true,
+        "size": "XL",
+        "tile": {
+          "w": 880,
+          "h": 305
+        },
+        "inkPx": 93748,
+        "fill": 35,
+        "leaves": 39,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": 40,
+        "overflow": 42,
+        "overflowX": 0
+      },
+      {
+        "id": "news*",
+        "hasHandle": false,
+        "size": null,
+        "tile": {
+          "w": 880,
+          "h": 305
+        },
+        "inkPx": 89643,
+        "fill": 33.4,
+        "leaves": 26,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      }
+    ]
+  },
+  {
+    "scene": "klein",
+    "viewport": "834x1112",
+    "ready": true,
+    "files": [
+      "vorher-klein-834x1112.png"
+    ],
+    "tiles": [
+      {
+        "id": "uhr",
+        "hasHandle": true,
+        "size": "S",
+        "tile": {
+          "w": 257,
+          "h": 168
+        },
+        "inkPx": 8028,
+        "fill": 18.6,
+        "leaves": 1,
+        "clockPx": 52,
+        "clockW": 227,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wecker",
+        "hasHandle": true,
+        "size": "S",
+        "tile": {
+          "w": 257,
+          "h": 168
+        },
+        "inkPx": 5780,
+        "fill": 13.4,
+        "leaves": 3,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wetter",
+        "hasHandle": true,
+        "size": "S",
+        "tile": {
+          "w": 257,
+          "h": 168
+        },
+        "inkPx": 3403,
+        "fill": 7.9,
+        "leaves": 3,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": 32,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "laeuft",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 525,
+          "h": 168
+        },
+        "inkPx": 25443,
+        "fill": 28.8,
+        "leaves": 5,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 27,
+        "overflowX": 0
+      },
+      {
+        "id": "einkauf",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 525,
+          "h": 168
+        },
+        "inkPx": 17089,
+        "fill": 19.3,
+        "leaves": 9,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 64,
+        "overflowX": 0
+      },
+      {
+        "id": "news*",
+        "hasHandle": false,
+        "size": null,
+        "tile": {
+          "w": 257,
+          "h": 168
+        },
+        "inkPx": 16641,
+        "fill": 38.5,
+        "leaves": 6,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 221,
+        "overflowX": 0
+      }
+    ]
+  },
+  {
+    "scene": "mittel",
+    "viewport": "834x1112",
+    "ready": true,
+    "files": [
+      "vorher-mittel-834x1112-s1.png",
+      "vorher-mittel-834x1112-s2.png"
+    ],
+    "tiles": [
+      {
+        "id": "uhr",
+        "hasHandle": true,
+        "size": "M",
+        "tile": {
+          "w": 525,
+          "h": 132
+        },
+        "inkPx": 14493,
+        "fill": 20.9,
+        "leaves": 2,
+        "clockPx": 67,
+        "clockW": 495,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wecker",
+        "hasHandle": true,
+        "size": "M",
+        "tile": {
+          "w": 525,
+          "h": 132
+        },
+        "inkPx": 8778,
+        "fill": 12.6,
+        "leaves": 3,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wetter",
+        "hasHandle": true,
+        "size": "M",
+        "tile": {
+          "w": 525,
+          "h": 132
+        },
+        "inkPx": 13180,
+        "fill": 19,
+        "leaves": 7,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": 32,
+        "overflow": 1,
+        "overflowX": 0
+      },
+      {
+        "id": "laeuft",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 525,
+          "h": 132
+        },
+        "inkPx": 21213,
+        "fill": 30.5,
+        "leaves": 4,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 63,
+        "overflowX": 0
+      },
+      {
+        "id": "einkauf",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 525,
+          "h": 132
+        },
+        "inkPx": 12729,
+        "fill": 18.3,
+        "leaves": 6,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 100,
+        "overflowX": 0
+      },
+      {
+        "id": "news*",
+        "hasHandle": false,
+        "size": null,
+        "tile": {
+          "w": 257,
+          "h": 709
+        },
+        "inkPx": 35901,
+        "fill": 19.7,
+        "leaves": 14,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      }
+    ]
+  },
+  {
+    "scene": "gross",
+    "viewport": "834x1112",
+    "ready": true,
+    "files": [
+      "vorher-gross-834x1112-s1.png",
+      "vorher-gross-834x1112-s2.png"
+    ],
+    "tiles": [
+      {
+        "id": "uhr",
+        "hasHandle": true,
+        "size": "L",
+        "tile": {
+          "w": 525,
+          "h": 277
+        },
+        "inkPx": 87499,
+        "fill": 60.2,
+        "leaves": 5,
+        "clockPx": 100,
+        "clockW": 495,
+        "condPx": null,
+        "overflow": 19,
+        "overflowX": 0
+      },
+      {
+        "id": "wecker",
+        "hasHandle": true,
+        "size": "M",
+        "tile": {
+          "w": 525,
+          "h": 132
+        },
+        "inkPx": 8778,
+        "fill": 12.6,
+        "leaves": 3,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wetter",
+        "hasHandle": true,
+        "size": "L",
+        "tile": {
+          "w": 525,
+          "h": 277
+        },
+        "inkPx": 17663,
+        "fill": 12.2,
+        "leaves": 9,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": 32,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "laeuft",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 525,
+          "h": 277
+        },
+        "inkPx": 51020,
+        "fill": 35.1,
+        "leaves": 8,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 31,
+        "overflowX": 0
+      },
+      {
+        "id": "einkauf",
+        "hasHandle": true,
+        "size": null,
+        "tile": {
+          "w": 525,
+          "h": 132
+        },
+        "inkPx": 12729,
+        "fill": 18.3,
+        "leaves": 6,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 100,
+        "overflowX": 0
+      },
+      {
+        "id": "news*",
+        "hasHandle": false,
+        "size": null,
+        "tile": {
+          "w": 794,
+          "h": 132
+        },
+        "inkPx": 28104,
+        "fill": 26.8,
+        "leaves": 7,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      }
+    ]
+  },
+  {
+    "scene": "xl",
+    "viewport": "834x1112",
+    "ready": true,
+    "files": [
+      "vorher-xl-834x1112-s1.png",
+      "vorher-xl-834x1112-s2.png"
+    ],
+    "tiles": [
+      {
+        "id": "uhr",
+        "hasHandle": true,
+        "size": "L",
+        "tile": {
+          "w": 525,
+          "h": 349
+        },
+        "inkPx": 87721,
+        "fill": 47.9,
+        "leaves": 5,
+        "clockPx": 100,
+        "clockW": 495,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "wetter",
+        "hasHandle": true,
+        "size": "XL",
+        "tile": {
+          "w": 794,
+          "h": 349
+        },
+        "inkPx": 102978,
+        "fill": 37.2,
+        "leaves": 47,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": 28,
+        "overflow": 0,
+        "overflowX": 0
+      },
+      {
+        "id": "news*",
+        "hasHandle": false,
+        "size": null,
+        "tile": {
+          "w": 794,
+          "h": 349
+        },
+        "inkPx": 98207,
+        "fill": 35.5,
+        "leaves": 32,
+        "clockPx": null,
+        "clockW": null,
+        "condPx": null,
+        "overflow": 0,
+        "overflowX": 0
+      }
+    ]
+  }
+]

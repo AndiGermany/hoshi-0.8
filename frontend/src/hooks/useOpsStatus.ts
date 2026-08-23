@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { API_BASE, TOKEN } from '../api/config';
+import { startVisiblePolling } from './visiblePolling';
 
 /**
  * Ops-Status (RAM-Druck + Sidecar-Gesundheit) aus `GET /api/v1/ops/status`.
@@ -141,11 +142,13 @@ export function useOpsStatus(intervalMs = 30000): OpsStatus | null {
     };
 
     void tick();
-    const id = window.setInterval(() => void tick(), intervalMs);
+    // Gate statt Frequenz: sichtbar taktet es unveraendert, dunkles
+    // Display pausiert, Sichtbarwerden holt sofort frisch nach.
+    const stopPolling = startVisiblePolling(() => void tick(), intervalMs);
     return () => {
       aliveRef.current = false;
       controller.abort();
-      window.clearInterval(id);
+      stopPolling();
     };
   }, [intervalMs]);
 

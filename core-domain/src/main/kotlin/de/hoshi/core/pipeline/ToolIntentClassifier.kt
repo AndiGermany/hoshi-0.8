@@ -191,7 +191,8 @@ class DeterministicToolIntentClassifier(
                     domain = "climate",
                     service = "set_temperature",
                     entityId = null,
-                    data = mapOf("area_id" to areaOf(tokens, rooms), "temperature" to temp),
+                    // No room named ⇒ NO area_id (the orchestrator resolves or asks).
+                    data = areaTarget(roomOrNull(tokens, rooms)) + ("temperature" to temp),
                 )
             }
         }
@@ -227,15 +228,16 @@ class DeterministicToolIntentClassifier(
         val isDim = tokens.any { it.startsWith("dimm") || it == "dim" }
         val isLight = tokens.any { it in LIGHT_WORDS } || isDim || compoundArea != null
         if (isLight) {
-            // Explizit genannter Raum gewinnt; sonst der im Kompositum steckende Raum;
-            // sonst Default (wie bisher). Byte-neutral, wenn kein Kompositum (compoundArea=null
-            // ⇒ roomOrNull(tokens) ?: "wohnzimmer" == areaOf(tokens)).
-            val area = roomOrNull(tokens, rooms) ?: compoundArea ?: "wohnzimmer"
+            // Explicitly named room wins; else the room inside a compound word; else
+            // NOTHING — the call goes out WITHOUT area_id and the orchestrator decides
+            // (satellite room / anaphora / ask). Never a default room:
+            // LL-2026-08-14-ballsaal-hardcode: never guess a room; ask.
+            val area: String? = roomOrNull(tokens, rooms) ?: compoundArea
             val pct = percent(raw)
             if (pct != null) {
                 return ToolCall(
                     domain = "light", service = "turn_on", entityId = null,
-                    data = mapOf("area_id" to area, "brightness_pct" to pct.coerceIn(0, 100)),
+                    data = areaTarget(area) + ("brightness_pct" to pct.coerceIn(0, 100)),
                 )
             }
             // (2a-temp) Farbtemperatur-Wort ⇒ `color_temp_kelvin` (HA-Standardattribut,
@@ -252,28 +254,36 @@ class DeterministicToolIntentClassifier(
             colorTempKelvin(tokens)?.let { kelvin ->
                 return ToolCall(
                     domain = "light", service = "turn_on", entityId = null,
-                    data = mapOf("area_id" to area, "color_temp_kelvin" to kelvin),
+                    data = areaTarget(area) + ("color_temp_kelvin" to kelvin),
                 )
             }
             colorName(tokens)?.let { color ->
                 return ToolCall(
                     domain = "light", service = "turn_on", entityId = null,
-                    data = mapOf("area_id" to area, "color_name" to color),
+                    data = areaTarget(area) + ("color_name" to color),
                 )
             }
             if (tokens.any { it in OFF_WORDS }) {
                 return ToolCall(
                     domain = "light", service = "turn_off", entityId = null,
-                    data = mapOf("area_id" to area),
+                    data = areaTarget(area),
                 )
             }
             // Das nackte „ein" (getrenntes Verb „schalte … ein") zählt NUR mit
             // Schalt-Verb als An-Partikel — ohne Verb ist „ein" meist Artikel
-            // („brennt da ein Licht?") und darf nie ein Befehl werden.
-            if (tokens.any { it in ON_WORDS } || (tokens.any { it in SWITCH_VERBS } && tokens.contains("ein"))) {
+            // („brennt da ein Licht?") und darf nie ein Befehl werden. AUSNAHME
+            // (2026-08-13, STT-Verb-Drop-Befund „[Schalte] das Licht im Flur ein"
+            // kommt ohne Schaltverb durch): „ein" NACH einem Präposition+bekannter-
+            // Raum-Anker zählt trotzdem — s. [hasVerbDropOnAnchor] für die exakte
+            // Regel (Anker VOR „ein" ⇒ Partikel; Anker fehlt oder „ein" steht VOR
+            // dem Anker wie im Artikel-Fall ⇒ kein Treffer).
+            if (tokens.any { it in ON_WORDS } ||
+                (tokens.any { it in SWITCH_VERBS } && tokens.contains("ein")) ||
+                hasVerbDropOnAnchor(tokens, rooms)
+            ) {
                 return ToolCall(
                     domain = "light", service = "turn_on", entityId = null,
-                    data = mapOf("area_id" to area),
+                    data = areaTarget(area),
                 )
             }
             // Licht erwähnt, aber keine klare Aktion (z.B. eine Frage) ⇒ kein Befehl.
@@ -292,7 +302,11 @@ class DeterministicToolIntentClassifier(
         //      Heizungs-Kommando — dafür soll NICHT nach dem Raum gefragt werden.
         val switchRoom = roomOrNull(tokens, rooms)
         val hasSwitchVerb = tokens.any { it in SWITCH_VERBS }
-        val hasOnParticle = tokens.any { it in ON_WORDS } || tokens.contains("ein")
+        // Bare "ein" only counts here if it trails a resolved room ("schalte das
+        // schlafzimmer ein") — the SAME article trap as in the light branch above
+        // ("mach ein Foto im Flur": "ein" precedes an unrelated noun, not a
+        // trailing particle) applies here too, s. [bareEinTrailsRoom].
+        val hasOnParticle = tokens.any { it in ON_WORDS } || bareEinTrailsRoom(tokens, rooms)
         val hasOffParticle = tokens.any { it in OFF_WORDS }
         val climateFree = tokens.none { it in CLIMATE_WORDS }
         if (switchRoom != null && hasSwitchVerb && climateFree) {
@@ -345,7 +359,13 @@ class DeterministicToolIntentClassifier(
                 domain = AreaClarifyIntent.DOMAIN,
                 service = AreaClarifyIntent.ASK,
                 entityId = null,
-                data = mapOf(AreaClarifyIntent.PHRASE to AreaClarifyIntent.phrase(areaCatalog.areas(), language)),
+                data = mapOf(
+                    AreaClarifyIntent.PHRASE to AreaClarifyIntent.phrase(areaCatalog.areas(), language),
+                    // Parked intent behind the ask ("Raum schalten = Licht im Raum"
+                    // convention, same as (2b)); off wins over on, mirroring (2b).
+                    AreaClarifyIntent.PENDING_DOMAIN to "light",
+                    AreaClarifyIntent.PENDING_SERVICE to if (hasOffParticle) "turn_off" else "turn_on",
+                ),
             )
         }
 
@@ -373,18 +393,20 @@ class DeterministicToolIntentClassifier(
     }
 
     /**
-     * Erstes vorkommendes Raum-Wort ⇒ echte HA-`area_id`; Default `wohnzimmer`
-     * (wie bisher — so funktioniert „Licht an" ohne genannten Raum weiter). KEIN
-     * Raten von entity_ids mehr: der Kernel grantet area_id gegen areaScope=["*"].
-     * [rooms] ist die pro-Turn aus [areaCatalog] gebaute Alias-Tabelle ([roomIndex]).
+     * The `area_id` slot of a room-targeted call — present ONLY for a room the text
+     * really named. `null` ⇒ EMPTY map: an unnamed room leaves the call honestly
+     * roomless, the [de.hoshi.core.pipeline.TurnOrchestrator] then resolves it
+     * (satellite room / anaphora) or asks. Replaces the former `?: "wohnzimmer"`
+     * default that switched a foreign room on 14.08.
+     * LL-2026-08-14-ballsaal-hardcode: never guess a room; ask.
      */
-    private fun areaOf(tokens: List<String>, rooms: Map<String, String>): String =
-        roomOrNull(tokens, rooms) ?: "wohnzimmer"
+    private fun areaTarget(area: String?): Map<String, Any?> =
+        if (area == null) emptyMap() else mapOf("area_id" to area)
 
     /**
-     * Wie [areaOf], aber OHNE Default: erstes genanntes Raum-Wort ⇒ echte `area_id`,
-     * sonst `null`. Für den Lese-Pfad: kein genannter Raum ⇒ kein Target ⇒ das
-     * Haus-Aggregat (statt fälschlich „Wohnzimmer" zu raten).
+     * Erstes genanntes Raum-Wort ⇒ echte `area_id`, sonst `null` — die EINZIGE
+     * Raum-Quelle des Classifiers (es gibt keinen Default mehr, s. [areaTarget]).
+     * Für den Lese-Pfad: kein genannter Raum ⇒ kein Target ⇒ das Haus-Aggregat.
      *
      * **Mehrwort-Aliase (`living room`):** an JEDER Position wird zuerst das Token-PAAR
      * geprüft, dann das Einzel-Token — so gewinnt der zuerst GESAGTE Raum, egal ob er
@@ -400,6 +422,55 @@ class DeterministicToolIntentClassifier(
             rooms[tokens[i]]?.let { return it }
         }
         return null
+    }
+
+    /**
+     * **Verb-Drop-Anker für das nackte „ein" im Licht-Zweig** (2026-08-13,
+     * STT-Befund: „[Schalte] das Licht im Flur ein" verliert das Schaltverb bei
+     * der Transkription und kam bisher als `null` durch). Die Präposition+
+     * bekannter-Raum-Kombination („im"/„in der"/„in dem" + Raum aus dem Katalog)
+     * ist der Anker, der den Artikel-Fall ausschließt: in „ein Licht im Flur"
+     * steht „ein" VOR dem Anker (Artikel), in „das Licht im Flur ein" steht „ein"
+     * NACH dem Anker (Partikel). Nur Letzteres zählt. ENG gefasst: verlangt eine
+     * Präposition (kein bloßes „Raum vor ein" wie im (2b)-Pfad unten) — dieser
+     * Zweig ist ausschließlich vom `isLight`-Aufrufer gegated (Licht-Domäne).
+     *
+     * Negativ-Beispiele, die bewusst NICHT matchen (kein Anker VOR „ein"):
+     * „brennt da ein Licht im Flur?", „es war ein Licht im Flur", „ein Licht im
+     * Flur wäre schön" — bei allen dreien steht „ein" vor „im/in der … Flur".
+     */
+    private fun hasVerbDropOnAnchor(tokens: List<String>, rooms: Map<String, String>): Boolean {
+        val einIdx = tokens.indexOf("ein")
+        if (einIdx < 0) return false
+        for (i in 0 until einIdx) {
+            if (tokens[i] !in PREPOSITIONS) continue
+            val afterPrep = i + 1
+            if (afterPrep >= einIdx) continue // nichts mehr uebrig vor "ein"
+            if (rooms.containsKey(tokens[afterPrep])) return true // "im flur ein"
+            if (tokens[afterPrep] in ARTICLES) {
+                val afterArticle = afterPrep + 1
+                if (afterArticle < einIdx && rooms.containsKey(tokens[afterArticle])) return true // "in der kueche ein"
+            }
+        }
+        return false
+    }
+
+    /**
+     * **Bare-„ein"-Wächter für den Raum-als-Ziel-Pfad (2b)** — dieselbe Artikel-
+     * Falle wie [hasVerbDropOnAnchor], nur OHNE Präpositions-Pflicht: (2b) nennt
+     * den Raum meist als direktes Objekt ohne Präposition („schalte das
+     * Schlafzimmer ein"). „ein" zählt daher nur, wenn IRGENDEIN bekannter Raum
+     * VOR ihm steht — sonst ist es fast immer ein Artikel vor einem anderen
+     * Substantiv („mach ein Foto im Flur": „flur" steht erst NACH „ein").
+     */
+    private fun bareEinTrailsRoom(tokens: List<String>, rooms: Map<String, String>): Boolean {
+        val einIdx = tokens.indexOf("ein")
+        if (einIdx < 0) return false
+        for (i in 0 until einIdx) {
+            if (rooms.containsKey(tokens[i])) return true
+            if (i + 1 < einIdx && rooms.containsKey("${tokens[i]} ${tokens[i + 1]}")) return true
+        }
+        return false
     }
 
     /**
@@ -508,6 +579,14 @@ class DeterministicToolIntentClassifier(
         val LIGHT_SUFFIXES = listOf("lichter", "lampen", "lights", "licht", "lampe", "light", "lamp")
         val ON_WORDS = setOf("an", "anschalten", "einschalten", "anmachen", "on")
         val OFF_WORDS = setOf("aus", "ausschalten", "ausmachen", "abschalten", "off")
+
+        /**
+         * Präpositionen + Artikel für den Verb-Drop-Anker ([hasVerbDropOnAnchor]):
+         * „im" (= in dem), „in" (+ Artikel: „in der"/„in dem"). DE-only — „ein" als
+         * Partikel-Wort existiert im Englischen nicht (EN nutzt „on"/`ON_WORDS`).
+         */
+        val PREPOSITIONS = setOf("im", "in")
+        val ARTICLES = setOf("der", "die", "das", "dem")
 
         /**
          * Schalt-Verben für den Raum-als-Ziel-Pfad ((2b)/(5), Live-Befund 2026-07-15):

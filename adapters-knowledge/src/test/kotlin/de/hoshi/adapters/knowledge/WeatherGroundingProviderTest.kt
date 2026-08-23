@@ -154,6 +154,25 @@ class WeatherGroundingProviderTest {
     ): String =
         provider.groundingBlock(query, RouteCategory.FACT_SHORT, language).block(Duration.ofSeconds(5)) ?: ""
 
+    // ── Byte-Bausteine der Pin-Tests (Auftrag 2b) ──────────────────────────────
+    //
+    // Die JETZT-Zeile und die ZEITFORM-Regel kommen ab 2026-08-21 in JEDEM Block
+    // vor, der HEUTE enthält. Als Konstanten statt inline, damit ein Wortlaut-
+    // Wechsel EINE Stelle ist und die Pin-Tests weiter das prüfen, was sie prüfen
+    // sollen (Reihenfolge, Marker, Ort — nicht die Rechtschreibung der Anweisung).
+
+    /** [forecastJson]: `current` OHNE `time`/`precipitation` ⇒ nur Grad + Lage. */
+    private val NOW_LINE_DE = "• Wetter Berlin JETZT: 14 Grad, leichter Regen.\n"
+
+    /** [richForecastJson]: `current.time` vorhanden ⇒ zusätzlich der Frische-Marker. */
+    private val NOW_LINE_DE_RICH = "• Wetter Berlin JETZT: 14 Grad, leichter Regen, Stand 12:00 Uhr.\n"
+
+    private val TENSE_DE =
+        " ZEITFORM: Die JETZT-Zeile gilt für den Augenblick, die Tages-Zeile für den ganzen Tag. " +
+            "Sag „es regnet“ NUR, wenn die JETZT-Zeile Niederschlag nennt. " +
+            "Niederschlag, der laut Block schon gefallen ist, heißt „heute hat es geregnet“; " +
+            "noch erwarteter heißt „es soll noch regnen“ — nie beides verwechseln."
+
     // ── Bestand: Default-Verhalten (ohne Setting, ohne Tages-Referenz) ─────────
 
     @Test
@@ -186,12 +205,22 @@ class WeatherGroundingProviderTest {
     fun `ohne Setting und ohne Referenz ist der Block BYTE-GLEICH zum bisherigen Verhalten`() =
         withOpenMeteo(forecastJson) { url, _, _ ->
             val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            // NEU seit Auftrag 2b (Andi-Livetest 2026-08-21): der Block trägt jetzt
+            // eine JETZT-Zeile + die ZEITFORM-Regel. Bewusst KEIN Byte-Rückschritt,
+            // sondern die Korrektur selbst — vorher standen hier nur Tageswerte, und
+            // genau die hat Hoshi als „grad" ausgegeben („15-irgendwas Grad und
+            // Regen", während es trocken war). Die JETZT-Zeile steht UNTEN, weil
+            // „Wie WIRD das Wetter?" nach vorne fragt (Futur-Marker, s.
+            // [DayReferenceResolver.FUTURE_PATTERN]); bei „Wie IST das Wetter?"
+            // steht sie oben — siehe den JETZT-Test weiter unten.
             val expected = "\n\n---\n" +
                 "HINTERGRUND (nur für dich, im Gespräch NICHT erwähnen):\n" +
                 "• Wetter Berlin heute: 11 bis 19 Grad, leichter Regen, etwa 3 mm Niederschlag.\n" +
                 "• Wetter Berlin morgen: 13 bis 22 Grad, teilweise bewölkt, kaum Niederschlag.\n" +
+                NOW_LINE_DE +
                 "ANWEISUNG: Nutze diese ECHTEN Wetterdaten und antworte knapp im eigenen warmen Stil — " +
-                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“."
+                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“." +
+                TENSE_DE
             assertEquals(expected, block(provider, "Wie wird das Wetter?"))
         }
 
@@ -273,7 +302,12 @@ class WeatherGroundingProviderTest {
     fun `echte Wetter-Lexeme behalten den vollstaendigen deutschen Block bytegleich`() =
         withOpenMeteo(forecastJson) { url, _, _ ->
             val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
-            val baseline = block(provider, "Wie wird das Wetter?")
+            // Baseline seit 2b im PRÄSENS: die Vergleichsfragen sind es alle drei,
+            // und die JETZT-Zeile steht bei Präsens oben, bei Futur unten. Die
+            // Zusage dieses Tests ist die LEXEM-Gleichheit („Sonne" groundet wie
+            // „Wetter"), nicht die Zeitform — mit „Wie wird" als Baseline würde er
+            // ab jetzt die Futur-Erkennung prüfen statt der Absichts-Erkennung.
+            val baseline = block(provider, "Wie ist das Wetter?")
 
             assertEquals(baseline, block(provider, "Scheint die Sonne?"))
             assertEquals(baseline, block(provider, "Gibt es Sonnenschein?"))
@@ -394,8 +428,13 @@ class WeatherGroundingProviderTest {
                 "BACKGROUND (for you only, do NOT mention it in the conversation):\n" +
                 "• Weather Berlin today: 11 to 19 degrees, light rain, about 3 mm of precipitation.\n" +
                 "• Weather Berlin tomorrow: 13 to 22 degrees, partly cloudy, hardly any precipitation.\n" +
+                "• Weather Berlin RIGHT NOW: 14 degrees, light rain.\n" +
                 "INSTRUCTION: Use this REAL weather data and answer briefly in your own warm style — " +
-                "add nothing you were not given and never mention “the API”, “Open-Meteo” or “the text”."
+                "add nothing you were not given and never mention “the API”, “Open-Meteo” or “the text”." +
+                " TENSE: The RIGHT NOW line is about this moment, the day line about the whole day. " +
+                "Say “it is raining” ONLY if the RIGHT NOW line states precipitation. " +
+                "Precipitation the block says already fell is “it rained today”; " +
+                "precipitation still expected is “it is going to rain” — never mix the two up."
             assertEquals(expected, block(provider, "Wie wird das Wetter?", Language.EN))
         }
 
@@ -664,12 +703,16 @@ class WeatherGroundingProviderTest {
                 locationLabel = "Berlin",
                 geocoding = OpenMeteoGeocodingClient(baseUrl = url),
             )
+            // Beide Fragen sind PRÄSENS ohne Futur-Marker ⇒ [nowFocus] ⇒ die
+            // JETZT-Zeile steht OBEN (im Gegensatz zum „Wie WIRD"-Pin oben).
             val expected = "\n\n---\n" +
                 "HINTERGRUND (nur für dich, im Gespräch NICHT erwähnen):\n" +
+                NOW_LINE_DE +
                 "• Wetter Berlin heute: 11 bis 19 Grad, leichter Regen, etwa 3 mm Niederschlag.\n" +
                 "• Wetter Berlin morgen: 13 bis 22 Grad, teilweise bewölkt, kaum Niederschlag.\n" +
                 "ANWEISUNG: Nutze diese ECHTEN Wetterdaten und antworte knapp im eigenen warmen Stil — " +
-                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“."
+                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“." +
+                TENSE_DE
 
             assertEquals(expected, block(provider, "Wetter in zwei Tagen"), "Zahlwort-Stoppwort ⇒ Heimat-Pfad byte-identisch")
             assertEquals(expected, block(provider, "wie ist das Wetter in der Zukunft"), "Artikel-Stoppwort ⇒ Heimat-Pfad byte-identisch")
@@ -692,12 +735,18 @@ class WeatherGroundingProviderTest {
             )
             val block = block(provider, "Wie wird das Wetter?")
 
+            // Die JETZT-Zeile trägt DIESELBEN «»-Marken: sie ist derselbe geerdete
+            // Fakt und gehört unter denselben Zitier-Vertrag — im Livetest hat das
+            // Brain gerade die Zahlen frei paraphrasiert.
             val expectedOn = "\n\n---\n" +
                 "HINTERGRUND (nur für dich, im Gespräch NICHT erwähnen):\n" +
                 "• Wetter «Berlin» «heute»: «11» bis «19» Grad, «leichter Regen», etwa 3 mm Niederschlag.\n" +
                 "• Wetter «Berlin» «morgen»: «13» bis «22» Grad, «teilweise bewölkt», kaum Niederschlag.\n" +
+                "• Wetter «Berlin» JETZT: «14 Grad», «leichter Regen».\n" +
                 "ANWEISUNG: Nutze diese ECHTEN Wetterdaten und antworte knapp im eigenen warmen Stil — " +
-                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“.\n" +
+                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“." +
+                TENSE_DE +
+                "\n" +
                 "WETTER-VERTRAG: Die Werte in «» oben (Ort, Tag, Temperaturen, Wetterlage) sind exakt. " +
                 "Nenne sie genau so weiter — gleicher Tagesbezug, gleicher Ortsname, gleiche Ziffern, gleiche Einheit — " +
                 "nicht runden, nicht umformulieren, keinen anderen Ort oder Wert erfinden."
@@ -717,8 +766,10 @@ class WeatherGroundingProviderTest {
                 "HINTERGRUND (nur für dich, im Gespräch NICHT erwähnen):\n" +
                 "• Wetter Berlin heute: 11 bis 19 Grad, leichter Regen, etwa 3 mm Niederschlag.\n" +
                 "• Wetter Berlin morgen: 13 bis 22 Grad, teilweise bewölkt, kaum Niederschlag.\n" +
+                NOW_LINE_DE +
                 "ANWEISUNG: Nutze diese ECHTEN Wetterdaten und antworte knapp im eigenen warmen Stil — " +
-                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“."
+                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“." +
+                TENSE_DE
             assertEquals(expectedOff, offBlock, "OFF (Default) bleibt byte-identisch zum bisherigen Block")
             assertFalse(offBlock.contains("«"), "OFF: kein Marker-Zeichen im Block")
             assertFalse(offBlock.contains("WETTER-VERTRAG"), "OFF: keine Zusatz-Instruktion")
@@ -988,12 +1039,18 @@ class WeatherGroundingProviderTest {
     fun `groundingBlock bleibt trotz der neuen hourly-sunrise-sunset-Parameter BYTE-GLEICH (der Prompt-Block ruehrt sie nicht an)`() =
         withOpenMeteo(richForecastJson) { url, _, _ ->
             val provider = WeatherGroundingProvider(baseUrl = url, locationLabel = "Berlin")
+            // `hourly`/`sunrise`/`sunset` rührt der Prompt-Block weiterhin NICHT an
+            // (das war und bleibt die Zusage dieses Tests). Was der Block seit 2b
+            // ZUSÄTZLICH liest, ist der `current`-Node — inklusive `current.time`
+            // als Frische-Marker, den [richForecastJson] als einziges Fixture trägt.
             val expected = "\n\n---\n" +
                 "HINTERGRUND (nur für dich, im Gespräch NICHT erwähnen):\n" +
                 "• Wetter Berlin heute: 11 bis 19 Grad, leichter Regen, etwa 3 mm Niederschlag.\n" +
                 "• Wetter Berlin morgen: 13 bis 22 Grad, teilweise bewölkt, kaum Niederschlag.\n" +
+                NOW_LINE_DE_RICH +
                 "ANWEISUNG: Nutze diese ECHTEN Wetterdaten und antworte knapp im eigenen warmen Stil — " +
-                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“."
+                "erfinde nichts dazu und erwähne nie „die API“, „Open-Meteo“ oder „den Text“." +
+                TENSE_DE
             assertEquals(expected, block(provider, "Wie wird das Wetter?"))
         }
 

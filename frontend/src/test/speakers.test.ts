@@ -146,7 +146,7 @@ describe('enrollSpeaker — Fehlermeldungen folgen der aktiven UI-Sprache', () =
   afterEach(() => setActiveUiLanguage('de'));
 
   it.each([
-    ['es', 422, 'too-short', 'La grabación era demasiado corta o floja. Di la frase una vez más.'],
+    ['es', 422, 'too-short', 'La grabación era demasiado corta o débil. Di la frase una vez más.'],
     ['fr', 400, 'bad-name', 'Prénom invalide — seuls les lettres, chiffres, _ et - sont autorisés.'],
     ['it', 502, 'no-embedding', 'Il riconoscimento vocale non è raggiungibile al momento. Riprova più tardi.'],
   ] as const)('%s: HTTP %i → übersetzte Zeile (%s)', async (lang, status, kind, expected) => {

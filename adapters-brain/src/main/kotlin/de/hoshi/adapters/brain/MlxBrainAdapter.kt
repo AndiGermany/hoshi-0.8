@@ -11,6 +11,7 @@ import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.time.Duration
+import java.util.concurrent.TimeoutException
 
 /**
  * Brain-Adapter für den aktiven e4b-Brain (`hoshi-llm-optiq/server_e4b.py`,
@@ -65,7 +66,35 @@ class MlxBrainAdapter(
     baseUrl: String,
     private val maxTokens: Int = 512,
     private val temperature: Double = 0.6,
-    private val chatTimeoutSeconds: Long = 30,
+    /**
+     * Upper bound on ONE /v1/chat stream. Exceeding it ends the turn in the warm
+     * never-silent phrase, so the budget must sit ABOVE the measured distribution
+     * of SUCCESSFUL answers: p99 15.8s / p99.5 16.5s over 445 brain turns
+     * (01.07.–14.08.), highest non-outlier 16.6s
+     * (vault/knowledge/MESSUNG-latenz-diary-2026-08-13.md).
+     */
+    private val chatTimeoutSeconds: Long = 20,
+    /**
+     * **Gesamt-Budget über ALLE Versuche** (Original + Empty-Retry) — die Wanduhr,
+     * die [chatTimeoutSeconds] NICHT stellt. Zwei Gründe, warum der Pro-Versuch-Wert
+     * allein den Turn nicht bindet:
+     *
+     *  1. `Flux.timeout` ist ein INAKTIVITÄTS-Timeout: er misst die Lücke ZWISCHEN
+     *     zwei Deltas, nicht die Gesamtdauer. Ein Brain, das alle 19 s ein Zeichen
+     *     tröpfelt, läuft damit unbegrenzt weiter.
+     *  2. Der Empty-Retry hängt einen ZWEITEN vollen Versuch an (+200 ms
+     *     `delaySubscription`) — schlimmster Fall vorher: 20 s + 0,2 s + 20 s = 40,2 s,
+     *     und das nur, wenn der Brain gar nichts tröpfelt.
+     *
+     * 25 s liegt bewusst ÜBER dem p99.5 einer erfolgreichen Antwort (16,5 s über 445
+     * Brain-Turns, s. [chatTimeoutSeconds]) plus Retry-Anlauf, aber weit UNTER der
+     * Turn-Deadline von [de.hoshi.core.pipeline.TurnOrchestrator] (60 s) — der Brain
+     * reisst also zuerst, damit der Turn noch warm zu Ende gesprochen werden kann.
+     * Bei Riss fliegt eine [java.util.concurrent.TimeoutException]; die erkennt der
+     * Orchestrator über `isTimeout` und antwortet mit der warmen Fehler-Phrase
+     * (never-silent) statt still zu sterben.
+     */
+    private val totalTimeoutSeconds: Long = 25,
     private val mapper: ObjectMapper = jacksonObjectMapper(),
     // FLAG-GATE für die Sampling-Felder (D1). `false` (Default) ⇒ min_p/presence_penalty
     // werden NIE gesendet, egal was konfiguriert ist — Body bleibt byte-identisch.
@@ -168,13 +197,15 @@ class MlxBrainAdapter(
         // First-Wins-Guard fürs TTFT. Spannt über BEIDE Versuche (Original + Retry) —
         // das erste nicht-leere Delta gewinnt, egal aus welchem Versuch.
         val prefillReported = java.util.concurrent.atomic.AtomicBoolean(false)
-        val stream = callBrain(body, prefillReported, onPrefill)
-            .switchIfEmpty(
-                Flux.defer {
-                    log.warn("[mlx-brain] Stream lieferte 0 Zeichen — Retry 1x (vermutl. 16GB-Memory-Druck)")
-                    callBrain(body, prefillReported, onPrefill).delaySubscription(Duration.ofMillis(200))
-                },
-            )
+        val stream = withTotalBudget(
+            callBrain(body, prefillReported, onPrefill)
+                .switchIfEmpty(
+                    Flux.defer {
+                        log.warn("[mlx-brain] Stream lieferte 0 Zeichen — Retry 1x (vermutl. 16GB-Memory-Druck)")
+                        callBrain(body, prefillReported, onPrefill).delaySubscription(Duration.ofMillis(200))
+                    },
+                ),
+        )
         if (!entropyEnabled) return stream // Flag OFF ⇒ exakt der heutige Stream (keine Messung)
         // Antwort-Entropie (S1, NUR messen+loggen): laufende Summe + Zähler statt
         // Liste (kein Speicher-Wachstum, egal wie lang der Turn wird). Am Stream-
@@ -200,6 +231,44 @@ class MlxBrainAdapter(
                     )
                 }
             }
+    }
+
+    /**
+     * Legt die harte Gesamt-Wanduhr [totalTimeoutSeconds] über den bereits
+     * zusammengesetzten Stream (Original + Empty-Retry) — s. [totalTimeoutSeconds].
+     *
+     * **Warum nicht `.timeout(Duration)`:** das wäre wieder ein Inaktivitäts-Timeout
+     * und damit dieselbe Lücke, die dieser Fix schliesst. Stattdessen begrenzt ein
+     * Companion-`Mono.delay` den Stream (`takeUntilOther` ⇒ sauberes Cancel des
+     * laufenden HTTP-Streams) und ein nachgeschalteter Stolperdraht macht daraus
+     * die [TimeoutException] — takeUntilOther allein würde nur STILL abschneiden,
+     * und ein still abgeschnittener Turn wäre genau der lautlose Tod, den
+     * never-silent verbietet.
+     *
+     * Der Draht ist ausschliesslich beim Riss aktiv: ohne Riss ist er ein leerer
+     * `concatWith` ⇒ Deltas, Reihenfolge und Abschluss bleiben byte-identisch.
+     * `Mono.delay` läuft auf `Schedulers.parallel()`, in Tests also auf dem
+     * [reactor.test.scheduler.VirtualTimeScheduler] (StepVerifier.withVirtualTime).
+     */
+    private fun withTotalBudget(stream: Flux<LlmDelta>): Flux<LlmDelta> {
+        val budget = Duration.ofSeconds(totalTimeoutSeconds)
+        val ripped = java.util.concurrent.atomic.AtomicBoolean(false)
+        return stream
+            .takeUntilOther(
+                Mono.delay(budget).doOnNext {
+                    ripped.set(true)
+                    log.warn("[mlx-brain] Gesamt-Budget {}s gerissen — Turn faellt auf die warme Fehler-Phrase", totalTimeoutSeconds)
+                },
+            )
+            .concatWith(
+                Flux.defer {
+                    if (ripped.get()) {
+                        Flux.error(TimeoutException("brain total budget ${totalTimeoutSeconds}s exceeded"))
+                    } else {
+                        Flux.empty()
+                    }
+                },
+            )
     }
 
     /** Ein einzelner /v1/chat-Aufruf gegen den Sidecar → Flux der Text-Deltas. */

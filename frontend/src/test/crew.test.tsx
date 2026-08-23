@@ -73,7 +73,7 @@ describe('TopNav — 星-Marke leise links im Brand (Render-Vertrag)', () => {
     // rendert (inkl. "dev"-Fallback, den Vitest zieht: vitest.config.ts ist
     // bewusst eine eigene Config und bekommt vite.config.ts' `define` NICHT
     // mit — s. Kommentar bei resolveHoshiVersion in TopNav.tsx).
-    expect(header).toContain(`${resolveHoshiVersion()} · Suisei`);
+    expect(header).toContain(`${resolveHoshiVersion()} · Nagori`);
   });
 });
 

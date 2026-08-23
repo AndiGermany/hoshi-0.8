@@ -7,14 +7,11 @@ import de.hoshi.adapters.knowledge.BridgeSearchClient
 import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.RouteCategory
 import de.hoshi.core.dto.RouteDecision
-import de.hoshi.core.dto.RouteProvider
 import de.hoshi.core.pipeline.EntityContextPort
 import de.hoshi.core.pipeline.EpisodicRecallPort
 import de.hoshi.core.pipeline.ExistenceClaimSignal
 import de.hoshi.core.pipeline.GroundingPort
 import de.hoshi.core.pipeline.HonestySignal
-import de.hoshi.core.pipeline.IntentClassifier
-import de.hoshi.core.pipeline.KeywordRouter
 import de.hoshi.core.pipeline.NamedEntitySignal
 import de.hoshi.core.pipeline.RouteRefiner
 import reactor.core.publisher.Mono
@@ -22,37 +19,33 @@ import reactor.core.publisher.Mono
 /**
  * **M2c-Stub-Adapter** — ehrlich benannte Minimal-Implementierungen der noch
  * offenen Ports, damit der [de.hoshi.core.pipeline.TurnOrchestrator] HEUTE
- * end-to-end mit dem ECHTEN Brain läuft. Die reichen Adapter ersetzen diese in
- * späteren Milestones (M4: Wiki-Grounding, Entity-/Episodic-Memory, echter
- * Embedding-/LLM-Refiner).
+ * end-to-end mit dem ECHTEN Brain läuft. Die reichen Adapter (Wiki-Grounding,
+ * Entity-/Episodic-Memory, Embedding-Refiner) existieren inzwischen bereits —
+ * s. [de.hoshi.web.PipelineConfig] — sind aber alle flag-gated default OFF, darum
+ * bleiben diese Stubs der AKTIVE Default-Pfad, kein Zukunftsversprechen. Ein
+ * echter LLM-Refiner wurde nie gebaut: `llmRefiner` bleibt unconditional
+ * [PassthroughRefinerStubAdapter]. Der frühere Keyword-Router-Stub ist seit 0.9
+ * gelöscht — der ECHTE Router ([de.hoshi.web.routing.KeywordRouterImpl]) läuft
+ * seit M4 produktiv.
  */
 
 /**
- * Einfache Keyword-Heuristik als [KeywordRouter] (Hop 1). Nutzt den portierten
- * [IntentClassifier]: Smart-Home-Kandidat → SMART_HOME, sonst SMALLTALK. Immer
- * LOCAL-Provider (kein Cloud in 0.8). M4 ersetzt das durch den vollen Router.
- */
-class KeywordRouterStubAdapter(
-    private val intent: IntentClassifier = IntentClassifier(),
-) : KeywordRouter {
-    override fun decide(text: String): RouteDecision {
-        val category =
-            if (intent.isSmartHomeCandidate(text)) RouteCategory.SMART_HOME
-            else RouteCategory.SMALLTALK
-        return RouteDecision(category, RouteProvider.LOCAL, "keyword-stub")
-    }
-}
-
-/**
- * Passthrough-[RouteRefiner]: reicht die Hop-1-Decision unverändert zurück (kein
- * Embedding-/LLM-Refine in 0.8). M4 ersetzt das durch Embedding-/LLM-Refiner.
+ * Passthrough-[RouteRefiner]: reicht die Hop-1-Decision unverändert zurück. Bedient
+ * IMMER den `llmRefiner` (kein echter LLM-Refiner existiert) und — bei
+ * `HOSHI_EMBEDDING_ROUTER=false` (Default) — den `embeddingRefiner`; der echte
+ * [de.hoshi.adapters.routing.EmbeddingRouterRefiner] existiert zwar bereits
+ * (flag-gated), bleibt aber laut [de.hoshi.web.PipelineConfig.routingPolicy]-KDoc
+ * „dormant by design", weil [de.hoshi.web.routing.KeywordRouterImpl] nie AMBIG liefert.
  */
 class PassthroughRefinerStubAdapter : RouteRefiner {
     override fun refine(text: String, fallback: RouteDecision): Mono<RouteDecision> = Mono.just(fallback)
 }
 
 /**
- * [EntityContextPort]-Stub: kein Gedächtnis-Block (Memory-Infra kommt in M4).
+ * [EntityContextPort]-Stub: kein Gedächtnis-Block. Der echte
+ * [de.hoshi.adapters.memory.EntityMemoryAdapter] existiert bereits (flag-gated
+ * `HOSHI_MEMORY_ENABLED`, default OFF) — dieser Stub ist der Default-Pfad, kein
+ * Zukunftsversprechen.
  * [language] ist gegenstandslos — ein fehlender Block hat keine Sprache.
  */
 class EntityContextStubAdapter : EntityContextPort {
@@ -60,7 +53,10 @@ class EntityContextStubAdapter : EntityContextPort {
 }
 
 /**
- * [GroundingPort]-Stub: kein Wiki-Treffer (Wiki-RAG-Bridge kommt in M4).
+ * [GroundingPort]-Stub: kein Wiki-Treffer. Der echte
+ * [de.hoshi.adapters.knowledge.Fts5GroundingAdapter] existiert bereits (flag-gated
+ * `HOSHI_GROUNDING_ENABLED`, default OFF) — dieser Stub ist der Default-Pfad, kein
+ * Zukunftsversprechen.
  * [language] ist gegenstandslos — ein leerer Block hat keine Sprache.
  */
 class GroundingStubAdapter : GroundingPort {

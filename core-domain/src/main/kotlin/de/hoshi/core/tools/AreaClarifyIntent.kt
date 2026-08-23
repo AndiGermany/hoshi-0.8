@@ -35,6 +35,13 @@ object AreaClarifyIntent {
     /** Datenschlüssel: die fertige, sprechbare Rückfrage-Phrase. */
     const val PHRASE = "phrase"
 
+    // Data keys of the intent behind the ask — the classifier states what it
+    // WOULD have done ("light"/"turn_on"), the orchestrator parks it as a
+    // PendingAreaClarify so the next turn's room answer can complete it.
+    // Absent keys ⇒ ask-only (old callers stay byte-identical, nothing parked).
+    const val PENDING_DOMAIN = "pending_domain"
+    const val PENDING_SERVICE = "pending_service"
+
     /** Höchstens so viele Raumnamen werden in der Rückfrage genannt (nicht die ganze Liste vorlesen). */
     const val MAX_ROOMS_NAMED = 4
 

@@ -76,13 +76,18 @@ HOST="${HOSHI_BRAIN_HOST:-0.0.0.0}"
 
 # Cold-Fix/KV-Freeze-Feintuning: EXAKT dieselben Env-Namen wie server.py sie
 # selbst liest (os.environ.get("HOSHI_E4B_...")) — NICHT umbenennen, sonst
-# verstummen die Features stillschweigend. Defaults identisch zum 0.5-Original
-# (hoshi-e4b-run.sh / hoshi-e4b-watchdog.sh): Touch-Loop an (Idle-Cold-Gegenmittel,
-# Iter-129d-Experiment), wired aus, Persona-KV-Freeze aus (Iter-137: 2 von 11
-# reproduzierbare Drifts im A/B, defensiv OFF).
+# verstummen die Features stillschweigend. Touch-Loop an (Idle-Cold-Gegenmittel,
+# Iter-129d-Experiment), wired aus.
+# Persona-KV-Freeze AN seit 22.08.2026 (Andi: „KV-Freeze bitte gleich
+# aktivieren"): ×27 warm-TTFT (Iter-129e, 9329→349 ms). Historie ehrlich:
+# Iter-137 sah 2/11 reproduzierbare Drifts (nicht bit-identisch) — bewusster
+# Risiko-Call der Experiment-Phase; Kohärenz-A/B-Werkzeug liegt bereit.
+# Rollback = diese Zeile auf 0 (oder Env beim Start). ACHTUNG: der 0.5-Ära-
+# e4b-watchdog (launchd) kennt dieses Default NICHT — restartet ER das Brain,
+# fällt der Freeze still auf OFF zurück (Watchdog-Umbau = 0.9.1, Andi 22.08.).
 export HOSHI_E4B_TOUCH_LOOP_S="${HOSHI_E4B_TOUCH_LOOP_S:-45}"
 export HOSHI_E4B_WIRED_MB="${HOSHI_E4B_WIRED_MB:-0}"
-export HOSHI_E4B_PERSONA_KV_FREEZE="${HOSHI_E4B_PERSONA_KV_FREEZE:-0}"
+export HOSHI_E4B_PERSONA_KV_FREEZE="${HOSHI_E4B_PERSONA_KV_FREEZE:-1}"
 
 # ── Trust-but-verify: das venv-Python MUSS die MLX-LLM-Runtime sehen ────────
 # server.py nutzt mlx_lm (+ mlx.core); wir pruefen mlx_lm, akzeptieren
@@ -143,7 +148,7 @@ PY
 }
 if ! model_fully_cached; then
     fail "Modell '$MODEL' ist NICHT vollstaendig im HF-Cache (fehlende safetensors / nur .incomplete-Reste / kaputte refs/main). NICHT starten — ein toter Sidecar loest stille Fallbacks aus. Erst sauber laden:
-    '$VENV_PY' -c \"from huggingface_hub import snapshot_download as d; d('$MODEL')\""
+    '$VENV_PY' -c \"from huggingface_hub import snapshot_download as d; d('$MODEL', revision='<REVISION aus refs/main einsetzen!>')\""
 fi
 
 # ── Modell-Revision PINNEN (Lehre aus Hoshi_0.5-Incident 2026-07-08) ─────────

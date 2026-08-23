@@ -55,6 +55,7 @@ import de.hoshi.core.pipeline.EntityContextPort
 import de.hoshi.core.pipeline.EntityMemoryWriter
 import de.hoshi.core.pipeline.EpisodicRecallPort
 import de.hoshi.core.pipeline.DailyNoteFastpath
+import de.hoshi.core.pipeline.CurrentAffairsFastpath
 import de.hoshi.core.pipeline.ProbeFastpath
 import de.hoshi.core.pipeline.WorkshopNoteFastpath
 import de.hoshi.core.pipeline.EscalationMode
@@ -277,6 +278,16 @@ class PipelineConfig {
     @Bean
     fun brainPort(
         @Value("\${hoshi.brain.base-url:http://localhost:8041}") baseUrl: String,
+        // Tail budget of one /v1/chat stream (s. MlxBrainAdapter.chatTimeoutSeconds).
+        // Env knob because the wedge forensics needs to walk this number without a
+        // rebuild; the default IS the data-backed value, so an unset env changes nothing.
+        @Value("\${HOSHI_BRAIN_CHAT_TIMEOUT_SECONDS:20}") chatTimeoutSeconds: Long,
+        // Total budget over BOTH attempts (original + empty-retry), s.
+        // MlxBrainAdapter.totalTimeoutSeconds. chatTimeoutSeconds alone is an
+        // INACTIVITY timeout per attempt — it never bounds a whole turn. Same env-knob
+        // reasoning as above; the default is the reasoned value, so an unset env
+        // changes nothing.
+        @Value("\${HOSHI_BRAIN_TOTAL_TIMEOUT_SECONDS:25}") brainTotalTimeoutSeconds: Long,
         @Value("\${HOSHI_BRAIN_SAMPLING_ENABLED:false}") samplingEnabled: Boolean,
         @Value("\${hoshi.brain.min-p:0.08}") minP: Double,
         @Value("\${hoshi.brain.presence-penalty:1.1}") presencePenalty: Double,
@@ -300,6 +311,8 @@ class PipelineConfig {
         @Value("\${hoshi.sidecar.token:\${HOSHI_SIDECAR_TOKEN:}}") sidecarToken: String,
     ): BrainPort = MlxBrainAdapter(
         baseUrl = baseUrl,
+        chatTimeoutSeconds = chatTimeoutSeconds,
+        totalTimeoutSeconds = brainTotalTimeoutSeconds,
         samplingEnabled = samplingEnabled,
         minP = minP,
         presencePenalty = presencePenalty,
@@ -805,10 +818,20 @@ class PipelineConfig {
     fun toolPort(
         @Value("\${HOSHI_HA_ENABLED:false}") haEnabled: Boolean,
         @Value("\${HOSHI_HA_BASE_URL:http://homeassistant.local:8123}") baseUrl: String,
+        // Spoken room labels: same source as the classifier/clarify path. Flag OFF (default)
+        // ⇒ AreaCatalogPort.STATIC ⇒ byte-neutral (its labels ARE the ToolAreas map).
+        @Value("\${HOSHI_AREAS_DYNAMIC_ENABLED:false}") areasDynamicEnabled: Boolean,
     ): ToolPort {
         val token = resolveHaToken()
         return if (haEnabled && !token.isNullOrBlank()) {
-            HaToolPort(baseUrl = baseUrl, token = token)
+            // No HOSHI_TOOLS_ENABLED check here: HA on + token IS the executor's own gate,
+            // and without tools no HA call ever reaches this port. Own adapter instance
+            // (own 15-min TTL cache) — the classifier's catalog is a local of intentClassifier,
+            // not a bean; promoting it to one would make both share a single cache.
+            val areaCatalog =
+                if (areasDynamicEnabled) HaAreaCatalogAdapter(baseUrl = baseUrl, token = token)
+                else AreaCatalogPort.STATIC
+            HaToolPort(baseUrl = baseUrl, token = token, areaCatalog = areaCatalog)
         } else {
             ToolPort.HONEST_PLACEHOLDER
         }
@@ -1045,7 +1068,7 @@ class PipelineConfig {
         store = scheduledItemPort,
         fired = firedItemsStore,
         enabled = fireEnabled,
-        onFired = { id, label, originSatelliteId -> timerRingDownlinkService.onFired(id, label, originSatelliteId) },
+        onFired = timerRingDownlinkService::onFired,
     ).also { it.start() }
 
     /**
@@ -1651,6 +1674,7 @@ class PipelineConfig {
         dailyNoteFastpath: DailyNoteFastpath,
         workshopNoteFastpath: WorkshopNoteFastpath,
         probeFastpath: ProbeFastpath,
+        currentAffairsFastpath: CurrentAffairsFastpath,
         // Laufzeit-Modell-Wahl (Andi-Video-Auftrag, LookupModelConfig): der SCHNELL-
         // Lookup läuft über den [DelegatingEscalationPort] statt direkt über die
         // [escalationPort]-Bean — `PUT /api/v1/settings/lookup-model` schaltet das
@@ -1707,6 +1731,11 @@ class PipelineConfig {
         // Gedankenexperiment und nimmt es aus der Wissens-/Grounding-Maschinerie raus.
         // DISABLED ⇒ byte-neutral (s. playfulModeDetector-Bean).
         playfulModeDetector: PlayfulModeDetector,
+        // Last wall clock of a turn (s. TurnOrchestrator.TURN_DEADLINE): every single
+        // stage has its own budget, but they ADD UP and none of them measures the turn
+        // as a whole. Env knob for the same reason as the brain timeouts — the wedge
+        // forensics wants to walk this number from the systemd unit without a rebuild.
+        @Value("\${HOSHI_TURN_DEADLINE_SECONDS:60}") turnDeadlineSeconds: Long,
     ): TurnOrchestrator = TurnOrchestrator(
         routing = routingPolicy,
         honesty = honestyGate,
@@ -1742,6 +1771,8 @@ class PipelineConfig {
         workshopNote = workshopNoteFastpath,
         // Probe-Fastpath (Golden #20; Testtag-Bündel 08.07).
         probe = probeFastpath,
+        // Lagebild-Briefing (F5, brain-frei; Port entscheidet — NONE antwortet ehrlich leer).
+        currentAffairs = currentAffairsFastpath,
         // Extended Think (S2, default OFF ⇒ NONE/AUS ⇒ byte-neutral).
         escalation = escalationPort,
         escalationDiagnostics = escalationDiagnosticsPort,
@@ -1782,6 +1813,7 @@ class PipelineConfig {
         },
         // Spiel-Register (Vorfall „Kuh mit Hose", 2026-07-25) — s. playfulModeDetector.
         playfulMode = playfulModeDetector,
+        turnDeadline = java.time.Duration.ofSeconds(turnDeadlineSeconds),
     )
 
     /**

@@ -50,12 +50,75 @@ export const de: UiStrings = {
       noteEmpty: 'Ehrlich leer — nichts erfunden.',
       noteWithData: 'Echte Zahlen aus deinem heutigen Verlauf.',
     },
+    stage: {
+      pagesAria: 'Kachel-Seiten',
+      page: (index, total) => `Seite ${index} von ${total}`,
+      sizerAria: (widget) => `Größe für ${widget}`,
+      sizeNames: { S: 'Klein', M: 'Mittel', L: 'Groß', XL: 'Sehr groß' },
+      sizeLarger: 'Größer',
+      sizeSmaller: 'Kleiner',
+      sizerEffective: (name) => `Auf diesem Bildschirm: ${name}`,
+      edit: {
+        title: 'Widgets anordnen',
+        tileAria: (widget, index, total) => `${widget} — Platz ${index} von ${total}`,
+        tileRole: 'verschiebbares Widget',
+        keyHint: 'Pfeiltasten tauschen mit der Nachbarkachel · Bild ↑/↓ wechselt die Seite · Eingabe wählt die Größe',
+        moved: (widget, index, total, page, pages) => `${widget} auf Platz ${index} von ${total}, Seite ${page} von ${pages}`,
+      },
+    },
+    uhr: {
+      name: 'Uhr',
+      sun: {
+        aria: (rise, set, phase) =>
+          `Sonnenverlauf, Aufgang ${rise}, Untergang ${set}, ${phase}`,
+        dayPhase: 'die Sonne steht am Himmel',
+        moon: {
+          aria: (phase, percent, rise) =>
+            `Mondphase, ${phase}, ${percent} beleuchtet, Sonnenaufgang ${rise}`,
+          phases: {
+            new: 'Neumond',
+            waxingCrescent: 'Zunehmende Sichel',
+            firstQuarter: 'Erstes Viertel',
+            waxingGibbous: 'Zunehmender Mond',
+            full: 'Vollmond',
+            waningGibbous: 'Abnehmender Mond',
+            lastQuarter: 'Letztes Viertel',
+            waningCrescent: 'Abnehmende Sichel',
+          },
+        },
+      },
+    },
+    wecker: {
+      name: 'Wecker',
+    },
     laeuft: {
       name: 'Läuft',
     },
     einkauf: {
       name: 'Einkauf',
       more: (count) => `+${count} weitere`,
+    },
+    currentAffairs: {
+      name: 'Nachrichten',
+      meta: (source, relative) => `${source} · ${relative}`,
+      stand: (clock) => `Stand ${clock}`,
+      staleHint: (relative) => `aktualisiert ${relative}`,
+      more: (count) => `+${count} weitere`,
+      less: 'weniger',
+      restNotShown: (count) => `+${count} weitere, hier nicht gezeigt`,
+      openSource: 'Quelle öffnen',
+      openAria: (title) => `${title} — Quelle in neuem Tab öffnen`,
+      allSources: 'Alle Quellen',
+      sourceFilterAria: 'Nach Quelle filtern',
+      countInfo: (shown, total) =>
+        shown === total
+          ? `${total} Meldung${total === 1 ? '' : 'en'}`
+          : `${shown} von ${total} Meldungen`,
+    },
+    maximieren: {
+      open: 'Maximieren',
+      openAria: (name) => `${name} maximieren`,
+      close: 'Schließen',
     },
     wetter: {
       name: 'Wetter',
@@ -69,6 +132,31 @@ export const de: UiStrings = {
       rainFrom: (clock) => `Regen ab ~${clock}`,
       sunUntil: (clock) => `hell bis ${clock}`,
       sunFrom: (clock) => `hell ab ${clock}`,
+      sections: {
+        now: 'Jetzt',
+        span: 'Spanne',
+        precip: 'Niederschlag',
+        tomorrow: 'Morgen',
+        hourly: 'Stundenverlauf',
+        days: 'Nächste Tage',
+        sun: 'Sonne',
+        sunrise: 'Aufgang',
+        sunset: 'Untergang',
+        daylight: 'Tageslänge',
+        daylightValue: ({ h, min }) => `${h} h ${min} min`,
+      },
+      hourly: {
+        aria: (hours, min, max) =>
+          `Stunden-Verlauf, nächste ${hours} Stunde${hours === 1 ? '' : 'n'}, ${min} bis ${max}`,
+        ariaRain: (percent) => `Regen bis ${percent} %`,
+        ariaDry: 'kein Regen erwartet',
+        barTitle: (percent) => `${percent} % Regen`,
+      },
+      outlook: {
+        aria: (days) => `Ausblick, ${days} Tag${days === 1 ? '' : 'e'}`,
+        title: (day, span, cond) => `${day}, ${span}, ${cond}`,
+        rainChance: (percent) => ` · ${percent} % Regen`,
+      },
     },
     status: {
       online: 'online',
@@ -76,6 +164,91 @@ export const de: UiStrings = {
       checking: 'wird geprüft',
       voiceCloud: 'Stimme: Cloud',
       voiceLocal: 'Stimme: lokal',
+    },
+    homeTiles: {
+      age: {
+        justNow: 'gerade eben',
+        minutesAgo: (n) => `vor ${n} Min.`,
+        hoursAgo: (n) => `vor ${n} Std.`,
+        daysAgo: (n) => `vor ${n} Tg.`,
+      },
+      unavailableSince: (relative) => `Nicht erreichbar — zuletzt gesehen ${relative}`,
+      vacuum: {
+        name: 'Sauger',
+        status: {
+          cleaning: 'Saugt gerade',
+          // Andi 21.08.: „Das ist Lärm, meistens ist er einfach im
+          // Energiesparmodus." „Schläft" dramatisierte den Normalzustand zu
+          // einem Ereignis; „Bereit in der Ladestation" ist sein eigenes Wort
+          // und sagt zusätzlich das Nützliche: er kann jetzt losfahren.
+          docked: 'Bereit in der Ladestation',
+          returning: 'Fährt zurück',
+          paused: 'Pausiert',
+          idle: 'Bereit',
+          error: 'Braucht Hilfe',
+        },
+        hybridStatus: {
+          cleaning: 'Saugt wohl gerade (laut Sensor)',
+          charging: 'Lädt wohl in der Station (laut Sensor)',
+        },
+        withRoom: (statusText, room) => `${statusText} · in ${room}`,
+        withBattery: (statusText, percent) => `${statusText} · Akku ${percent} %`,
+        progress: (percent) => `Fortschritt ${percent} %`,
+        battery: (percent) => `Akku ${percent} %`,
+        vacuumErrorDetail: (value) => `Sauger-Fehler: ${value}`,
+        dockErrorDetail: (value) => `Dock-Fehler: ${value}`,
+        unreachable: 'Sauger grad nicht erreichbar — hier steht nichts Erfundenes.',
+        lastKnownLine: (relative, statusText) => `Zuletzt gesehen ${relative}: ${statusText}`,
+        cacheSince: (clock) => `Stand ${clock}`,
+        lastCleanToday: (clock) => `zuletzt fertig ${clock}`,
+        lastCleanAgo: (relative) => `zuletzt fertig ${relative}`,
+        lastCleanDuration: (span) => `Dauer ${span}`,
+        duration: {
+          hoursMinutes: (hours, minutes) => `${hours} h ${minutes} min`,
+          minutes: (minutes) => `${minutes} min`,
+        },
+        actions: {
+          start: 'Start',
+          returnToBase: 'Zur Basis',
+          sending: 'wird übergeben…',
+          // Sagt genau so viel, wie eine 200 hergibt — und keinen Halbsatz mehr.
+          accepted: '✓ Angenommen — Home Assistant hat den Auftrag.',
+          failed: 'Nicht übergeben.',
+          networkError: 'Nicht übergeben — Hoshi hat das Backend gerade nicht erreicht.',
+        },
+        maintenance: {
+          summary: 'Wartung',
+          moppDrying: 'Mopp trocknet',
+          mainBrush: (value) => `Hauptbürste: ${value}`,
+          sideBrush: (value) => `Seitenbürste: ${value}`,
+          filter: (value) => `Filter: ${value}`,
+          sensor: (value) => `Sensoren: ${value}`,
+          moppAttached: 'Mopp dran',
+          moppNotAttached: 'Mopp nicht dran',
+          waterboxAttached: 'Wasserkasten dran',
+          waterboxNotAttached: 'Wasserkasten nicht dran',
+          remaining: {
+            dueNow: 'jetzt fällig',
+            minutes: (n) => `noch ~${n} min`,
+            hours: (n) => `noch ~${n} h`,
+            days: (n) => `noch ~${n} Tage`,
+          },
+          overdue: {
+            minutes: (n) => `überfällig seit ~${n} min`,
+            hours: (n) => `überfällig seit ~${n} h`,
+            days: (n) => `überfällig seit ~${n} Tage`,
+          },
+        },
+      },
+      climate: {
+        name: 'Klima',
+        roomLine: (room, current, target) => `${room} ${current} → ${target}`,
+        heating: 'heizt',
+        roomUnreachable: (room) => `${room} grad nicht erreichbar.`,
+        lastKnownRoomLine: (room, current, target, relative) => `${room} ${current} → ${target} · zuletzt ${relative}`,
+        restSummary: (count) => `+${count} weitere Räume`,
+        unreachable: 'Klima grad nicht erreichbar — hier steht nichts Erfundenes.',
+      },
     },
   },
 
@@ -286,6 +459,18 @@ export const de: UiStrings = {
     deleteRecordingAria: (index) => `Aufnahme ${index} löschen`,
     deleteRecordingLastHint: 'Das ist die letzte Aufnahme — lösche stattdessen das ganze Profil.',
     deleteRecordingFailed: 'Löschen der Aufnahme fehlgeschlagen — sie ist noch da. Bitte erneut versuchen.',
+    nameNext: 'Weiter',
+    closeAria: 'Anlernen schließen',
+    checkTooShort: 'Das war sehr kurz — sprich bitte den ganzen Satz, dann nochmal.',
+    checkTooQuiet: 'Da kam fast nichts an — sprich bitte lauter oder näher ans Mikrofon.',
+    cancelConfirmTitle: 'Anlernen wirklich abbrechen?',
+    cancelConfirmFresh: 'Die bisherigen Sätze dieser Sitzung werden verworfen — es bleibt kein halbes Profil zurück.',
+    cancelConfirmAppend: 'Deine früheren Sitzungen bleiben erhalten; nur diese eine bleibt unvollständig.',
+    cancelConfirmYes: 'Ja, abbrechen',
+    cancelConfirmNo: 'Doch weitermachen',
+    recordingsTitle: 'Deine Aufnahmen',
+    recordingsOpen: 'Aufnahmen',
+    recordingsOpenAria: (name) => `Aufnahmen von ${name} ansehen`,
     enrollErrors: {
       auth: '401 — Token fehlt oder ist ungültig (Auth-Wand).',
       badName: 'Name ungültig — erlaubt sind Buchstaben, Ziffern, _ und -.',
@@ -392,6 +577,7 @@ export const de: UiStrings = {
   rooms: {
     sketchRoom: 'Raum', sketchAria: 'Skizze: Hoshi im Zentrum, noch leere Raum-Platzhalter ringsum', pickerAria: (name) => `Raum für ${name} wählen`,
     assigning: 'wird zugeordnet…', chooseRoom: 'Raum wählen…', deviceCount: (count) => `${count} Gerät${count === 1 ? '' : 'e'}`,
+    deviceCountOfTotal: (visible, total) => `${visible} von ${total} Gerät${total === 1 ? '' : 'en'}`,
     roomEmpty: 'Noch keine Geräte in diesem Raum.', allAssigned: 'Aktuell hat jedes gemeldete Gerät einen Raum in Home Assistant.',
     unassignedEditable: 'Diese Geräte haben in Home Assistant noch keinen Raum. Wähle rechts einen Raum — gespeichert wird direkt in Home Assistant, dort jederzeit sichtbar und umkehrbar.',
     unassignedReadOnly: 'Diese Geräte haben in Home Assistant noch keinen Raum. Zuordnen geht bislang nur direkt in Home Assistant — Hoshi zeigt die Lücke hier nur ehrlich an.',
@@ -411,6 +597,9 @@ export const de: UiStrings = {
     inboxHintEditable: 'Diese Geräte haben in Home Assistant noch keinen Raum. Der Raum-Vorschlag ist schon vorbelegt — kurz prüfen und „Bestätigen" tippen; gespeichert wird direkt in Home Assistant, dort jederzeit sichtbar und umkehrbar.',
     inboxHintReadOnly: 'Diese Geräte haben in Home Assistant noch keinen Raum. Zuordnen geht bislang nur direkt in Home Assistant — Hoshi zeigt die Lücke hier nur ehrlich an.',
     roomShowMore: (hiddenCount) => `die übrigen ${hiddenCount} zeigen`, roomShowLess: 'Einklappen',
+    silentRooms: (count) => `Stille Räume (${count})`,
+    inboxRestSummary: (count) => `${count} ohne Raum-Bezug — System, Diagnose, Mobiles. Hoshi braucht für sie keinen Raum.`,
+    sortHint: 'Sortiert nach Geräteanzahl — eine Sortierung nach echter Nutzung fehlt noch die Datenspur.',
   },
 
   overview: {
@@ -478,6 +667,8 @@ export const de: UiStrings = {
     categoryNavAria: 'Einstellungs-Kategorien',
     themeLabel: 'Farbthema',
     themeGroupAria: 'Farbthema',
+    themeActiveLabel: 'Aktuell',
+    themeLoading: 'Themen werden geladen …',
     themes: {
       aoi: { label: 'Aoi', hint: 'Morgenblau auf Tinte (青) — der Standard' },
       yoru: { label: 'Yoru', hint: 'Warmes Laternenlicht (夜)' },
@@ -513,9 +704,21 @@ export const de: UiStrings = {
         title: 'Folgt dem Tag',
         note: 'Keine Farbe, sondern eine Regel: Hoshi wechselt das Thema mit der Uhrzeit dieses Geräts.',
       },
-      tageszeiten: {
-        title: 'Tageszeiten',
-        note: 'Diese fünf wechseln normalerweise von selbst. Wählst du eines, bleibt es stehen.',
+      morgen: {
+        title: 'Morgen',
+        note: 'Nebel, Tatami, erstes Licht — die Stunden vor dem richtigen Tag, von hell hinunter ins Morgengrauen.',
+      },
+      tag: {
+        title: 'Tag',
+        note: 'Volles Licht: Blätterschatten, Ahorn, Sommerfeld, die große Welle — und am Ende das tiefe Blau.',
+      },
+      'abend-nacht': {
+        title: 'Abend & Nacht',
+        note: 'Feuerwerk, Regen auf Asphalt, warmes Laternenlicht — ganz unten die tiefste Nacht.',
+      },
+      klassiker: {
+        title: 'Klassiker',
+        note: 'Im Ruhestand: dieses Thema steht nicht mehr zur Wahl — Sora zeigt es weiter zu seiner Stunde.',
       },
       stimmung: {
         title: 'Eigene Stimmung',
@@ -533,12 +736,23 @@ export const de: UiStrings = {
       amayadori: 'Regenpause',
       sora: 'Himmel',
     },
+    nagori: {
+      label: 'Nagori',
+      gloss: 'was zurückbleibt',
+      hint: 'Blaue Stunde — die Leuchtspur verglüht nicht (名残)',
+      note: '名残 — ein Vorbote von 0.9',
+    },
     themeGlossSuffix: (gloss) => ` · ${gloss}`,
     themeSoraNow: (themeName) => `folgt dem Tag · jetzt ${themeName}`,
     themeArcSeparator: ' › ',
     themeArcAria: 'Tagesbogen von Sora',
     themePinnedNote: (themeName) => `${themeName} steht gerade fest — die Automatik pausiert.`,
     themeOptionAria: (groupTitle, themeName) => `${groupTitle}: ${themeName}`,
+    themeGalleryOpen: 'Alle Designs ansehen',
+    themeGalleryTitle: 'Designs',
+    themeGalleryCloseAria: 'Design-Galerie schließen',
+    themeGalleryDone: 'Fertig',
+    themeSceneAlt: (themeName) => `Szene von ${themeName}`,
     languageLabel: 'Sprache',
     languages: {
       auto: 'Automatisch (Deutsch / Englisch)',
@@ -580,6 +794,40 @@ export const de: UiStrings = {
     escalationHint: (seconds) =>
       `Ein Wecker bimmelt erst am Gerät, wo du ihn gestellt hast — nach ${seconds} Sekunden auf allen. So weckt dich dein Wecker zuerst leise dort, wo du bist, und wird erst laut überall, wenn niemand reagiert.`,
     skillsTitle: 'Skills',
+    homeTilesTitle: 'Zuhause-Widgets',
+    homeTilesHint: 'Widgets für den Zuhause-Reiter — die Geräte-Kacheln bekommen hier erst einen Schalter, wenn ihre Quelle wirklich da ist.',
+    homeTilesCrownGroupLabel: 'Kopfzeile',
+    homeTilesUhrLabel: 'Uhr',
+    homeTilesUhrHint: 'Zeigt Uhrzeit, Gruß und Datum im festen Kopf des Zuhause-Bildschirms.',
+    homeTilesWeckerLabel: 'Wecker',
+    homeTilesWeckerHint: 'Zeigt deinen nächsten Wecker im festen Kopf des Zuhause-Bildschirms.',
+    homeTilesStageGroupLabel: 'Bühne',
+    homeTilesWetterLabel: 'Wetter',
+    homeTilesWetterHint: 'Zeigt das aktuelle Wetter auf dem Zuhause-Bildschirm.',
+    homeTilesLaeuftLabel: 'Läuft',
+    homeTilesLaeuftHint: 'Zeigt laufende Timer, Wecker und Erinnerungen auf dem Zuhause-Bildschirm.',
+    homeTilesEinkaufLabel: 'Einkauf',
+    homeTilesEinkaufHint: 'Zeigt deine Einkaufsliste auf dem Zuhause-Bildschirm.',
+    homeTilesVacuumLabel: 'Sauger-Kachel',
+    homeTilesVacuumHint: 'Zeigt den Status deines Saugers auf dem Zuhause-Bildschirm.',
+    homeTilesClimateLabel: 'Klima-Kachel',
+    homeTilesClimateHint: 'Zeigt Ist- und Soll-Temperatur je Raum mit Klima-Gerät.',
+    homeTilesCurrentAffairsLabel: 'Nachrichten',
+    homeTilesCurrentAffairsHint:
+      'Zeigt die aktuellen Meldungen auf dem Zuhause-Bildschirm — und nur dann, wenn es wirklich welche gibt. Aus: Kachel und „mehr"-Ansicht bleiben weg, es wird auch nichts mehr geladen. Dieser Schalter regelt nur die Anzeige: nachfragen kannst du Hoshi weiterhin jederzeit, und ob es die Meldungen überhaupt gibt, entscheidet der Server.',
+    homeTilesNewsSourcesLabel: 'Aktive Quellen',
+    homeTilesNewsSourcesHint:
+      'Welche Quellen Hoshi überhaupt abruft — für die Kachel UND fürs Nachfragen. Mindestens eine ausgewählte Quelle wird alle 30 Minuten aktualisiert; ohne ausgewählte Quelle gibt es ehrlich keine Meldungen.',
+    homeTilesNewsSourcesLoading: 'lädt…',
+    homeTilesNewsSourcesLoadError: 'Konnte die Quellen-Auswahl nicht laden.',
+    homeTilesNewsSourcesFailed: 'Speichern fehlgeschlagen — bitte später nochmal versuchen.',
+    homeTilesNewsSourcesUnknown: 'Unbekannte Quelle.',
+    homeTilesLayoutHint:
+      'Reihenfolge festlegen — Hoshi packt die Kacheln passend zur Bildschirmbreite.',
+    homeTilesLayoutArrange: 'Widgets anordnen',
+    homeTilesLayoutReset: 'Layout zurücksetzen',
+    homeTilesLayoutResetArmed: 'Wirklich? Klick nochmal',
+    homeTilesLayoutResetDone: 'Layout zurückgesetzt. Die Schalter oben sind unverändert.',
     privacyTitle: 'Privatsphäre',
     privacyIntro:
       'Ehrlicher Ist-Stand, direkt vom Server gelesen — das Schloss bleibt auf der Box, die Wolke geht online.',
@@ -619,6 +867,19 @@ export const de: UiStrings = {
       )[target];
       return `Gelöscht: ${deleted} ${deleted === 1 ? one : many}.`;
     },
+
+    // ── Kategorie-Übersicht (Einstiegs-Ebene des Drawers, Design 15.08 §3.1) ──
+    categoryBlurbs: {
+      darstellung: 'Farbthema und wie Hoshi aussieht',
+      'sprache-stimme': 'Sprache, Stimme und wie sie klingt',
+      'online-nachschlagen': 'Wann Hoshi online nachschaut — und womit',
+      'modell-leistung': 'Welches Modell denkt, und wie schnell',
+      persoenlichkeit: 'Hoshis Grundton im Gespräch',
+      'gedaechtnis-privatsphaere': 'Erkannte Stimmen, Gedächtnis, was gespeichert wird',
+      'zuhause-integrationen': 'Wetter-Ort, Kacheln, Wecker, Nachtmodus',
+    },
+    overviewBack: 'Einstellungen',
+    overviewBackAria: 'Zurück zur Kategorie-Übersicht',
   },
 
   scheduled: {

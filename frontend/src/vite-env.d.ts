@@ -17,3 +17,11 @@ interface ImportMeta {
  * fehlt/unlesbar war. Siehe frontend/vite.config.ts (readHoshiVersion).
  */
 declare const __HOSHI_VERSION__: string;
+
+/**
+ * Build-Stempel (base36-Zeitstempel des Builds) fürs Cache-Busting der
+ * dynamisch nachgeladenen Theme-Dateien — s. vite.config.ts (define) und
+ * styles/themeLoader.ts (buildId). Wie __HOSHI_VERSION__ eine reine
+ * Build-Zeit-Konstante; vitest zieht das define NICHT (Muster TopNav).
+ */
+declare const __HOSHI_BUILD_ID__: string;

@@ -1,0 +1,393 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "automatik",
+      "order": 1
+    },
+    {
+      "id": "morgen",
+      "order": 2
+    },
+    {
+      "id": "tag",
+      "order": 3
+    },
+    {
+      "id": "abend-nacht",
+      "order": 4
+    },
+    {
+      "id": "stimmung",
+      "order": 5
+    },
+    {
+      "id": "klassiker",
+      "order": 6
+    }
+  ],
+  "themes": [
+    {
+      "id": "sora",
+      "name": "Sora",
+      "kanji": "空",
+      "gloss": {
+        "de": "Himmel",
+        "en": "sky",
+        "es": "cielo",
+        "fr": "ciel",
+        "it": "cielo"
+      },
+      "group": "automatik",
+      "swatch": [
+        "#141a26",
+        "#5ea0f2",
+        "#e8eef7"
+      ]
+    },
+    {
+      "id": "asagiri",
+      "name": "Asagiri",
+      "kanji": "朝霧",
+      "gloss": {
+        "de": "Morgennebel",
+        "en": "morning mist",
+        "es": "niebla matinal",
+        "fr": "brume du matin",
+        "it": "nebbia mattutina"
+      },
+      "group": "morgen",
+      "swatch": [
+        "#f7fbfd",
+        "#a23d50",
+        "#182631"
+      ],
+      "file": "asagiri.css"
+    },
+    {
+      "id": "asa",
+      "name": "Asa",
+      "kanji": "朝",
+      "gloss": {
+        "de": "Morgen",
+        "en": "morning",
+        "es": "mañana",
+        "fr": "matin",
+        "it": "mattino"
+      },
+      "group": "morgen",
+      "swatch": [
+        "#fcf7ed",
+        "#ad3300",
+        "#231a14"
+      ],
+      "file": "asa.css"
+    },
+    {
+      "id": "yoake",
+      "name": "Yoake",
+      "kanji": "夜明け",
+      "gloss": {
+        "de": "Morgengrauen",
+        "en": "daybreak",
+        "es": "amanecer",
+        "fr": "aube",
+        "it": "alba"
+      },
+      "group": "morgen",
+      "swatch": [
+        "#171327",
+        "#ff9575",
+        "#f7eee7"
+      ],
+      "file": "yoake.css"
+    },
+    {
+      "id": "fuyubare",
+      "name": "Fuyubare",
+      "kanji": "冬晴れ",
+      "gloss": {
+        "de": "klarer Wintertag",
+        "en": "clear winter day",
+        "es": "día claro de invierno",
+        "fr": "journée d’hiver claire",
+        "it": "giornata d’inverno limpida"
+      },
+      "group": "tag",
+      "swatch": [
+        "#f8fcff",
+        "#8c590b",
+        "#0a1f34"
+      ],
+      "file": "fuyubare.css"
+    },
+    {
+      "id": "hanaikada",
+      "name": "Hanaikada",
+      "kanji": "花筏",
+      "gloss": {
+        "de": "Blütenfloß",
+        "en": "petal raft",
+        "es": "balsa de pétalos",
+        "fr": "radeau de pétales",
+        "it": "zattera di petali"
+      },
+      "group": "tag",
+      "swatch": [
+        "#fefaf8",
+        "#a73459",
+        "#11282b"
+      ],
+      "file": "hanaikada.css"
+    },
+    {
+      "id": "komorebi",
+      "name": "Komorebi",
+      "kanji": "木漏れ日",
+      "gloss": {
+        "de": "Licht durch Blätter",
+        "en": "light through leaves",
+        "es": "luz entre las hojas",
+        "fr": "lumière entre les feuilles",
+        "it": "luce tra le foglie"
+      },
+      "group": "tag",
+      "swatch": [
+        "#f5f9e4",
+        "#7d5708",
+        "#09230e"
+      ],
+      "file": "komorebi.css"
+    },
+    {
+      "id": "momiji",
+      "name": "Momiji",
+      "kanji": "紅葉",
+      "gloss": {
+        "de": "Ahornfärbung",
+        "en": "autumn maple",
+        "es": "arce de otoño",
+        "fr": "érable d’automne",
+        "it": "acero d’autunno"
+      },
+      "group": "tag",
+      "swatch": [
+        "#fff4e7",
+        "#973c00",
+        "#30140d"
+      ],
+      "file": "momiji.css"
+    },
+    {
+      "id": "hanashigure",
+      "name": "Hanashigure",
+      "kanji": "花時雨",
+      "gloss": {
+        "de": "Regen zur Kirschblüte",
+        "en": "rain at cherry blossom time",
+        "es": "lluvia en la floración",
+        "fr": "pluie des cerisiers en fleur",
+        "it": "pioggia sui ciliegi in fiore"
+      },
+      "group": "tag",
+      "swatch": [
+        "#f1f5f8",
+        "#963826",
+        "#19212c"
+      ],
+      "file": "hanashigure.css"
+    },
+    {
+      "id": "ukiyo",
+      "name": "Ukiyo",
+      "kanji": "浮世",
+      "gloss": {
+        "de": "die fließende Welt",
+        "en": "the floating world",
+        "es": "el mundo flotante",
+        "fr": "le monde flottant",
+        "it": "il mondo fluttuante"
+      },
+      "group": "tag",
+      "swatch": [
+        "#f6f0de",
+        "#04548d",
+        "#161f29"
+      ],
+      "file": "ukiyo.css"
+    },
+    {
+      "id": "natsunohi",
+      "name": "Natsu no Hi",
+      "kanji": "夏の日",
+      "gloss": {
+        "de": "Sommertag",
+        "en": "summer day",
+        "es": "día de verano",
+        "fr": "jour d’été",
+        "it": "giorno d’estate"
+      },
+      "group": "tag",
+      "swatch": [
+        "#f3edd4",
+        "#0a5f72",
+        "#09293b"
+      ],
+      "file": "natsunohi.css"
+    },
+    {
+      "id": "aoi",
+      "name": "Aoi",
+      "kanji": "青",
+      "gloss": {
+        "de": "Blau",
+        "en": "blue",
+        "es": "azul",
+        "fr": "bleu",
+        "it": "azzurro"
+      },
+      "group": "tag",
+      "swatch": [
+        "#141a26",
+        "#5ea0f2",
+        "#e8eef7"
+      ],
+      "file": "aoi.css"
+    },
+    {
+      "id": "natsumatsuri",
+      "name": "Natsumatsuri",
+      "kanji": "夏祭り",
+      "gloss": {
+        "de": "Sommerfest",
+        "en": "summer festival",
+        "es": "fiesta de verano",
+        "fr": "fête d’été",
+        "it": "festa d’estate"
+      },
+      "group": "abend-nacht",
+      "swatch": [
+        "#0c1b35",
+        "#f7ca1d",
+        "#f8f1e2"
+      ],
+      "file": "natsumatsuri.css"
+    },
+    {
+      "id": "yukiakari",
+      "name": "Yukiakari",
+      "kanji": "雪明かり",
+      "gloss": {
+        "de": "Schneelicht",
+        "en": "snow light",
+        "es": "luz de la nieve",
+        "fr": "clarté de la neige",
+        "it": "luce della neve"
+      },
+      "group": "abend-nacht",
+      "swatch": [
+        "#151a25",
+        "#fdb569",
+        "#f0f4f7"
+      ],
+      "file": "yukiakari.css"
+    },
+    {
+      "id": "amayadori",
+      "name": "Amayadori",
+      "kanji": "雨宿り",
+      "gloss": {
+        "de": "Regenpause",
+        "en": "sheltering from the rain",
+        "es": "refugio de la lluvia",
+        "fr": "à l’abri de la pluie",
+        "it": "al riparo dalla pioggia"
+      },
+      "group": "abend-nacht",
+      "swatch": [
+        "#1a1613",
+        "#ee9b6e",
+        "#f2e9dc"
+      ],
+      "file": "amayadori.css"
+    },
+    {
+      "id": "yoru",
+      "name": "Yoru",
+      "kanji": "夜",
+      "gloss": {
+        "de": "Nacht",
+        "en": "night",
+        "es": "noche",
+        "fr": "nuit",
+        "it": "notte"
+      },
+      "group": "abend-nacht",
+      "swatch": [
+        "#0e0c0a",
+        "#ffa275",
+        "#f4f1ed"
+      ],
+      "file": "yoru.css"
+    },
+    {
+      "id": "nagareboshi",
+      "name": "Nagareboshi",
+      "kanji": "流れ星",
+      "gloss": {
+        "de": "Sternschnuppe",
+        "en": "shooting star",
+        "es": "estrella fugaz",
+        "fr": "étoile filante",
+        "it": "stella cadente"
+      },
+      "group": "abend-nacht",
+      "swatch": [
+        "#050812",
+        "#f8b65d",
+        "#e9edf2"
+      ],
+      "file": "nagareboshi.css"
+    },
+    {
+      "id": "nagori",
+      "name": "Nagori",
+      "kanji": "名残",
+      "gloss": {
+        "de": "was zurückbleibt",
+        "en": "what remains",
+        "es": "lo que queda",
+        "fr": "ce qui reste",
+        "it": "ciò che resta"
+      },
+      "group": "stimmung",
+      "swatch": [
+        "#0e1528",
+        "#f9a25b",
+        "#ecf1f5"
+      ],
+      "file": "nagori.css",
+      "hidden": true
+    },
+    {
+      "id": "kasumi",
+      "name": "Kasumi",
+      "kanji": "霞",
+      "gloss": {
+        "de": "Dunst",
+        "en": "haze",
+        "es": "bruma",
+        "fr": "brume",
+        "it": "foschia"
+      },
+      "group": "klassiker",
+      "swatch": [
+        "#001514",
+        "#ffa275",
+        "#e4f2f1"
+      ],
+      "file": "old/kasumi.css",
+      "retired": true
+    }
+  ]
+}

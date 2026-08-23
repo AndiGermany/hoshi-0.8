@@ -1,0 +1,154 @@
+/* Hoshi 0.8 — Theme-Datei „amayadori" (dynamisch nachgeladen).
+   ────────────────────────────────────────────────────────────────────────────
+   1:1 aus src/styles/themes.css herausgelöst (Umzug 2026-08-08: Themen liegen
+   nicht mehr im CSS-Bundle, sondern werden über public/themes/manifest.json +
+   styles/themeLoader.ts zur Laufzeit nachgeladen). Der Inhalt ist unverändert —
+   nur der Wohnort hat gewechselt.
+
+   Selbsttragend: der Block setzt jeden Token, den er auch vorher gesetzt hat,
+   und braucht keinen Import. BEIDE Selektoren bleiben Pflicht
+   (`:root[data-theme='amayadori']` UND `[data-theme='amayadori']`): der zweite trägt die
+   Token auch an ein verschachteltes Element, das `data-theme` selbst setzt.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ════════════════ AMAYADORI (雨宿り) — Regentag, geborgen im Trockenen ════════════════
+   „Draußen fällt es weiter; hier drinnen ist es trocken und jemand hat Licht
+   gelassen." Nasses Zedernholz unterm Vordach: ein warmer Innenraum (Kaki-
+   Persimone als Akzent) — geborgen, nicht melancholisch. Die Temperaturspaltung
+   TRÄGT die Stimmung: kaltes Regenblau (#6e8296, sehr niedrige Alpha) bleibt
+   strikt in den Seitenrändern (--theme-atmosphere unten), das warme Innen liest
+   sich erst DADURCH als Schutz. Zwei Signaturen ergänzen den Token-Block: die
+   Traufe (ein Nieselschleier, der exakt an der Lesespalte endet — body::before
+   weiter unten) und der Pfützen-Orb (die bestehenden Sprech-Ringe lesen sich
+   als Regenringe auf Wasser — .vc-orb__* weiter unten). */
+:root[data-theme='amayadori'],
+[data-theme='amayadori'] {
+  --theme-atmosphere:
+    radial-gradient(ellipse at 0% 42%, rgb(110 130 150 / 0.09), transparent 46%),
+    radial-gradient(ellipse at 100% 62%, rgb(110 130 150 / 0.07), transparent 46%),
+    var(--bg-base);
+
+  --bg-base: #100e0c;
+  --bg-surface: #1a1613;
+  --bg-elevated: #221d18;
+  --bg-subtle: #2c2620;
+  --bg-hairline: #3a322a;
+  --bg-hairline-dashed: #4a4038;
+
+  --text-1: #f2e9dc;
+  --text-2: #d3c6b4;
+  --text-3: #a2947f;
+  --text-4: #90836c;
+
+  /* Kaki-Persimone — das Herdfeuer, das man drinnen gelassen hat. */
+  --accent: #ee9b6e;
+  --accent-soft: rgb(238 155 110 / 0.2);
+  --accent-faint: rgb(238 155 110 / 0.1);
+  --accent-glow: rgb(238 155 110 / 0.4);
+  --accent-ink: #100e0c;
+
+  --success: #8fbf87;
+  --success-soft: rgb(143 191 135 / 0.16);
+  --warn: #e8c07a;
+  --warn-soft: rgb(232 192 122 / 0.16);
+  --error: #e0736a;
+  --error-soft: rgb(224 115 106 / 0.16);
+
+  --bg-user: #241d18;
+
+  color-scheme: dark;
+}
+
+/* Der Sprachstern bleibt warmes Licht im Kern — die Glut, die man für einen
+   dagelassen hat. */
+:root[data-theme='amayadori'] .vc-orb__core {
+  background: radial-gradient(circle at 42% 38%, #fff3e6, var(--accent) 62%, #b9713f 100%);
+}
+
+/* Der Bloom kippt von warm (innen) zu einem sehr leisen Regenblau-Silber
+   (außen) — Licht, das sich in nasser Luft bricht. */
+:root[data-theme='amayadori'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    rgb(199 210 218 / 0.16) 46%,
+    transparent 74%
+  );
+}
+
+/* Der PFÜTZEN-ORB: dieselben Pegel-Ringe wie überall, nur kühles Regenblau-
+   Silber statt Akzent — sie lesen sich als Ringe, die der Regen auf einer
+   Pfütze schlägt. Der zusätzliche weiche Außen-Schein macht sie konzentrisch
+   statt scharf. KEINE neue Mechanik — nur Farbe/Form auf dem bestehenden Ring. */
+:root[data-theme='amayadori'] .vc-orb__ring {
+  border-color: rgb(199 210 218 / 0.55);
+  box-shadow: 0 0 0 5px rgb(199 210 218 / 0.1);
+}
+
+/* ── Die TRAUFE: ein Nieselschleier NUR im Seitenraum ─────────────────────────
+   Haarfeine, leicht geneigte Streifen (repeating-linear-gradient, ~3,5 % Alpha,
+   93°-Achse ⇒ Bänder ~3° von der Senkrechten geneigt) driften langsam nach
+   unten — aber nur dort, wo kein Inhalt steht. mask-image blendet exakt die
+   Lesespalte (--measure) aus: sie ist wie .chat__log/.compose viewport-
+   zentriert (`.app`/`.chat__log` beide `margin-inline:auto`), darum trifft
+   `calc(50% - var(--measure)/2)` relativ zur Viewport-Mitte hier genau ihre
+   Kante — der Regen hört SICHTBAR an der Spaltenkante auf, das Innere bleibt
+   trocken.
+   Stacking: `position:fixed` + `z-index:-1` hält den Schleier HINTER jedem
+   normalen (nicht-positionierten) Inhalt — negative z-index-Ebenen malen unter
+   die In-Flow-Boxen von `.app` —, aber ÜBER dem body-eigenen Hintergrund
+   (`--theme-atmosphere`, eine reguläre CSS-`background`-Eigenschaft, die als
+   Backdrop der Stacking-Context-Wurzel immer zuunterst liegt). Nur `transform`
+   animiert (Projekt-Konvention, s. index.css „Motion-Token"); die globale
+   reduced-motion-Regel (index.css, `*,*::before,*::after { animation-duration:
+   0.01ms !important; ... }`) friert die Drift praktisch auf den Startzustand
+   ein — die Streifen bleiben stehen, kein eigenes Gate nötig. */
+:root[data-theme='amayadori'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    93deg,
+    rgb(199 210 218 / 0.035) 0px,
+    rgb(199 210 218 / 0.035) 1px,
+    transparent 1px,
+    transparent 15px
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black calc(50% - var(--measure) / 2 - 20px),
+    transparent calc(50% - var(--measure) / 2),
+    transparent calc(50% + var(--measure) / 2),
+    black calc(50% + var(--measure) / 2 + 20px),
+    black 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black calc(50% - var(--measure) / 2 - 20px),
+    transparent calc(50% - var(--measure) / 2),
+    transparent calc(50% + var(--measure) / 2),
+    black calc(50% + var(--measure) / 2 + 20px),
+    black 100%
+  );
+  animation: amayadori-drift 32s linear infinite;
+}
+@keyframes amayadori-drift {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(150px);
+  }
+}
+
+/* Die Lichtlippe: eine 2px warme Kante an der Oberkante der Lesespalte — hier
+   hat jemand das Licht gelassen. box-shadow statt border/Pseudo-Element: kein
+   Reflow, und die Kante bleibt beim Scrollen im Thread an Ort und Stelle (sie
+   gehört der Box, nicht ihrem — scrollenden — Inhalt). */
+:root[data-theme='amayadori'] .chat__log {
+  box-shadow: 0 -2px 0 0 var(--accent-glow);
+}

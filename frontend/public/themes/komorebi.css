@@ -1,0 +1,439 @@
+/* Hoshi — KOMOREBI (木漏れ日) · „das Licht, das durch die Blätter sickert"
+   ═══════════════════════════════════════════════════════════════════════════
+   Summary (EN): light green day theme. The picture is split by medium — the
+   canopy that BREAKS the light is a vector silhouette (komorebi-kozue.svg),
+   the light itself is CSS gradients: hard-edged sun shafts that cross the
+   whole page. Colour tokens are unchanged from v1.
+
+   Ein HELLES Tages-Thema und bewusst der Gegenpol zur Dunkel-Dominanz der
+   bisherigen Palette. Die Szene: später Vormittag unter einer Laubkrone. Der
+   Grund ist keine neutrale Papierfläche, sondern ein Blattgrund, in dem echtes
+   Licht steht — warmes Grün als Fläche, Gold als das, was hindurchfällt.
+
+   DREI ENTSCHEIDUNGEN, die dieses Thema tragen
+   ────────────────────────────────────────────
+   1) DER GRUND IST GRÜN, nicht Creme. --bg-base liegt bei oklch(0.925 0.058 126)
+      — sichtbar Blattgrün, nicht „Weiß mit Stich". Das ist der radikale Teil:
+      Asa und Natsu no Hi sind helle Washi-Themen, Komorebi ist ein helles
+      GRÜNES Thema. Die Karten (--bg-surface / --bg-elevated) sind demgegenüber
+      die Stellen, an denen das Licht auftrifft: heller, wärmer, entsättigter.
+      Lesen passiert also im Licht, die Fläche ringsum bleibt Blatt.
+   2) DIE SCHRIFT IST RINDE, kein Schwarz. text-1..4 stehen alle auf H≈148 mit
+      sehr niedrigem Chroma — ein dunkles Moosgrün, das als Tinte liest, aber
+      zur Fläche gehört. Kein Fremdkörper-Neutralgrau auf buntem Grund.
+   3) DER AKZENT IST DAS LICHT SELBST, verdichtet: ein tiefes Honig-Bronze
+      (oklch(0.485 0.098 78)). Auf hellem Grund MUSS Gold dunkel werden, sonst
+      ist es nicht lesbar — das strahlende Gold der Nacht-Themen (L≈0.80) wäre
+      hier unsichtbar. Das helle Gold lebt darum ausschließlich in der
+      Atmosphäre, wo es nichts tragen muss (--accent-glow / body::after).
+
+   ───────────────────────────────────────────────────────────────────────────
+   v2 — ZWEI MEDIEN STATT EINEM (14.08.)
+   ───────────────────────────────────────────────────────────────────────────
+   v1 baute BEIDES aus radial-gradient-Ellipsen: das Blattwerk und die
+   Lichtflecken. Das Blattwerk verlor dabei — weiche Ellipsen können kein Blatt
+   sein, sie werden zu Wolken (dieselbe Lehre, an der Ukiyos Welle und Momijis
+   Laub v1 gescheitert sind: Verläufe können kein Objekt zeichnen).
+   v2 teilt das Bild nach dem, was jedes Medium wirklich kann:
+
+     • DAS BLATTWERK ist Silhouette → Vektor. `komorebi-kozue.svg` (梢 kozue,
+       der Wipfel): eine geschlossene Laubmasse, die von der oberen Kante
+       hereinhängt, ein Stamm im linken Seitenraum, kurze Zweige mit einzelnen
+       Blättern am unteren Saum. Entscheidend ist nicht die Masse, sondern ihre
+       PERFORATION: 400 schmale, schräge Löcher (eine SVG-Maske) — der Himmel
+       zwischen den Blättern. Genau daran erkennt man ein Blätterdach von unten;
+       die Masse allein wäre eine Hecke. (86 KB, weil die Löcher grob gerastert
+       und ganzzahlig sind: bei 8–40 px Kantenlänge sieht man Nachkommastellen
+       ohnehin nicht, sie kosten aber ein Drittel der Dateigröße.)
+     • DAS LICHT ist Kante → CSS-Verlauf. Ein linear-gradient KANN keine Kurve,
+       aber er kann eine gerade Kante unter JEDEM Winkel, in beliebiger Breite,
+       mit beliebig weichem Saum — und ein Sonnenschacht ist genau das. NEUN
+       parallele Bänder, 25° aus der Senkrechten, zwischen 2 und 6,4 % der
+       Verlaufsachse breit und zwischen 13 und 34 % deckend, dazu die Sonne
+       selbst als weicher Fleck oben rechts und eine Maske, die alles entlang
+       der Strahlrichtung ausfaden lässt. Kein Bild, nur Licht.
+
+   Die Schächte laufen VOLL über die ganze Seite, auch über die Lesespalte.
+   Das ist erlaubt und der eigentliche Trick des Themas: Licht AUFHELLT den
+   Grund, und heller Grund erhöht den Kontrast dunkler Schrift, statt ihn zu
+   fressen (nachgerechnet, s. u.). Nur die dunkle Laubmasse braucht einen
+   Schleier. So kann das Motiv das tun, was ein Seitenraum-Bild nie kann: den
+   Text mitten hindurchlaufen lassen.
+
+   EHRLICHKEIT: Licht und Laub sind reine Zierde. Sie stellen NICHTS dar —
+   keine Pegel, keine Zustände, keine erfundenen Datenpunkte. Sie ändern sich
+   nicht, wenn Hoshi etwas tut. Wer sie liest, liest Wetter, nicht Information.
+
+   ───────────────────────────────────────────────────────────────────────────
+   KONTRAST (nachgerechnet in sRGB, WCAG 2.x). Alle vier Textstufen sind AA auf
+   ALLEN Flächen-Token — und zusätzlich auf beiden Extremen, die die Atmosphäre
+   im Lesebereich erzeugen kann (hellster Punkt #f2ebb4, dunkelster #c7e1b4):
+
+                     elevated  surface   base   subtle  bg-user  hell   dunkel
+       --text-1        16.30    15.57   13.61   12.63   11.63   13.77   11.87
+       --text-2        11.12    10.63    9.29    8.62    7.94    9.40    8.10
+       --text-3         7.66     7.31    6.39    5.93    5.46    6.47    5.58
+       --text-4         6.50     6.21    5.43    5.04    4.64    5.49    4.74
+       --accent         6.32     6.04    5.28    4.90    4.51    5.34    4.60
+       --success        6.33     6.05    5.29    4.91    4.52    5.35    4.61
+       --warn           6.25     5.97    5.22    4.84    4.46*   5.28    4.55
+       --error          6.72     6.42    5.61    5.21    4.80    5.68    4.90
+
+       --accent-ink auf --accent: 6.32:1
+       * einziger Wert < 4.5:1 im ganzen Raster. --bg-user füllt ausschließlich
+         .msg--user, und darin steht nur --text-1 (11.63:1). Statusfarbe auf
+         der Du-Blase ist kein Renderpfad, den es gibt.
+
+   Alle Farbwerte sind in sRGB darstellbar (Gamut geprüft, kein Clipping).
+
+   ───────────────────────────────────────────────────────────────────────────
+   DIE ZWEI ZAHLEN DES BILDES (Methode wie in ukiyo.css/momiji.css)
+   ───────────────────────────────────────────────────────────────────────────
+   1. LAUB (dunkel, muss geschleiert werden). Dunkelster Grund unter der
+      App-Spalte = Atmosphäre über --bg-base, abgetastet über die ganze
+      Spaltenfläche bei 1100/1280/1440/1512/1920/2560 px Breite. Schlechtester
+      Punkt: #d8ebc1 → --text-4 5,27:1 ohne Bild. Darüber das Laub mit 10 %
+      Restdeckkraft, je Bildfarbe der schlechteste Fall:
+        Stamm #4a512e → 4,57 · nahes Laub #2b643e → 4,61 ·
+        mittleres #548b54 → 4,78 · fernes #87ab71 → 4,95     (alle AA)
+      Bei 12 % kippen Stamm (4,43) und nahes Laub (4,48) unter AA — deshalb
+      steht dort 0.10 und nicht „ungefähr ein Zehntel". Ohne Schleier wäre es
+      1,05–2,57:1, also unlesbar; wer die Maske aufmacht, muss das gutmachen.
+   2. LICHT (hell, braucht KEINEN Schleier). Das Schacht-Gold ist
+      oklch(0.93 0.104 94) = #ffe796 (sRGB-Rand bei C 0.106 — hier voll
+      ausgereizt, nicht geklippt). Über demselben schlechtesten Grund, als
+      volle Fläche gerechnet:
+        14 % → 5,29 · 26 % → 5,31 · 34 % → 5,32
+        hellster Schacht UND Sonnenfleck übereinander (rechnerisch 56 %) → 5,36
+      Jede Stufe liegt ÜBER den 5,27 des nackten Grundes: die Schächte machen
+      den Text messbar besser lesbar, nicht schlechter. Darum dürfen sie
+      ungebremst über die Spalte laufen — und darum ist die Grenze dieses
+      Layers nicht Kontrast, sondern Geschmack (jenseits von ~0.35 je Band
+      wird aus Licht ein gelber Schleier).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ZWEI SELEKTOREN (Haus-Konvention aus themes.css): `:root[data-theme=…]`
+   (0,2,0) gewinnt am <html> gegen die Basis-Token; der nackte `[data-theme=…]`
+   sorgt dafür, dass auch ein verschachteltes Element mit eigenem data-theme
+   diese Token trägt — genau das braucht die echte Farbvorschau im Theme-Picker
+   (.settings__swatch), damit sie keine zweite, driftende Farbliste pflegt. */
+:root[data-theme='komorebi'],
+[data-theme='komorebi'] {
+  /* ── Atmosphäre: der Lichtschacht über der ganzen Seite ────────────────────
+     Sehr zurückhaltend gedeckelt (Gold ≤ 0.20, Warmweiß ≤ 0.34, Blattschatten
+     ≤ 0.09) — diese Schicht liegt AUCH unter der Lesespalte, darum darf sie den
+     Grund nur so weit bewegen, wie die Kontrasttabelle oben es abgesichert hat.
+     Das laute Licht steht weiter unten in body::after, wo es niemandem beim
+     Lesen im Weg ist.
+     Reihenfolge der Schichten: [1] die Sonne selbst, oben rechts hinter den
+     Zweigen, breit und weich · [2+3] zwei große Lichtseen auf dem Waldboden ·
+     [4+5] der Blattschatten, der von den Ecken hereinträgt.
+     (Keine Kommentare INNERHALB des Werts: eine Custom Property wird als
+     Token-Strom gespeichert, und diese Datei wird dynamisch nachgeladen —
+     der Wert bleibt darum bewusst ein einziger, glatter Ausdruck.) */
+  --theme-atmosphere:
+    radial-gradient(ellipse 72% 56% at 88% -8%, oklch(0.965 0.038 88 / 0.34), transparent 62%),
+    radial-gradient(ellipse 46% 34% at 20% 26%, oklch(0.925 0.098 92 / 0.2), transparent 68%),
+    radial-gradient(ellipse 38% 30% at 72% 66%, oklch(0.925 0.098 92 / 0.16), transparent 70%),
+    radial-gradient(ellipse 60% 42% at -8% 106%, oklch(0.72 0.1 145 / 0.09), transparent 66%),
+    radial-gradient(ellipse 44% 30% at 108% 96%, oklch(0.72 0.1 145 / 0.07), transparent 64%),
+    var(--bg-base);
+
+  /* ── Flächen ───────────────────────────────────────────────────────────────
+     base = der Blattgrund. surface/elevated = wo das Licht auftrifft (heller UND
+     wärmer, das Grün nimmt ab). subtle = die Stelle, die ein Blatt beschattet. */
+  --bg-base: oklch(0.925 0.058 126); /* #dceec4 — sonnendurchlässiges Blattgrün */
+  --bg-surface: oklch(0.973 0.028 116); /* #f5f9e4 — Papier im Licht */
+  --bg-elevated: oklch(0.99 0.018 100); /* #fefcef — der hellste Lichtfleck */
+  --bg-subtle: oklch(0.9 0.064 128); /* #d2e7ba — Blattschatten als Füllfläche */
+  --bg-hairline: oklch(0.76 0.068 132); /* #a1bb8e — Blattader, nicht Kante */
+  --bg-hairline-dashed: oklch(0.68 0.07 134); /* #87a276 — für „ehrlich leer"-Kacheln */
+
+  /* ── Schrift: dunkles Moos, eine Familie über alle vier Stufen ───────────── */
+  --text-1: oklch(0.228 0.05 148); /* #09230e */
+  --text-2: oklch(0.342 0.048 148); /* #273f2a */
+  --text-3: oklch(0.432 0.046 148); /* #3f5842 */
+  --text-4: oklch(0.47 0.045 148); /* #4a624d — leiseste Stufe, 4,64:1 im schlechtesten Fall */
+
+  /* ── Akzent: Honig-Bronze, das verdichtete Licht ──────────────────────────
+     --accent-glow ist bewusst NICHT die abgedunkelte Akzentfarbe, sondern das
+     helle Sonnengold (L 0.86): Glow ist immer Atmosphäre und trägt nie Text,
+     darum darf er hier hell und offensiv sein, während der Akzent selbst
+     lesbar dunkel bleibt. (Dasselbe Prinzip nutzt Natsu no Hi.) */
+  --accent: oklch(0.485 0.098 78); /* #7d5708 */
+  --accent-soft: oklch(0.485 0.098 78 / 0.18);
+  --accent-faint: oklch(0.485 0.098 78 / 0.09);
+  --accent-glow: oklch(0.86 0.125 88 / 0.42); /* #f3cc6a — Sonne, kein Bronze */
+  --accent-ink: oklch(0.99 0.014 98); /* #fefcf2 — Licht auf Bronze, 6,32:1 */
+
+  /* ── Status: gesättigt genug, um auf hellem Grund zu greifen, in Hue klar
+     vom Akzent getrennt (Akzent H78 · warn H52 · error H24 · success H150). */
+  --success: oklch(0.468 0.122 150); /* #106c32 — frisches Blatt */
+  --success-soft: oklch(0.468 0.122 150 / 0.16);
+  --warn: oklch(0.495 0.124 52); /* #974907 — Blatt, das sich färbt */
+  --warn-soft: oklch(0.495 0.124 52 / 0.16);
+  --error: oklch(0.49 0.185 24); /* #b21826 */
+  --error-soft: oklch(0.49 0.185 24 / 0.16);
+
+  /* Die Du-Blase: warmes Honig-Cremé. Sie hebt sich vom grünen Grund über den
+     HUE-Unterschied ab (96 vs. 126) und nicht nur über Helligkeit — auf einer
+     hellen Fläche ist das der verlässlichere Weg. */
+  --bg-user: oklch(0.878 0.062 96); /* #e3d7a9 */
+
+  color-scheme: light;
+}
+
+/* Der Grund gehört dem body. In themes.css macht das eine generische Regel für
+   jedes [data-theme]; sie steht hier noch einmal, damit diese Datei ALLEIN
+   lauffähig ist (sie wird dynamisch nachgeladen). */
+:root[data-theme='komorebi'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── DAS BLÄTTERDACH ─────────────────────────────────────────────────────────
+   Die dunkle Hälfte des Bildes: die Masse, die das Licht überhaupt erst
+   zerteilt. Alles Bildhafte steckt im SVG; hier steht nur, wo es hängt und wie
+   laut es sein darf.
+
+   Contract:
+   • Stage 1440x1200, drawn for `cover` + top anchor. Top anchoring is load
+     bearing: the canopy hangs from the top edge, a centred crop would cut it.
+   • The two dense masses sit at stage x < 330 and x > 900 — that is where the
+     side margins are at every window width >= 1280px. In between the canopy is
+     deliberately thin, because that part is veiled anyway.
+   • Mask: full strength outside the app column (920px, centred), 10 % over it,
+     72px ramp. 10 % is measured (see header) — 12 % already breaks AA.
+   • The sway keeps `scale(1.05)`: it enlarges the mask along with the picture,
+     so the veiled zone grows by 23px per side while the drift only moves it by
+     10px. The protected column can therefore never slip out from under it.
+   • Animated properties are transform-class only (`transform` for the sway,
+     the separate `scale` for the breath), and every base value sits on the
+     element — without the animations exactly this frame stays.
+   • The breath only ever ADDS scale on top of the drawn 1.05, never subtracts:
+     the veil over the reading column can grow, never shrink. */
+:root[data-theme='komorebi'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url('komorebi-kozue.svg');
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: cover;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(50% - 532px),
+    rgb(0 0 0 / 0.1) calc(50% - 460px),
+    rgb(0 0 0 / 0.1) calc(50% + 460px),
+    #000 calc(50% + 532px),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(50% - 532px),
+    rgb(0 0 0 / 0.1) calc(50% - 460px),
+    rgb(0 0 0 / 0.1) calc(50% + 460px),
+    #000 calc(50% + 532px),
+    #000 100%
+  );
+  transform: translate3d(-8px, -5px, 0) scale(1.05);
+  scale: 1;
+  animation:
+    komorebi-sway 84s ease-in-out infinite,
+    komorebi-breath 150s ease-in-out infinite;
+}
+
+/* Wind im Wipfel. 84 s für einen ganzen Hin- und Rückweg: langsam genug, dass
+   man die Bewegung nicht sieht, während man hinschaut — nur bemerkt, dass die
+   Löcher später woanders sind. Hoshi mag stille Momente. */
+@keyframes komorebi-sway {
+  0%,
+  100% {
+    transform: translate3d(-8px, -5px, 0) scale(1.05);
+  }
+  50% {
+    transform: translate3d(10px, 4px, 0) scale(1.05);
+  }
+}
+
+/* Der wandernde Nachmittag. One breath per 150 s, 0.8 % about the canopy's own
+   centre — and that is the point: a scale moves the holes near the edges by
+   ~5 px and the holes near the middle by almost nothing, so the light patches
+   drift APART from each other instead of sliding as one block. That is the
+   only way to deform whole groups of the 400 perforations without animating a
+   single node inside the picture (it is a background image — see RESULT).
+   Own property (`scale`) instead of folding it into `transform`, so it cannot
+   fight the 84 s sway and keeps its own, coprime period. */
+@keyframes komorebi-breath {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.008;
+  }
+}
+
+/* ── DAS LICHT ───────────────────────────────────────────────────────────────
+   Acht Sonnenschächte, 14° aus der Senkrechten, von rechts oben nach links
+   unten — dieselbe Richtung, aus der auch die Atmosphäre ihre Sonne stellt
+   (Ellipse 1 sitzt auf 88% -8%). Unterschiedliche Breiten (2–7 % der
+   Verlaufsachse) und unterschiedliche Helligkeiten, damit kein Muster
+   entsteht; jedes Band hat einen weichen Saum, weil eine Halbschatten-Kante
+   nie hart ist.
+
+   Contract:
+   • NO mask over the app column, on purpose: this layer only lightens, and a
+     lighter ground raises the contrast of dark type (numbers in the header).
+     It is the one element of the whole theme that runs full bleed across the
+     text. Never add a colour here that is darker than --bg-base.
+   • The along-the-beam fade is the element mask (194deg = the beam direction).
+     Light that reaches the far corner at full strength stops reading as light.
+   • `inset: -3%` gives the drift room: the element is bigger than the viewport,
+     so the 14px sway can never pull an uncovered edge into view. The 0.5° tilt
+     (komorebi-turn) travels at most ~8px at the far corner and therefore lives
+     inside the very same overscan — no new budget needed. */
+:root[data-theme='komorebi'] body::after {
+  content: '';
+  position: fixed;
+  inset: -3%;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(
+      ellipse 26% 34% at 88% 2%,
+      oklch(0.93 0.104 94 / 0.34),
+      oklch(0.93 0.104 94 / 0.12) 46%,
+      transparent 74%
+    ),
+    linear-gradient(
+      115deg,
+      transparent 0,
+      transparent 4.3%,
+      oklch(0.93 0.104 94 / 0.14) 5.2%,
+      oklch(0.93 0.104 94 / 0.14) 8.8%,
+      transparent 9.7%,
+      transparent 14.1%,
+      oklch(0.93 0.104 94 / 0.26) 15.0%,
+      oklch(0.93 0.104 94 / 0.26) 17.0%,
+      transparent 17.9%,
+      transparent 21.5%,
+      oklch(0.93 0.104 94 / 0.17) 22.4%,
+      oklch(0.93 0.104 94 / 0.17) 27.6%,
+      transparent 28.5%,
+      transparent 34.9%,
+      oklch(0.93 0.104 94 / 0.32) 35.8%,
+      oklch(0.93 0.104 94 / 0.32) 38.2%,
+      transparent 39.1%,
+      transparent 43.9%,
+      oklch(0.93 0.104 94 / 0.13) 44.8%,
+      oklch(0.93 0.104 94 / 0.13) 51.2%,
+      transparent 52.1%,
+      transparent 57.6%,
+      oklch(0.93 0.104 94 / 0.30) 58.5%,
+      oklch(0.93 0.104 94 / 0.30) 61.5%,
+      transparent 62.4%,
+      transparent 66.9%,
+      oklch(0.93 0.104 94 / 0.20) 67.8%,
+      oklch(0.93 0.104 94 / 0.20) 72.2%,
+      transparent 73.1%,
+      transparent 78.1%,
+      oklch(0.93 0.104 94 / 0.34) 79.0%,
+      oklch(0.93 0.104 94 / 0.34) 81.0%,
+      transparent 81.9%,
+      transparent 86.7%,
+      oklch(0.93 0.104 94 / 0.16) 87.6%,
+      oklch(0.93 0.104 94 / 0.16) 92.4%,
+      transparent 93.3%,
+      transparent 100%
+    );
+  -webkit-mask-image: linear-gradient(
+    194deg,
+    #000 0,
+    #000 42%,
+    rgb(0 0 0 / 0.78) 68%,
+    rgb(0 0 0 / 0.34) 90%,
+    rgb(0 0 0 / 0.12) 100%
+  );
+  mask-image: linear-gradient(
+    194deg,
+    #000 0,
+    #000 42%,
+    rgb(0 0 0 / 0.78) 68%,
+    rgb(0 0 0 / 0.34) 90%,
+    rgb(0 0 0 / 0.12) 100%
+  );
+  transform: translate3d(0, 0, 0);
+  rotate: 0deg;
+  animation:
+    komorebi-light 66s ease-in-out infinite,
+    komorebi-turn 120s ease-in-out infinite;
+}
+
+/* Das Atmen des Lichts: die Schächte wandern um 14 px und werden dabei eine
+   Spur schwächer — so, wie sich das Blattwerk über einem verzieht. 66 s gegen
+   die 84 s des Wipfels, damit die beiden Bewegungen nie in Takt geraten. */
+@keyframes komorebi-light {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(-14px, 6px, 0);
+    opacity: 0.84;
+  }
+}
+
+/* Der Sonnenstand. Half a degree over 120 s. A tilt is not a shift: it moves
+   the shaft field over the perforation field at a rate that grows with the
+   distance from the centre, so a patch that sat in a bright shaft slides out
+   of it while its neighbour slides in — single patches brighten, others close,
+   and no node had to be animated per patch. Together with the 66 s drift, the
+   84 s sway and the 150 s breath the periods are coprime enough (LCM ≈ 12,8 h)
+   that no loop is ever visible.
+   Contract: this layer only lightens, so a tilt can raise the ground under
+   dark type but never lower it — the AA margin cannot drop here. */
+@keyframes komorebi-turn {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  50% {
+    rotate: 0.5deg;
+  }
+}
+
+/* Eigenes reduced-motion-Gate: index.css bremst zwar global alle Animationen
+   aus, aber diese Datei wird dynamisch geladen und muss auch für sich genommen
+   korrekt sein. Ohne Animation bleiben beide Grund-Transforms stehen — Wipfel
+   und Licht stehen dann einfach still, nichts verschwindet.
+   `animation: none` kills the whole shorthand list, breath and tilt included,
+   and every 0 % keyframe equals the base value written on the element
+   (`scale: 1`, `rotate: 0deg`) — the still frame is exactly the drawn one. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='komorebi'] body::before,
+  :root[data-theme='komorebi'] body::after {
+    animation: none;
+  }
+}
+
+/* Die Kopfzeile steht im Licht: fast weiß, leicht durchscheinend, mit einer
+   1px-Bronzelippe als unterer Kante (Muster wie Natsu no Hi / Nagori, die ihre
+   Nav ebenfalls nur tönen statt sie neu zu bauen). */
+:root[data-theme='komorebi'] .nav {
+  background: oklch(0.985 0.02 105 / 0.86);
+  box-shadow: 0 1px 0 oklch(0.485 0.098 78 / 0.12);
+  backdrop-filter: blur(12px);
+}
+
+/* Der Sprachstern bleibt FLACH (Andi-Korrektur 26.07: keine 3D-Kugeln) — der
+   Kern erbt unverändert seine gefüllte Akzentfläche. Geändert wird nur die
+   Kontur: sie nimmt das Blattgrün an, damit der Lichtpunkt sichtbar IM Blatt
+   sitzt statt daneben. Eine Farbe, keine neue Mechanik. */
+:root[data-theme='komorebi'] .vc-orb__ring {
+  border-color: oklch(0.6 0.11 145 / 0.5);
+}

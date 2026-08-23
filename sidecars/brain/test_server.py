@@ -493,9 +493,21 @@ def test_classify_memory_warn_below_free_plus_inactive_threshold():
     assert "knapp" in result["detail"]
 
 
-def test_classify_memory_warn_high_swap_pct_even_with_healthy_free_plus_inactive():
-    # frei+inaktiv reichlich (4 GB), aber Swap zu >50% belegt.
-    raw = _raw_mem(free_mb=2000, inactive_mb=2000, swap_total_mb=8192, swap_used_mb=5000)
+def test_classify_memory_ok_andis_case_16gb_high_swap_but_healthy_free_plus_inactive():
+    # Andi-Befund 2026-08-19: 16-GB-Mac, 5874 MB frei+inaktiv, Swap 60 % belegt —
+    # das war die falsche Warnung (Swap ALLEIN > 50 % reichte vorher). Hoher Swap
+    # ist bei reichlich frei+inaktiv normal (macOS lagert Idle-Pages aus) und
+    # zählt jetzt nur noch zusammen mit knappem frei+inaktiv (< 3 GB).
+    raw = _raw_mem(free_mb=3000, inactive_mb=2874, swap_total_mb=16384, swap_used_mb=9830)
+    result = server._classify_memory(raw, compressor_growing=False)
+    assert result["level"] == "ok", result
+    assert round(result["free_inactive_mb"]) == 5874
+    assert round(result["swap_used_pct"]) == 60
+
+
+def test_classify_memory_warn_combined_high_swap_and_tight_free_plus_inactive():
+    # Echter Druck: Swap > 85 % UND frei+inaktiv < 3 GB gleichzeitig -> warn.
+    raw = _raw_mem(free_mb=1200, inactive_mb=1200, swap_total_mb=16384, swap_used_mb=14500)
     result = server._classify_memory(raw, compressor_growing=False)
     assert result["level"] == "warn", result
     assert "Swap" in result["detail"]

@@ -7,12 +7,14 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.io.FileSystemResource
 import org.springframework.core.io.Resource
+import org.springframework.http.CacheControl
 import org.springframework.http.MediaType
 import org.springframework.web.reactive.config.ResourceHandlerRegistry
 import org.springframework.web.reactive.config.WebFluxConfigurer
 import org.springframework.web.reactive.function.server.RouterFunction
 import org.springframework.web.reactive.function.server.ServerResponse
 import org.springframework.web.reactive.function.server.router
+import org.springframework.web.reactive.resource.EncodedResourceResolver
 import org.springframework.web.reactive.resource.PathResourceResolver
 import reactor.core.publisher.Mono
 import java.nio.file.Paths
@@ -48,6 +50,28 @@ import java.nio.file.Paths
  * index.html (Client-Routing + Browser-Reload). Der Resource-Handler laeuft mit
  * `LOWEST_PRECEDENCE`, die `@RestController` und das WS-Handler-Mapping
  * (Order -1) haben hoehere Prioritaet — werden also NICHT ueberschrieben.
+ *
+ * **Kompression (vorkomprimiert, nicht on-the-fly):** WebFlux komprimiert
+ * Antworten von sich aus NICHT — die FE ging bis 08/2026 komplett roh ueber die
+ * Leitung (~2,1 MB dist). Der Vite-Build legt darum neben jedes Textasset ein
+ * `.br` und `.gz` (`frontend/vite.config.ts`, `precompressPlugin`), und der
+ * Spring-native [EncodedResourceResolver] verhandelt hier per `Accept-Encoding`:
+ * er loest ueber die Kette auf, sucht `<datei>.br` (bevorzugt) bzw. `<datei>.gz`
+ * und liefert die aus. Kosten zur Laufzeit: ein `exists()`-Check, keine CPU pro
+ * Request — deshalb vorkomprimiert statt eines Compression-Filters.
+ *
+ * Drei Eigenschaften, auf die sich das verlaesst (an Spring 6.1.12 verifiziert):
+ *  - `EncodedResource.getFilename()` gibt den ORIGINALnamen zurueck ⇒ der
+ *    Content-Type bleibt `text/css` / `application/javascript`, nicht `.br`.
+ *  - `contentLength()` kommt aus der komprimierten Datei ⇒ Content-Length passt,
+ *    und `Content-Encoding` + `Vary: Accept-Encoding` setzt der Resolver selbst.
+ *  - Der `CachingResourceResolver` aus `resourceChain(true)` nimmt das Coding in
+ *    seinen Cache-Key auf ⇒ ein br-Client vergiftet den Cache eines Clients ohne
+ *    `Accept-Encoding` nicht.
+ *
+ * Fehlt eine `.br`/`.gz`-Datei (z. B. `index.html`, unter der 1024-B-Schwelle des
+ * Build-Plugins), faellt der Resolver still auf das Original zurueck — ein Deploy
+ * ohne vorkomprimierte Assets funktioniert also unveraendert weiter.
  */
 @Configuration
 @ConditionalOnProperty(name = ["hoshi.web.serve-frontend"], havingValue = "true")
@@ -64,9 +88,27 @@ class WebConfig(
     override fun addResourceHandlers(registry: ResourceHandlerRegistry) {
         log.info("[web] FE-Serving aktiv aus {} (catch-all + SPA-fallback)", dir)
 
+        // Hashed Vite bundles are immutable by name — cache them for a year.
+        // Everything else (themes/*.css, index.html) must revalidate: without a
+        // Cache-Control the browser's Last-Modified heuristic silently served a
+        // stale themes/ukiyo.css over a deployed scene update (14.08.).
+        registry.addResourceHandler("/assets/**")
+            .addResourceLocations("file:$dir/assets/")
+            .setCacheControl(CacheControl.maxAge(java.time.Duration.ofDays(365)).cachePublic())
+            .resourceChain(true)
+            // Kein eigener PathResourceResolver noetig — die ResourceChain haengt
+            // hinter dem letzten Resolver automatisch einen an, wenn keiner dabei ist.
+            .addResolver(EncodedResourceResolver())
+
         registry.addResourceHandler("/**")
             .addResourceLocations("file:$dir/")
+            .setCacheControl(CacheControl.noCache())
             .resourceChain(true)
+            // VOR dem SPA-Resolver: EncodedResourceResolver loest erst ueber die
+            // Kette auf (also inkl. SPA-Fallback auf index.html) und tauscht das
+            // Ergebnis danach gegen die .br/.gz-Variante — die Reihenfolge ist
+            // damit Pflicht, umgekehrt saehe er nie eine aufgeloeste Datei.
+            .addResolver(EncodedResourceResolver())
             .addResolver(object : PathResourceResolver() {
                 override fun getResource(resourcePath: String, location: Resource): Mono<Resource> {
                     // Best-effort: existiert die angefragte statische Datei wirklich?

@@ -41,11 +41,19 @@ import org.springframework.web.bind.annotation.RestController
  *  - War der Adapter mindestens einmal erfolgreich, liefert er den letzten
  *    guten Stand weiter (TTL-Cache-Muster, s. Adapter-KDoc) ⇒ 200, auch wenn
  *    HA GERADE nicht antwortet.
+ *
+ * **Räume-Nutzungs-Naht (additiv, kartiert in Commit f049965 /
+ * `frontend/src/components/roomsSort.ts`-KDoc):** NACH dem HA-Read mischt
+ * [areaUsage] die 14-Tage-Zählung je Area ([AreaUsageReader.countsByArea])
+ * in den Snapshot — [de.hoshi.adapters.ha.HomeRegistryArea.recentCommands]
+ * ist bei jedem bestehenden Aufrufer (Default [AreaUsageReader.NONE]) `0`
+ * ⇒ byte-neutral ohne die neue Bean, KEIN neuer Endpoint, KEIN Feature-Flag.
  */
 @RestController
 class HomeRegistryController(
     private val adapter: HaHomeRegistryAdapter,
     @Value("\${HOSHI_HA_ENABLED:false}") private val haEnabled: Boolean,
+    private val areaUsage: AreaUsageReader = AreaUsageReader.NONE,
 ) {
 
     @GetMapping("/api/v1/home/registry")
@@ -59,7 +67,12 @@ class HomeRegistryController(
         val snapshot = adapter.registry()
             ?: return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(SettingsError("home-registry-unreachable", FEATURE_ID, "Home Assistant ist gerade nicht erreichbar."))
-        return ResponseEntity.ok(snapshot)
+        // Räume-Nutzungs-Naht (additiv, s. Klassen-KDoc): fehlende Treffer ⇒ ehrlich 0.
+        val counts = areaUsage.countsByArea()
+        val enriched = snapshot.copy(
+            areas = snapshot.areas.map { area -> area.copy(recentCommands = counts[area.areaId] ?: 0) },
+        )
+        return ResponseEntity.ok(enriched)
     }
 
     companion object {

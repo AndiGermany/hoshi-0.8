@@ -1,10 +1,18 @@
 package de.hoshi.web
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import de.hoshi.core.port.DeviceDownlinkPort
+import de.hoshi.core.port.InMemoryScheduledItemStore
+import de.hoshi.core.port.ScheduledItem
+import de.hoshi.core.port.ScheduledKind
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -18,6 +26,13 @@ import java.time.ZoneOffset
  * oder Timeout, und der Flag-OFF-Beweis (byte-neutral, kein Push, kein Thread).
  */
 class TimerRingDownlinkServiceTest {
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private data class LegacyTimerRingFrame(
+        val type: String,
+        val id: String,
+        val label: String? = null,
+    )
 
     private class FakeDownlinkPort : DeviceDownlinkPort {
         val connected = mutableSetOf<String>()
@@ -44,6 +59,20 @@ class TimerRingDownlinkServiceTest {
 
     private val t0: Instant = Instant.parse("2026-07-20T12:00:00Z")
 
+    private fun item(
+        id: String = "t1",
+        label: String? = "Pizza",
+        originSatelliteId: String? = "sat-kueche",
+        scheduledFor: Long = t0.toEpochMilli(),
+        kind: ScheduledKind = ScheduledKind.TIMER,
+    ) = ScheduledItem(
+        id = id,
+        kind = kind,
+        dueAtEpochMs = scheduledFor,
+        label = label,
+        originSatelliteId = originSatelliteId,
+    )
+
     private fun service(
         downlink: FakeDownlinkPort,
         enabled: Boolean = true,
@@ -62,7 +91,7 @@ class TimerRingDownlinkServiceTest {
         val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
         val svc = service(downlink, enabled = false)
 
-        svc.onFired("t1", "Pizza", "sat-kueche")
+        svc.onFired(item())
 
         assertTrue(downlink.pushed.isEmpty(), "Flag OFF ⇒ kein Push-Versuch")
         assertEquals(0, svc.ringingCount())
@@ -90,7 +119,7 @@ class TimerRingDownlinkServiceTest {
         val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
         val svc = service(downlink)
 
-        svc.onFired("t1", "Pizza", null)
+        svc.onFired(item(originSatelliteId = null))
 
         assertTrue(downlink.pushed.isEmpty(), "kein Satelliten-Ursprung ⇒ kein Push")
         assertEquals(0, svc.ringingCount())
@@ -98,12 +127,14 @@ class TimerRingDownlinkServiceTest {
 
     // ── onFired: Satellit verbunden ⇒ SOFORTIGER Push, Frame-Format ──────────
 
-    @Test
-    fun `onFired mit verbundenem Satelliten pusht sofort das timer_ring-Frame`() {
+    @ParameterizedTest
+    @EnumSource(ScheduledKind::class)
+    fun `onFired pusht scheduledFor und kind fuer jede ScheduledKind`(kind: ScheduledKind) {
         val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
         val svc = service(downlink)
+        val scheduledFor = 1_750_000_123_456L
 
-        svc.onFired("t1", "Pizza", "sat-kueche")
+        svc.onFired(item(kind = kind, scheduledFor = scheduledFor))
 
         assertEquals(1, downlink.pushed.size, "genau ein sofortiger Push")
         val (satelliteId, frame) = downlink.pushed.single()
@@ -111,7 +142,42 @@ class TimerRingDownlinkServiceTest {
         assertEquals("timer_ring", frame["type"])
         assertEquals("t1", frame["id"])
         assertEquals("Pizza", frame["label"])
+        assertEquals(scheduledFor, frame["scheduledFor"])
+        assertEquals(kind.name, frame["kind"])
         assertEquals(1, svc.ringingCount(), "Retry-Zustand angelegt (wartet auf Ack/Timeout)")
+    }
+
+    @Test
+    fun `altes timer_ring-Schema parst das additive Frame unveraendert`() {
+        val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
+        val svc = service(downlink)
+        svc.onFired(item(kind = ScheduledKind.REMINDER))
+
+        val json = jacksonObjectMapper().writeValueAsString(downlink.pushed.single().second)
+        val legacy = jacksonObjectMapper().readValue<LegacyTimerRingFrame>(json)
+
+        assertEquals(LegacyTimerRingFrame(type = "timer_ring", id = "t1", label = "Pizza"), legacy)
+    }
+
+    @Test
+    fun `Fire-Service reicht Zeit und Kind aus dem bestehenden ScheduledItem bis ins Frame`() {
+        val scheduledFor = 1_750_000_123_456L
+        val scheduled = item(kind = ScheduledKind.ALARM, scheduledFor = scheduledFor)
+        val store = InMemoryScheduledItemStore().apply { set(scheduled) }
+        val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
+        val ring = service(downlink)
+
+        ScheduledItemFireService(
+            store = store,
+            fired = InMemoryFiredItemsStore(),
+            enabled = true,
+            clock = Clock.fixed(Instant.ofEpochMilli(scheduledFor), ZoneOffset.UTC),
+            onFired = ring::onFired,
+        ).pollOnce()
+
+        val frame = downlink.pushed.single().second
+        assertEquals(scheduled.dueAtEpochMs, frame["scheduledFor"])
+        assertEquals(scheduled.kind.name, frame["kind"])
     }
 
     @Test
@@ -119,7 +185,7 @@ class TimerRingDownlinkServiceTest {
         val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
         val svc = service(downlink)
 
-        svc.onFired("t1", null, "sat-kueche")
+        svc.onFired(item(label = null))
 
         val (_, frame) = downlink.pushed.single()
         assertFalse(frame.containsKey("label"), "label=null ⇒ Feld fehlt im Frame")
@@ -132,7 +198,7 @@ class TimerRingDownlinkServiceTest {
         val downlink = FakeDownlinkPort() // niemand verbunden
         val svc = service(downlink)
 
-        svc.onFired("t1", "Pizza", "sat-kueche")
+        svc.onFired(item())
 
         assertTrue(downlink.pushed.isEmpty())
         assertEquals(0, svc.ringingCount(), "kein Retry-Zustand fuer ein totes Ziel (kein Sturm)")
@@ -145,7 +211,7 @@ class TimerRingDownlinkServiceTest {
         val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
         val clock = MutableClock(t0)
         val svc = service(downlink, clock = clock, retryIntervalMs = 1_000, timeoutMs = 10_000)
-        svc.onFired("t1", "Pizza", "sat-kueche")
+        svc.onFired(item())
         assertEquals(1, downlink.pushed.size, "der sofortige Erst-Push")
 
         clock.advanceMs(500) // < retryIntervalMs
@@ -155,6 +221,7 @@ class TimerRingDownlinkServiceTest {
         clock.advanceMs(600) // jetzt insgesamt 1100ms seit dem letzten Push
         svc.tick()
         assertEquals(2, downlink.pushed.size, "nach Ablauf des Intervalls ein weiterer Push")
+        assertEquals(downlink.pushed.first().second, downlink.pushed.last().second, "Retry wiederholt dasselbe Frame")
         assertEquals(1, svc.ringingCount(), "weiterhin wartend (kein Ack, kein Timeout)")
     }
 
@@ -163,7 +230,7 @@ class TimerRingDownlinkServiceTest {
         val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
         val clock = MutableClock(t0)
         val svc = service(downlink, clock = clock, retryIntervalMs = 1_000, timeoutMs = 3_000)
-        svc.onFired("t1", "Pizza", "sat-kueche")
+        svc.onFired(item())
 
         clock.advanceMs(3_500) // ueber den Timeout hinaus
         svc.tick()
@@ -176,7 +243,7 @@ class TimerRingDownlinkServiceTest {
         val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
         val clock = MutableClock(t0)
         val svc = service(downlink, clock = clock, retryIntervalMs = 1_000, timeoutMs = 10_000)
-        svc.onFired("t1", "Pizza", "sat-kueche")
+        svc.onFired(item())
         assertEquals(1, downlink.pushed.size)
 
         downlink.connected.clear() // Satellit trennt sich
@@ -194,7 +261,7 @@ class TimerRingDownlinkServiceTest {
         val downlink = FakeDownlinkPort().apply { connected += "sat-kueche" }
         val clock = MutableClock(t0)
         val svc = service(downlink, clock = clock, retryIntervalMs = 1_000, timeoutMs = 10_000)
-        svc.onFired("t1", "Pizza", "sat-kueche")
+        svc.onFired(item())
 
         svc.onAck("t1")
         assertEquals(0, svc.ringingCount(), "Ack raeumt den Ring-Zustand sofort")
@@ -218,8 +285,8 @@ class TimerRingDownlinkServiceTest {
         val downlink = FakeDownlinkPort().apply { connected += setOf("sat-kueche", "sat-buero") }
         val svc = service(downlink)
 
-        svc.onFired("t1", "Pizza", "sat-kueche")
-        svc.onFired("t2", "Meeting", "sat-buero")
+        svc.onFired(item())
+        svc.onFired(item(id = "t2", label = "Meeting", originSatelliteId = "sat-buero"))
 
         assertEquals(2, svc.ringingCount())
         svc.onAck("t1")

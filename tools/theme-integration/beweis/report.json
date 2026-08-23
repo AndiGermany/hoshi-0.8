@@ -1,0 +1,339 @@
+{
+  "manifestSeen": {
+    "status": 200,
+    "ids": [
+      "asagiri",
+      "komorebi",
+      "momiji",
+      "natsumatsuri",
+      "hanashigure",
+      "ukiyo",
+      "amayadori",
+      "natsunohi",
+      "nagareboshi",
+      "asa",
+      "yoake",
+      "aoi",
+      "yoru",
+      "sora",
+      "nagori",
+      "kasumi"
+    ],
+    "szenen": [
+      "asagiri",
+      "komorebi",
+      "momiji",
+      "natsumatsuri",
+      "hanashigure",
+      "ukiyo",
+      "amayadori",
+      "natsunohi",
+      "nagareboshi",
+      "asa",
+      "yoake",
+      "aoi",
+      "yoru"
+    ]
+  },
+  "themes": [
+    {
+      "id": "amayadori",
+      "file": "amayadori.css",
+      "swatch": [
+        "#1a1613",
+        "#ee9b6e",
+        "#f2e9dc"
+      ],
+      "links": [
+        {
+          "href": "/themes/amayadori.css",
+          "loaded": true
+        }
+      ],
+      "cssStatus": 200,
+      "cssBytes": 37315,
+      "svgStatus": 200,
+      "svgBytes": 30692,
+      "rawAccent": "#ee9b6e",
+      "bgSurface": {
+        "computed": "rgb(26, 22, 19)",
+        "hex": "#1a1613"
+      },
+      "accent": {
+        "computed": "rgb(238, 155, 110)",
+        "hex": "#ee9b6e"
+      },
+      "text1": {
+        "computed": "rgb(242, 233, 220)",
+        "hex": "#f2e9dc"
+      },
+      "atmosphere": "linear-gradient(\n      180deg,\n      rgb(110 130 150 / 0.16)"
+    },
+    {
+      "id": "natsunohi",
+      "file": "natsunohi.css",
+      "swatch": [
+        "#fdfaee",
+        "#19687b",
+        "#0e2d40"
+      ],
+      "links": [
+        {
+          "href": "/themes/natsunohi.css",
+          "loaded": true
+        }
+      ],
+      "cssStatus": 200,
+      "cssBytes": 22447,
+      "svgStatus": 200,
+      "svgBytes": 29712,
+      "rawAccent": "oklch(0.48 0.078 218)",
+      "bgSurface": {
+        "computed": "oklch(0.985 0.017 96)",
+        "hex": "#fdfaee"
+      },
+      "accent": {
+        "computed": "oklch(0.48 0.078 218)",
+        "hex": "#19687b"
+      },
+      "text1": {
+        "computed": "oklch(0.285 0.05 238)",
+        "hex": "#0e2d40"
+      },
+      "atmosphere": "radial-gradient(\n      circle 15vmin at 90% 7%,\n      oklch("
+    },
+    {
+      "id": "nagareboshi",
+      "file": "nagareboshi.css",
+      "swatch": [
+        "#090609",
+        "#e59e77",
+        "#e2ddd5"
+      ],
+      "links": [
+        {
+          "href": "/themes/nagareboshi.css",
+          "loaded": true
+        }
+      ],
+      "cssStatus": 200,
+      "cssBytes": 21574,
+      "svgStatus": 200,
+      "svgBytes": 51808,
+      "rawAccent": "oklch(0.76 0.1 50)",
+      "bgSurface": {
+        "computed": "oklch(0.13 0.008 330)",
+        "hex": "#090609"
+      },
+      "accent": {
+        "computed": "oklch(0.76 0.1 50)",
+        "hex": "#e59e77"
+      },
+      "text1": {
+        "computed": "oklch(0.9 0.012 78)",
+        "hex": "#e2ddd5"
+      },
+      "atmosphere": "linear-gradient(\n      180deg,\n      transparent 40%,\n      "
+    },
+    {
+      "id": "asa",
+      "file": "asa.css",
+      "swatch": [
+        "#fcf7ed",
+        "#ad3300",
+        "#231a14"
+      ],
+      "links": [
+        {
+          "href": "/themes/asa.css",
+          "loaded": true
+        }
+      ],
+      "cssStatus": 200,
+      "cssBytes": 24852,
+      "svgStatus": 200,
+      "svgBytes": 7283,
+      "rawAccent": "oklch(0.5 0.17 42)",
+      "bgSurface": {
+        "computed": "oklch(0.977 0.014 85)",
+        "hex": "#fcf7ed"
+      },
+      "accent": {
+        "computed": "oklch(0.5 0.17 42)",
+        "hex": "#ad3300"
+      },
+      "text1": {
+        "computed": "oklch(0.225 0.018 55)",
+        "hex": "#231a14"
+      },
+      "atmosphere": "radial-gradient(ellipse 74% 58% at 95% -8%, oklch(0.995 0.00"
+    },
+    {
+      "id": "yoake",
+      "file": "yoake.css",
+      "swatch": [
+        "#171327",
+        "#ff9575",
+        "#f7eee7"
+      ],
+      "links": [
+        {
+          "href": "/themes/yoake.css",
+          "loaded": true
+        }
+      ],
+      "cssStatus": 200,
+      "cssBytes": 29371,
+      "svgStatus": 200,
+      "svgBytes": 7919,
+      "rawAccent": "oklch(0.775 0.135 38)",
+      "bgSurface": {
+        "computed": "oklch(0.202 0.04 291)",
+        "hex": "#171327"
+      },
+      "accent": {
+        "computed": "oklch(0.775 0.135 38)",
+        "hex": "#ff9575"
+      },
+      "text1": {
+        "computed": "oklch(0.955 0.014 62)",
+        "hex": "#f7eee7"
+      },
+      "atmosphere": "linear-gradient(\n      180deg,\n      oklch(0.105 0.05 288 / "
+    },
+    {
+      "id": "aoi",
+      "file": "aoi.css",
+      "swatch": [
+        "#141a26",
+        "#5ea0f2",
+        "#e8eef7"
+      ],
+      "links": [
+        {
+          "href": "/themes/aoi.css",
+          "loaded": true
+        }
+      ],
+      "cssStatus": 200,
+      "cssBytes": 28679,
+      "svgStatus": 200,
+      "svgBytes": 11489,
+      "rawAccent": "#5ea0f2",
+      "bgSurface": {
+        "computed": "rgb(20, 26, 38)",
+        "hex": "#141a26"
+      },
+      "accent": {
+        "computed": "rgb(94, 160, 242)",
+        "hex": "#5ea0f2"
+      },
+      "text1": {
+        "computed": "rgb(232, 238, 247)",
+        "hex": "#e8eef7"
+      },
+      "atmosphere": "radial-gradient(ellipse 120% 46% at 46% -12%, rgb(94 160 242"
+    },
+    {
+      "id": "yoru",
+      "file": "yoru.css",
+      "swatch": [
+        "#0e0c0a",
+        "#ffa275",
+        "#f4f1ed"
+      ],
+      "links": [
+        {
+          "href": "/assets/index-ClZ19Q1W.css",
+          "loaded": true
+        },
+        {
+          "href": "/themes/yoru.css",
+          "loaded": true
+        }
+      ],
+      "cssStatus": 200,
+      "cssBytes": 22076,
+      "svgStatus": 200,
+      "svgBytes": 14415,
+      "rawAccent": "oklch(.8 .13 45)",
+      "bgSurface": {
+        "computed": "oklch(0.155 0.006 64)",
+        "hex": "#0e0c0a"
+      },
+      "accent": {
+        "computed": "oklch(0.8 0.13 45)",
+        "hex": "#ffa275"
+      },
+      "text1": {
+        "computed": "oklch(0.96 0.006 70)",
+        "hex": "#f4f1ee"
+      },
+      "atmosphere": "radial-gradient(ellipse at 82% 108%, oklch(0.8 0.13 45 / 0.0"
+    }
+  ],
+  "opened": {
+    "trail": [
+      "settingsBtn=true",
+      "tab=DarstellungFarbthema und wie Hoshi aussieht",
+      "galleryBtn=true"
+    ],
+    "overlayOpen": true,
+    "cards": 15,
+    "labels": [
+      "Szenen: Asagiri",
+      "Szenen: Komorebi",
+      "Szenen: Momiji",
+      "Szenen: Natsumatsuri",
+      "Szenen: Hanashigure",
+      "Szenen: Ukiyo",
+      "Szenen: Amayadori",
+      "Szenen: Natsu no Hi",
+      "Szenen: Nagareboshi",
+      "Szenen: Asa",
+      "Szenen: Yoake",
+      "Szenen: Aoi",
+      "Szenen: Yoru",
+      "Folgt dem Tag: Sora",
+      "Klassiker: Kasumi"
+    ],
+    "images": [
+      "/themes/asagiri-szene.svg",
+      "/themes/komorebi-kozue.svg",
+      "/themes/momiji-eda.svg",
+      "/themes/natsumatsuri-hanabi.svg",
+      "/themes/hanashigure-szene.svg",
+      "/themes/ukiyo-wave.svg",
+      "/themes/amayadori-szene.svg"
+    ],
+    "groups": [
+      "Szenen",
+      "Folgt dem Tag",
+      "Klassiker"
+    ],
+    "scrolled": {
+      "images": [
+        "/themes/asagiri-szene.svg",
+        "/themes/komorebi-kozue.svg",
+        "/themes/momiji-eda.svg",
+        "/themes/natsumatsuri-hanabi.svg",
+        "/themes/hanashigure-szene.svg",
+        "/themes/ukiyo-wave.svg",
+        "/themes/amayadori-szene.svg",
+        "/themes/nagareboshi-szene.svg",
+        "/themes/asa-szene.svg",
+        "/themes/yoake-szene.svg",
+        "/themes/aoi-szene.svg",
+        "/themes/yoru-szene.svg"
+      ],
+      "visible": [
+        "Szenen: Nagareboshi",
+        "Szenen: Asa",
+        "Szenen: Yoake",
+        "Szenen: Aoi",
+        "Szenen: Yoru"
+      ]
+    }
+  },
+  "chrome": "Chrome/151.0.7922.138"
+}

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>heise online Top-News</title>
+  <updated>2026-08-15T09:00:00+02:00</updated>
+  <entry>
+    <title>Heise Meldung eins – aktualisiert</title>
+    <id>http://heise.de/-100001</id>
+    <published>2026-08-15T08:00:00+02:00</published>
+    <link href="https://www.heise.de/news/heise-eins-100001.html?topic=technik&amp;wt_mc=rss.test"/>
+    <summary>Der redigierte Anriss.</summary>
+  </entry>
+  <entry>
+    <title>Heise Meldung zwei</title>
+    <id>http://heise.de/-100002</id>
+    <published>2026-08-15T07:00:00+02:00</published>
+    <link href="https://www.heise.de/news/heise-zwei-100002.html"/>
+    <summary>Ein zweiter Anriss.</summary>
+  </entry>
+  <entry>
+    <title>Heise Meldung drei</title>
+    <id>http://heise.de/-100003</id>
+    <published>2026-08-15T09:00:00+02:00</published>
+    <link href="https://www.heise.de/news/heise-drei-100003.html"/>
+    <summary>Neu hinzugekommen.</summary>
+  </entry>
+</feed>

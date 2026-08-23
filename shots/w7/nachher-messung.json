@@ -1,0 +1,720 @@
+{
+ "1366x1024/normal": {
+  "viewport": {
+   "w": 1366,
+   "h": 1024
+  },
+  "docScrollH": 1024,
+  "editing": "false",
+  "rail": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 621
+  },
+  "tilesBox": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 641
+  },
+  "pageCount": 4,
+  "inFlowChildrenOfStage": [
+   "idle__tiles"
+  ],
+  "editbar": null,
+  "tray": null,
+  "sizer": null,
+  "sizerCell": null,
+  "sizerButtons": [],
+  "grips": 0,
+  "visibleStepLetter": null,
+  "storedLayout": "{\"version\":1,\"order\":[{\"id\":\"uhr\",\"size\":\"L\"},{\"id\":\"wecker\",\"size\":\"M\"},{\"id\":\"wetter\",\"size\":\"L\"},{\"id\":\"laeuft\",\"size\":\"L\"},{\"id\":\"einkauf\",\"size\":\"M\"},{\"id\":\"vacuum\",\"size\":\"L\"},{\"id\":\"climate\",\"size\":\"L\"},{\"id\":\"news\",\"size\":\"M\"}],\"placements\":{\"3\":{\"uhr\":{\"col\":0,\"row\":0},\"wecker\":{\"col\":0,\"row\":2},\"wetter\":{\"col\":0,\"row\":4},\"vacuum\":{\"col\":0,\"row\":6},\"climate\":{\"col\":0,\"row\":8},\"laeuft\":{\"col\":0,\"row\":10},\"einkauf\":{\"col\":0,\"row\":12},\"news\":{\"col\":0,\"row\":13}}}}",
+  "tiles": [
+   {
+    "id": "uhr",
+    "page": 0,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 243,
+     "y": 157,
+     "w": 583,
+     "h": 410
+    }
+   },
+   {
+    "id": "wecker",
+    "page": 0,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 243,
+     "y": 579,
+     "w": 583,
+     "h": 199
+    }
+   },
+   {
+    "id": "wetter",
+    "page": 1,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 1123,
+     "y": 157,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "vacuum",
+    "page": 1,
+    "cell": "1 / span 2 / 3 / span 2",
+    "box": {
+     "x": 1123,
+     "y": 474,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "climate",
+    "page": 2,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 2003,
+     "y": 157,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "laeuft",
+    "page": 2,
+    "cell": "1 / span 2 / 3 / span 2",
+    "box": {
+     "x": 2003,
+     "y": 474,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "einkauf",
+    "page": 3,
+    "cell": "1 / span 2 / 1 / span 1",
+    "box": {
+     "x": 2883,
+     "y": 157,
+     "w": 583,
+     "h": 305
+    }
+   }
+  ]
+ },
+ "1366x1024/edit": {
+  "longPressOn": "uhr",
+  "viewport": {
+   "w": 1366,
+   "h": 1024
+  },
+  "docScrollH": 1024,
+  "editing": "true",
+  "rail": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 621
+  },
+  "tilesBox": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 641
+  },
+  "pageCount": 4,
+  "inFlowChildrenOfStage": [
+   "idle__tiles"
+  ],
+  "editbar": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 62
+  },
+  "tray": {
+   "x": 243,
+   "y": 742,
+   "w": 880,
+   "h": 56
+  },
+  "sizer": {
+   "x": 243,
+   "y": 509,
+   "w": 583,
+   "h": 50
+  },
+  "sizerCell": "1 / span 2 / 1 / span 2",
+  "sizerButtons": [
+   {
+    "dir": "down",
+    "label": "Kleiner",
+    "disabled": false,
+    "w": 44,
+    "h": 44,
+    "glyphPx": 17
+   },
+   {
+    "dir": "up",
+    "label": "Größer",
+    "disabled": true,
+    "w": 44,
+    "h": 44,
+    "glyphPx": 17
+   }
+  ],
+  "grips": 0,
+  "visibleStepLetter": {
+   "text": "Groß",
+   "w": 1,
+   "h": 1
+  },
+  "storedLayout": "{\"version\":1,\"order\":[{\"id\":\"uhr\",\"size\":\"L\"},{\"id\":\"wecker\",\"size\":\"M\"},{\"id\":\"wetter\",\"size\":\"L\"},{\"id\":\"laeuft\",\"size\":\"L\"},{\"id\":\"einkauf\",\"size\":\"M\"},{\"id\":\"vacuum\",\"size\":\"L\"},{\"id\":\"climate\",\"size\":\"L\"},{\"id\":\"news\",\"size\":\"M\"}],\"placements\":{\"3\":{\"uhr\":{\"col\":0,\"row\":0},\"wecker\":{\"col\":0,\"row\":2},\"wetter\":{\"col\":0,\"row\":4},\"vacuum\":{\"col\":0,\"row\":6},\"climate\":{\"col\":0,\"row\":8},\"laeuft\":{\"col\":0,\"row\":10},\"einkauf\":{\"col\":0,\"row\":12},\"news\":{\"col\":0,\"row\":13}}}}",
+  "tiles": [
+   {
+    "id": "uhr",
+    "page": 0,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 243,
+     "y": 156,
+     "w": 583,
+     "h": 411
+    }
+   },
+   {
+    "id": "wecker",
+    "page": 0,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 243,
+     "y": 578,
+     "w": 584,
+     "h": 202
+    }
+   },
+   {
+    "id": "wetter",
+    "page": 1,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 1122,
+     "y": 155,
+     "w": 585,
+     "h": 308
+    }
+   },
+   {
+    "id": "vacuum",
+    "page": 1,
+    "cell": "1 / span 2 / 3 / span 2",
+    "box": {
+     "x": 1122,
+     "y": 471,
+     "w": 585,
+     "h": 309
+    }
+   },
+   {
+    "id": "climate",
+    "page": 2,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 2002,
+     "y": 155,
+     "w": 585,
+     "h": 309
+    }
+   },
+   {
+    "id": "laeuft",
+    "page": 2,
+    "cell": "1 / span 2 / 3 / span 2",
+    "box": {
+     "x": 2002,
+     "y": 472,
+     "w": 585,
+     "h": 309
+    }
+   },
+   {
+    "id": "einkauf",
+    "page": 3,
+    "cell": "1 / span 2 / 1 / span 1",
+    "box": {
+     "x": 2882,
+     "y": 155,
+     "w": 584,
+     "h": 308
+    }
+   }
+  ]
+ },
+ "1366x1024/luecke": {
+  "viewport": {
+   "w": 1366,
+   "h": 1024
+  },
+  "docScrollH": 1024,
+  "editing": "false",
+  "rail": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 621
+  },
+  "tilesBox": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 641
+  },
+  "pageCount": 4,
+  "inFlowChildrenOfStage": [
+   "idle__tiles"
+  ],
+  "editbar": null,
+  "tray": null,
+  "sizer": null,
+  "sizerCell": null,
+  "sizerButtons": [],
+  "grips": 0,
+  "visibleStepLetter": null,
+  "storedLayout": "{\"version\":1,\"order\":[{\"id\":\"uhr\",\"size\":\"L\"},{\"id\":\"wecker\",\"size\":\"M\"},{\"id\":\"wetter\",\"size\":\"L\"},{\"id\":\"laeuft\",\"size\":\"L\"},{\"id\":\"einkauf\",\"size\":\"M\"},{\"id\":\"vacuum\",\"size\":\"L\"},{\"id\":\"climate\",\"size\":\"L\"},{\"id\":\"news\",\"size\":\"M\"}],\"placements\":{\"3\":{\"uhr\":{\"col\":0,\"row\":0},\"wecker\":{\"col\":0,\"row\":2},\"wetter\":{\"col\":0,\"row\":4},\"vacuum\":{\"col\":0,\"row\":6},\"climate\":{\"col\":0,\"row\":8},\"laeuft\":{\"col\":0,\"row\":10},\"einkauf\":{\"col\":0,\"row\":12},\"news\":{\"col\":0,\"row\":13}}}}",
+  "tiles": [
+   {
+    "id": "uhr",
+    "page": 0,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 243,
+     "y": 157,
+     "w": 583,
+     "h": 410
+    }
+   },
+   {
+    "id": "wecker",
+    "page": 0,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 243,
+     "y": 579,
+     "w": 583,
+     "h": 199
+    }
+   },
+   {
+    "id": "wetter",
+    "page": 1,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 1123,
+     "y": 157,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "vacuum",
+    "page": 1,
+    "cell": "1 / span 2 / 3 / span 2",
+    "box": {
+     "x": 1123,
+     "y": 474,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "climate",
+    "page": 2,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 2003,
+     "y": 157,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "einkauf",
+    "page": 3,
+    "cell": "1 / span 2 / 1 / span 1",
+    "box": {
+     "x": 2883,
+     "y": 157,
+     "w": 583,
+     "h": 305
+    }
+   }
+  ]
+ },
+ "834x1112/normal": {
+  "viewport": {
+   "w": 834,
+   "h": 1112
+  },
+  "docScrollH": 1112,
+  "editing": "false",
+  "rail": {
+   "x": 20,
+   "y": 157,
+   "w": 794,
+   "h": 709
+  },
+  "tilesBox": {
+   "x": 20,
+   "y": 157,
+   "w": 794,
+   "h": 729
+  },
+  "pageCount": 3,
+  "inFlowChildrenOfStage": [
+   "idle__tiles"
+  ],
+  "editbar": null,
+  "tray": null,
+  "sizer": null,
+  "sizerCell": null,
+  "sizerButtons": [],
+  "grips": 0,
+  "visibleStepLetter": null,
+  "storedLayout": "{\"version\":1,\"order\":[{\"id\":\"uhr\",\"size\":\"L\"},{\"id\":\"wecker\",\"size\":\"M\"},{\"id\":\"wetter\",\"size\":\"L\"},{\"id\":\"laeuft\",\"size\":\"L\"},{\"id\":\"einkauf\",\"size\":\"M\"},{\"id\":\"vacuum\",\"size\":\"L\"},{\"id\":\"climate\",\"size\":\"L\"},{\"id\":\"news\",\"size\":\"M\"}],\"placements\":{\"3\":{\"uhr\":{\"col\":0,\"row\":0},\"wecker\":{\"col\":0,\"row\":2},\"wetter\":{\"col\":0,\"row\":4},\"vacuum\":{\"col\":0,\"row\":6},\"climate\":{\"col\":0,\"row\":8},\"laeuft\":{\"col\":0,\"row\":10},\"einkauf\":{\"col\":0,\"row\":12},\"news\":{\"col\":0,\"row\":13}}}}",
+  "tiles": [
+   {
+    "id": "uhr",
+    "page": 0,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 20,
+     "y": 157,
+     "w": 525,
+     "h": 277
+    }
+   },
+   {
+    "id": "wecker",
+    "page": 0,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 20,
+     "y": 446,
+     "w": 525,
+     "h": 132
+    }
+   },
+   {
+    "id": "wetter",
+    "page": 0,
+    "cell": "1 / span 2 / 4 / span 2",
+    "box": {
+     "x": 20,
+     "y": 590,
+     "w": 525,
+     "h": 277
+    }
+   },
+   {
+    "id": "vacuum",
+    "page": 1,
+    "cell": "1 / span 2 / 2 / span 2",
+    "box": {
+     "x": 814,
+     "y": 301,
+     "w": 525,
+     "h": 277
+    }
+   },
+   {
+    "id": "climate",
+    "page": 1,
+    "cell": "1 / span 2 / 4 / span 2",
+    "box": {
+     "x": 814,
+     "y": 590,
+     "w": 525,
+     "h": 277
+    }
+   },
+   {
+    "id": "laeuft",
+    "page": 2,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 1608,
+     "y": 157,
+     "w": 525,
+     "h": 349
+    }
+   },
+   {
+    "id": "einkauf",
+    "page": 2,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 1608,
+     "y": 518,
+     "w": 525,
+     "h": 168
+    }
+   }
+  ]
+ },
+ "834x1112/edit": {
+  "longPressOn": "uhr",
+  "viewport": {
+   "w": 834,
+   "h": 1112
+  },
+  "docScrollH": 1112,
+  "editing": "true",
+  "rail": {
+   "x": 20,
+   "y": 157,
+   "w": 794,
+   "h": 709
+  },
+  "tilesBox": {
+   "x": 20,
+   "y": 157,
+   "w": 794,
+   "h": 729
+  },
+  "pageCount": 3,
+  "inFlowChildrenOfStage": [
+   "idle__tiles"
+  ],
+  "editbar": {
+   "x": 20,
+   "y": 157,
+   "w": 794,
+   "h": 62
+  },
+  "tray": {
+   "x": 20,
+   "y": 830,
+   "w": 794,
+   "h": 56
+  },
+  "sizer": {
+   "x": 20,
+   "y": 376,
+   "w": 525,
+   "h": 50
+  },
+  "sizerCell": "1 / span 2 / 1 / span 2",
+  "sizerButtons": [
+   {
+    "dir": "down",
+    "label": "Kleiner",
+    "disabled": false,
+    "w": 44,
+    "h": 44,
+    "glyphPx": 17
+   },
+   {
+    "dir": "up",
+    "label": "Größer",
+    "disabled": true,
+    "w": 44,
+    "h": 44,
+    "glyphPx": 17
+   }
+  ],
+  "grips": 0,
+  "visibleStepLetter": {
+   "text": "Groß",
+   "w": 1,
+   "h": 1
+  },
+  "storedLayout": "{\"version\":1,\"order\":[{\"id\":\"uhr\",\"size\":\"L\"},{\"id\":\"wecker\",\"size\":\"M\"},{\"id\":\"wetter\",\"size\":\"L\"},{\"id\":\"laeuft\",\"size\":\"L\"},{\"id\":\"einkauf\",\"size\":\"M\"},{\"id\":\"vacuum\",\"size\":\"L\"},{\"id\":\"climate\",\"size\":\"L\"},{\"id\":\"news\",\"size\":\"M\"}],\"placements\":{\"3\":{\"uhr\":{\"col\":0,\"row\":0},\"wecker\":{\"col\":0,\"row\":2},\"wetter\":{\"col\":0,\"row\":4},\"vacuum\":{\"col\":0,\"row\":6},\"climate\":{\"col\":0,\"row\":8},\"laeuft\":{\"col\":0,\"row\":10},\"einkauf\":{\"col\":0,\"row\":12},\"news\":{\"col\":0,\"row\":13}}}}",
+  "tiles": [
+   {
+    "id": "uhr",
+    "page": 0,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 19,
+     "y": 155,
+     "w": 527,
+     "h": 280
+    }
+   },
+   {
+    "id": "wecker",
+    "page": 0,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 19,
+     "y": 443,
+     "w": 526,
+     "h": 136
+    }
+   },
+   {
+    "id": "wetter",
+    "page": 0,
+    "cell": "1 / span 2 / 4 / span 2",
+    "box": {
+     "x": 19,
+     "y": 588,
+     "w": 527,
+     "h": 281
+    }
+   },
+   {
+    "id": "vacuum",
+    "page": 1,
+    "cell": "1 / span 2 / 2 / span 2",
+    "box": {
+     "x": 813,
+     "y": 299,
+     "w": 527,
+     "h": 280
+    }
+   },
+   {
+    "id": "climate",
+    "page": 1,
+    "cell": "1 / span 2 / 4 / span 2",
+    "box": {
+     "x": 813,
+     "y": 588,
+     "w": 527,
+     "h": 279
+    }
+   },
+   {
+    "id": "laeuft",
+    "page": 2,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 1608,
+     "y": 156,
+     "w": 526,
+     "h": 350
+    }
+   },
+   {
+    "id": "einkauf",
+    "page": 2,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 1608,
+     "y": 517,
+     "w": 525,
+     "h": 169
+    }
+   }
+  ]
+ },
+ "834x1112/luecke": {
+  "viewport": {
+   "w": 834,
+   "h": 1112
+  },
+  "docScrollH": 1118,
+  "editing": "false",
+  "rail": {
+   "x": 20,
+   "y": 157,
+   "w": 794,
+   "h": 709
+  },
+  "tilesBox": {
+   "x": 20,
+   "y": 157,
+   "w": 794,
+   "h": 729
+  },
+  "pageCount": 3,
+  "inFlowChildrenOfStage": [
+   "idle__tiles"
+  ],
+  "editbar": null,
+  "tray": null,
+  "sizer": null,
+  "sizerCell": null,
+  "sizerButtons": [],
+  "grips": 0,
+  "visibleStepLetter": null,
+  "storedLayout": "{\"version\":1,\"order\":[{\"id\":\"uhr\",\"size\":\"L\"},{\"id\":\"wecker\",\"size\":\"M\"},{\"id\":\"wetter\",\"size\":\"L\"},{\"id\":\"laeuft\",\"size\":\"L\"},{\"id\":\"einkauf\",\"size\":\"M\"},{\"id\":\"vacuum\",\"size\":\"L\"},{\"id\":\"climate\",\"size\":\"L\"},{\"id\":\"news\",\"size\":\"M\"}],\"placements\":{\"3\":{\"uhr\":{\"col\":0,\"row\":0},\"wecker\":{\"col\":0,\"row\":2},\"wetter\":{\"col\":0,\"row\":4},\"vacuum\":{\"col\":0,\"row\":6},\"climate\":{\"col\":0,\"row\":8},\"laeuft\":{\"col\":0,\"row\":10},\"einkauf\":{\"col\":0,\"row\":12},\"news\":{\"col\":0,\"row\":13}}}}",
+  "tiles": [
+   {
+    "id": "uhr",
+    "page": 0,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 20,
+     "y": 157,
+     "w": 525,
+     "h": 277
+    }
+   },
+   {
+    "id": "wecker",
+    "page": 0,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 20,
+     "y": 446,
+     "w": 525,
+     "h": 132
+    }
+   },
+   {
+    "id": "wetter",
+    "page": 0,
+    "cell": "1 / span 2 / 4 / span 2",
+    "box": {
+     "x": 20,
+     "y": 590,
+     "w": 525,
+     "h": 277
+    }
+   },
+   {
+    "id": "vacuum",
+    "page": 1,
+    "cell": "1 / span 2 / 2 / span 2",
+    "box": {
+     "x": 814,
+     "y": 301,
+     "w": 525,
+     "h": 277
+    }
+   },
+   {
+    "id": "climate",
+    "page": 1,
+    "cell": "1 / span 2 / 4 / span 2",
+    "box": {
+     "x": 814,
+     "y": 590,
+     "w": 525,
+     "h": 277
+    }
+   },
+   {
+    "id": "einkauf",
+    "page": 2,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 1608,
+     "y": 518,
+     "w": 525,
+     "h": 168
+    }
+   }
+  ]
+ }
+}

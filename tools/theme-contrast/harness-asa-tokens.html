@@ -1,0 +1,101 @@
+<!doctype html>
+<!--
+  Farb-Gerüst des Asa-Pods — die zweite Hälfte des Beweises.
+
+  WARUM ES DIESE SEITE GIBT: asa.css schreibt seine Farben in oklch(). Wollte ich
+  die Kontrast-Tabelle im Datei-Kopf aus diesen Zahlen selbst ausrechnen, würde
+  ich meine eigene Farbraum-Mathematik gegen meine eigene Farbraum-Mathematik
+  prüfen — und ein Vorzeichenfehler in beiden Hälften hebt sich auf. Genau das
+  ist hier passiert: eine frühere Fassung erklärte den Alt-Akzent
+  oklch(0.52 0.17 42) für AUSSERHALB von sRGB und entsättigte ihn deshalb. Die
+  Messung hat das widerlegt (der Gamut trägt dort bis mindestens C 0.226; bei
+  C≈0.157 geht nur der Blau-Kanal auf 0). Der Akzent musste am Ende trotzdem
+  nachgeben, aber wegen AA — 4,45:1 auf der Du-Blase —, nicht wegen des Gamuts.
+
+  Darum malt diese Seite jeden Token als Kachel und lässt CHROME die Umrechnung
+  machen. Gemessen wird danach der fertige Bildschirm-Pixel: was hier steht, ist
+  die Farbe, die ein Mensch wirklich sieht — Gamut-Klipping inklusive.
+
+  GEOMETRIE (das Skript rechnet damit, nicht mit Layout-Abfragen):
+  Kacheln sind exakt 120x120 px in einem Raster von 8 Spalten, Seitenrand 0. Die
+  i-te Kachel in Dokumentreihenfolge hat also ihren Mittelpunkt bei
+      x = (i % 8) * 120 + 60      y = (i / 8) * 120 + 60
+  Reihenfolge und Namen liest das Skript aus den data-name-Attributen; die Liste
+  steht damit nur EINMAL, hier.
+
+  Die vier "*-auf-soft"-Kacheln sind Kompositionen, keine Farben: eine Fläche
+  --bg-surface mit der halbdurchsichtigen --*-soft darüber, so wie index.css die
+  Pills und Badges baut. Chrome komponiert, das Skript liest das Ergebnis ab —
+  auch diese Rechnung muss ich damit nicht selbst machen.
+-->
+<html lang="de" data-theme="asa">
+  <head>
+    <meta charset="utf-8" />
+    <title>Asa — Farb-Messgerüst</title>
+    <link rel="stylesheet" href="../../frontend/src/index.css" />
+    <link rel="stylesheet" href="../../frontend/src/styles/themes.css" />
+    <link rel="stylesheet" href="../../frontend/public/themes/asa.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(8, 120px);
+        grid-auto-rows: 120px;
+        gap: 0;
+        width: 960px;
+      }
+      .tile {
+        width: 120px;
+        height: 120px;
+      }
+      /* Das Bett: volle Fläche --bg-surface, darauf die --*-soft in voller
+         Deckung des Elements. Chrome komponiert die beiden. */
+      .tile > i {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grid">
+      <div class="tile" data-name="text-1" style="background: var(--text-1)"></div>
+      <div class="tile" data-name="text-2" style="background: var(--text-2)"></div>
+      <div class="tile" data-name="text-3" style="background: var(--text-3)"></div>
+      <div class="tile" data-name="text-4" style="background: var(--text-4)"></div>
+      <div class="tile" data-name="accent" style="background: var(--accent)"></div>
+      <div class="tile" data-name="accent-ink" style="background: var(--accent-ink)"></div>
+      <div class="tile" data-name="success" style="background: var(--success)"></div>
+      <div class="tile" data-name="warn" style="background: var(--warn)"></div>
+
+      <div class="tile" data-name="error" style="background: var(--error)"></div>
+      <div class="tile" data-name="bg-base" style="background: var(--bg-base)"></div>
+      <div class="tile" data-name="bg-surface" style="background: var(--bg-surface)"></div>
+      <div class="tile" data-name="bg-elevated" style="background: var(--bg-elevated)"></div>
+      <div class="tile" data-name="bg-subtle" style="background: var(--bg-subtle)"></div>
+      <div class="tile" data-name="bg-user" style="background: var(--bg-user)"></div>
+      <div class="tile" data-name="bg-hairline" style="background: var(--bg-hairline)"></div>
+      <div class="tile" data-name="bg-hairline-dashed" style="background: var(--bg-hairline-dashed)"></div>
+
+      <div class="tile" data-name="bed-accent" style="background: var(--bg-surface)">
+        <i style="background: var(--accent-soft)"></i>
+      </div>
+      <div class="tile" data-name="bed-success" style="background: var(--bg-surface)">
+        <i style="background: var(--success-soft)"></i>
+      </div>
+      <div class="tile" data-name="bed-warn" style="background: var(--bg-surface)">
+        <i style="background: var(--warn-soft)"></i>
+      </div>
+      <div class="tile" data-name="bed-error" style="background: var(--bg-surface)">
+        <i style="background: var(--error-soft)"></i>
+      </div>
+      <div class="tile" data-name="accent-faint-bed" style="background: var(--bg-surface)">
+        <i style="background: var(--accent-faint)"></i>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,171 @@
+/* Hoshi 0.8 — Theme-Datei „nagori" (dynamisch nachgeladen, VERSTECKT).
+   ────────────────────────────────────────────────────────────────────────────
+   1:1 aus src/styles/themes.css herausgelöst (Umzug 2026-08-08). Nagori liegt
+   bewusst NICHT unter old/, sondern gleichrangig neben den Szenen-Themen: es
+   ist kein Alt-Theme, sondern der Vorbote der 0.9 — im Manifest steht es als
+   `"hidden": true` in der Gruppe „stimmung".
+
+   Das Unlock-Gate selbst hat sich NICHT verändert: es lebt weiterhin in
+   hooks/useSettings.ts (NAGORI_UNLOCK_KEY / isNagoriUnlocked / unlockNagori,
+   Fund über 3× die Versions-Zeile). Diese Datei ist nur Farbe.
+
+   BEIDE Selektoren bleiben Pflicht (`:root[data-theme='nagori']` UND
+   `[data-theme='nagori']`) — der zweite trägt die Token auch an ein
+   verschachteltes Element, das `data-theme` selbst setzt.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ════════════════ NAGORI (名残) — die blaue Stunde, und die Spur bleibt ════════════════
+   Das versteckte zehnte Thema (s. useSettings: Fund über die Versions-Zeile) und
+   zugleich der Codename der kommenden 0.9. 名残 kommt von 波残り (nami-nokori):
+   das, was die Welle am Strand zurücklässt. Himmelsanker ist 名残の月 — der Mond,
+   der morgens noch steht, obwohl die Nacht vorbei ist.
+
+   Farbwelt = BLAUE STUNDE: tiefes Indigo als Grund, entsättigter Schiefer für die
+   gehobenen Flächen, mattes Perlmutt/Silberweiß für die Schrift. Als EINZIGE
+   Akzentfarbe steht Glut-Amber dagegen — die verglühende Leuchtspur. Kein Neon,
+   keine zweite Buntfarbe, keine Eile; die Statusfarben bleiben bewusst leise
+   (niedriges Chroma), sie informieren, sie schmücken nicht.
+
+   Kontrast (gemessen, sRGB): text-1 15,9:1 · text-2 11,1:1 · text-3 6,8:1 ·
+   text-4 5,0:1 · accent 8,9:1 — jeweils auf --bg-surface, also AA auch für die
+   leiseste Textstufe; --accent-ink (das Indigo) steht mit 9,6:1 auf dem Amber.
+
+   Zwei Signaturen ergänzen den Token-Block, beide weiter unten:
+     • die LEUCHTSPUR — ein feiner amberner Faden im oberen rechten Raum, der
+       NICHT verlischt (body::before). Er ist reine Zierde und stellt bewusst
+       nichts dar: keine Sterne, keine erfundenen Datenpunkte.
+     • die FLUTLINIE — eine ruhige waagerechte Kante: einmal als Horizont im
+       Hintergrundverlauf (--theme-atmosphere), einmal als 1px-Amberlippe unter
+       der Kopfzeile. */
+:root[data-theme='nagori'],
+[data-theme='nagori'] {
+  /* Blaue Stunde als Vertikalverlauf: oben die tiefe Nacht, unten das
+     Restlicht über dem Horizont — dazwischen die Flutlinie als weiche,
+     waagerechte Kante bei ~60 % Höhe. Reine Fläche, keine Bewegung. */
+  --theme-atmosphere:
+    linear-gradient(180deg, transparent 57%, oklch(0.5 0.03 250 / 0.14) 60%, transparent 62%),
+    linear-gradient(180deg, oklch(0.08 0.05 285 / 0.55), transparent 44%),
+    linear-gradient(0deg, oklch(0.46 0.035 252 / 0.2), transparent 34%), var(--bg-base);
+
+  --bg-base: oklch(0.16 0.045 270); /* tiefes Indigo — der Himmel nach Sonnenuntergang */
+  --bg-surface: oklch(0.2 0.04 268);
+  --bg-elevated: oklch(0.24 0.034 264); /* entsättigter Schiefer */
+  --bg-subtle: oklch(0.285 0.03 260);
+  --bg-hairline: oklch(0.355 0.026 258);
+  --bg-hairline-dashed: oklch(0.42 0.022 256);
+
+  --text-1: oklch(0.955 0.008 250); /* mattes Perlmutt, kein Reinweiß */
+  --text-2: oklch(0.84 0.012 252);
+  --text-3: oklch(0.7 0.014 254);
+  --text-4: oklch(0.62 0.016 256); /* 5,0:1 auf surface — leise, aber lesbar */
+
+  /* Glut-Amber: die EINZIGE Akzentfarbe. Stimme, CTA, Auswahl — sonst nichts. */
+  --accent: oklch(0.785 0.135 58);
+  --accent-soft: oklch(0.785 0.135 58 / 0.18);
+  --accent-faint: oklch(0.785 0.135 58 / 0.09);
+  --accent-glow: oklch(0.785 0.135 58 / 0.38);
+  --accent-ink: oklch(0.16 0.045 270);
+
+  /* Status leise (Chroma runter): sie sind Information, nicht Dekor. */
+  --success: oklch(0.7 0.085 155);
+  --success-soft: oklch(0.7 0.085 155 / 0.14);
+  --warn: oklch(0.8 0.09 88);
+  --warn-soft: oklch(0.8 0.09 88 / 0.14);
+  --error: oklch(0.63 0.13 25);
+  --error-soft: oklch(0.63 0.13 25 / 0.14);
+
+  --bg-user: oklch(0.25 0.034 264); /* Du-Blase: Schiefer, eine Stufe über der Fläche */
+
+  color-scheme: dark;
+}
+
+/* Die FLUTLINIE unter der Kopfzeile: eine ruhige waagerechte Kante, 1px Amber
+   bei 10 % Deckkraft — die Wasserlinie, die die Welle hinterlässt (Muster wie
+   Yoake/Natsu no Hi, die ihre Nav ebenfalls nur tönen). */
+:root[data-theme='nagori'] .nav {
+  background: linear-gradient(180deg, oklch(0.21 0.04 268), oklch(0.185 0.045 270));
+  box-shadow: 0 1px 0 oklch(0.785 0.135 58 / 0.1);
+}
+
+/* Der Sprachstern ist die Glut selbst: ein heller Kern, der nach außen in das
+   Amber abkühlt. Form und Bewegung bleiben die des Basis-Orbs. */
+:root[data-theme='nagori'] .vc-orb__core {
+  background: radial-gradient(
+    circle at 40% 36%,
+    oklch(0.97 0.025 80),
+    var(--accent) 58%,
+    oklch(0.52 0.1 45) 100%
+  );
+}
+
+/* Der Bloom kippt von Glut (innen) in die blaue Stunde (außen) — Licht, das in
+   der Dämmerungsluft steht. */
+:root[data-theme='nagori'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    oklch(0.6 0.06 265 / 0.18) 44%,
+    transparent 74%
+  );
+}
+
+/* ── Die LEUCHTSPUR: der Faden, der nicht verlischt ──────────────────────────
+   Das Leitmotiv der 0.x-Linie war die Sternschnuppe (Nagareboshi). Hier ist sie
+   durch — und ihre Spur bleibt: ein haarfeiner amberner Faden, schräg im oberen
+   RECHTEN Raum, HINTER allen Inhalten (er scheint dort durch, wo der Grund
+   liegt). Bewusst OHNE Kopf/Stern am Ende: was zurückbleibt, ist die Spur, nicht
+   der Stern. Und bewusst ohne jede Datenbedeutung — es ist Zierde, die nichts
+   behauptet, keine erfundenen Sterne, keine Pseudo-Messwerte.
+
+   Bau (kein neues Deko-System, exakt die Amayadori-Naht):
+     • `position:fixed; inset:0; z-index:-1` — hinter jedem normalen Inhalt, aber
+       über dem body-Hintergrund (--theme-atmosphere). Fixiert heißt: die Spur
+       bleibt beim Scrollen stehen, wie ein Nachbild.
+     • Der Faden selbst ist EIN linear-gradient: die Farbstopps liegen quer zur
+       160°-Achse eng beieinander (±0,5px Kern, ±7px Hauch, bei 26px aus) —
+       daraus wird ein ~1px-Strich mit weichem Saum statt einer Fläche.
+     • mask-image (weiche Ellipse oben rechts) schneidet die Enden ab, damit der
+       Faden in der Luft beginnt und endet statt an den Viewport-Rändern zu
+       kleben. Die Ellipse liegt auf der Bahn des Fadens (nachgerechnet für
+       gängige Fenster ~4:3 bis 16:9); auf schmalen Fenstern wandert der Faden an
+       ihren Rand und verschwindet leise — genau richtig, dort ist kein Platz
+       für Zierde.
+     • Der Eintritt läuft GENAU EINMAL (kein `infinite`): beim Entdecken zieht
+       die Spur sich sichtbar auf. Animiert werden nur opacity/transform;
+       `both` friert den Endzustand ein, darum bleibt die Spur bei
+       prefers-reduced-motion (globale Regel in index.css kürzt die Dauer)
+       einfach still da. */
+:root[data-theme='nagori'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: linear-gradient(
+    160deg,
+    transparent calc(41% - 26px),
+    oklch(0.785 0.135 58 / 0.05) calc(41% - 7px),
+    oklch(0.87 0.12 62 / 0.34) calc(41% - 0.5px),
+    oklch(0.87 0.12 62 / 0.34) calc(41% + 0.5px),
+    oklch(0.785 0.135 58 / 0.05) calc(41% + 7px),
+    transparent calc(41% + 26px)
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 42% 34% at 78% 24%,
+    #000 0%,
+    #000 32%,
+    transparent 74%
+  );
+  mask-image: radial-gradient(ellipse 42% 34% at 78% 24%, #000 0%, #000 32%, transparent 74%);
+  animation: nagori-trail 2600ms var(--ease-decel, ease-out) both;
+}
+@keyframes nagori-trail {
+  from {
+    opacity: 0;
+    transform: translate3d(26px, -10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

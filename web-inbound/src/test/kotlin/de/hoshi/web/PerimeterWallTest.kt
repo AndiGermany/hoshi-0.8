@@ -74,10 +74,46 @@ class PerimeterWallTest(@Autowired val client: WebTestClient) {
     }
 
     @Test
+    fun `lagebild ohne Token — 401`() {
+        // Deckt die Auth-Seite von CurrentAffairsController generisch ab (Shape und
+        // limit-Deckel testet CurrentAffairsControllerTest direkt).
+        client.get().uri("/api/v1/currentaffairs/today")
+            .exchange()
+            .expectStatus().isUnauthorized
+    }
+
+    @Test
+    fun `lagebild mit Token — 200 mit ehrlichem UNAVAILABLE (Adapter nicht verdrahtet)`() {
+        client.get().uri("/api/v1/currentaffairs/today?limit=5")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer test-secret-token")
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.freshness").isEqualTo("UNAVAILABLE")
+            .jsonPath("$.items").isEmpty
+    }
+
+    @Test
     fun `home registry ohne Token — 401`() {
         // Deckt die Auth-Seite von HomeRegistryController generisch ab (die
         // 200/404/502-Fallunterscheidung testet HomeRegistryControllerTest direkt).
         client.get().uri("/api/v1/home/registry")
+            .exchange()
+            .expectStatus().isUnauthorized
+    }
+
+    @Test
+    fun `Sauger-Aktion ohne Token — 401`() {
+        // Die TAT-Seite: ein Sauger darf NIE ohne Token losfahren. Die
+        // 200/400/409/502-Fallunterscheidung testet VacuumActionControllerTest direkt.
+        client.post().uri("/api/v1/home/vacuum/start")
+            .exchange()
+            .expectStatus().isUnauthorized
+    }
+
+    @Test
+    fun `Sauger-Rueckkehr ohne Token — 401`() {
+        client.post().uri("/api/v1/home/vacuum/return_to_base")
             .exchange()
             .expectStatus().isUnauthorized
     }

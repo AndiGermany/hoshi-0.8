@@ -2,14 +2,21 @@ package de.hoshi.adapters.ha
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import de.hoshi.core.port.AreaCatalogPort
+import de.hoshi.core.port.AreaInfo
 import de.hoshi.core.tools.ToolCall
 import de.hoshi.core.tools.ToolResult
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.net.InetSocketAddress
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -54,6 +61,15 @@ class HaToolPortTest {
         templateStatus: Int = 200,
         templateBody: String = "8|2",
         templateBodies: List<String>? = null,
+        /**
+         * **Frische-Phrasen-Probe** (F2-Rest): wie [templateBodies], nur für den
+         * HTTP-Status je Anfrage — teilt sich [templateIdx] mit [templateBodies],
+         * damit sich „Anfrage 1 = 200 mit Wert, Anfrage 2 = 500" simulieren lässt
+         * (der Last-known-Fallback greift NUR nach einem vorherigen Erfolg).
+         * `null` ⇒ [templateStatus] gilt fest für jede Anfrage (unverändertes
+         * Verhalten der Bestandstests).
+         */
+        templateStatuses: List<Int>? = null,
         templateDelayMs: Long = 0,
         block: (url: String, service: AtomicReference<RequestMeta?>, template: AtomicReference<RequestMeta?>) -> Unit,
     ) {
@@ -68,12 +84,18 @@ class HaToolPortTest {
         server.createContext("/api/template") { ex ->
             template.set(metaOf(ex))
             if (templateDelayMs > 0) Thread.sleep(templateDelayMs)
+            val idx = templateIdx.getAndIncrement()
             val body = if (templateBodies != null) {
-                templateBodies[templateIdx.getAndIncrement().coerceAtMost(templateBodies.size - 1)]
+                templateBodies[idx.coerceAtMost(templateBodies.size - 1)]
             } else {
                 templateBody
             }
-            respond(ex, templateStatus, body)
+            val status = if (templateStatuses != null) {
+                templateStatuses[idx.coerceAtMost(templateStatuses.size - 1)]
+            } else {
+                templateStatus
+            }
+            respond(ex, status, body)
         }
         server.start()
         try {
@@ -96,6 +118,10 @@ class HaToolPortTest {
         readbackSettleMs: Long = 300,
         readbackPollIntervalMs: Long = 50,
         climateReadbackSettleMs: Long = 200,
+        // Default = production default: STATIC labels are byte-identical to ToolAreas.
+        areaCatalog: AreaCatalogPort = AreaCatalogPort.STATIC,
+        // Default = echte Uhr; Frische-Phrasen-Tests injizieren eine feste Clock.
+        clock: Clock = Clock.systemUTC(),
     ) = HaToolPort(
         baseUrl = url,
         token = token,
@@ -104,7 +130,18 @@ class HaToolPortTest {
         readbackSettleMs = readbackSettleMs,
         readbackPollIntervalMs = readbackPollIntervalMs,
         climateReadbackSettleMs = climateReadbackSettleMs,
+        areaCatalog = areaCatalog,
+        clock = clock,
     )
+
+    /** Eine feste [Clock], die sich per [advanceBy] weiterstellen lässt — für deterministische Alters-Stufen ohne `Thread.sleep`. */
+    private class MutableClock(start: Instant) : Clock() {
+        private var now = start
+        fun advanceBy(millis: Long) { now = now.plusMillis(millis) }
+        override fun getZone() = ZoneOffset.UTC
+        override fun withZone(zone: java.time.ZoneId) = this
+        override fun instant(): Instant = now
+    }
 
     private fun metaOf(ex: HttpExchange) = RequestMeta(
         method = ex.requestMethod,
@@ -124,13 +161,13 @@ class HaToolPortTest {
         domain = "light",
         service = "turn_on",
         entityId = null,
-        data = mapOf("area_id" to "kueche", "brightness_pct" to 40),
+        data = mapOf("area_id" to "kuche", "brightness_pct" to 40),
     )
     private val lightOff = ToolCall(
         domain = "light",
         service = "turn_off",
         entityId = null,
-        data = mapOf("area_id" to "kueche"),
+        data = mapOf("area_id" to "kuche"),
     )
 
     @Test
@@ -150,7 +187,7 @@ class HaToolPortTest {
 
             assertTrue(result is ToolResult.Ok, "an>=1 muss Ok liefern, war $result")
             val phrase = (result as ToolResult.Ok).phrase
-            assertTrue(phrase.contains("kueche"), "Area muss im Text stehen: $phrase")
+            assertTrue(phrase.contains("Küche"), "Gesprochen gehört der HA-Anzeigename, nie der Slug: $phrase")
             assertTrue(phrase.contains("ist an"), "muss verifiziert bestätigen dass Licht an ist: $phrase")
             // Bewusst KEINE genaue Zahl (Unterzähl-Race beim Früh-Stop) — „ist an" reicht ehrlich.
 
@@ -161,7 +198,7 @@ class HaToolPortTest {
             assertEquals("/api/template", rb.path)
             assertEquals("Bearer secret-token", rb.authorization)
             assertTrue(rb.bodyText.contains("area_entities"), "Template muss area_entities zählen: ${rb.bodyText}")
-            assertTrue(rb.bodyText.contains("kueche"), "Template muss die Area tragen: ${rb.bodyText}")
+            assertTrue(rb.bodyText.contains("kuche"), "Template muss die Area-ID (Slug!) tragen: ${rb.bodyText}")
         }
 
     @Test
@@ -216,7 +253,7 @@ class HaToolPortTest {
             val result = port.execute(lightOn)
             assertTrue(result is ToolResult.NoEffect, "an=0 (gesamt>0) muss NoEffect liefern, war $result")
             val phrase = (result as ToolResult.NoEffect).phrase
-            assertTrue(phrase.contains("kueche"), "Area muss im Text stehen: $phrase")
+            assertTrue(phrase.contains("Küche"), "Gesprochen gehört der HA-Anzeigename, nie der Slug: $phrase")
             assertTrue(phrase.contains("kein Licht"), "muss ehrlich sagen dass nichts anging: $phrase")
         }
 
@@ -239,7 +276,7 @@ class HaToolPortTest {
             val result = port.execute(lightOff)
             assertTrue(result is ToolResult.Ok, "turn_off + an=0 muss Ok liefern, war $result")
             val phrase = (result as ToolResult.Ok).phrase
-            assertTrue(phrase.contains("kueche"), "Area muss im Text stehen: $phrase")
+            assertTrue(phrase.contains("Küche"), "Gesprochen gehört der HA-Anzeigename, nie der Slug: $phrase")
             assertTrue(phrase.contains("aus"), "muss bestätigen dass Licht aus ist: $phrase")
         }
 
@@ -332,7 +369,7 @@ class HaToolPortTest {
             assertEquals("/api/services/light/turn_on", meta.path, "Pfad = /api/services/{domain}/{service}")
             assertEquals("Bearer secret-token", meta.authorization, "Bearer-Header falsch/fehlt")
             assertTrue(meta.bodyText.contains("area_id"), "Body muss area_id tragen: ${meta.bodyText}")
-            assertTrue(meta.bodyText.contains("kueche"), "Body muss den Area-Wert tragen: ${meta.bodyText}")
+            assertTrue(meta.bodyText.contains("kuche"), "Body muss die Area-ID (Slug!) tragen: ${meta.bodyText}")
             assertTrue(meta.bodyText.contains("brightness_pct"), "Body muss die Params tragen: ${meta.bodyText}")
         }
 
@@ -351,7 +388,7 @@ class HaToolPortTest {
         domain = "light",
         service = "turn_on",
         entityId = null,
-        data = mapOf("area_id" to "kueche"),
+        data = mapOf("area_id" to "kuche"),
     )
 
     /**
@@ -596,4 +633,186 @@ class HaToolPortTest {
         val result = port.execute(readTemp("wohnzimmer"))
         assertTrue(result is ToolResult.Failed, "connection refused ⇒ Failed, war $result")
     }
+
+    // ── Frische-Phrasen (F2-Rest): Last-known-Fallback nach einem vorherigen Erfolg ──
+
+    @Test
+    fun `none nach vorherigem Erfolg spricht den gemerkten Wert MIT gerade-eben-Phrase statt NoEffect`() =
+        withHa(templateBodies = listOf("21.5", "none")) { url, _, _ ->
+            val port = haPort(url)
+            val live = port.execute(readTemp("wohnzimmer"))
+            assertTrue(live is ToolResult.Ok, "erster Read ist live, war $live")
+
+            val stale = port.execute(readTemp("wohnzimmer"))
+            assertTrue(stale is ToolResult.Ok, "zweiter Read (none) faellt auf den gemerkten Wert zurueck, war $stale")
+            val phrase = (stale as ToolResult.Ok).phrase
+            assertTrue(phrase.contains("Wohnzimmer"), "Area-Label erwartet: $phrase")
+            assertTrue(phrase.contains("21,5 Grad"), "gemerkter Wert erwartet: $phrase")
+            assertTrue(phrase.contains("gerade eben"), "kaum Zeit vergangen ⇒ gerade-eben-Phrase: $phrase")
+            assertTrue(phrase.contains("waren es"), "Vergangenheitsform erwartet (nicht mehr live): $phrase")
+            assertFalse(phrase.contains("sind es gerade"), "darf NICHT die Live-Formulierung sprechen: $phrase")
+        }
+
+    @Test
+    fun `500 nach vorherigem Erfolg spricht den gemerkten Wert statt Failed`() =
+        withHa(templateBodies = listOf("20.0", "boom"), templateStatuses = listOf(200, 500)) { url, _, _ ->
+            val port = haPort(url)
+            assertTrue(port.execute(readTemp("kuche")) is ToolResult.Ok, "erster Read ist live")
+
+            val stale = port.execute(readTemp("kuche"))
+            assertTrue(stale is ToolResult.Ok, "HTTP-500 nach Erfolg faellt auf den gemerkten Wert zurueck, war $stale")
+            val phrase = (stale as ToolResult.Ok).phrase
+            assertTrue(phrase.contains("Küche") && phrase.contains("20 Grad"), "gemerkter Wert erwartet: $phrase")
+        }
+
+    @Test
+    fun `Haus-Aggregat nutzt einen eigenen Cache-Schluessel, getrennt von jeder Area`() =
+        withHa(templateBodies = listOf("21.3", "none")) { url, _, _ ->
+            val port = haPort(url)
+            assertTrue(port.execute(readTemp(null)) is ToolResult.Ok, "erster Read ist live")
+
+            val stale = port.execute(readTemp(null))
+            assertTrue(stale is ToolResult.Ok, "war $stale")
+            val phrase = (stale as ToolResult.Ok).phrase
+            assertTrue(phrase.contains("Haus") && phrase.contains("21,3 Grad"), "Haus-Aggregat-Fallback erwartet: $phrase")
+        }
+
+    @Test
+    fun `ohne vorherigen Erfolg bleibt das Verhalten unveraendert - kein Cache, kein Fallback`() =
+        withHa(templateBody = "none") { url, _, _ ->
+            // Frischer Port, NIE zuvor erfolgreich gelesen ⇒ exakt das alte Verhalten.
+            val result = haPort(url).execute(readTemp("wohnzimmer"))
+            assertTrue(result is ToolResult.NoEffect, "ohne gemerkten Wert bleibt es ehrlich NoEffect, war $result")
+        }
+
+    @Test
+    fun `Frische-Phrase trifft die Minuten-Stufe bei 12 Minuten Alter`() =
+        withHa(templateBodies = listOf("21.5", "none")) { url, _, _ ->
+            val clock = MutableClock(Instant.parse("2026-08-19T10:00:00Z"))
+            val port = haPort(url, clock = clock)
+            assertTrue(port.execute(readTemp("wohnzimmer")) is ToolResult.Ok)
+
+            clock.advanceBy(12 * 60_000L)
+            val stale = port.execute(readTemp("wohnzimmer"))
+            val phrase = (stale as ToolResult.Ok).phrase
+            assertTrue(phrase.contains("vor 12 Minuten"), "12 Minuten Alter erwartet: $phrase")
+        }
+
+    @Test
+    fun `Frische-Phrase trifft den Stunden-Auffang ab 60 Minuten Alter`() =
+        withHa(templateBodies = listOf("21.5", "none")) { url, _, _ ->
+            val clock = MutableClock(Instant.parse("2026-08-19T10:00:00Z"))
+            val port = haPort(url, clock = clock)
+            assertTrue(port.execute(readTemp("wohnzimmer")) is ToolResult.Ok)
+
+            clock.advanceBy(90 * 60_000L)
+            val stale = port.execute(readTemp("wohnzimmer"))
+            val phrase = (stale as ToolResult.Ok).phrase
+            assertTrue(phrase.contains("vor über einer Stunde"), "über eine Stunde Alter erwartet: $phrase")
+            assertFalse(phrase.contains("90 Minuten"), "keine Sekunden-/Minuten-Pedanterie jenseits einer Stunde: $phrase")
+        }
+
+    // ── One room, one name: spoken labels come from the AreaCatalogPort ─────────
+
+    /** Stub catalog: exactly the given areas, no HTTP (the adapter itself has its own test). */
+    private fun catalogOf(vararg areas: Pair<String, String>): AreaCatalogPort =
+        AreaCatalogPort { areas.map { (id, label) -> AreaInfo(areaId = id, label = label) } }
+
+    @Test
+    fun `Temperatur-Label kommt aus dem Katalog und schlaegt die statische ToolAreas-Map`() =
+        withHa(templateBody = "20.0") { url, _, _ ->
+            // HA renamed the area; the static map still says "Küche" — the catalog must win.
+            val port = haPort(url, areaCatalog = catalogOf("kuche" to "Kochnische"))
+            val result = port.execute(readTemp("kuche"))
+
+            assertTrue(result is ToolResult.Ok, "war $result")
+            val phrase = (result as ToolResult.Ok).phrase
+            assertTrue(phrase.contains("Kochnische"), "HA-Name muss gesprochen werden: $phrase")
+            assertFalse(phrase.contains("Küche"), "statisches Label darf NICHT gewinnen: $phrase")
+        }
+
+    @Test
+    fun `neu in HA angelegte Area wird mit ihrem echten Namen gesprochen statt als Slug`() =
+        withHa(templateBody = "19.0") { url, _, _ ->
+            // The bug this slice fixes: ToolAreas knows no "gaestezimmer" ⇒ would say "Gaestezimmer".
+            val port = haPort(url, areaCatalog = catalogOf("gaestezimmer" to "Gäste-Zimmer"))
+            val result = port.execute(readTemp("gaestezimmer"))
+
+            assertTrue(result is ToolResult.Ok, "war $result")
+            val phrase = (result as ToolResult.Ok).phrase
+            assertTrue(phrase.contains("Gäste-Zimmer"), "echter HA-Name erwartet: $phrase")
+            assertFalse(phrase.contains("Gaestezimmer"), "kapitalisierter Slug darf nicht mehr fallen: $phrase")
+        }
+
+    @Test
+    fun `Katalog kennt den Slug nicht ⇒ ToolAreas-Fallback`() =
+        withHa(templateBody = "20.0") { url, _, _ ->
+            val port = haPort(url, areaCatalog = catalogOf("flur" to "Flur"))
+            val result = port.execute(readTemp("kuche"))
+
+            assertTrue(result is ToolResult.Ok, "war $result")
+            assertTrue(
+                (result as ToolResult.Ok).phrase.contains("Küche"),
+                "unbekannter Slug muss auf ToolAreas.label zurückfallen: ${result.phrase}",
+            )
+        }
+
+    @Test
+    fun `leeres Katalog-Label ⇒ ToolAreas-Fallback statt leerer Raumname`() =
+        withHa(templateBody = "20.0") { url, _, _ ->
+            val port = haPort(url, areaCatalog = catalogOf("kuche" to "   "))
+            val result = port.execute(readTemp("kuche"))
+
+            assertTrue(result is ToolResult.Ok, "war $result")
+            assertTrue(
+                (result as ToolResult.Ok).phrase.contains("Küche"),
+                "leeres Label darf keinen leeren {room}-Slot erzeugen: ${result.phrase}",
+            )
+        }
+
+    @Test
+    fun `Katalog im Fallback-Stand (HA unerreichbar) wirft nicht und spricht ein sinnvolles Label`() =
+        withHa(templateBody = "20.0") { url, _, _ ->
+            // Real adapter against a dead port: never-throw ⇒ its own STATIC fallback.
+            val deadCatalog = HaAreaCatalogAdapter(
+                baseUrl = "http://127.0.0.1:1",
+                token = "secret-token",
+                ttl = Duration.ofMinutes(15),
+                timeoutMs = 300,
+            )
+            val port = haPort(url, areaCatalog = deadCatalog)
+            val result = port.execute(readTemp("kuche"))
+
+            assertTrue(result is ToolResult.Ok, "Katalog-Ausfall darf die Antwort nicht kippen, war $result")
+            assertTrue(
+                (result as ToolResult.Ok).phrase.contains("Küche"),
+                "Fallback-Stand muss ein sinnvolles Label sprechen: ${result.phrase}",
+            )
+        }
+
+    @Test
+    fun `climate ohne Thermostat nennt den Raum mit dem Katalog-Namen`() =
+        withHa(templateBody = "0") { url, service, _ ->
+            val port = haPort(url, areaCatalog = catalogOf("badezimmer" to "Bad unten"))
+            val result = port.execute(climateSet)
+
+            assertTrue(result is ToolResult.NoEffect, "war $result")
+            val phrase = (result as ToolResult.NoEffect).phrase
+            assertTrue(phrase.contains("Bad unten"), "Katalog-Label erwartet: $phrase")
+            assertNull(service.get(), "ohne Thermostat darf KEIN Service-Call raus")
+        }
+
+    @Test
+    fun `climate_set Quittung nennt den Raum mit dem Katalog-Namen`() =
+        withHa(templateBodies = listOf("1", "21")) { url, _, _ ->
+            val port = haPort(url, areaCatalog = catalogOf("badezimmer" to "Bad unten"))
+            val result = port.execute(climateSet)
+
+            assertTrue(result is ToolResult.Ok, "war $result")
+            assertEquals(
+                "Heizung im Bad unten auf 21 Grad.",
+                (result as ToolResult.Ok).phrase,
+                "Quittung muss den echten HA-Namen tragen",
+            )
+        }
 }

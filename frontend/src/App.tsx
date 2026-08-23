@@ -14,6 +14,8 @@ import { useSettings, useEscalationSeconds, useResolvedTheme } from './hooks/use
 import { useFiredItems } from './hooks/useFiredItems';
 import { useVoiceChatSession } from './hooks/useVoiceChatSession';
 import { getDeviceId } from './api/device';
+import { subscribeHomeEdit } from './hooks/useHomeLayout';
+import { useAppliedTheme } from './styles/themeLoader';
 import './styles/themes.css';
 
 export default function App() {
@@ -39,6 +41,12 @@ export default function App() {
     setSettingsAnchor(anchor);
     setSettingsOpen(true);
   }, []);
+  // „Widgets anordnen" (W4, Einstellungen → Zuhause-Widgets): der Edit-Modus
+  // lebt auf der Übersicht. Wer den Knopf aus einem anderen Reiter drückt,
+  // soll dort landen, wo die Kacheln liegen — sonst passierte sichtbar nichts.
+  // Die Bühne holt den Wunsch selbst ab (hooks/useHomeLayout.ts); App muss nur
+  // dafür sorgen, dass sie überhaupt steht.
+  useEffect(() => subscribeHomeEdit(() => setTab('overview')), []);
   const { theme, language, persona, voice, setTheme, setLanguage, setPersona, setVoice } =
     useSettings();
   // Die EINE Voice-Chat-Session der App (Andi-Auftrag 19.07): App.tsx ruft sie
@@ -70,11 +78,12 @@ export default function App() {
   // weiterhin die Original-Wahl (`theme`, inkl. 'sora').
   const resolvedTheme = useResolvedTheme(theme);
 
-  // Farbthema am <html> spiegeln → die [data-theme]-Overrides in styles/themes.css
-  // greifen app-weit. Yoru braucht keinen Override (= :root-Default → byte-neutral).
-  useEffect(() => {
-    document.documentElement.dataset.theme = resolvedTheme;
-  }, [resolvedTheme]);
+  // Farbthema anwenden — seit dem .old-Umzug (2026-08-08) liegen die Themen
+  // nicht mehr im CSS-Bundle, sondern als eigene Dateien unter `public/themes/`.
+  // `useAppliedTheme` lädt die Datei des aufgelösten Themas und setzt
+  // `data-theme` am <html> ERST NACH deren `load`-Ereignis (FOUC-Naht; scheitert
+  // das Laden, bleibt der aktuelle Look stehen). Siehe styles/themeLoader.ts.
+  useAppliedTheme(resolvedTheme);
 
   // Views hier (nicht auf Modulebene) bauen: `session` selbst bekommt die
   // aktuelle Persona/Sprache/Stimme aus useSettings (oben) — so fließt die
@@ -87,8 +96,16 @@ export default function App() {
     chat: <ChatViewBody session={session} onOpenSettings={openSettings} />,
   };
 
+  // `data-tab` is the ONE tab marker the stylesheet needs (slice S1 of
+  // vault/tracks/DESIGN-widgets-settings-2026-08-15.md, §2.1/§2.2): the "one
+  // window that never scrolls" cap and the wider home column must bind to the
+  // HOME tab ALONE — Chat/Räume/Aktivität keep the 920px reading column and
+  // keep scrolling normally. No body/root tab marker existed before, and the
+  // `key={tab}` on <main> is a remount hint, not a selectable attribute; one
+  // data attribute here is cheaper than threading the tab id through every
+  // view. Values are the `Tab` union from TopNav.tsx.
   return (
-    <div className="app">
+    <div className="app" data-tab={tab}>
       <FiredToast
         items={firedItems}
         onAck={ackFired}

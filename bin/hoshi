@@ -14,11 +14,18 @@
 #   bin/hoshi ground       # M4-Step-1-Beweis: Fts5GroundingAdapter → echte Wiki-Bridge (:8035)
 #   bin/hoshi services     # M3-Beweis: Sidecar-Supervisor live (ehrlicher read-only Report)
 #   bin/hoshi doctor       # Stack ehrlich prüfen (echter Roundtrip, read-only)
+#   bin/hoshi ha check     # den HA-Rand prüfen (read-only: erreichbar/Token/Areas/States)
+#   bin/hoshi backup       # Haushalts-Stores sichern (read-only, Manifest + Verify)
+#   bin/hoshi restore      # Haushalts-Stores wiederherstellen (verify-vor-write, Rollback-Snapshot)
 #   bin/hoshi heal         # Zombie/Wedge-Brain auto-fixen (guard-sicher, mit Beweis)
 #   bin/hoshi up           # Stack brain-guard-sicher hochfahren (idempotent)
 #   bin/hoshi seam-watch   # die Brain-Naht (e4b :8041) beobachten
 #   bin/hoshi deploy       # lokaler launchd-Service (io.hoshi.0.8.backend, :8090, HA-scharf)
-#                          #   + Verify; --status / --down / --remote(=Andi-Gate-Stub)
+#                          #   + Verify; --status / --down / --remote = REAL PROD DEPLOY
+#                          #   to ct-106 (unit render, secrets, guarded restart, verify)
+#   bin/hoshi preflight    # Vorflug-Checks ohne Seiteneffekte
+#   bin/hoshi setup        # Erst-Einrichtung (unterstützt --dry-run)
+#   bin/hoshi tts-openai   # TTS-Vergleichsprobe gegen OpenAI-Stimme
 #
 # Exit-Code wird 1:1 vom Subcommand durchgereicht (0 = grün).
 
@@ -44,7 +51,7 @@ fi
 
 usage() {
     cat <<EOF
-${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (${HOSHI_VERSION} / Suisei)
+${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (${HOSHI_VERSION})
 
   ${C_CYAN}verify${C_RESET}       grüner Gate: Deploy-Render + TTS-Fresh-HOME +
                ./gradlew build (ArchUnit/Unit) + LIVE-Brain-Smoke (:8041)
@@ -74,6 +81,26 @@ ${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (${HOSHI_VERSION} / Suisei)
                immer sicher — zweiter Lauf meldet nur „schon da".
   ${C_CYAN}doctor${C_RESET}       Stack ehrlich prüfen (READ-ONLY): Brain via echtem /v1/chat-Roundtrip
                (grün≠lebt → OK/WEDGE/ZOMBIE/DOWN/LOADING), Sidecars + RAM + Brain-Guard
+  ${C_CYAN}ha${C_RESET} check     den Home-Assistant-Rand prüfen (READ-ONLY, schreibt NIE): erreichbar,
+               Token gültig (401-Unterscheidung), Areas via /api/template lesbar,
+               States + jüngstes last_updated; Adresse/Token aus denselben Quellen
+               wie das Backend (HOSHI_HA_BASE_URL · HOSHI_HA_TOKEN ▷ secrets.json)
+  ${C_CYAN}backup${C_RESET}       Haushalts-Stores sichern (READ-ONLY, schreibt NIE in einen Store):
+               tar.gz + manifest.json (SHA-256 je Store, nach dem Packen gegen den
+               Tar-Inhalt verifiziert); SQLite über die Backup-API, nie blind kopiert.
+               ${C_DIM}--dry-run${C_RESET} zeigt nur den Plan + die Manifest-Vorschau ·
+               ${C_DIM}--with-speaker-profiles${C_RESET} (BIOMETRISCH, zweite Bestätigung) ·
+               ${C_DIM}--with-diary${C_RESET} (PRIVAT) · ${C_DIM}--out <dir>${C_RESET}. Secrets/Modelle/Räume/
+               Browser-localStorage sind per Vertrag NIE dabei; Restore = Welle 2b
+  ${C_CYAN}restore${C_RESET} <archiv.tar.gz>
+               Haushalts-Stores wiederherstellen: verifiziert das GANZE Archiv (Schema,
+               Formatdecke, SHA-256, JSON/JSONL/SQLite-Struktur) BEVOR ein Zielpfad
+               angefasst wird — korrupt/manipuliert = BLOCKIERT, nichts geschrieben.
+               Vorhandene Ziele wandern vor dem Schreiben in ein datiertes Rollback-
+               Verzeichnis (nie gelöscht); Schreiben ist atomarer Same-Dir-Rename.
+               ${C_DIM}--dry-run${C_RESET} zeigt nur den Plan (CREATE/REPLACE/SKIP je Store) ·
+               ${C_DIM}--with-speaker-profiles${C_RESET} / ${C_DIM}--with-diary${C_RESET} wie beim Backup. Echter Lauf
+               verlangt Owner-Bestätigung (JA / HOSHI_RESTORE_CONFIRM=ja); wirkt nur lokal.
   ${C_CYAN}heal${C_RESET}         Zombie/Wedge/Down-Brain auto-fixen: guard-sicher kill→start,
                Erfolg ERST bei bewiesenem Roundtrip (--brain-only, Default)
   ${C_CYAN}up${C_RESET}           Stack brain-guard-sicher hochfahren: Brain (wenn nicht OK) +
@@ -81,7 +108,7 @@ ${C_BOLD}hoshi${C_RESET} — autonome Dev-Pipeline (${HOSHI_VERSION} / Suisei)
   ${C_CYAN}seam-watch${C_RESET}   die Brain-Naht (e4b :8041) beobachten (--once für einen Schuss)
   ${C_CYAN}deploy${C_RESET}       lokaler launchd-Service: io.hoshi.0.8.backend (:8090, HA-scharf,
                self-healing) bauen+installieren+verifizieren (Health/401-Wand/Turn/Log);
-               ${C_DIM}--status${C_RESET} (Service+Health) · ${C_DIM}--down${C_RESET} (stoppen) · ${C_DIM}--remote${C_RESET} (ct-106 = Andi-Gate-Stub)
+               ${C_DIM}--status${C_RESET} (Service+Health) · ${C_DIM}--down${C_RESET} (stoppen) · ${C_DIM}--remote${C_RESET} = ECHTER Prod-Deploy auf ct-106
 
 Logs: ${C_DIM}$REPO_ROOT/.pipeline/${C_RESET}
 EOF
@@ -91,7 +118,7 @@ cmd="${1:-}"
 [ $# -gt 0 ] && shift || true
 
 case "$cmd" in
-    verify|run|turn|ask|voice|voicein|tts-openai|ground|services|preflight|setup|doctor|heal|up|seam-watch|deploy)
+    verify|run|turn|ask|voice|voicein|tts-openai|ground|services|preflight|setup|doctor|ha|backup|restore|heal|up|seam-watch|deploy)
         target="$PIPELINE_DIR/$cmd.sh"
         if [ ! -x "$target" ]; then
             echo "${C_RED}✗ FAIL${C_RESET} — $target fehlt oder ist nicht ausführbar" >&2

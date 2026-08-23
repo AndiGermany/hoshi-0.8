@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useFiredItems, FIRED_TITLE, TITLE_BLINK_MS } from '../hooks/useFiredItems';
 import { useScheduledItems } from '../hooks/useScheduledItems';
+import { useCurrentAffairs } from '../hooks/useCurrentAffairs';
 import { playAlarmChime, CHIME_REPEAT_MS } from '../audio/chime';
 
 // ── Warum diese Datei existiert (Regression 2026-07-02) ───────────────────────
@@ -16,6 +17,14 @@ import { playAlarmChime, CHIME_REPEAT_MS } from '../audio/chime';
 // useHealth) sichtbar pollten. Diese Tests MOUNTEN die Hooks echt (jsdom,
 // fake timers) und beweisen: Initial-Fetch feuert, das Interval läuft, das
 // Cleanup stoppt — und zwar AUCH bei document.visibilityState === 'hidden'.
+//
+// Gate-Neufassung 2026-08-22 (Audit: 46.944 Requests/Tag bei dunklem Display):
+// useScheduledItems pausiert jetzt bei `hidden` — aber NUR das Intervall. Der
+// Initial-Fetch bleibt bedingungslos, und Sichtbarwerden holt sofort frisch
+// nach. Beide Hälften stehen unten als Test, damit der 07-02-Fehler (Gate im
+// tick, erster Fetch tot) nicht durch die Hintertür zurückkommt.
+// useFiredItems bleibt ABSICHTLICH ungegatet: das ist der Weg, auf dem ein
+// Wecker klingelt — ein verdecktes Fenster darf keinen Alarm verschlucken.
 //
 // Ring-1-Fix 2026-07-03 („der Timer hat heute nicht geklappt"): der Server ist
 // jetzt idempotent (kein consume-once), quittiert wird per ack-POST, der Chime
@@ -50,6 +59,15 @@ function FiredStateHost({ intervalMs }: { intervalMs: number }) {
 function ScheduledHost({ intervalMs }: { intervalMs: number }) {
   useScheduledItems(intervalMs);
   return null;
+}
+/**
+ * Host des Lagebild-Hooks: macht den gelesenen Zustand im DOM prüfbar. `enabled`
+ * ist der Anzeige-Schalter aus den Einstellungen (Zuhause-Kacheln) — AUS heißt
+ * hier NICHT „gerendert, aber leer", sondern „kein Draht" (s. Tests unten).
+ */
+function CurrentAffairsHost({ intervalMs, enabled }: { intervalMs: number; enabled: boolean }) {
+  const state = useCurrentAffairs(intervalMs, enabled);
+  return <span data-testid="ca-state">{state === null ? 'null' : state.kind}</span>;
 }
 
 /** `document.visibilityState` erzwingen (jsdom-Default ist 'visible'). */
@@ -99,7 +117,29 @@ describe('Poll-Verdrahtung der Scheduled-Hooks (Effect + fake timers)', () => {
       vi.advanceTimersByTime(ms);
     });
   };
+  /** Prop-Wechsel im BESTEHENDEN Root — `mount` würde einen zweiten Root auf denselben Container legen. */
+  const rerender = async (el: React.ReactElement): Promise<void> => {
+    await act(async () => {
+      root!.render(el);
+    });
+  };
+  /**
+   * Sichtbarkeit umschalten UND das echte `visibilitychange` feuern — das Gate
+   * hängt am Event, nicht an einem Poll auf `document.hidden`. Innerhalb von
+   * `act`, weil das Sofort-Nachholen State setzt.
+   */
+  const setVisibility = async (state: DocumentVisibilityState): Promise<void> => {
+    forceVisibility(state);
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+  };
+  const becomeHidden = (): Promise<void> => setVisibility('hidden');
+  const becomeVisible = (): Promise<void> => setVisibility('visible');
+
   const ids = (): string => container.querySelector('[data-testid="fired-ids"]')?.textContent ?? '';
+  /** Der vom Lagebild-Hook gelesene Zustand (`null` = kein Draht/erster Fetch läuft). */
+  const state = (): string => container.querySelector('[data-testid="ca-state"]')?.textContent ?? '';
   const clickAck = async (): Promise<void> => {
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="fired-ack"]')!.click();
@@ -280,11 +320,95 @@ describe('Poll-Verdrahtung der Scheduled-Hooks (Effect + fake timers)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('useScheduledItems REGRESSION: pollt auch bei visibilityState=hidden (Window-Occlusion)', async () => {
+  it('useScheduledItems REGRESSION: Initial-Fetch feuert AUCH bei visibilityState=hidden', async () => {
+    // Die Hälfte des 07-02-Befunds, die unverhandelbar bleibt: ein verdecktes
+    // Fenster (Chrome-Occlusion meldet den aktiven Tab als hidden) muss trotzdem
+    // sofort Daten holen, sonst erscheint die Timer-Zeile nie.
     forceVisibility('hidden');
     await mount(<ScheduledHost intervalMs={15_000} />);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('useScheduledItems: hidden ⇒ das Intervall taktet NICHT nach', async () => {
+    forceVisibility('hidden');
+    await mount(<ScheduledHost intervalMs={15_000} />);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // nur der Initial-Fetch
     await advance(15_000);
+    await advance(15_000);
+    await advance(15_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // dunkles Display kostet nichts
+  });
+
+  it('useScheduledItems: Sichtbarwerden holt SOFORT nach und startet das Intervall neu', async () => {
+    forceVisibility('hidden');
+    await mount(<ScheduledHost intervalMs={15_000} />);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await becomeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(2); // sofort frisch, nicht erst in 15s
+
+    await advance(15_000);
+    expect(fetchMock).toHaveBeenCalledTimes(3); // Intervall läuft wieder
+  });
+
+  it('useScheduledItems: sichtbar gestartet, dann verdeckt ⇒ Intervall stoppt', async () => {
+    await mount(<ScheduledHost intervalMs={15_000} />);
+    await advance(15_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // sichtbar: unverändertes Takten
+
+    await becomeHidden();
+    await advance(15_000);
+    await advance(15_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // verdeckt: Ruhe
+  });
+
+  it('useScheduledItems: Cleanup meldet den visibilitychange-Listener ab', async () => {
+    // Sonst tickte ein längst unmounteter Hook beim nächsten Sichtbarwerden
+    // noch einmal nach — genau die Sorte Leck, die ein Gate gern mitbringt.
+    await mount(<ScheduledHost intervalMs={15_000} />);
+    const afterMount = fetchMock.mock.calls.length;
+    await becomeHidden();
+    await unmount();
+    await becomeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(afterMount);
+  });
+
+  // ── useCurrentAffairs — Poll-Ehrlichkeit des Lagebild-Schalters ────────────
+  //
+  //  Der Anzeige-Schalter (Einstellungen → Zuhause-Kacheln) regelt nicht nur
+  //  das Markup, sondern auch den Draht: ein unsichtbares Fenster darf keinen
+  //  10-Minuten-Fetch kosten. Genau wie oben ist DAS Effect-Verhalten — ein
+  //  Static-Render könnte es nie beweisen, also lebt der Beweis hier.
+
+  it('useCurrentAffairs: Schalter AN ⇒ Initial-Fetch auf …/currentaffairs/today + Interval', async () => {
+    await mount(<CurrentAffairsHost intervalMs={600_000} enabled />);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('/api/v1/currentaffairs/today');
+    await advance(600_000);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('useCurrentAffairs: Schalter AUS ⇒ KEIN Initial-Fetch und kein einziger Poll', async () => {
+    await mount(<CurrentAffairsHost intervalMs={600_000} enabled={false} />);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await advance(600_000 * 5); // fünf Takte lang: weiterhin still
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('useCurrentAffairs: AUS-schalten stoppt den laufenden Poll und wirft den Stand weg', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ items: [], freshness: 'EMPTY' }),
+    });
+    await mount(<CurrentAffairsHost intervalMs={600_000} enabled />);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(state()).toBe('live');
+
+    await rerender(<CurrentAffairsHost intervalMs={600_000} enabled={false} />); // kein Remount
+    expect(state()).toBe('null'); // kein Rest-Zustand aus der AN-Phase
+    await advance(600_000 * 3);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // das Interval ist wirklich weg
   });
 });

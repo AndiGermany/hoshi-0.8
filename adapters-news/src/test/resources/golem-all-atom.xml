@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <title type="html">Golem.de</title>
+  <updated>2026-08-15T08:30:00+02:00</updated>
+  <entry>
+    <title type="html">Golem Meldung eins</title>
+    <link rel="alternate" type="text/html" href="https://www.golem.de/news/golem-eins-2608-200001.html"/>
+    <published>2026-08-15T08:30:00+02:00</published>
+    <updated>2026-08-15T08:30:00+02:00</updated>
+    <id>https://www.golem.de/news/golem-eins-2608-200001.html</id>
+    <summary type="html">Ein Anriss mit (&lt;a href=&quot;https://www.golem.de/specials/technik/&quot;&gt;Technik&lt;/a&gt;) &lt;img src=&quot;https://cpx.golem.de/pixel&quot; alt=&quot;&quot; /&gt;</summary>
+  </entry>
+  <entry>
+    <title>Golem Meldung zwei</title>
+    <link rel="alternate" href="https://www.golem.de/news/golem-zwei-2608-200002.html"/>
+    <published>2026-08-15T06:30:00+02:00</published>
+    <id>https://www.golem.de/news/golem-zwei-2608-200002.html</id>
+    <summary>Ein zweiter Anriss.</summary>
+  </entry>
+</feed>

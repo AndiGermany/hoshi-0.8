@@ -153,6 +153,13 @@ class WeatherGroundingProvider(
         if (!isWeatherIntent(query)) return Mono.just("")
 
         val reference = days.resolve(query)
+        // Jenseits der Reichweite: ehrlich sagen — und zwar OHNE Open-Meteo zu
+        // fragen. Es gibt für den Tag keine Daten, also gibt es auch nichts zu
+        // holen; ein Call wäre reine Netz-Last für eine Antwort, die schon
+        // feststeht. Gilt auch mit explizitem Ort: der Horizont bindet zuerst.
+        if (reference.beyondHorizon && reference.offsets.isEmpty()) {
+            return Mono.just(horizonBlock(language))
+        }
         val place = if (geocoding != null) explicitPlace(query) else null
         return if (place != null && geocoding != null) {
             explicitPlaceBlock(place, geocoding, reference, language)
@@ -221,6 +228,15 @@ class WeatherGroundingProvider(
     private fun honestyBlock(place: String, language: Language): String =
         "\n\n---\n" + WeatherBlockTexts.placeNotFound(language, place)
 
+    /**
+     * Schwester zu [honestyBlock] für die ZEIT-Grenze statt der Orts-Grenze: die
+     * Frage zielte über die [FORECAST_DAYS]-Reichweite hinaus („nächsten
+     * Samstag", „nächste Woche"). Derselbe Baustil, dieselbe Doktrin — die Lücke
+     * offen benennen statt sie mit dem nächstbesten Tag zu füllen.
+     */
+    private fun horizonBlock(language: Language): String =
+        "\n\n---\n" + WeatherBlockTexts.beyondHorizon(language, FORECAST_DAYS)
+
     /** Store-Wert gewinnt; nie gespeichert (`null`) ⇒ ENV-Seed aus dem Ctor. */
     private fun configuredLocation(): WeatherLocation =
         locationSupplier?.invoke() ?: WeatherLocation(label = locationLabel, lat = lat, lon = lon)
@@ -286,6 +302,20 @@ class WeatherGroundingProvider(
                                 sunriseEpochMs = sunrise,
                                 sunsetEpochMs = sunset,
                                 hourly = parseHourly(body),
+                                // Derselbe [parseDays]-Aufruf, der oben schon
+                                // heute+morgen lieferte — nur werden die übrigen
+                                // fünf Tage jetzt nicht mehr weggeworfen.
+                                outlook = days.map { d ->
+                                    DayOutlook(
+                                        offset = d.offset,
+                                        dateIso = d.dateIso,
+                                        tempMin = d.tMin,
+                                        tempMax = d.tMax,
+                                        codeText = weatherCodeText(d.code, displayLanguage),
+                                        precipMm = d.precipMm,
+                                        precipProbability = d.precipProbability,
+                                    )
+                                },
                             ),
                         )
                     }
@@ -301,7 +331,19 @@ class WeatherGroundingProvider(
         fetchDailyJson(location)
             .map { body ->
                 val requested = parseDays(body).filter { it.offset in reference.offsets }
-                buildBlock(requested, location.label, reference.explicit, language)
+                buildBlock(
+                    forecastDays = requested,
+                    label = location.label,
+                    reference = reference,
+                    // JETZT-Werte nur holen, wenn HEUTE überhaupt im Bild ist —
+                    // bei „Wie wird's am Donnerstag?" hat die aktuelle Temperatur
+                    // im Block nichts verloren (sie würde den Tagesbezug nur
+                    // verwässern, den [WeatherBlockTexts.explicitDaySuffix] gerade
+                    // schärft).
+                    now = if (0 in reference.offsets) parseNow(body, language) else NowSnapshot(),
+                    todayRain = if (0 in reference.offsets) parseTodayRain(body) else null,
+                    language = language,
+                )
             }
 
     /**
@@ -311,8 +353,15 @@ class WeatherGroundingProvider(
      *  - `daily` bekommt `sunrise,sunset` dazu (heute-Zeile „hell bis …"/„hell ab …").
      *  - `hourly=temperature_2m,precipitation_probability` ist der EINZIGE wirklich neue
      *    Datenpunkt (Stunden-Verlauf + Regenwahrscheinlichkeit fürs Jetzt-Band).
-     * [groundingBlock]/[parseDays] lesen aus demselben Body weiter NUR `current`/`daily`
-     * ohne `sunrise`/`sunset`/`hourly` zu berühren — der Prompt-Block bleibt byte-identisch.
+     * **Mehrtage + JETZT 2026-08-21 (wieder KEIN neuer Call — drei zusätzliche FELDER
+     * am BESTEHENDEN Request, deshalb unverändert EIN Fetch pro Cache-Rhythmus):**
+     *  - `current` bekommt `precipitation` dazu — der EINZIGE Wert, der ehrlich sagt,
+     *    ob es GERADE regnet (Andis Livetest: Tages-Summe ≠ Gegenwart, s. [buildBlock]).
+     *  - `daily` bekommt `precipitation_probability_max` dazu (Regenwahrscheinlichkeit
+     *    je Tag für den Sieben-Tage-Ausblick [TodayForecast.outlook]).
+     *  - `hourly` bekommt `precipitation` dazu — erlaubt [parseTodayRain], den Tages-
+     *    Niederschlag in „schon gefallen" und „noch erwartet" zu TRENNEN, statt das
+     *    Brain die Zeitform raten zu lassen.
      */
     private fun fetchDailyJson(location: WeatherLocation): Mono<String> =
         client.get()
@@ -320,12 +369,13 @@ class WeatherGroundingProvider(
                 b.path("/v1/forecast")
                     .queryParam("latitude", location.lat)
                     .queryParam("longitude", location.lon)
-                    .queryParam("current", "temperature_2m,weathercode")
+                    .queryParam("current", "temperature_2m,weathercode,precipitation")
                     .queryParam(
                         "daily",
-                        "temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,sunrise,sunset",
+                        "temperature_2m_max,temperature_2m_min,precipitation_sum," +
+                            "precipitation_probability_max,weathercode,sunrise,sunset",
                     )
-                    .queryParam("hourly", "temperature_2m,precipitation_probability")
+                    .queryParam("hourly", "temperature_2m,precipitation_probability,precipitation")
                     .queryParam("forecast_days", FORECAST_DAYS)
                     .queryParam("timezone", "Europe/Berlin")
                     .build()
@@ -341,7 +391,44 @@ class WeatherGroundingProvider(
         val tMax: Int,
         val precipMm: Double,
         val code: Int,
+        /** `daily.precipitation_probability_max` in % — `null`, wenn Open-Meteo sie nicht liefert. */
+        val precipProbability: Int? = null,
+        /** `daily.time[i]` („2026-06-28") — leer, wenn das Array fehlt (Wire-Feld [DayOutlook.dateIso]). */
+        val dateIso: String = "",
     )
+
+    /**
+     * **Der AUGENBLICK** (`current`-Node) — Auftrag 2b. Jedes Feld einzeln
+     * best-effort `null`: der Node ist bei Open-Meteo nicht garantiert, und ein
+     * fehlender Wert wird WEGGELASSEN, nie geraten (ein geratener Jetzt-Wert war
+     * genau der Livetest-Fehler, nur andersherum).
+     *
+     * [precipMm] ist der Schlüsselwert: `current.weathercode` kann „leichter
+     * Regen" sagen, während `current.precipitation` 0,0 mm meldet (Schauerlage,
+     * gerade Pause). Beide Fakten gehen so, wie sie sind, in den Block — das
+     * Brain bekommt die Wahrheit, nicht unsere Interpretation.
+     */
+    private data class NowSnapshot(
+        val tempC: Int? = null,
+        val codeText: String? = null,
+        val precipMm: Double? = null,
+        val observedClock: String? = null,
+    ) {
+        /** Nichts Brauchbares da ⇒ der Block muss den Ausweich kennzeichnen ([WeatherBlockTexts.nowUnavailable]). */
+        val isEmpty: Boolean get() = tempC == null && codeText == null && precipMm == null
+    }
+
+    /**
+     * Der HEUTIGE Niederschlag, in „schon gefallen" und „noch erwartet" getrennt
+     * (Summen der `hourly.precipitation`-Stunden vor bzw. ab `current.time`).
+     *
+     * WARUM: die Tages-Summe allein trägt KEINE Zeitform. „3,4 mm heute" kann
+     * heißen, dass es morgens geschüttet hat und jetzt trocken ist — oder dass
+     * der Regen erst abends kommt. Andis Fall war der erste, und ohne diese
+     * Aufteilung bleibt dem Brain nur Raten. Mit ihr steht die Zeitform als
+     * FAKT im Block ([WeatherBlockTexts.todayRainFallen]/[todayRainAhead]).
+     */
+    private data class TodayRain(val fallenMm: Double, val aheadMm: Double)
 
     /** Parst die Open-Meteo `daily`-Arrays → bis zu [FORECAST_DAYS] Tage. Leer/kaputt → leere Liste. */
     private fun parseDays(body: String): List<Day> = runCatching {
@@ -352,6 +439,7 @@ class WeatherGroundingProvider(
         val precip = daily.path("precipitation_sum")
         val codes = daily.path("weathercode")
         if (!tMax.isArray || tMax.size() == 0) return emptyList()
+        val probs = daily.path("precipitation_probability_max")
         val count = minOf(tMax.size(), FORECAST_DAYS)
         (0 until count).map { i ->
             Day(
@@ -360,6 +448,11 @@ class WeatherGroundingProvider(
                 tMax = tMax.numOrZero(i).roundToInt(),
                 precipMm = precip.numOrZero(i),
                 code = codes.path(i).asInt(0),
+                // Fehlt das Feld (Alt-Mirror, kanned Test-JSON) ⇒ `null`, NICHT 0 %:
+                // „0 % Regenwahrscheinlichkeit" wäre eine erfundene Aussage,
+                // „keine Angabe" ist die Wahrheit.
+                precipProbability = probs.path(i).takeIf { it.isNumber }?.asInt(),
+                dateIso = daily.path("time").path(i).asText(""),
             )
         }
     }.getOrElse { emptyList() }
@@ -386,6 +479,65 @@ class WeatherGroundingProvider(
         val code = current.path("weathercode").takeIf { it.isIntegralNumber }?.asInt()
         temp to code?.let { weatherCodeText(it, language) }
     }.getOrElse { null to null }
+
+    /**
+     * Wie [parseCurrent], aber für den GROUNDING-Pfad: zusätzlich
+     * `current.precipitation` (regnet es GERADE?) und `current.time` als
+     * Frische-/Herkunfts-Marker ([WeatherBlockTexts.observedAt]).
+     *
+     * Bewusst NICHT in [parseCurrent] hineingebaut: dessen `Pair`-Rückgabe ist die
+     * Wire-Naht von [todayForecast] (Kachel), diese hier ist die Prompt-Naht.
+     * Beide lesen denselben Node aus demselben Body — kein zweiter Call, aber
+     * auch keine Signatur, die zwei Aufgaben gleichzeitig trägt.
+     */
+    private fun parseNow(body: String, language: Language): NowSnapshot = runCatching {
+        val current = mapper.readTree(body).path("current")
+        if (current.isMissingNode) return NowSnapshot()
+        val code = current.path("weathercode").takeIf { it.isIntegralNumber }?.asInt()
+        NowSnapshot(
+            tempC = current.path("temperature_2m").takeIf { it.isNumber }?.asDouble()?.roundToInt(),
+            codeText = code?.let { weatherCodeText(it, language) },
+            precipMm = current.path("precipitation").takeIf { it.isNumber }?.asDouble(),
+            // „2026-06-28T12:00" → „12:00". Kein Zeit-Parsing nötig und keins
+            // gewollt: der Block braucht die lokale Uhrzeit als TEXT, und ein
+            // unerwartetes Format soll `null` ergeben statt zu werfen.
+            observedClock = current.path("time").asText("")
+                .substringAfter('T', "")
+                .takeIf { it.matches(CLOCK_PATTERN) },
+        )
+    }.getOrElse { NowSnapshot() }
+
+    /**
+     * Teilt den HEUTIGEN Niederschlag an `current.time` in „schon gefallen" und
+     * „noch erwartet" (Summen über `hourly.precipitation`). `null`, wenn der
+     * `hourly`-Block oder `current.time` fehlt — dann bleibt es bei der reinen
+     * Tages-Summe und der Block trifft KEINE Zeitform-Aussage (ehrlicher als eine
+     * geratene).
+     *
+     * Nur Stunden DESSELBEN Kalendertags wie `current.time` zählen (Präfix-
+     * Vergleich auf „yyyy-MM-dd"): der `hourly`-Block reicht über alle sieben
+     * Tage, und morgiger Regen gehört nicht in die heutige Bilanz.
+     */
+    private fun parseTodayRain(body: String): TodayRain? = runCatching {
+        val root = mapper.readTree(body)
+        val hourly = root.path("hourly")
+        val times = hourly.path("time")
+        val precip = hourly.path("precipitation")
+        if (!times.isArray || !precip.isArray || times.size() == 0) return null
+        val currentTime = root.path("current").path("time").asText("")
+        if (currentTime.isBlank()) return null
+        val today = currentTime.substringBefore('T')
+        var fallen = 0.0
+        var ahead = 0.0
+        for (i in 0 until minOf(times.size(), precip.size())) {
+            val t = times.path(i).asText("")
+            if (!t.startsWith(today)) continue
+            val mm = precip.path(i).asDouble(0.0)
+            // Die laufende Stunde zählt als „noch erwartet": sie ist nicht vorbei.
+            if (t < currentTime) fallen += mm else ahead += mm
+        }
+        TodayRain(fallenMm = fallen, aheadMm = ahead)
+    }.getOrNull()
 
     /**
      * `daily.sunrise[0]`/`daily.sunset[0]` (HEUTE, Index 0) → Epoch-Millisekunden.
@@ -473,11 +625,24 @@ class WeatherGroundingProvider(
      * OFF ⇒ [mark] ist die Identität ⇒ Zeile und Block bleiben byte-identisch
      * zum bisherigen Verhalten (s. Pin-Tests).
      */
-    private fun buildBlock(forecastDays: List<Day>, label: String, explicitDay: Boolean, language: Language): String {
+    private fun buildBlock(
+        forecastDays: List<Day>,
+        label: String,
+        reference: DayReferenceResolver.DayReference,
+        now: NowSnapshot,
+        todayRain: TodayRain?,
+        language: Language,
+    ): String {
         if (forecastDays.isEmpty()) return ""
         val sb = StringBuilder()
         sb.append("\n\n---\n")
         sb.append(WeatherBlockTexts.head(language))
+
+        // JETZT-Zeile ZUERST, wenn die Frage auf den Augenblick zielt: der Block
+        // wird von oben nach unten gelesen, und was oben steht, prägt die Antwort.
+        val nowLine = nowLine(now, label, language)
+        if (reference.nowFocus && nowLine != null) sb.append(nowLine)
+
         forecastDays.forEach { d ->
             sb.append(
                 WeatherBlockTexts.line(
@@ -490,13 +655,85 @@ class WeatherGroundingProvider(
                     precip = precipText(d.precipMm, language),
                 ),
             )
+            // Die Zeitform-Aufteilung gehört DIREKT unter die heutige Zeile, auf
+            // die sie sich bezieht — und nur, wenn heute überhaupt Niederschlag
+            // vorkommt (sonst ist „bis jetzt nichts gefallen, nichts mehr
+            // erwartet" eine Zeile ohne Aussage).
+            if (d.offset == 0 && todayRain != null && d.precipMm >= PRECIP_THRESHOLD_MM) {
+                sb.append(todayRainLine(todayRain, language))
+            }
         }
+        // Ohne nowFocus steht die JETZT-Zeile UNTER den Tagen: der Wert ist dann
+        // Zusatz-Kontext, nicht die Antwort („Regnet es heute?" will das Tagesbild,
+        // profitiert aber davon, dass Hoshi den Moment danebenlegen kann).
+        if (!reference.nowFocus && nowLine != null) sb.append(nowLine)
+
         sb.append(WeatherBlockTexts.instruction(language))
-        if (explicitDay) {
+        if (reference.explicit) {
             sb.append(WeatherBlockTexts.explicitDaySuffix(language))
+        }
+        if (reference.weekend) {
+            sb.append(WeatherBlockTexts.weekendSuffix(language))
+        }
+        // Zeitform-Regel nur, wenn es eine JETZT-Zeile GIBT; fehlt sie, obwohl
+        // nach dem Augenblick gefragt war, wird der Ausweich ehrlich markiert
+        // (statt still die Tagesspanne als Gegenwart durchgehen zu lassen —
+        // exakt Andis Livetest-Fehler).
+        if (nowLine != null) {
+            sb.append(WeatherBlockTexts.tenseInstruction(language))
+        } else if (reference.nowFocus) {
+            sb.append(WeatherBlockTexts.nowUnavailable(language))
+        }
+        // Teil-Antwort ehrlich kennzeichnen: „heute und nächste Woche" liefert
+        // heute — und sagt dazu, dass der Rest jenseits der Reichweite liegt.
+        if (reference.beyondHorizon) {
+            sb.append("\n").append(WeatherBlockTexts.beyondHorizon(language, FORECAST_DAYS))
         }
         appendWeatherContract(sb, language)
         return sb.toString()
+    }
+
+    /**
+     * Die fertige JETZT-Zeile, oder `null` wenn Open-Meteo keinen brauchbaren
+     * `current`-Node lieferte. Fehlende EINZEL-Felder werden weggelassen, nicht
+     * ersetzt — eine Zeile „14 Grad" ohne Lage ist ehrlich, „14 Grad, unbekannt"
+     * wäre Füllmaterial.
+     *
+     * Die Werte tragen [mark] wie die Tages-Zeilen: sie sind exakt derselbe Sorte
+     * geerdeter Fakt und gehören unter denselben Zitier-Vertrag (der Livetest
+     * zeigte ja gerade, dass das Brain Zahlen gern frei paraphrasiert).
+     */
+    private fun nowLine(now: NowSnapshot, label: String, language: Language): String? {
+        if (now.isEmpty) return null
+        val parts = mutableListOf<String>()
+        now.tempC?.let { parts += mark(WeatherBlockTexts.nowDegrees(language, it.toString())) }
+        now.codeText?.let { parts += mark(it) }
+        now.precipMm?.let {
+            parts += mark(
+                WeatherBlockTexts.nowPrecipitation(
+                    language = language,
+                    mm = it.roundToInt(),
+                    measurable = it >= PRECIP_THRESHOLD_MM,
+                ),
+            )
+        }
+        now.observedClock?.let { parts += WeatherBlockTexts.observedAt(language, it) }
+        return WeatherBlockTexts.nowLine(language, mark(label), parts.joinToString(", "))
+    }
+
+    /** Die Zeitform-Aufteilung des heutigen Niederschlags als eigene Unterzeile. */
+    private fun todayRainLine(rain: TodayRain, language: Language): String {
+        val fallen = WeatherBlockTexts.todayRainFallen(
+            language = language,
+            mm = rain.fallenMm.roundToInt(),
+            measurable = rain.fallenMm >= PRECIP_THRESHOLD_MM,
+        )
+        val ahead = WeatherBlockTexts.todayRainAhead(
+            language = language,
+            mm = rain.aheadMm.roundToInt(),
+            measurable = rain.aheadMm >= PRECIP_THRESHOLD_MM,
+        )
+        return "  ${mark(fallen)}, ${mark(ahead)}.\n"
     }
 
     /**
@@ -544,7 +781,7 @@ class WeatherGroundingProvider(
      * jetzt [WeatherBlockTexts.precipitation]).
      */
     private fun precipText(mm: Double, language: Language): String =
-        WeatherBlockTexts.precipitation(language, mm.roundToInt(), measurable = mm >= 0.5)
+        WeatherBlockTexts.precipitation(language, mm.roundToInt(), measurable = mm >= PRECIP_THRESHOLD_MM)
 
     // ── Wetter-Absichts-Erkennung ───────────────────────────────────────────────
 
@@ -589,6 +826,60 @@ class WeatherGroundingProvider(
         val sunriseEpochMs: Long? = null,
         val sunsetEpochMs: Long? = null,
         val hourly: List<HourPoint> = emptyList(),
+        /**
+         * **Der Sieben-Tage-Ausblick (Andi 2026-08-21: „warum nicht für mehr?").**
+         * ADDITIV ANS ENDE (K4-Muster): jeder Bestandsleser — die Wetter-Kachel,
+         * `weathertoday.test.ts`, jeder Alt-Client — sieht exakt die Felder, die er
+         * vorher sah. Wer den Ausblick nicht kennt, ignoriert ihn.
+         *
+         * **Kein zusätzlicher Fetch:** die Tage stammen aus DEMSELBEN
+         * [fetchDailyJson]-Body, aus dem schon heute+morgen kommen — Open-Meteo
+         * liefert seit jeher [FORECAST_DAYS] Tage, sechs davon wurden bisher
+         * geparst und weggeworfen. Der Poll-Rhythmus des FE (~10 min,
+         * `useWeatherToday`) bleibt damit unangetastet.
+         *
+         * Enthält HEUTE als `offset = 0` — die Zeile ist damit selbsttragend und
+         * ein Client muss sie nicht aus [todayMin]/[todayMax] zusammenstückeln.
+         * Leere Liste = Open-Meteo lieferte keine lesbaren `daily`-Arrays (dann ist
+         * aber auch der Rest leer und der Controller antwortet ehrlich 502).
+         */
+        val outlook: List<DayOutlook> = emptyList(),
+    )
+
+    /**
+     * Ein Tag des Sieben-Tage-Ausblicks ([TodayForecast.outlook]) — Wire-Teil.
+     *
+     * [dateIso] („2026-06-28") statt Epoch-ms, anders als [HourPoint.epochMs]:
+     * ein TAG ist ein Kalenderdatum, kein Zeitpunkt. Über Epoch-ms müsste jeder
+     * Client wieder eine Zeitzone raten, um „welcher Tag ist das?" zu beantworten
+     * — genau die Sorte Drift, die bei Sonnenauf-/-untergang schon einmal
+     * korrigiert werden musste. [offset] (0 = heute) liegt daneben, damit das FE
+     * „heute/morgen" beschriften kann, ohne selbst zu rechnen.
+     *
+     * [precipProbability] ist als EINZIGES Feld nullable: Open-Meteo liefert
+     * `precipitation_probability_max` nicht überall (und ältere Mirrors gar
+     * nicht). `null` heißt „keine Angabe" — das FE lässt das Regen-Prozent dann
+     * weg, statt „0 %" zu behaupten.
+     */
+    data class DayOutlook(
+        val offset: Int,
+        val dateIso: String,
+        /**
+         * **`tempMin`/`tempMax`, NICHT `tMin`/`tMax`** — der Name ist hier
+         * Wire-Vertrag, nicht Geschmack: Jackson leitet den JSON-Schlüssel aus dem
+         * Java-Getter ab, und `tMin` wird über `getTMin()` zu **`tmin`**
+         * (Bean-Konvention: nach einem einbuchstabigen Präfix wird
+         * dekapitalisiert). Das FE hätte `outlook[].tmin` lesen müssen, während
+         * daneben `todayMin` steht — eine Falle, die genau einmal beim
+         * Serialisierungs-Test auffällt und danach nie wieder. Die internen
+         * Parser-Felder heißen unverändert `tMin`/`tMax`; nur das Wire-Objekt
+         * trägt die ausgeschriebenen Namen.
+         */
+        val tempMin: Int,
+        val tempMax: Int,
+        val codeText: String,
+        val precipMm: Double,
+        val precipProbability: Int? = null,
     )
 
     /**
@@ -628,6 +919,19 @@ class WeatherGroundingProvider(
          * ohne die vollen bis zu 168 `hourly`-Punkte (7 Tage × 24 h) durchzureichen.
          */
         internal const val HOURLY_WINDOW = 12
+
+        /**
+         * **Die EINE Niederschlags-Schwelle** (mm): darunter heißt es „kaum"/„kein"
+         * Niederschlag, darüber wird die Zahl genannt. Stand als nackte `0.5` in
+         * [precipText] und wird jetzt von drei Stellen geteilt (Tages-Zeile,
+         * JETZT-Zeile, Zeitform-Aufteilung) — eine Wahrheit, ein Grenzwert, sonst
+         * behauptet der Block irgendwann gleichzeitig „kaum Niederschlag" und
+         * „gerade Niederschlag" für denselben Messwert.
+         */
+        internal const val PRECIP_THRESHOLD_MM: Double = 0.5
+
+        /** „HH:mm" — akzeptiertes Format des `current.time`-Uhrzeit-Teils. */
+        private val CLOCK_PATTERN = Regex("""\d{2}:\d{2}""")
 
         /**
          * Wissens-Kategorien-Gate (FACT_SHORT/NEEDS_WEB/AMBIG) als geteilte

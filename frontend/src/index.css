@@ -41,6 +41,67 @@
   --radius: 12px;
   --gap: 16px;
 
+  /* ── DER GLAS-GRAD DES HAUSES (Andi 22.08.) ───────────────────────────────
+     Wörtlich: „ich möchte den inneren teil etwas transparenter, damit man den
+     hintergrund etwas besser sieht. mach bitte auch die hintergründe der
+     widgets etwas transparenter."
+
+     EINE Zahl für ALLE Flächen, die über einer Szene liegen — Kacheln,
+     Karten, die Compose-Leiste, die Nav-Insel, die Fußleiste. Sie ist der
+     Anteil der Flächenfarbe im `color-mix(…, transparent)`; der Rest ist die
+     Szene darunter. Nachjustieren ist damit EIN Wert, nicht sechzehn.
+
+     WARUM 86 % UND KEIN GLAS. Die Nav-Insel und die Fußleiste tragen diese
+     Zahl seit dem 09.08. als Literal (dort mit `backdrop-filter`, hier
+     bewusst ohne — die Akku-Messung für Blur auf dem Flur-iPad steht aus,
+     ROADMAP 0.9.1 §2). Sie ist also keine neue Erfindung, sondern die
+     Deckkraft, mit der Andi seit zwei Wochen lebt, jetzt für alle Flächen —
+     und die zwei Literale sind durch diesen Token ersetzt, damit sie nicht
+     beim nächsten Feinschliff auseinanderlaufen.
+
+     DIE GRENZE IST DIE LESBARKEIT, und sie ist gemessen, nicht geschätzt:
+     `tools/theme-contrast/flaechen.mjs` legt EINE Kachel über die volle
+     Lesespalte und sucht den schlechtesten Bildpunkt über allen 16 Szenen.
+     Deckend war der schwächste riegelfähige Wert 5,34:1 (Aoi/Yoru); bei 86 %
+     bleibt er über 4,5:1. Wer diese Zahl senkt, misst neu — sonst ist die
+     nächste Stufe eine Behauptung.
+
+     WO SIE NICHT GILT: Overlays und der Einstellungs-Drawer bleiben deckend
+     (ein modaler Kasten muss den Inhalt darunter zudecken, sonst liest man
+     zwei Texte übereinander — Cowork-Fund 2026-07-02), ebenso die
+     Bedienelemente der Edit-Schicht, die auf einer Kachel liegen. */
+  --surface-mix: 86%;
+
+  /* ── DER RAHMEN-GRAD DES HAUSES (Andi 23.08.) ─────────────────────────────
+     Wörtlich: „Und mach bitte die Rahmen um die Widgets noch transparenter."
+
+     Das „noch" ist der ganze Auftrag: die FLÄCHE ist am 22.08. durchscheinend
+     geworden (`--surface-mix`), die LINIE um sie herum blieb deckend — und eine
+     deckende Kante um eine durchscheinende Fläche zieht die Kachel wieder
+     scharf, gegen die Absicht. Dieselbe Bauart wie oben, aus demselben Grund:
+     EINE Zahl statt einer Fundstelle je Kachel-Regel. Andis nächstes „noch
+     etwas transparenter" ist damit wieder ein Wert, kein Suchlauf.
+
+     WARUM 68 % UND NICHT WENIGER. Der Boden ist hier ein anderer als bei der
+     Fläche: auf einer Haarlinie steht nie eine Glyphe, sie ist Dekoration —
+     der 4,5:1-Text-Boden gilt für sie nicht (`flaechen.mjs` spart die Kante
+     ausdrücklich mit 3 px Einzug aus). Der Riegel ist stattdessen, dass die
+     Kachel als Kachel LESBAR bleibt, und auch der ist gemessen, nicht
+     geschätzt: `tools/theme-contrast/rahmen.mjs` legt eine echte `.tile` über
+     die echte Szene und misst den WCAG-Kontrast der Linie gegen ihre beiden
+     Seiten (Kachelgrund innen, Szene außen) über alle Szenen.
+     Deckend war die schwächste Szene **aoi mit 1,19:1** (ihre Haarlinie
+     #1f2938 liegt von Haus aus dicht an der Fläche); bei 68 % bleibt sie über
+     dem 1,10:1-Riegel. Wer diese Zahl senkt, misst neu — sonst ist die
+     nächste Stufe eine Behauptung.
+
+     WO SIE NICHT GILT: die Linien INNERHALB einer Kachel (Trennstriche,
+     Pillen, Faltungen) und die Möbel des Hauses (Nav-Insel, Fußleiste,
+     Compose-Leiste). Andis Satz sagt „die Rahmen um die WIDGETS"; eine
+     Trennlinie im Inneren ist kein Rahmen, und die Insel oben ist kein
+     Widget. Das ist eine Entscheidung, kein Vergessen. */
+  --hairline-mix: 68%;
+
   /* Lesespalte + bubblelose Message-Token (Yoru, awake — Slice 1). */
   --measure: 42rem; /* ~672px ruhige Lesebreite für den Thread */
   --radius-bubble: 18px;
@@ -108,7 +169,25 @@ code {
   margin: 0 auto;
 }
 
-/* ---- Top-Nav ---- */
+/* ---- Sofort-Fix Übersichtsseite (Andi-Auftrag 18.08.) — der Breiten-Deckel
+   der Übersicht war seit S1 breiter als bei den anderen Reitern
+   (`min(1280px,100vw)` statt der 920er-Lesespalte oben an `.app`). Andis
+   Urteil: dieselbe Spalte wie überall sonst, keine eigene Zahl fürs Zuhause —
+   die eigene `.app[data-tab='overview']`-max-width-Regel entfällt darum
+   ersatzlos, die 920px aus der Basisregel gelten jetzt auch hier. Damit
+   erreicht die Bühne unten die vierte Spalte nicht mehr (280px braucht sie
+   nicht — `onewindow.test.ts` prüft das Restbild). Der `.app__main`-Deckel
+   direkt darunter (kein Dokument-Scroll auf Zuhause) bleibt unverändert, der
+   ist eine eigene, weiter gültige Zusage. */
+
+/* ---- Top-Nav — die schwebende Insel (Andi-Entscheid „Option B", 09.08) ----
+   Vorher endete der Leisten-Hintergrund hart an der 920px-Spalte, während die
+   Theme-Atmosphäre dahinter weiterlief — ein sichtbarer Kanten-Bruch auf
+   breiten Fenstern. Jetzt löst sich die Nav als rundes Milchglas-Element vom
+   Rand: die Atmosphäre (Komorebis Lichtsprenkel, Asagiris Nebel, die
+   Laternenkette) läuft UM sie herum weiter statt an ihr zu enden. Die
+   Theme-Signaturen (Goldlippe, Flutlinie …) hängen an .nav und schmücken
+   damit automatisch die Insel. */
 .nav {
   display: flex;
   align-items: center;
@@ -117,9 +196,20 @@ code {
      (Header-Badge ragte sonst über den Viewport → H-Scroll). */
   flex-wrap: wrap;
   row-gap: 10px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--bg-hairline);
+  padding: 10px 18px;
+  margin: 10px clamp(8px, 2vw, 16px) 2px;
+  border: 1px solid var(--bg-hairline);
+  border-radius: 18px;
+  /* Milchglas: Fallback solide Surface, darüber die durchscheinende Mischung —
+     Browser ohne color-mix/backdrop-filter zeigen einfach die ruhige Insel
+     ohne Blur (kein kaputter Zustand, nur weniger Glas).
+     Die 86 % standen hier bis 22.08. als Literal; sie sind jetzt
+     `--surface-mix` (s. dort) — dieselbe Zahl, aber die des ganzen Hauses. */
   background: var(--bg-surface);
+  background: color-mix(in oklab, var(--bg-surface) var(--surface-mix), transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
+  box-shadow: 0 8px 28px -18px rgb(0 0 0 / 0.55);
   /* Eigener Stacking-Context ÜBER dem Inhalt: Nav-Popovers (Ops-Panel) liegen
      damit garantiert über den Kacheln — egal welche Stacking-Contexte die
      animierte .app__main darunter aufmacht. */
@@ -186,6 +276,8 @@ code {
     border-color var(--dur-base) var(--ease-standard);
 }
 .badge__dot {
+  /* Never squeezed when the pill has to shrink (the label is the elastic part). */
+  flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -247,6 +339,9 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* min-width:0 defeats the flex `auto` minimum: the group may shrink instead of
+     pushing the nav row (default `min-width:auto` = never below content width). */
+  min-width: 0;
 }
 
 /* 星 (Hoshi) — leise Marke links VOR dem Wortmark (im nav__brand). Bewusst
@@ -272,10 +367,12 @@ code {
 .ops {
   position: relative;
   display: inline-flex;
+  min-width: 0;
 }
 .ops__pill {
   cursor: default;
   user-select: none;
+  min-width: 0;
 }
 /* WARN/CRITICAL ist ein echter <button> (klickbar → Panel): Browser-Chrome
    neutralisieren, Zeigefinger zeigt die Klickbarkeit an. */
@@ -284,8 +381,40 @@ button.ops__pill {
   cursor: pointer;
 }
 .ops__icon {
+  flex: none;
   font-size: 11px;
   line-height: 1;
+}
+
+/* Andi 2026-08-14: "the memory-tight hint slips in the row when it appears".
+   Cause: `.badge` is `white-space: nowrap` and the CRITICAL headline is a whole
+   sentence (measured 440px de / 595px it vs. 16px for the silent OK dot) — the
+   nav row has ~236px of slack, so the status group was pushed onto a second line
+   (nav 59px → 103px, tabs jumped 72px) and on phone widths it burst the nav
+   island (up to 261px overflow → page H-scroll).
+
+   Contract: the headline is the ONLY elastic part of the pill. It is clipped to
+   a cap, and below the tablet breakpoint it is dropped entirely — the pill then
+   stays the dot + warn glyph it always was, so the row never moves. Nothing is
+   lost: the full sentence sits in `.ops__hint` in the panel (ONE tap, no
+   hover-only path) and in the button's aria-label/title.
+
+   Numbers behind the two values (measured in all five catalogs, longest is it):
+   the row has ~235–265px of slack at the `.app` max width, and a 9rem headline
+   makes the pill ~203px — ~35px of headroom for longer tab labels. Below 952px
+   viewport the slack shrinks 1:1 with the window, so the 1000px breakpoint (not
+   a device size: the width where the text stops fitting) drops it. */
+.ops__headline {
+  min-width: 0;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 1000px) {
+  .ops__headline {
+    display: none;
+  }
 }
 
 /* OK = still: nur ein kleiner Punkt in Statusfarbe, ohne Pillen-Chrome und
@@ -360,6 +489,10 @@ button.ops__pill {
   box-shadow: 0 10px 30px oklch(0 0 0 / 0.4);
   font-size: 12.5px;
   color: var(--text-2);
+  /* Long unbreakable runs (HA URLs in a sidecar `detail`, S4) must wrap INSIDE
+     the 320px panel — measured 60px (92px @360) of horizontal spill without it.
+     `anywhere` (not `break-word`) so it also shrinks the min-content width. */
+  overflow-wrap: anywhere;
   visibility: hidden;
   transform: translateY(-4px);
   transition:
@@ -373,6 +506,16 @@ button.ops__pill {
   visibility: visible;
   transform: translateY(0);
   pointer-events: auto;
+}
+
+/* The pill's headline in full — the pill itself may only show a clipped
+   fragment (or none at all below the tablet breakpoint, s. .ops__headline). */
+.ops__hint {
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--bg-hairline);
+  font-size: 12.5px;
+  color: var(--text-1);
 }
 
 /* Toms ☁️-Cloud-Banner (voice.cloud === true): ruhig, ehrlich, kein Alarm-Rot. */
@@ -452,6 +595,8 @@ button.ops__pill {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* A long `detail` (HA URL) drops to its own line instead of stretching the row. */
+  flex-wrap: wrap;
 }
 .ops__scdot {
   flex: none;
@@ -479,6 +624,7 @@ button.ops__pill {
 }
 .ops__scdetail {
   margin-left: auto;
+  min-width: 0;
   text-align: right;
   font-size: 11.5px;
   color: var(--text-4);
@@ -500,6 +646,51 @@ button.ops__pill {
   flex-direction: column;
   /* Tab-Wechsel (key={tab} in App.tsx remountet) → ruhige Inhalts-Einblendung. */
   animation: view-in var(--dur-base) var(--ease-decel) both;
+  /* BEWUSST KEIN `overflow` hier: Chat/Räume/Aktivität sind Lese-Reiter, ihre
+     Inhalte sind naturgemäß länger als das Fenster und MÜSSEN weiter normal
+     scrollen. Der Deckel hängt darum am Zuhause-Reiter, nicht an dieser
+     Basis-Regel (s. direkt darunter). */
+}
+/* ---- S1 „Ein-Fenster-Deckel" — das Dokument scrollt auf Zuhause NIE --------
+   (DESIGN-widgets-settings-2026-08-15 §2.2.) Ohne diese eine Zeile scrollte
+   bisher das DOKUMENT, sobald die Kacheln (oder die aufgeklappte Nachrichten-
+   Expansion) höher wurden als das Fenster — auf dem Flur-iPad heißt das: die
+   Uhr wandert aus dem Bild. Hier wird der Rahmen dichtgemacht; wer wirklich
+   mehr zu zeigen hat, scrollt INNERHALB seines eigenen Rahmens (Bühne unten,
+   Nachrichten-Liste, Orb-Karte). */
+.app[data-tab='overview'] .app__main {
+  overflow: hidden;
+  /* Same short-window law as `.idle` below: 2.9vh hits the base 24px at 834 px
+     viewport height, so the iPad in its home-screen app sees no change at all —
+     a flatter window hands the difference to the stage instead of to padding.
+     Scoped to the home tab on purpose: the reading tabs keep their calm 24px.
+
+     UNTEN kleiner seit 19.08.: die Fußleiste (`.homefoot`) trägt den unteren
+     Rand jetzt selbst — 24 px Polster DAHINTER schöben sie 26 px über die
+     Fensterkante, während die Nav oben mit 10 px sitzt. Die Seite sähe
+     kopflastig aus. 1.2vh trifft die 10 px bei 834 px Fensterhöhe, also genau
+     dieselbe Kalibrierung wie die Zeile darüber. */
+  padding-block: clamp(12px, 2.9vh, 24px) clamp(8px, 1.2vh, 10px);
+
+  /* ── W6 · DER RHYTHMUS UNTER DER BÜHNE (Andi 20.08.) ────────────────────
+     Wörtlich: „Zwischen Tippen zum Sprechen und dem Orb und dem Bereich für
+     die Seiten ist echt viel ungenutzter Platz. Mache das in der UI enger."
+
+     Es sind ZWEI Zahlen, nicht drei, und der Unterschied ist die ganze Regel:
+     der Orb und seine Beschriftung („Tippen zum Sprechen") sind EIN Ding — ein
+     beschrifteter Knopf. Zwischen ihnen gehört der KLEINERE Abstand; um den
+     Block herum, gegen Bühne und Fußleiste, der größere. Ein gleichmäßiges
+     Raster über alle drei Fugen sähe ordentlich aus und läge falsch: die
+     Beschriftung schwebte dann genauso weit vom Orb weg wie von der Fußleiste,
+     und man müsste raten, wozu sie gehört.
+
+     Sie stehen hier statt an den drei Stellen selbst, weil `.voiceorb`
+     (styles/voicebar.css) und `.homefoot` (weiter unten) sonst je eine eigene
+     Zahl trügen und beim nächsten Feinschliff auseinanderliefen. Die
+     Nutzungsstellen tragen denselben Wert als Fallback — ein Orb außerhalb des
+     Zuhause-Reiters bekäme sonst gar keinen Abstand. */
+  --home-orb-gap: 10px;
+  --home-orb-label-gap: 6px;
 }
 @keyframes view-in {
   from {
@@ -574,7 +765,10 @@ button.ops__pill {
   padding: 16px 18px;
   border-radius: var(--radius);
   border: 1px solid var(--bg-hairline);
+  /* Erste Zeile = Fallback für Browser ohne color-mix (dann einfach deckend),
+     zweite = der Glas-Grad des Hauses (`--surface-mix`, s. `:root`). */
   background: var(--bg-surface);
+  background: color-mix(in oklab, var(--bg-surface) var(--surface-mix), transparent);
 }
 .hero__dot {
   flex: none;
@@ -683,7 +877,32 @@ button.ops__pill {
   padding: 14px;
   border-radius: var(--radius);
   border: 1px solid var(--bg-hairline);
+  /* ANDI 23.08.: „mach bitte die Rahmen um die Widgets noch transparenter."
+     Genau EINE Fundstelle für genau die Kanten, die Andi meint — `.tile` ist
+     der Rahmen JEDES Widgets (Übersicht wie Zuhause, `.idle__tile` erbt ihn).
+     Die Zeile darüber bleibt Wort für Wort stehen: sie ist der deckende
+     Rückfall für einen Browser ohne `color-mix` (dann eine ruhige, volle
+     Linie — nie gar keine, sonst zerfiele die Kachelfläche in die Szene).
+     Der Grad ist `--hairline-mix` (s. `:root`), gemessen mit
+     `tools/theme-contrast/rahmen.mjs` über alle Szenen. */
+  border-color: color-mix(in oklab, var(--bg-hairline) var(--hairline-mix), transparent);
+  /* ANDI 22.08.: „mach bitte auch die hintergründe der widgets etwas
+     transparenter."  Genau EINE Regel, obwohl es zwei Auftritte sind: die
+     Kacheln der Übersicht und die Widgets des Zuhause-Reiters tragen beide
+     diese Klasse (`.idle__tile` ergänzt nur Scroll-Verhalten). Und genau EINE
+     Zahl für alle 16 Szenen — `--surface-mix` (s. `:root`), nicht je Thema
+     ein Wert: der Grund unter der Kachel ist zwar in jedem Thema ein anderer,
+     der GRAD des Durchscheinens aber dieselbe Gestaltungsaussage.
+     Erste Zeile = Fallback für Browser ohne color-mix (dann deckend, nie
+     grundlos), zweite = die Mischung.
+     Der Preis ist gemessen, nicht geschätzt: `tools/theme-contrast/flaechen.mjs`
+     legt EINE Kachel über die volle Lesespalte (der Worst Case — dort hat sie
+     über jedem Punkt der Szene gelegen) und sucht über allen 16 Szenen den
+     schlechtesten Bildpunkt. Schwächster riegelfähiger Wert deckend 5,34:1
+     (Aoi/Yoru), bei 86 % 5,26:1 (Yoru) — der ganze Handel kostet 0,08 und
+     bleibt 0,76 über dem 4,5:1-Boden. */
   background: var(--bg-surface);
+  background: color-mix(in oklab, var(--bg-surface) var(--surface-mix), transparent);
   /* Eintritts-Stagger (gemeinsam mit .feed__row) beim Mount/Tab-Wechsel. */
   animation: tile-in var(--dur-base) var(--ease-decel) both;
 }
@@ -760,6 +979,62 @@ button.ops__pill {
   background: var(--accent-soft);
   border-color: transparent;
 }
+/* ── Der Maximieren-Zugang im Kachelkopf (Andi 23.08.) ────────────────────
+   „füge einen ‚maximieren' hier und beim wetter an, wo man alle auswahlen,
+   alle informationen vernünftig angezeigt bekommt :)"
+
+   DEZENT heißt hier: kein Rahmen, keine Fläche, die Farbe der leisesten
+   Textstufe — sichtbar, wenn man hinsieht, still, wenn man es nicht tut. Er
+   trägt trotzdem das volle 44-px-Ziel (Flur-iPad, Daumen); dass er optisch
+   klein ist und als Ziel groß, ist der ganze Trick. `margin-right: -8px` holt
+   das überstehende Ziel wieder an die Kopfkante zurück, damit die Kachel nicht
+   nach rechts auszufransen scheint.
+
+   Er bringt die Kopfzeile auf 44 px — dieselben 21 px, die auch der Play-Knopf
+   des Saugers kostet, und aus demselben Grund gewählt: als eigene ZEILE hätte
+   er 50 px gekostet und die flachen Stufen wieder über die Kante geschoben. */
+.idle__maxbtn {
+  margin-left: auto;
+  margin-right: -8px;
+  /* **Das Ziel ist 44 px, die ZEILE wächst trotzdem nicht.** Ohne die
+     negativen Blockränder zog der Knopf die 23-px-Kopfzeile auf 44 — und die
+     21 px hat die flache Wetter-Kachel nicht: die Sonde meldete danach sofort
+     wieder Schnitte („morgen 13–19°, Regenschauer" 5 px, „hell bis 20:48"
+     3 px). −10 px oben und unten machen aus 44 px Kasten 24 px Zeilenhöhe;
+     der Finger bekommt trotzdem das volle Quadrat, weil Ränder das
+     Trefferfeld nicht beschneiden. Das ist derselbe Handel wie bei
+     `margin-right`, nur senkrecht. */
+  margin-block: -10px;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-4);
+  cursor: pointer;
+}
+.idle__maxbtn:hover {
+  color: var(--text-2);
+}
+.idle__maxbtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* IM EDIT-MODUS IST ER WEG, nicht nur wirkungslos. Die Bühne macht alle
+   Kachelkinder ohnehin `inert` — technisch genügte das. Aber ein sichtbarer
+   Knopf, der nicht reagiert, ist eine Zusage, die die Kachel gerade nicht
+   hält, und beim Anordnen ist er außerdem nur ein Ziel, das man versehentlich
+   trifft. Die Regel steht hier und nicht in React, weil die Wetter-Kachel ihr
+   `data-edit` erst per `cloneElement` von der Bühne bekommt und es selbst gar
+   nicht lesen kann. */
+.idle__tile[data-edit='true'] .idle__maxbtn {
+  display: none;
+}
+
 .tile__value {
   font-size: 14px;
   color: var(--text-1);
@@ -781,23 +1056,87 @@ button.ops__pill {
    tile-in der Kacheln) — Chromes Occlusion-Throttling friert opacity-
    Animationen ein; reduced-motion stellt die globale Regel ruhig, die
    Welle rendert ihr Standbild selbst. */
+/* S1 „Ein-Fenster-Deckel" (DESIGN-widgets-settings-2026-08-15 §2.2): aus der
+   Flex-Spalte wird ein Grid — Kopf `auto`, Wecker `auto`, WIDGET-BÜHNE `1fr`.
+   Nur die Bühne bekommt die Restfläche; Kopf/Wecker behalten ihre natürliche
+   Höhe. `flex:1 1 auto` + `min-height:0` machen `.idle` selbst zum dehnbaren
+   Kind der `.app__main`-Spalte (ohne `min-height:0` wächst ein Flex-Kind nie
+   unter seine Inhaltshöhe — genau daran scheiterte der Deckel bisher).
+
+   VIER ZEILEN WAREN ES BIS 19.08.: die vierte trug die Status-Chips. Die sind
+   zur Fußleiste unter dem Orb geworden (`.homefoot`, Andi-Bestellung) — und
+   das kostet die Bühne nichts, im Gegenteil: die Chip-Zeile (20 px) UND ihr
+   Grid-Gap (bis 20 px) fallen hier weg, die Leiste unten nimmt sich ~34 px
+   plus Rand. Netto gewinnt die `1fr`-Bühne bei 1366×1024 rund 18 px
+   (gemessen: 432 → 450 px). Der Ein-Fenster-Vertrag ist unangetastet. */
+/* SHORT-WINDOW TIGHTENING (Komposition v2, 15.08.) — the structural air of the
+   home frame is height-aware, exactly like the clock (16vh) and the orb (18vh)
+   already are. Every value below is a `clamp()` whose vh term is calibrated to
+   hit the OLD constant at 834 px of viewport height: at the iPad's own height
+   (and anything taller) NOTHING changes — 2.4vh = 20.0, 3.4vh = 28.4 ⇒ both cap
+   at their maxima. Only below that do they give air back, and they give it to
+   the one row that has to earn it: the stage.
+   Measured against the real composition (headless Chrome, all five tiles):
+   at 1194 × 745 (iPad landscape WITH the Safari bars — Andi's real second case)
+   the stage grows 129 → ~145 px, i.e. one tile row of ~125 instead of ~109 px.
+   That still does not reach the 132 px floor of `homeLayout.ts`; a window that
+   short simply does not have the pixels, and the honest answer stays the one the
+   model gives (ONE row, the rest on page 2) instead of five squeezed ones.
+
+   SOFORT-FIX (Andi-Auftrag 18.08.): der `border-bottom` unter den Kacheln
+   (zwischen Bühne und Orb) ist ersatzlos raus — kein Nachfolge-Strich. Sein
+   `margin-bottom` existierte nur, um dieser Linie Luft zu geben; ohne Linie
+   fällt auch der Grund fürs Polster weg. `.app__main` ist ein Flex-Block mit
+   fester Höhe (`.idle` + `.voiceorb` teilen sie), also wandert jedes hier
+   gesparte Pixel 1:1 in `.idle`s eigene Höhe — und weil nur die `1fr`-Zeile
+   wächst, landet es an der Bühne, ohne den Orb zu berühren. */
+/* ZWEI ZEILEN SEIT W6 (Andi 20.08.). Der Wecker war die zweite `auto`-Zeile;
+   er ist ein Bühnen-Widget geworden (s. `homeWidgets.ts`). Die Zeile ERSATZLOS
+   zu streichen statt sie leer stehen zu lassen ist der ganze Punkt: eine leere
+   `auto`-Zeile ist 0 px hoch, ihre Grid-Lücke aber nicht — Kopf→Bühne wären
+   20 + 0 + 20 = 40 px geblieben statt der 20, die es jetzt sind.
+   Gemessen (Sonde, 1366×1024): Kopf→Bühne **75 → 20 px**, die 55 px gehen
+   vollständig an die `1fr`-Bühne, weil nur sie sich dehnt.
+
+   Und das untere Polster (`4px`) fällt mit: es trennte die Bühne vom Orb-Block,
+   der darunter schon 14 px eigenes Polster trägt. Zwei Polster übereinander
+   sind ein Abstand, den niemand bestellt hat — Andi wörtlich: „Zwischen Tippen
+   zum Sprechen und dem Orb und dem Bereich für die Seiten ist echt viel
+   ungenutzter Platz." */
 .idle {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 20px 0 4px;
-  margin-bottom: 28px;
-  border-bottom: 1px solid var(--bg-hairline);
-}
-.idle__head {
-  /* Kopfzeile als Grid (Flur-Display-Umbau 2026-07-26): Uhr+Gruß nehmen den
-     flexiblen Raum, das Jetzt-Band (Wetter) sitzt rechts daneben, unten
-     bündig mit der Uhr. Die EINE Breiten-Media-Query des Projekts (ganz
-     unten in dieser Datei) klappt das auf schmalen Screens untereinander. */
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 6px 20px;
+  grid-template-rows: auto 1fr;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: clamp(12px, 2.4vh, 20px);
+  padding: clamp(10px, 2.4vh, 20px) 0 0;
+}
+/* ---- Kopf als EINE Gruppe (Komposition v2, 15.08.) ------------------------
+   Andi am echten iPad: „ich mag nicht, dass Uhr und Wetter so weit auseinander
+   sind in der Breite". Ursache war genau diese Regel: ein Grid
+   `minmax(0,1fr) auto` schob das Jetzt-Band an den rechten Rand — und seit S1
+   die Zuhause-Breite auf `min(1280px,100vw)` lüftete, waren das auf dem iPad
+   quer über 1150 px Abstand zwischen Uhr und Wetter. Zwei Dinge, die
+   zusammengehören, standen an entgegengesetzten Enden des Fensters.
+   Jetzt: EINE linksbündige Flex-Gruppe — das Wetter steht direkt neben der Uhr
+   mit einer festen Lücke (fluide 16–32 px), nicht „so weit rechts wie möglich".
+   Passt es nicht mehr daneben, bricht es per `flex-wrap` von selbst unter die
+   Uhr; unter 560 px stapelt die Media-Query am Ende dieser Datei explizit.
+   `align-items: flex-end` hält die Gruppe unten bündig — das Wetter sitzt auf
+   der Grundlinie der Gruß-Zeile statt neben der Ziffernmitte zu schweben. */
+.idle__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px clamp(16px, 3vw, 32px);
+  /* W4: die vier Blöcke tragen ihre Zeile SELBST. Bis W3 verließ sich das
+     Gerüst auf Auto-Placement — solange alle vier immer rendern, geht das
+     gut. Seit die Wecker-Zeile einen echten Schalter hat (und ohne ihn gar
+     nicht rendert), würde Auto-Placement die Bühne in die `auto`-Zeile 2
+     schieben und die Chips in die `1fr`-Zeile 3: die Bühne wäre plötzlich
+     so hoch wie ihr Inhalt und die Chips bekämen die ganze Restfläche.
+     Vier explizite `grid-row` machen das unmöglich. */
+  grid-row: 1;
 }
 .idle__headmain {
   display: flex;
@@ -806,8 +1145,16 @@ button.ops__pill {
   min-width: 0;
 }
 .idle__clock {
-  /* Typo-first: groß, fluid, tabular — die Uhr IST das Gesicht. */
-  font-size: clamp(56px, 12vw, 124px);
+  /* Typo-first: groß, fluid, tabular — die Uhr IST das Gesicht.
+     S1 (DESIGN §2.2): die Uhr ist jetzt AUCH höhenbewusst. Sie war mit
+     ~118 px Zeilenhöhe der größte fixe Posten des Gerüsts und wusste vom
+     Fenster nichts — auf einem flachen Viewport (Safari mit Leisten, Querformat-
+     Handy) fraß sie die Bühne auf. `min(12vw, 16vh)` lässt die kleinere der
+     beiden Achsen gewinnen; die Ober-/Untergrenzen bleiben harte Anker.
+     Die 16vh-Komponente greift ab Fensterhöhen unter ~775 px — auf dem iPad
+     quer (834 px, Home-Screen-App) bleibt die Uhr also unverändert bei
+     124 px, in Safari mit Leisten schrumpft sie ehrlich mit. */
+  font-size: clamp(40px, min(12vw, 16vh), 124px);
   font-weight: 250;
   line-height: 0.95;
   letter-spacing: -0.02em;
@@ -842,9 +1189,13 @@ button.ops__pill {
 .idle__now {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  text-align: right;
+  /* Komposition v2: LINKSBÜNDIG statt rechtsbündig — das Band ist jetzt der
+     zweite Teil der Kopf-Gruppe direkt neben der Uhr, kein rechter Anschlag
+     mehr. Damit stehen Uhr, Gruß und Wetterlage auf derselben Startkante. */
+  align-items: flex-start;
+  text-align: left;
   gap: 2px;
+  min-width: 0;
 }
 .idle__nowcond {
   display: flex;
@@ -904,7 +1255,450 @@ button.ops__pill {
   max-width: 32ch;
 }
 
-/* Wecker-Zeile: Icon | Text | Vertrauens-Satz rechts, darunter die Haarlinie. */
+/* ---- W6 · Flur-Lesbarkeit der L-Stufe (Andi 20.08.) ----------------------
+   „Die Höhe der Widgets ist in der Höhe zu groß, grad beim Wetter ist nichts
+   gefüllt." Gemessen war das keine Übertreibung: 583 × 550 px Kachel, 170 px
+   Inhalt — 29 % der Fläche trugen etwas.
+
+   Die Deltas 1 und 5 haben die Kachel bereits von 550 auf ~305 px gebracht
+   (sie war nur deshalb so hoch, weil eine Seite genau EINE Kachel trug). Was
+   danach blieb, ist das eigentliche Problem und ein älteres: die fünf
+   Zusatzzeilen stehen mit **13/14 px und 2 px Zeilenabstand** da. Das ist die
+   Typo einer kleinen Karte von 2026-07 — und dieser Bildschirm hängt im Flur.
+   Aus 3 m liest die niemand. Genau diesen Weg ist die Wecker-Zeile schon
+   einmal gegangen (14 → 18 px, „Flur-Lesbarkeit", Andi-Auftrag 2026-07-26);
+   die Wetter-Zeilen sind damals nicht mitgekommen.
+
+   ES WIRD NICHTS ERFUNDEN (§2.3): dieselben fünf Zeilen, dieselben echten
+   Felder, die weiterhin einzeln an ihrem Rohdatum hängen (`tomorrow`/
+   `rainFrom`/`sun` sind null, sobald ihre Felder fehlen). Sie werden nur so
+   groß, wie ein Flur-Display sie braucht — und dass die Fläche dabei benutzt
+   wirkt, ist die Folge, nicht der Zweck.
+
+   NUR L. Die M-Stufe hat Andi am 19.08. selbst zugeschnitten (Fakten als
+   zweite SPALTE, weil dort die Fläche breit ist und nicht hoch) — sie hier
+   mitzuziehen hieße, eine abgenommene Komposition ungefragt umzubauen. S ist
+   eine Zeile, XL trägt den Stunden-Verlauf. */
+.idle__now[data-size='L'] {
+  /* 2 → 8 px: fünf Zeilen mit 2 px Abstand sind ein Block, kein Text. */
+  gap: 8px;
+}
+.idle__now[data-size='L'] .idle__nowspan {
+  font-size: 17px;
+}
+.idle__now[data-size='L'] .idle__nowprecip,
+.idle__now[data-size='L'] .idle__nowline {
+  font-size: 16px;
+  line-height: 1.35;
+}
+/* Die Sonnen-Zeile bleibt „eine Stufe leiser als die anderen Zusatzzeilen"
+   (Andi-Auftrag) — das ist ein VERHÄLTNIS, kein absoluter Wert. Sie wächst
+   also mit, behält aber ihren Abstand nach unten. */
+.idle__now[data-size='L'] .idle__nowline--sun {
+  font-size: 13.5px;
+}
+
+/* ---- Wetter in der M-Stufe (Andi-Bestellung 19.08.) ----------------------
+   „Beim Wetter: wenn ich die mittlere Größe auswähle, habe ich echt viel
+   Platz." Gemessen: 583 × 200 px Kachel, 553 × 80 px Inhalt — und der Inhalt
+   stand als schmale Spalte oben links. Der Platz war also nicht einfach „zu
+   viel", er lag an einer bestimmten Stelle: RECHTS.
+
+   Darum kippt M von untereinander auf nebeneinander. Links die Lage groß
+   (Icon · Jetzt-Temperatur · Lagentext), rechts die drei kurzen Fakten als
+   eigene Spalte. Das ist der Zuschnitt, den 2×1 verlangt — eine breite, oft
+   niedrige Kachel. Es ist zugleich der Riegel gegen den Fehlversuch davor:
+   dieselben Zeilen untereinander passen in eine kurze M-Kachel (134 px, wenn
+   die Bühne drei Zeilen packt) nicht mehr hinein, der Niederschlag brach ab.
+
+   Typo darf mitatmen (die Kachel ist zwei Zellen breit, kein 1×1-Kästchen),
+   aber die Leiter bleibt eine Leiter: 40 → 16,5 → 15 → 14 px. Keine erfundene
+   Zeile — die Morgen-Zeile kommt nur mit echten Rohdaten (`weatherTileBody`).
+
+   S und L rühren die Werte NICHT an: S ist die 1×1-Kachel, L trägt schon
+   sechs Zeilen und ist auf seiner 2×2-Fläche dicht. */
+.idle__now[data-size='M'] {
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(14px, 2.6vw, 36px);
+  /* NIE umbrechen. Ein `flex-wrap: wrap` wäre die naheliegende Absicherung und
+     ist genau die falsche: bricht die Fakten-Spalte unter die Lage, steht
+     wieder der vierzeilige Stapel da, der in eine kurze M-Kachel nicht passt —
+     der Niederschlag verschwindet dann unter der Kante. Zu eng wird darum
+     nicht umgebrochen, sondern gekürzt (unten). Gemessen mit dem längsten
+     echten Lagentext, den das Backend kennt („Gewitter mit starkem Hagel",
+     26 Zeichen; andere Sprachen bis 28 — `WeatherCodeTexts.kt`). */
+  flex-wrap: nowrap;
+}
+.idle__now[data-size='M'] .idle__nowcond {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+/* Die Jetzt-Temperatur ist die Hauptsache und wird NIE gekürzt — gekürzt wird
+   der Lagentext daneben, mit sichtbarem Auslassungspunkt statt stiller Kante. */
+.idle__now[data-size='M'] .idle__nowtemp {
+  flex: none;
+}
+.idle__now[data-size='M'] .idle__nowcondtext {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Die Fakten-Spalte rechts — existiert NUR in M (in L stehen dieselben Zeilen
+   weiter untereinander, byte-gleich wie bisher). */
+.idle__nowfacts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.idle__nowfacts > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.idle__nowfacts .idle__nowspan {
+  font-size: 16.5px;
+}
+.idle__nowfacts .idle__nowprecip {
+  font-size: 15px;
+}
+.idle__nowfacts .idle__nowline {
+  font-size: 14px;
+}
+
+/* ── XL: die Bühne (W5, DESIGN-widget-raster §3.1) ────────────────────────
+   XL heißt „volle Bühnenbreite × 2 Zeilen" (Kurskorrektur 18.08.), also
+   ~880 × 314 px. Die Kachel bekommt darum ZWEI Blöcke statt einer Spalte:
+   oben Lage + Fakten waagerecht (derselbe Gedanke wie bei M — der freie
+   Platz einer breiten Kachel liegt rechts), unten der Stunden-Verlauf über
+   die ganze Breite. Anders als bei M ist `flex-wrap: wrap` hier ERLAUBT und
+   gewollt: die Warnung an [data-size='M'] galt einer 134 px hohen Kachel,
+   XL ist doppelt so hoch. */
+.idle__now[data-size='XL'] {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 8px;
+  align-self: stretch;
+}
+.idle__now[data-size='XL'] .idle__nowcond {
+  font-size: clamp(26px, 3.4vw, 40px);
+}
+.idle__nowfacts--row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: clamp(14px, 2.4vw, 34px);
+  row-gap: 4px;
+  flex: 0 0 auto;
+  width: 100%;
+}
+/* Aus 2 m gelesen: die Fakten dürfen in XL nicht auf 13/14 px zusammenfallen
+   wie in der schmalen L-Spalte — sie sind hier die einzige Textzeile. */
+.idle__nowfacts--row .idle__nowspan {
+  font-size: clamp(16px, 1.5vw, 20px);
+}
+.idle__nowfacts--row .idle__nowprecip,
+.idle__nowfacts--row .idle__nowline {
+  font-size: clamp(15px, 1.35vw, 18px);
+}
+.idle__nowfacts--row .idle__nowline--sun {
+  font-size: clamp(14px, 1.2vw, 16px);
+}
+
+/* ── Das Wetter füllt seine Kachel (Andi 22.08.) ──────────────────────────
+   „beim wetter ist das beim wetter widgets auch" — derselbe Auftrag wie bei
+   der Uhr, und dieselbe Ursache: JEDE Zahl über dieser Zeile misst am
+   FENSTER (`4vw`, `3.4vw`, `1.35vw`) oder gar nicht (feste 13/14/16 px). Das
+   ist auf einer Bühne, die dieselbe Stufe je nach Zeilenzahl 146 px oder
+   621 px hoch macht, keine Größe, sondern ein Zufall.
+
+   Gemessen (`tools/zuhause-probe/flaeche.mjs`, Inhalts-Anteil):
+   **S 8,2 % · M 15,5 % · L 9,9 % · XL 35,0 %** bei 1366 × 1024 — die S-Stufe
+   war damit die leerste Kachel des ganzen Hauses. Am krassesten sichtbar
+   wurde der Fenster-Bezug bei XL: auf dem SCHMALEN iPad (834 px) war die
+   Lage-Zeile 28 px, auf dem breiten Laptop 40 px — obwohl die XL-Kachel dort
+   794 px breit ist und hier 880 px. Fast gleich große Kacheln, 43 % Typo-
+   Unterschied, allein wegen des Fensters dahinter.
+
+   ES WIRD NICHTS ERFUNDEN (§2.3): dieselben Zeilen, dieselben echten Felder,
+   jede weiterhin einzeln an ihr Rohdatum gebunden. Sie werden nur so groß,
+   wie ihre eigene Kachel es hergibt.
+
+   Alle Faktoren haben Boden UND Deckel: eine L-Kachel kann auf einer
+   einzeiligen Seite 621 px hoch werden, und ein 90-px-Lagentext wäre dann
+   keine Lesbarkeit mehr, sondern ein Plakat. Basis-Regeln bleiben als
+   Rückfall stehen (Browser ohne Container-Queries). */
+@container kachel (min-width: 0) {
+  /* S trägt EINE Zeile (Icon + Jetzt-Temperatur) — sie darf sie ausfüllen.
+     28cqw ist der Breiten-Riegel: Icon (0,82 em) + Fuge (0,22 em) + eine
+     dreistellige Minus-Temperatur brauchen zusammen ~3,5 em. */
+  .idle__now[data-size='S'] .idle__nowcond {
+    font-size: min(28cqw, 55cqh);
+  }
+
+  /* M steht NEBENEINANDER (Andi 19.08.): links die Lage, rechts die Fakten-
+     Spalte. Die Breite ist dort nie der Engpass, die Höhe immer. */
+  .idle__now[data-size='M'] .idle__nowcond {
+    font-size: min(20cqw, 45cqh);
+  }
+  /* **Die Fuge zwischen beiden Spalten war das letzte Fenster-Maß hier**
+     (Andi 23.08., „die felder werden oft abgeschnitten"). `clamp(14px, 2.6vw,
+     36px)` liest den BILDSCHIRM: auf Andis 1366er standen damit **35 px**
+     zwischen zwei Spalten, die zusammen nur 553 px haben — und genau diese
+     35 px fehlten den beiden Zeilen daneben. Gemessen
+     (`tools/zuhause-probe/schnitt.mjs`, vorher): „teilweise bewölkt" 7 px zu
+     schmal, „morgen 13–19°, Regenschauer" 5 px zu schmal — beide endeten mit
+     Auslassungspunkt, obwohl der Platz eine Handbreit weiter rechts frei lag.
+     3cqw misst die KACHEL und ergibt dort 17 px: 18 px zurück an den Text,
+     mehr als die 12 px, die beide Kürzungen zusammen brauchten. Boden und
+     Deckel bleiben, damit eine sehr schmale Kachel die Spalten nicht
+     verklebt und eine sehr breite sie nicht auseinanderreißt. */
+  .idle__now[data-size='M'] {
+    gap: clamp(10px, 3cqw, 28px);
+  }
+  /* **Das Verhältnis 0,55 em stammt aus einer 32-px-Lage und trägt eine
+     52-px-Lage nicht mehr.** Die Fakten-Spalte rechts wächst nicht im selben
+     Maß mit, also frisst der Lagentext bei größerer Schrift genau den Platz,
+     der ihm daneben fehlt — im ersten Wurf stand dort „teilweise be…". Die
+     Kürzung ist zwar bestellt (die Temperatur wird NIE gekürzt, der Lagentext
+     schon, mit sichtbarem Auslassungspunkt), aber ein Wort zu verlieren ist
+     teurer als ein paar Punkt Schriftgröße. 0,36 em landet bei 18,7 px — also
+     knapp ÜBER den 17,6 px, die dieselbe Zeile vor dieser Scheibe hatte: der
+     Lagentext wird damit nachweislich nicht früher gekürzt als vorher, während
+     die Zahl daneben von 32 auf 52 px wächst. */
+  .idle__now[data-size='M'] .idle__nowcondtext {
+    font-size: 0.36em;
+  }
+  .idle__now[data-size='M'] .idle__nowfacts .idle__nowspan {
+    font-size: clamp(14px, 16cqh, 28px);
+  }
+  .idle__now[data-size='M'] .idle__nowfacts .idle__nowprecip {
+    font-size: clamp(13px, 14.5cqh, 25px);
+  }
+  .idle__now[data-size='M'] .idle__nowfacts .idle__nowline {
+    font-size: clamp(12px, 13.5cqh, 23px);
+  }
+
+  /* L ist die sechszeilige Spalte. Ihr Problem war nie die Höhe (die Zeilen
+     füllten 72 % davon), sondern die Kürze der Zeilen in einer 555 px breiten
+     Kachel — größere Typo ist hier die einzige ehrliche Antwort, weil eine
+     siebte Zeile Erfindung wäre. Die Leiter bleibt eine Leiter: Lage → Spanne
+     → Niederschlag/Morgen/Regen → Sonne, jede Stufe leiser als die vorige. */
+  .idle__now[data-size='L'] {
+    gap: clamp(6px, 3.2cqh, 16px);
+  }
+  .idle__now[data-size='L'] .idle__nowcond {
+    font-size: clamp(24px, 15.5cqh, 56px);
+  }
+  .idle__now[data-size='L'] .idle__nowspan {
+    font-size: clamp(15px, 8.6cqh, 30px);
+  }
+  .idle__now[data-size='L'] .idle__nowprecip,
+  .idle__now[data-size='L'] .idle__nowline {
+    font-size: clamp(14px, 8cqh, 28px);
+  }
+  .idle__now[data-size='L'] .idle__nowline--sun {
+    font-size: clamp(12px, 6.7cqh, 22px);
+  }
+
+  /* XL trägt schon am meisten und überlief bei 1366 × 1024 um 42 px — hier
+     geht es darum, dass der Stunden-Verlauf seine Mindesthöhe an der KACHEL
+     misst statt an einer festen 96, und dass die schmale iPad-XL nicht mehr
+     für ihr schmales Fenster bestraft wird. */
+  .idle__now[data-size='XL'] .idle__nowcond {
+    font-size: clamp(22px, 12cqh, 38px);
+  }
+  .idle__now[data-size='XL'] .idle__nowfacts--row .idle__nowspan {
+    font-size: clamp(15px, 6.5cqh, 22px);
+  }
+  .idle__now[data-size='XL'] .idle__nowfacts--row .idle__nowprecip,
+  .idle__now[data-size='XL'] .idle__nowfacts--row .idle__nowline {
+    font-size: clamp(14px, 6cqh, 20px);
+  }
+  .idle__now[data-size='XL'] .idle__nowfacts--row .idle__nowline--sun {
+    font-size: clamp(13px, 5.5cqh, 18px);
+  }
+  .idle__now[data-size='XL'] .idle__hourly {
+    min-height: clamp(64px, 23cqh, 130px);
+  }
+}
+
+/* Der Stunden-Verlauf (components/WeatherHourly.tsx). Ein Gitter mit zwei
+   Spalten (Temperatur-Marken | Bild) und zwei Zeilen (Bild | Stundenachse) —
+   die Achse liegt in Spalte 2, damit „17" wirklich unter der 17-Uhr-Stunde
+   steht und nicht um die Breite der Marken verschoben.
+   Farben ausschließlich aus Theme-Token (Muster `.stagespark*`), keine eigene
+   Animation ⇒ kein eigener reduced-motion-Riegel nötig: das Bild ist statisch. */
+.idle__hourly {
+  margin: 0;
+  flex: 1 1 auto;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  /* **Fund beim Kachel-Ausbau (21.08.), Bestandsfehler seit W5:** `.idle__now`
+     setzt `align-items: flex-start`, also blieb diese Figur auf ihrer
+     INHALTSBREITE stehen — und die ist die intrinsische 300-px-Breite des SVG.
+     Das Bild nutzte damit auf einer 880-px-XL-Kachel keine 350 px (nachgeprüft
+     im W5-Screenshot `shots/xl-wetter-1366x1024.png`, dort schon so). Es fiel
+     nie auf, weil daneben nichts stand, das die volle Breite nahm — bis die
+     Mehrtage-Zeile darunter kam. */
+  align-self: stretch;
+}
+.idle__hourlyplot {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  column-gap: 8px;
+}
+.idle__hourlyscale {
+  grid-area: 1 / 1;
+  position: relative;
+  min-width: 2.4em;
+}
+.idle__hourlytick {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: clamp(13px, 1.15vw, 16px);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.idle__hourlyplotarea {
+  grid-area: 1 / 2;
+  position: relative;
+  min-height: 0;
+}
+.idle__hourlychart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.idle__hourlyaxis {
+  grid-area: 2 / 2;
+  position: relative;
+  height: 1.5em;
+  margin-top: 2px;
+}
+.idle__hourlyhour {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: clamp(13px, 1.15vw, 16px);
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Regen-Balken: feste 0–100-%-Skala, hinter der Linie. `--accent-glow` (0.4
+   Alpha) statt `--accent-soft` (0.2) — aus Flur-Distanz muss ein 35-%-Balken
+   noch als Balken lesbar sein, nicht als Hauch. */
+.idle__hourlybar {
+  fill: var(--accent-glow);
+}
+.idle__hourlybase {
+  stroke: var(--bg-hairline);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.idle__hourlyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+/* Der „jetzt"-Punkt ist HTML, kein `<circle>`: das SVG darunter ist mit
+   `preserveAspectRatio="none"` gedehnt (auf einer 880-px-XL-Kachel um Faktor
+   ~2,8), ein Kreis darin wäre eine sichtbare Ellipse. Fiel beim Kachel-Ausbau
+   21.08. auf, als die Figur endlich die volle Breite bekam. */
+.idle__hourlynow {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Die Mehrtage-Zeile der XL-Wetterkachel (Andi 21.08.) — sie steht UNTER dem
+   Stunden-Verlauf und trägt genau so viele Spalten, wie das Wire echte Tage
+   liefert. `auto-fit` statt einer 7 im CSS: leere Spuren fallen zusammen, die
+   vorhandenen teilen sich die volle Breite — sieben Tage wie fünf sehen
+   dadurch beide richtig aus, ohne dass eine Zahl im Stylesheet etwas über das
+   Backend behauptet.
+   `align-self: stretch`, weil `.idle__now` seine Kinder linksbündig auf
+   Inhaltsbreite setzt; ohne das säße die Zeile als schmaler Block links. */
+.idle__outlook {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  gap: 6px 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bg-hairline);
+}
+.idle__outlookday {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.idle__outlookwd {
+  font-size: clamp(14px, 1.2vw, 17px);
+  color: var(--text-3);
+}
+/* HEUTE wird gefärbt, nicht beschriftet: „heute" als Wort bräuchte fünf
+   Übersetzungen und eine Spaltenbreite, und der Wochentag steht ohnehin da. */
+.idle__outlookday[data-today='true'] .idle__outlookwd {
+  color: var(--accent);
+  font-weight: 600;
+}
+.idle__outlookicon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: var(--text-3);
+}
+.idle__outlookspan {
+  font-size: clamp(15px, 1.3vw, 19px);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Der Lagen-Text ist der einzige Teil, der nicht in jede Spalte passt
+   („mäßiger Schneefall"). Er wird gekürzt, NICHT weggelassen — der volle Text
+   steht im `title` der Spalte, zusammen mit Wochentag, Spanne und (falls das
+   Wire sie liefert) der Regenwahrscheinlichkeit. */
+.idle__outlookcond {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(12px, 1vw, 14px);
+  color: var(--text-4);
+}
+
+/* ── Der Wecker als KACHEL (W6) ────────────────────────────────────────────
+   Bis W5 war das eine Zeile im Kopf mit `grid-row: 2` im `.idle`-Gerüst. Jetzt
+   liegt sie in einer Kachel, also fällt die Zeilen-Zuweisung weg (sie hätte in
+   der Kachel nichts mehr bedeutet und im Gerüst eine Zeile beansprucht, die es
+   nicht mehr gibt) — und der Inhalt muss die Kachelhöhe selbst tragen.
+   `justify-content: center` statt oben-kleben: eine Zeile, die in einer 270 px
+   hohen Kachel an der Oberkante hängt, ist genau das Bild, über das Andi beim
+   Wetter geurteilt hat („da ist nichts gefüllt"). */
+.idle__alarmtile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  min-height: 0;
+}
 .idle__alarm {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -920,6 +1714,40 @@ button.ops__pill {
   font-size: 18px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
+}
+/* M hat die Fläche für eine echte Flur-Zeile — die Zahl ist der Inhalt, und
+   sie ist aus 3 m das Einzige, was man von dieser Kachel wirklich lesen will.
+   S bleibt bei 18px: dort IST die Zeile die ganze Kachel.
+
+   DREI ZEILEN STATT ZWEI SPALTEN (Bild-Urteil der Hand, erste Fassung): mit
+   dem Vertrauens-Satz als dritter SPALTE blieben der Weckzeit nur ~440 px,
+   und der Satz brach mitten in der Einheit um — „noch 21 h 49 ⏎ min". Ein
+   Umbruch, der eine Zahl von ihrer Einheit trennt, ist schlimmer als eine
+   kleinere Schrift. Jetzt: Zeile 1 Icon + Weckzeit über die VOLLE Breite,
+   Zeile 2 die Haarlinie, Zeile 3 der Vertrauens-Satz. Er steht damit unter
+   dem, worüber er etwas behauptet, statt daneben zu schweben — und die drei
+   Zeilen tragen die Kachelhöhe, die vorher unter der Linie leer blieb. */
+.idle__alarmtile[data-step='M'] .idle__alarm {
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+}
+.idle__alarmtile[data-step='M'] .idle__alarmtext {
+  font-size: clamp(20px, 2.2vw, 28px);
+  color: var(--text-1);
+}
+.idle__alarmtile[data-step='M'] .idle__alarmicon {
+  font-size: clamp(15px, 1.5vw, 19px);
+}
+.idle__alarmtile[data-step='M'] .idle__alarmtrack {
+  grid-row: 2;
+}
+.idle__alarmtile[data-step='M'] .idle__alarmtruth {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  /* Nicht `nowrap`: hier ist die volle Breite da, und auf Französisch/
+     Spanisch ist der Satz deutlich länger als auf Deutsch. Eine Ellipse
+     verspräche Kürze, die die Sprache nicht hergibt. */
+  white-space: normal;
 }
 .idle__alarmtruth {
   font-size: 12.5px;
@@ -946,18 +1774,712 @@ button.ops__pill {
   color: var(--text-4);
 }
 
-/* Die Haushalts-Karten „Läuft"/„Einkauf" (Flur-Display-Umbau 2026-07-26, ex-
-   „Geplant"/„Wetter"/„Heute"-Kachelreihe): nutzt weiter die fixierte
-   .tile-Designsprache; der Aoi-Token --bg-hairline-dashed zeichnet die
-   gestrichelte Kante (Fallback: normale Hairline in Nicht-Aoi-Themen).
-   Grid-Fix: `auto-fill` → `auto-fit` (schloss eine Phantom-Spalte, wenn nur
-   eine Karte da ist) UND breiter (200 → 280px) — die Karten tragen jetzt
-   mehrzeilige Listen statt eines einzelnen Kachel-Werts, sie brauchen mehr
-   Raum als die frühere kompakte Drei-Kachel-Reihe. */
+/* ==== Die Bühne (Komposition v2, 15.08.) ===================================
+   Die Haushalts-Karten „Läuft"/„Einkauf"/Sauger/Klima/Nachrichten leben in der
+   `1fr`-Zeile von `.idle` und behalten die fixierte .tile-Designsprache (der
+   Aoi-Token --bg-hairline-dashed zeichnet die gestrichelte Kante).
+
+   WAS SICH GEGENÜBER S1 ÄNDERT — und warum. S1 machte die Bühne zu EINEM Grid
+   mit `grid-auto-rows: minmax(0,1fr)`: alle Kacheln teilten sich die Restfläche,
+   egal wie viele es waren. Andis Urteil am echten iPad (15.08.): „so bringt es
+   nichts — die Widgets sind einfach zusammengepresst". Genau der in DESIGN §5.1
+   angekündigte Fall: fünf Kacheln, ~165 px Restfläche, zwei Zeilen à ~76 px.
+   Jetzt gilt die Regel aus DESIGN §2.2/Entscheidung 2: eine Kachel wird NIE
+   unter ihre Mindesthöhe gedrückt (132 px, kalibriert in
+   `components/homeLayout.ts`) — was nicht mehr passt, fließt auf Seite 2/3.
+
+   Der Aufbau ist darum jetzt dreistufig:
+     .idle__tiles  = die Bühne selbst: zwei Zeilen (Seitenfläche + Punkte-Zeile)
+     .idle__pages  = die wischbare Schiene, EIN Kind je Seite
+     .idle__page   = das Kachel-Raster einer Seite
+   Die Spalten-/Zeilenzahl schreibt `HomeStage.tsx` aus der EINEN Messung als
+   Inline-Stil an `.idle__page`; die Regeln hier sind der Zustand VOR der
+   Messung (erster Paint, SSR/Tests) — bewusst das alte `auto-fit`-Verhalten,
+   nur mit dem korrigierten Spalten-Minimum (280 → 252 px, s. `homeLayout.ts`:
+   mit 280 verfehlte das iPad quer die vierte Spalte um zwei Pixel). */
+/* ── Die Bühnen-Hülle (W4 … 23.08.) ───────────────────────────────────────
+   Sie war einmal die Klammer um drei Dinge: Leiste (oben), Kachel-Schiene,
+   Fach (unten). Der Weg dorthin und wieder zurück in einem Absatz, weil er
+   die Regel darunter erklärt:
+
+   W4 stellte Leiste und Fach als Geschwister in den Flex-Fluss — zusammen
+   62 + 56 + 2×10 = 138 px, fast genau eine Bühnenzeile (132 + 12). Der
+   Edit-Modus schob damit Kacheln auf die nächste Seite (Andi 21.08.). W7-A
+   hob beide in eine absolut positionierte Schicht (`.idle__editlayer`), damit
+   `.idle__tiles` im Edit exakt so hoch bleibt wie außerhalb. Am 22.08. fiel
+   das Fach, am 23.08. die Leiste — und mit ihr die Schicht selbst: sie hätte
+   nichts mehr zu tragen.
+
+   Geblieben ist `position: relative`, und zwar nicht als Rest: der
+   Stufen-Wähler (`.idle__sizer`) und die Kachel-Zellen hängen daran. */
+.idle__stage {
+  display: flex;
+  /* W6: Zeile 3 → 2. Der Wecker hatte Zeile 2; er liegt jetzt IN dieser Bühne. */
+  grid-row: 2;
+  flex-direction: column;
+  min-height: 0;
+  gap: 10px;
+  /* Bezugsrahmen der Bedienelemente auf der Bühne — ohne das hingen sie am
+     Fenster statt an ihrer Kachel. */
+  position: relative;
+}
 .idle__tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  flex: 1 1 auto;
+  /* Die Punkte-Zeile ist IMMER reserviert, auch bei einer einzigen Seite.
+     Kein Schmuck, sondern der Bruch einer Rückkopplung: Punkte sichtbar ⇒
+     Schiene kürzer ⇒ weniger Zeilen ⇒ mehr Seiten ⇒ Punkte sichtbar … Eine
+     konstante Zeile macht die Messung stabil (s. HomeStage-KDoc). */
+  grid-template-rows: minmax(0, 1fr) var(--home-dots-h, 20px);
+  /* S1 bleibt gültig: `min-height:0` bricht die `auto`-Mindesthöhe eines
+     Grid-Kindes auf, `overflow:hidden` ist der letzte Riegel — was hier nicht
+     passt, schiebt NICHT das Dokument auf. */
+  min-height: 0;
+  overflow: hidden;
+}
+/* Die Schiene: alle Seiten nebeneinander, bewegt wird ausschließlich
+   `transform` (Motion-Gesetz des Hauses — nie left/width). `touch-action:
+   pan-y` gibt das vertikale Scrollen INNERHALB einer Kachel an den Browser
+   zurück und behält nur die horizontale Achse für den Seitenwisch. */
+.idle__pages {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  touch-action: pan-y;
+  transition: transform var(--dur-base) var(--ease-decel);
+}
+/* Während des Ziehens folgt die Schiene dem Finger 1:1 — eine Transition
+   würde hier hinterherlaufen statt zu tragen. */
+.idle__pages[data-dragging='true'] {
+  transition: none;
+}
+/* Eine Seite = das Kachel-Raster. `visibility` statt `display`, weil eine
+   ausgeblendete Seite ihre Höhe behalten muss (sonst kollabiert die Schiene);
+   `visibility: hidden` nimmt sie zugleich aus Tab-Reihenfolge UND
+   Screenreader-Baum — ohne das könnte ein Tab in eine unsichtbare Seite den
+   `overflow:hidden`-Rahmen wegscrollen und die Schiene verschieben.
+   Der Trick mit der Transition-Verzögerung: Einblenden sofort, Ausblenden erst
+   NACH dem Gleiten — sonst verschwände die abziehende Seite mitten in der
+   Bewegung. */
+.idle__page {
+  flex: 0 0 100%;
+  /* Bezugsrahmen der Kachel-Bedienung (W7-D): ein absolut positioniertes
+     RASTERKIND bekommt seine eigene Zelle als Containing Block — aber nur,
+     wenn der Rasterelter selbst positioniert ist. Ohne diese Zeile hinge der
+     Wähler an der Bühne statt an seiner Kachel. */
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(252px, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
   gap: 12px;
+  visibility: hidden;
+  transition: visibility 0s linear var(--dur-base);
+}
+.idle__page[data-active='true'],
+.idle__pages[data-dragging='true'] .idle__page {
+  visibility: visible;
+  transition-delay: 0s;
+}
+/* Die Punkte — erst ab Seite 2 im Markup (ein Bedienelement ohne Wahl wäre
+   Lärm), die Zeile selbst bleibt immer stehen. Der Knopf ist 24×20 groß
+   (Fingerziel), der Punkt darin 7 px (Optik). */
+.idle__dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.idle__dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-4);
+  cursor: pointer;
+}
+.idle__dot::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+  transition:
+    opacity var(--dur-base) var(--ease-standard),
+    transform var(--dur-base) var(--ease-out-soft);
+}
+.idle__dot:hover::before {
+  opacity: 0.7;
+}
+.idle__dot[aria-current='true'] {
+  color: var(--text-2);
+}
+.idle__dot[aria-current='true']::before {
+  opacity: 1;
+  transform: scale(1.15);
+}
+.idle__dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* ── Stufen-Wähler (W3, DESIGN §4.2) ───────────────────────────────────────
+   Er liegt in DERSELBEN Rasterzelle wie seine Kachel (HomeStage schreibt ihm
+   dieselbe `grid-column`/`grid-row` als Inline-Stil) und legt sich unten mittig
+   darüber — kein Segment IN der Kachel, das auf 1×1 ein Drittel der Fläche
+   fräße. Nicht erlaubte Stufen fehlen ganz, statt grau zu sein.
+   Solange er offen ist, markiert der Finger keinen Text mehr (`data-sizing` an
+   der Schiene) — die zweite Hälfte der unterdrückten Long-Press-Nebenwirkungen
+   neben Klick und Kontextmenü. */
+.idle__pages[data-sizing='true'] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* **W7-D: der Wähler LIEGT auf der Kachel, er steht nicht neben ihr.**
+
+   Andi 21.08.: *„Das M darunter verändert die Größe des Widgets, das macht es
+   schwer platzierbar."* Er war bisher ein normales Rasterkind in derselben
+   Zelle — also ein Kasten, der in der Zelle mitgerechnet wurde. `position:
+   absolute` IN einem positionierten Rasterelter macht seine ZELLE zum
+   Bezugsrahmen (die `grid-column`/`grid-row` aus HomeStage gelten weiter) und
+   nimmt ihn zugleich vollständig aus der Spur-Berechnung: die Kachel ist mit
+   offenem Wähler exakt so groß wie ohne. Dieselbe Regel wie `.idle__editlayer`
+   in W7-A, nur eine Ebene tiefer.
+
+   Der Streifen selbst ist zeigerdurchlässig und volle Zellbreite; nur die
+   Pille darin fängt Zeiger. Sonst wäre die untere Kachelkante im Edit tot,
+   und genau dort greift die Hand zum Verschieben. */
+.idle__sizer {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+.idle__sizer > * {
+  pointer-events: auto;
+}
+/* W7-D: nur noch `−` und `+`, als ruhige Pille auf der Kachel. Der Buchstabe
+   dazwischen ist weg — die Kachel selbst zeigt ihre Stufe, indem sie größer
+   oder kleiner ist (der lange Name bleibt für die Ohren, s. `HomeStage`). */
+.idle__sizerrow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lifted, 0 8px 24px rgb(0 0 0 / 0.18));
+}
+/* **44 px ist das Fingerziel, nicht die Optik** — und seit W7-D gilt der
+   zweite Halbsatz wörtlich (Andi 21.08.: „einfach durch dezentere Icons").
+   Die Fläche bleibt 44 × 44, der Daumen im Vorbeigehen braucht sie; das
+   Zeichen darin schrumpft von 24 auf 17 px und wird ruhiger eingefärbt. Ein
+   Knopf, der laut aussieht, konkurriert mit dem Inhalt der Kachel, auf der er
+   liegt — die Kachel ist die Hauptsache, er ist Werkzeug. */
+.idle__sizerbtn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--dur-base) var(--ease-standard),
+    color var(--dur-base) var(--ease-standard);
+}
+.idle__sizerbtn:hover:not(:disabled) {
+  background: var(--bg-hairline);
+  color: var(--text-1);
+}
+/* **Ausgegraut an den Enden** (Andi 20.08. wörtlich). Bewusst nur gedämpft und
+   nicht versteckt: die Grenze soll SICHTBAR sein („größer geht nicht mehr"),
+   nicht spurlos. `cursor: default` statt `not-allowed` — das Haus zeigt keine
+   Verbotsschilder, es zeigt Zustände. */
+.idle__sizerbtn:disabled {
+  color: var(--text-4);
+  opacity: 0.45;
+  cursor: default;
+}
+.idle__sizerbtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* `.idle__sizerstep` ist seit W7-D sr-only (die Regel steht oben bei
+   `.idle__sronly`): die Stufe ist fürs Ohr da, fürs Auge zeigt sie die Kachel
+   selbst — sie ist ja genau so groß, wie die Stufe sagt.
+   „Auf diesem Bildschirm: Mittel" bleibt sichtbar — das ist keine Steuerung,
+   sondern die ehrliche Zeile für den Fall, dass die gewählte Stufe hier gerade
+   nicht darstellbar ist (§0.4). */
+.idle__sizernote {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--text-4);
+  font-size: 13px;
+  text-align: center;
+}
+/* Das Zucken bei 600 ms (§4.1): die Kachel unter dem offenen Wähler hebt sich
+   2 px — nur `transform`, damit die Grenze spürbar wird, bevor der Finger
+   loslässt. */
+.idle__tile[data-sizing='true'] {
+  transform: translateY(-2px);
+  transition: transform var(--dur-base) var(--ease-out-soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  .idle__tile[data-sizing='true'] {
+    transform: none;
+    transition: none;
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+  }
+  .idle__sizerbtn {
+    transition: none;
+  }
+}
+/* „Widgets anordnen" (W4) — der Zwilling des Reset-Knopfes daneben. Die
+   übrige Settings-Optik lebt in `styles/themes.css`; die eine neue Regel steht
+   bewusst HIER, weil dieser Pod nichts anfassen darf, was „themes" heißt. */
+.settings__arrangebtn {
+  flex: none;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--bg-subtle);
+  color: var(--text-1);
+  font: inherit;
+  cursor: pointer;
+}
+.settings__arrangebtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* ── Edit-Modus (W4, DESIGN §4.2) ─────────────────────────────────────────
+   Wackeln, Griffecke, Leiste, Fach. Alles Bewegte ist `transform` — das
+   Motion-Gesetz des Hauses gilt auch hier. */
+
+/* Im Edit gehört der Finger der KACHEL, nicht dem Scrollen: `pan-y` würde
+   einen Zug nach unten an den Browser abgeben. */
+.idle__pages[data-edit='true'] {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* **Die Bearbeitungsfläche ist die GANZE Bühne** (Andi 23.08.: „nimm die UI
+   oben, wenn man etwas bearbeitet raus").
+
+   Hier stand die Regel, die der Seite im Edit-Modus oben einen Rand in der
+   gemessenen Höhe der Leiste gab (`--home-editband-top`, geschrieben von
+   `HomeStage`) — nötig, solange eine Leiste da war, die sonst der obersten
+   Kachelreihe die Kopfzeile abschnitt (Andi 22.08.: „soll aber nicht die
+   fläche zum bearbeiten überlagern"). Erst fiel das Fach unten (22.08.), dann
+   die Leiste oben (23.08.); damit ist der Rand ersatzlos weg. Gemessen bei
+   1366 × 1024: die Seite im Edit ist 880 × 669 px — Pixel für Pixel dasselbe
+   Rechteck wie außerhalb des Edit-Modus. */
+/* **Alle Kachel-Kinder sind inert** (Andis Befund 19.08.: an den Größen-Wähler
+   der Nachrichten-Kachel kam er nicht heran, weil sie fast nur aus Links
+   besteht). `inert` setzt HomeStage am DOM; diese Regel ist der Gürtel für
+   Browser, die es noch nicht kennen. Die Kachel selbst bleibt bedienbar. */
+.idle__pages[data-edit='true'] .idle__tile > * {
+  pointer-events: none;
+}
+.idle__tile[data-edit='true'] {
+  cursor: grab;
+  /* **Die Kachel muss es SELBST sagen** — hier lag die zweite Hälfte von Andis
+     iPad-Befund (22.08.). Eine Kachel ist ein eigener Scroll-Kasten (sie trägt
+     `overflow-y: auto`), und Blink entscheidet die Touch-Absicht an dem
+     Kasten, der die Bewegung ausführen WÜRDE — nicht an der Schiene darüber.
+     Das `touch-action: none` an `.idle__pages` kam damit nie an: der Browser
+     gab den Finger dem Scrollen der Kachel, feuerte `pointercancel` und
+     schickte danach kein einziges `pointermove` mehr. Zu sehen war nichts,
+     denn zu scrollen gab es auch nichts — `scrollTop` blieb 0, die Kachel
+     stand nur still. Gemessen mit `tools/zuhause-probe/touch.mjs`. */
+  touch-action: none;
+  /* Wackeln: ±0,45°, 2,4 s, VERSETZT (`animation-delay` kommt als Inline-Stil
+     aus HomeStage — Gleichschritt sähe nach Fehler aus, Versatz nach Leben). */
+  animation: idle-wiggle 2.4s ease-in-out infinite;
+}
+/* Die gezogene Kachel wackelt NICHT: sie folgt dem Finger, und ihr
+   `transform` (translate3d, Inline-Stil) darf nicht gegen die Animation
+   kämpfen. `animation: none` gibt die Eigenschaft frei — deshalb braucht der
+   Zug keinen zweiten Wrapper und keine `rotate`-Sondereigenschaft. */
+.idle__tile[data-edit='true'][data-dragging='true'] {
+  animation: none;
+  cursor: grabbing;
+  z-index: 3;
+  opacity: 0.92;
+  box-shadow: var(--shadow-lifted, 0 8px 24px rgb(0 0 0 / 0.18));
+}
+.idle__tile[data-edit='true']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@keyframes idle-wiggle {
+  0%,
+  100% {
+    transform: rotate(-0.45deg);
+  }
+  50% {
+    transform: rotate(0.45deg);
+  }
+}
+/* **Die Edit-Leiste ist am 23.08. ersatzlos gefallen** (Andi wörtlich: „nimm
+   die UI oben, wenn man etwas bearbeitet raus, dann passt es für mich").
+   Hier standen die Regeln für .idle__editbar, .idle__editreset und
+   .idle__editdone — samt der Herleitung ihrer 62 px Mindesthöhe. Sie sind mit
+   der Leiste weg; „Zurücksetzen" lebt in den Einstellungen weiter
+   (.settings__layoutreset, bei den Widget-Schaltern). Der Edit-Modus trägt
+   damit gar keine eigene Bedienung mehr: die Kacheln wackeln, und das ist die
+   ganze Ansage. */
+/* **Für die Ohren, nicht für die Augen** — aber NICHT `display:none`: was so
+   versteckt ist, wird auch nicht vorgelesen. Zwei Dinge leben hier: der lange
+   Stufen-Name im `−`/`+`-Wähler und (seit dem Fall der Leiste am 23.08.) die
+   beiden Zeilen der Edit-Bedienung, die es überhaupt noch gibt — die
+   Tastatur-Belegung und die `aria-live`-Ansage nach einem Zug.
+
+   `.idle__editannounce`/`.idle__editkeys` sind mit der Leiste gefallen: beide
+   sind zur schon vorhandenen Klasse `.idle__sronly` geworden. Drei Namen für
+   dieselbe eine Regel waren der Rest eines Weges, nicht eine Unterscheidung.
+
+   `.idle__editsr` ist die HÜLLE der beiden — und sie steht hier, nicht nur
+   ihre Kinder: sie ist ein Flex-Kind der Bühne, und ein Flex-Kind von 0 px
+   Höhe kostet trotzdem die 10-px-Fuge (`gap`) über sich. Eine unsichtbare
+   Zeile, die die Kacheln um 10 px verschiebt, wäre genau der Fehler, den
+   dieser Tag beseitigt hat. */
+.idle__sronly,
+.idle__editsr,
+.idle__sizerstep {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* `prefers-reduced-motion`: KEIN Wackeln — stattdessen ein gestrichelter
+   Rahmen, der genauso deutlich sagt „diese Kachel lässt sich jetzt anfassen"
+   (§4.2, wörtlich). */
+@media (prefers-reduced-motion: reduce) {
+  .idle__tile[data-edit='true'] {
+    animation: none;
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+  }
+}
+/* Jede Karte lebt IN ihrer Bühnenzeile statt sie zu sprengen. Bewusst
+   `overflow-y: auto` statt `hidden`: eine aufgeklappte Wartungs-/Räume-
+   Faltung darf nicht lautlos abgeschnitten werden (Ehrlichkeits-Regel des
+   Hauses) — sie scrollt dann innerhalb ihrer eigenen Karte, während das
+   Dokument stillsteht. `overscroll-behavior: contain` verhindert, dass dieser
+   Scroll nach außen durchschlägt. */
+.idle__tile {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Bezugsrahmen für die EINE Sache, die auf einer flachen Kachel aus der
+     Spalte ausbricht: die Sauger-Knopfzeile legt sich dort in die freie
+     untere rechte Ecke (s. den `@container`-Block bei
+     `.idle__hometileactions`). Sonst ändert `relative` an dieser Kachel
+     nichts — sie steht weiterhin in ihrer Rasterzelle. */
+  position: relative;
+  /* ── Die Kachel ist ihr eigener Maßstab (Andi 22.08.) ───────────────────
+     „ich möchte, dass das widget besser ausgefüllt ist und sich dynamisch auf
+     der größe des widgets anpasst."
+
+     Bis hierher skalierte die Typo am FENSTER (`vw`/`vh`). Das ist auf dieser
+     Bühne die falsche Bezugsgröße: dieselbe S-Kachel ist 285 × 146 px, wenn
+     drei Zeilen auf die Seite passen, und 285 × 621 px, wenn nur eine passt —
+     das Fenster ist in beiden Fällen dasselbe. Eine Uhr, die vom Fenster
+     lernt, kann darum gar nicht wissen, wie viel Fläche sie hat. Mit
+     `container-type: size` wird jede Kachel zum Bezugsrahmen, und `cqw`/`cqh`
+     messen ihre INHALTS-Box (also schon ohne die 14 px Polster von `.tile`).
+
+     Warum das hier sicher ist: die Höhe einer Kachel kommt NIE aus ihrem
+     Inhalt. `.idle__page` verteilt `minmax(0, 1fr)`-Zeilen (gemessen wie
+     ungemessen), die Seite selbst hängt an der Bühnenhöhe. `contain: size`
+     nimmt also nichts weg, was jemand gebraucht hätte.
+
+     Die Basis-Regeln der Widgets bleiben trotzdem stehen: ein Browser ohne
+     Container-Queries (Safari < 16) matcht die `@container`-Blöcke nicht und
+     sieht exakt das Bild von vorher. Fortschritt ohne Bruchkante. */
+  container-type: size;
+  container-name: kachel;
+  /* **Die Kachel muss die Achse selbst nennen** (Andi 22.08.: „ich kann nicht
+     über die seiten scrollen. also nach links und rechts").
+
+     Direkt darüber steht `overflow-y: auto` — damit ist jede Kachel ein
+     eigener Scroll-Kasten, und Blink entscheidet die Touch-Absicht an dem
+     Kasten, der die Bewegung ausführen WÜRDE, nicht an der Schiene darüber.
+     Das `touch-action: pan-y` an `.idle__pages` kam deshalb nie an, sobald der
+     Finger auf einer Kachel aufsetzte — und auf einem vollen iPad-Bildschirm
+     setzt er fast immer auf einer Kachel auf. Der Browser nahm den waagerechten
+     Zug für ein Scrollen der Kachel, feuerte `pointercancel` und schickte
+     danach kein `pointermove` mehr. Zu sehen war nichts: die Kachel hat keine
+     waagerechte Achse, `scrollTop` blieb 0, der Wisch verpuffte einfach.
+
+     Dieselben zwei Wörter hier machen die Zusage wahr: senkrecht scrollt die
+     Kachel, waagerecht gehört der Bühne. Gemessen mit
+     `tools/zuhause-probe/touch.mjs` (1112×834, Wisch auf der Sauger-Kachel:
+     vorher Seite 1→1, nachher 1→0). */
+  touch-action: pan-y;
+}
+/* ── Die Uhr als Kachel (W4, Andi 19.08.) ─────────────────────────────────
+   Sie war bis hierher die Krone: eine 124-px-Uhr in einer eigenen Kopfzeile.
+   Jetzt liegt sie im Raster wie jedes andere Widget — verschiebbar, in drei
+   Stufen. Die große Schrift von `.idle__clock` ist unverändert die L-Stufe
+   (die alte Krone, `clamp(40px, min(12vw,16vh), 124px)`, gepinnt von
+   onewindow.test.ts); S und M treten kleiner auf, weil eine 1×1-Zelle
+   (~279 × 132 px) eine 124-px-Ziffernreihe schlicht nicht trägt.
+   Kein `tile__head`: eine Zeile „Uhr" über einer Uhr ist Beschriftung des
+   Offensichtlichen — der Name lebt im `aria-label`. */
+.idle__tile--clock {
+  /* Die Uhr scrollt NICHT in ihrer Karte (anders als Listen-Kacheln): sie hat
+     genau so viel Inhalt, wie ihre Stufe zulässt. */
+  overflow: hidden;
+  display: flex;
+}
+.idle__clocktile {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+}
+.idle__clocktile[data-step='S'] .idle__clock {
+  font-size: clamp(28px, 7vw, 52px);
+}
+.idle__clocktile[data-step='M'] .idle__clock {
+  font-size: clamp(32px, 8vw, 68px);
+}
+.idle__clockdate {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-3);
+}
+
+/* ── Die Uhr füllt ihre Kachel (Andi 22.08.) ──────────────────────────────
+   „Die Uhr sieht in klein etwas verloren aus. ich möchte, dass das widget
+   besser ausgefüllt ist und sich dynamisch auf der größe des widgets anpasst."
+
+   Gemessen war das keine Übertreibung (`tools/zuhause-probe/flaeche.mjs`):
+   S trug **19,2 %** Text auf 285 × 146 px — 52 px Ziffern in einer Kachel,
+   die 257 px Innenbreite hat. Die 52 px kamen aus `min(7vw, …)`, also vom
+   FENSTER; die Kachel hatte damit nie ein Wort mitzureden.
+
+   Jetzt entscheidet die Kachel. `--clockfs` ist die EINE Quelle je Stufe,
+   Datum und Tagesabschnitt hängen daran (`calc`/`em`) — zwei Zahlen, die
+   auseinanderlaufen könnten, gibt es nicht mehr.
+
+   **Die Breiten-Faktoren sind gemessen, nicht geschätzt.** „15:26" ist bei
+   dieser Schrift 3,13 em breit (Sonde: 162 px Text bei 52 px Schrift); die
+   12-Stunden-Sprachen hängen einen Tagesabschnitt an (0,28 em Schrift +
+   0,18 em Abstand ⇒ ~0,58 em). Der Riegel rechnet mit **3,75 em**, also mit
+   dem längsten Fall, den `clockParts` in einer der fünf Sprachen liefert —
+   die Ziffern werden nie beschnitten, auch nicht auf Englisch. Die
+   `cqh`-Hälfte des `min()` ist der zweite Riegel: auf einer flachen Kachel
+   gewinnt die Höhe, statt die Zeile über die Kante zu schieben.
+
+   Der SONNENBOGEN der L-Stufe bleibt unangetastet (eigene Höhe, eigener
+   Deckel) — L wird nur höhenehrlicher: die 834 × 1112-Bühne meldete vorher
+   19 px Überlauf, weil 100 px Ziffern + Datum + Bogen in 249 px Innenhöhe
+   nicht passten.
+
+   Die Basis-Regeln oben bleiben Wort für Wort stehen: sie sind der Rückfall
+   für Browser ohne Container-Queries. */
+@container kachel (min-width: 0) {
+  /* L (Basis-Stufe der Kachel): dieselbe Obergrenze wie die alte Krone —
+     124 px, nur jetzt aus der Kachel statt aus dem Fenster abgeleitet. */
+  .idle__clocktile[data-step] {
+    --clockfs: clamp(40px, min(26cqw, 43cqh), 124px);
+  }
+  /* S trägt NUR die Zeit — die Breite ist hier der einzige echte Riegel.
+     29cqw entspricht einem Budget von 3,45 em für „15:26" (gemessen: 3,13 em),
+     also gut 10 % Luft an der Kante. */
+  .idle__clocktile[data-step='S'] {
+    --clockfs: min(29cqw, 78cqh);
+  }
+  /* **Die 12-Stunden-Sprachen bekommen ihr eigenes Budget.** Ein globaler
+     Worst-Case-Faktor hätte Deutsch, Spanisch, Französisch und Italienisch für
+     ein „PM" bezahlen lassen, das sie nie rendern (`clockParts` liefert den
+     Tagesabschnitt nur, wo die Locale ihn kennt — heute allein en-US). Der
+     Anhang kostet 0,28 em Schrift + 0,18 em Abstand; `:has()` fragt schlicht,
+     ob er überhaupt im DOM steht. */
+  .idle__clocktile[data-step='S']:has(.idle__clockperiod) {
+    --clockfs: min(24cqw, 78cqh);
+  }
+  /* M trägt Zeit + Datum: die Höhe muss beide Zeilen tragen, darum der
+     kleinere `cqh`-Anteil. Die Breite ist auf einer 2×1-Kachel nie der
+     Engpass — 24cqw sind dort weit jenseits dessen, was die Höhe zulässt. */
+  .idle__clocktile[data-step='M'] {
+    --clockfs: min(24cqw, 72cqh);
+  }
+  .idle__clocktile[data-step] .idle__clock {
+    font-size: var(--clockfs);
+  }
+  /* Das Datum ist ein FESTES VERHÄLTNIS zur Uhr, kein zweiter Maßstab — mit
+     Boden und Deckel, damit es auf einer winzigen Kachel lesbar und auf einer
+     riesigen keine zweite Überschrift wird. */
+  .idle__clocktile[data-step] .idle__clockdate {
+    font-size: clamp(13px, calc(var(--clockfs) * 0.2), 26px);
+  }
+  /* **Der Bogen lernt dieselbe Lektion.** Sein Deckel hing an `13vh` — auf dem
+     iPad hoch (1112 px) sind das 144 px, also nahm er auf einer 249 px hohen
+     L-Kachel den Deckelwert 112 px und ließ der Uhr 104 px für Ziffern UND
+     Datum. Genau daher kam der gemessene 19-px-Überlauf der 834er-Bühne.
+     `30cqh` sagt dasselbe, nur über die richtige Bezugsgröße: der Bogen nimmt
+     knapp ein Drittel SEINER Kachel. Sein Wesen bleibt unberührt — die
+     bestellte Flachheit („breiter als hoch, mit Abstand") wird dadurch sogar
+     deutlicher: 497 × 75 statt 497 × 112 sind 6,6 : 1 statt 4,4 : 1. */
+  /* Der Nachfahren-Selektor ist kein Zierrat: die Basis-Regel steht WEITER
+     UNTEN in dieser Datei, also gewönne sie bei gleicher Spezifität. */
+  .idle__clocktile .idle__sunarcplot {
+    height: clamp(56px, 30cqh, 112px);
+  }
+}
+/* ── Der Sonnenverlauf der L-Uhr (components/SunArc.tsx, Andi 21.08.) ──────
+   Er nimmt den Rest der 2×2-Kachel, den Zeit und Datum übrig lassen — nicht
+   mehr: `flex: 1 1 auto` mit `min-height: 0`, damit er auf einer flachen Bühne
+   schrumpft statt die Uhr abzuschneiden. Unter ~54 px lohnt der Bogen nicht,
+   darum die Untergrenze; die Kachel scrollt nicht (`.idle__tile--clock` ist
+   `overflow: hidden`), sie hat genau den Inhalt ihrer Stufe.
+   Farben ausschließlich aus Theme-Token (Muster `.idle__hourly*`), KEINE eigene
+   Animation ⇒ kein eigener reduced-motion-Riegel: das Bild ist statisch und
+   bewegt sich nur mit dem Minuten-Tick, den die Uhr ohnehin hat. */
+.idle__sunarc {
+  margin: 10px 0 0;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* **Gedeckelte Höhe, und zwar aus einem gemessenen Grund.** Der erste Wurf ließ
+   den Bogen den ganzen Rest der Kachel nehmen (`flex: 1 1 auto`); im Screenshot
+   war er dann 553 × 441 px — bei `preserveAspectRatio="none"` wird aus einem
+   flachen Bogen bei diesem Seitenverhältnis ein hoher DOM, der die Uhr
+   erschlägt. Andi hat einen „flachen Bogen" bestellt, und flach heißt: breiter
+   als hoch, mit Abstand. Der Deckel hält das Verhältnis bei mindestens ~4:1. */
+.idle__sunarcplot {
+  position: relative;
+  height: clamp(56px, 13vh, 112px);
+  flex: none;
+}
+/* `preserveAspectRatio="none"`: das Bild dehnt sich auf die echte Kachelfläche.
+   Deshalb steht darin nichts Rundes und kein Text — Sonne, Mond und die zwei
+   Uhrzeiten sind HTML (s. Kopfkommentar von SunArc.tsx). */
+.idle__sunarcchart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.idle__sunarchorizon {
+  stroke: var(--bg-hairline);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.idle__sunarcline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.85;
+}
+.idle__sunarcsun {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px var(--accent-glow);
+}
+/* ── Die Mondphase der L-Uhr bei Nacht (Andi 23.08.) ───────────────────────
+   „Bei dem goßen sonnenstand möchte ich in der nacht die mondphase angezeigt
+   haben :)" — an der Stelle, an der bis hierher ein leerer Ring stand.
+
+   Dieselbe Linienarbeit wie der Bogen (Theme-Token, `non-scaling-stroke`,
+   keine eigene Animation), aber ein anderes `preserveAspectRatio`: der Bogen
+   wird auf die Kachelbreite GEDEHNT, der Mond darf das nicht — ein gedehnter
+   Kreis ist eine Ellipse. `xMidYMid meet` stellt die Scheibe mittig in die
+   Plotfläche und lässt sie rund. */
+.idle__moonchart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+/* Der Umriss ist die GANZE Scheibe — er trägt den unbeleuchteten Teil, ohne
+   ihn zu behaupten: ein dünner Ring in derselben Haarlinie wie der Horizont,
+   plus eine sehr leise Füllung, damit die dunkle Hälfte nicht als Loch in der
+   Kachel liegt. */
+.idle__moondisc {
+  fill: var(--text-3);
+  fill-opacity: 0.1;
+  /* Der Rand ist KRÄFTIGER als die Horizont-Haarlinie des Bogens, und das ist
+     Absicht: er ist die einzige Kante, die der Vollmond hat. Ohne ihn war die
+     volle Scheibe im Bild ein blauer Punkt wie jeder andere im Haus. */
+  stroke: var(--text-3);
+  stroke-opacity: 0.5;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+/* Der beleuchtete Teil in der Akzentfarbe des Hauses — dieselbe, die tags die
+   Sonne trägt. Kein Gelb, kein Grau: der Mond ist hier kein Foto, sondern
+   dieselbe Zeichnung mit einer anderen Form. */
+.idle__moonlit {
+  fill: var(--accent);
+  fill-opacity: 0.85;
+  stroke: var(--accent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+/* Der Phasenname steht an der Stelle, an der tags die zwei Uhrzeiten stehen —
+   eine Zeile, mittig, in derselben stillen Farbe. */
+.idle__moonname {
+  margin: 0;
+  height: 1.4em;
+  text-align: center;
+  font-size: clamp(13px, 1.15vw, 16px);
+  color: var(--text-3);
+}
+/* Die zwei Uhrzeiten stehen ABSOLUT unter ihrem Bogenfuß (Prozente aus dem
+   Layout), nicht links/rechts angeschlagen — sonst zeigt „06:22" auf den
+   Kachelrand statt auf die Stelle, an der der Bogen beginnt. Muster:
+   `.idle__hourlyhour`. */
+.idle__sunarctimes {
+  position: relative;
+  margin: 0;
+  height: 1.4em;
+  font-size: clamp(13px, 1.15vw, 16px);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.idle__sunarctime {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 .idle__tile.tile--pending {
   border-color: var(--bg-hairline-dashed, var(--bg-hairline));
@@ -995,7 +2517,517 @@ button.ops__pill {
   color: var(--text-4);
 }
 
-/* Stille Text-Chips — Text statt Pillen; nur der Health-Punkt trägt Farbe. */
+/* Zuhause-Kacheln (Sauger/Klima, Andi-Auftrag 2026-08-11): eigene, ruhigere
+   Textgröße als die Läuft-/Einkaufs-Zahlen (`.idle__cardlist li`, 28px) — die
+   Kachel-Zeilen sind ganze Sätze („Schläft in der Ladestation") statt kurzer
+   Labels, 28px würde in der 280px-Karte hässlich umbrechen. */
+.idle__hometileline {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-1);
+}
+/* Amber (Sauger-Fehler „Braucht Hilfe") — derselbe Ton wie `.room__name--gap`/`.ops__pill--warn`. */
+.idle__hometilewarn {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--warn);
+}
+.idle__hometilesub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+/* W6 · Flur-Lesbarkeit auf der L-Stufe (Andi 20.08.) — dieselbe Begründung wie
+   bei den Wetter-Zeilen weiter oben, und dieselbe Grenze: NUR L.
+   `data-size` kommt seit W6 auch bei Sauger/Klima am `article` an
+   (`HomeTileCards.tsx`), damit die Typo einen Griff hat, ohne dass eine
+   Komponente Größen ausrechnet.
+   Gemessen war der Sauger die leerste Kachel der Bühne (14 % Füllung): zwei
+   Zeilen — Zustandssatz und Akkustand — in einer 2×2-Zelle. Mehr Zeilen HAT
+   er nicht, solange die Familie nicht mehr liefert (Fortschritt, Fehler,
+   Wartung erscheinen einzeln und nur mit echtem Wert). Was hier passiert, ist
+   also ausdrücklich KEIN Auffüllen: die zwei echten Zeilen werden lesbar. */
+.idle__tile[data-size='L'] .idle__hometilesub,
+.idle__tile[data-size='XL'] .idle__hometilesub {
+  margin-top: 6px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.idle__tile[data-size='L'] .idle__hometileline,
+.idle__tile[data-size='L'] .idle__hometilewarn,
+.idle__tile[data-size='L'] .idle__hometilestale {
+  font-size: 20px;
+  line-height: 1.4;
+}
+/* Nicht erreichbar (state fehlt/unavailable/unknown ODER Registry nicht ladbar)
+   — ehrliche stille Zeile, bewusst NICHT amber (Muster `.tile__note`). */
+.idle__hometileunavailable {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-4);
+}
+/* Last-known-good-Fallback (Andi-Auftrag 2026-08-13, „Sauger-Sichtbarkeits-
+   Lücke"): live unbrauchbar, aber ein gemerkter alter Stand existiert —
+   gleiche Zeilengröße wie `.idle__hometileline`, aber gedämpft (`--text-3`
+   statt `--text-1`) und NIE amber, egal welcher Zustand zuletzt gemerkt
+   wurde (ein alter Fehler ist kein aktueller Alarm). */
+.idle__hometilestale {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-3);
+}
+li.idle__hometileunavailable {
+  list-style: none;
+}
+/* Amber-Tile-Rahmen (Sauger-Fehler) — dezent, kein zweites `--error`-Rot. */
+.tile--warn {
+  border-color: var(--warn-soft);
+}
+.idle__cardlist--climate li {
+  font-size: 18px;
+  font-weight: 500;
+}
+/* Wartungs-Fold der Sauger-Kachel (Andi-Auftrag 2026-08-13, Sauger-Metrik-
+   Familie) — dieselbe ruhigere Zeilengröße wie die Klima-Faltung. */
+.idle__cardlist--vacuum li {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+/* Überfällige Wartungs-Restzeit (Andi 22.08., Auftrag wörtlich „mit dezenter
+   Warn-Optik") — NUR die Textfarbe wechselt auf denselben Bernstein-Ton wie
+   überall sonst (`--warn`), Größe/Gewicht bleiben die der Zeile daneben. KEIN
+   `tile--warn`-Rahmen, KEIN Fettdruck: eine überfällige Bürste ist eine
+   Erinnerung, kein Alarm wie ein echter Sauger-Fehler. */
+.idle__cardlist__row--overdue {
+  color: var(--warn);
+}
+.idle__heatingdot {
+  color: var(--warn);
+  font-weight: 600;
+}
+/* „+n weitere Räume"-Fach der Klima-Kachel (Muster `.rooms__silentgroup`/`.inbox__restgroup`). */
+.idle__hometilerest {
+  margin-top: 4px;
+}
+.idle__hometilerestsummary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+  list-style: none;
+}
+.idle__hometilerestsummary::-webkit-details-marker {
+  display: none;
+}
+.idle__hometilerestsummary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--text-4);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.idle__hometilerest[open] > .idle__hometilerestsummary::before {
+  transform: rotate(90deg);
+}
+.idle__hometilerest .idle__cardlist {
+  margin-top: 6px;
+}
+
+/* ── Sauger 22.08. (Andi 21.08.) ──────────────────────────────────────────
+   Drei neue Bausteine, alle im Kachel-Stil und keiner davon laut:
+
+   1. `--subhead` — die Überschrift des Wartungsblocks, der seit 22.08. auf
+      L/XL AUFGEKLAPPT steht statt hinter `<details>` (§3.2: „Auf 2×2 ist ein
+      Fold sinnlos, die Fläche ist da"). Sie erbt den Ton der alten
+      `<summary>`-Zeile, damit sich für das Auge nichts verschiebt außer dem
+      Dreieck, das weg ist.
+   2. `--whisper` — die Cache-Fußnote „Stand 14:20". Kleiner und blasser als
+      ALLES andere auf der Kachel, inklusive der stillen „nicht erreichbar"-
+      Zeile: sie widerspricht den Werten darüber nicht, sie datiert sie nur.
+      Andis Beschwerde galt einer 18-px-Zeile, die den Zustandssatz verdrängt
+      hat — dies ist ihr Gegenteil.
+   3. `--action(s)` — die zwei Tat-Knöpfe. Bewusst dieselbe Formel, die auch
+      die Knöpfe der (am 23.08. gefallenen) Edit-Leiste trugen: 44 px,
+      `calc(var(--radius) - 4px)`, Haarlinie, `background:none`. Sie sind
+      Knöpfe des Hauses, keine Fremdkörper mit eigener Farbe. Nur der
+      Start-Knopf trägt zusätzlich die Akzent-Kante, weil er die häufigere
+      Bitte ist. */
+.idle__hometilesubhead {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+/* Aus 2 m gemessen (Selbstabnahme 22.08.): der Wartungsblock stand als
+   15-px-Liste in einer 590 × 610-px-Kachel und ließ die untere Hälfte leer.
+   Dieselbe Antwort wie bei den XL-Klimazeilen (W5): auf der großen Fläche
+   dürfen DIESELBEN Felder wachsen — kein neues Feld, keine neue Zeile, nur die
+   Größe, die die Fläche hergibt. Die Regel „L/XL erfindet niemals Inhalt"
+   verbietet Füllmaterial, nicht Lesbarkeit. */
+.idle__tile[data-size='L'] .idle__hometilesubhead,
+.idle__tile[data-size='XL'] .idle__hometilesubhead {
+  margin-top: 10px;
+  font-size: 15px;
+}
+.idle__tile[data-size='L'] .idle__cardlist--vacuum li {
+  font-size: 18px;
+  line-height: 1.5;
+}
+.idle__tile[data-size='XL'] .idle__cardlist--vacuum li {
+  font-size: clamp(18px, 1.5vw, 22px);
+  line-height: 1.5;
+}
+.idle__hometilewhisper {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+}
+/* `margin-top:auto` in der Flex-Spalte `.tile`: die Knöpfe sitzen am unteren
+   Rand, egal wie viele echte Zeilen darüber stehen. Auf einer Kachel, die
+   heute vier und morgen eine Zeile hat, wäre eine feste Position ein
+   wandernder Knopf. */
+.idle__hometileactions {
+  margin-top: auto;
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.idle__hometileactionrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.idle__hometileaction {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  border-radius: calc(var(--radius) - 4px);
+  border: 1px solid var(--bg-hairline);
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.idle__hometileactionrow > .idle__hometileaction:first-child {
+  border-color: var(--accent);
+  color: var(--text-1);
+}
+.idle__hometileaction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* ── Der Play-Knopf der S-Stufe (Andi 23.08.) ─────────────────────────────
+   „Den Start button hätte ich für den sauger auch gerne im kleinen widget.
+   hier soll es ein play button sein."
+
+   Er sitzt RECHTS IM KOPF der Kachel (`HomeTileCard#headAction`), nicht unter
+   dem Rumpf: als eigene Zeile hätte er 50 px gekostet (44 + Fuge) und die
+   Zustandszeile auf einer 108 px hohen Kachel unter die Kante gedrückt — also
+   genau den Schnitt erzeugt, den dieselbe Bestellung abschafft. Im Kopf kostet
+   er 21 px (23 → 44), gemessen mit `tools/zuhause-probe/schnitt.mjs`.
+
+   Das 44-px-Ziel ist NICHT verhandelbar (Flur-iPad, Daumen) — quadratisch,
+   ohne Beschriftung, mit `aria-label` aus demselben Katalog wie der große
+   Knopf. `margin-left: auto` schiebt ihn ans Kopfende, dorthin, wo bei anderen
+   Kacheln die Pille saß. */
+.idle__hometileaction--play {
+  margin-left: auto;
+  /* Wie beim Maximieren-Knopf: 44 px Ziel, 24 px Zeilenhöhe (s. dort). Die
+     S-Kachel hatte damit vorher 21 px weniger Luft als nötig. */
+  margin-block: -10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* Gesperrt heißt sichtbar gesperrt — im Edit-Modus (inert) UND während eine
+   Tat unterwegs ist. Kein Verschwinden: eine Kachel, die im Edit anders
+   AUSSIEHT als im Betrieb, ist beim Anordnen die falsche Vorlage. */
+.idle__hometileaction:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+/* Die Rückmeldezeile hält ihre Höhe auch leer (`min-height`), sonst hüpfte
+   die Kachel bei jedem Klick um eine Zeile — auf einer Bühne mit festem
+   Raster ist dieses Hüpfen ein Layout-Sprung, kein Feedback. */
+.idle__hometileactionnote {
+  margin: 0;
+  min-height: 1.25em;
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--text-3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DIE FLACHE KACHEL VERDIENT WENIGER FELDER (Andi 23.08.)
+   ═══════════════════════════════════════════════════════════════════════════
+   Wörtlich: „die felder werden oft abgeschnitten. dafür haben wir ja die
+   größen, dass sich sowas dynamisch anpasst und den inhalt anpasst."
+
+   EINE Rasterzeile ist gemessen **108 px** innen (iPad hoch) bis **123 px**
+   (Laptop); zwei Zeilen sind 258–289 px (`tools/zuhause-probe/schnitt.mjs`,
+   Höhen-Bilanz). Die Schwelle 180 px liegt mit ~57 px Abstand nach beiden
+   Seiten dazwischen — sie trennt „flach" (S/M) von „hoch" (L/XL), ohne dass
+   ein Rundungsfehler sie kippen könnte.
+
+   Was hier passiert, ist NICHT Zusammenquetschen: es fallen GANZE Felder weg
+   (Verdien-Regel §2.3, rückwärts gelesen). Ein halb sichtbares Feld ist eine
+   Lüge über den Inhalt; ein fehlendes Feld ist eine Aussage über die Stufe.
+
+   GEMESSENER BEFUND, DER DIESEN BLOCK AUSGELÖST HAT (vorher):
+     news S 834×1112  „Stand 10:16" 34 px unter der Kante — GANZ WEG
+     news M 834×1112  „Stand" 42 px weg, Quellenzeile 6 px angeschnitten
+     news M 1366×1024 „Stand" 27 px unter der Kante — GANZ WEG
+     vacuum M beide   Knopfzeile bis 19 px über die Kante
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* ---- DIE LISTE IST DAS DEHNBARE GLIED, NICHT DIE WAHRHEITSZEILE ----------
+   Jede Kachel dieser Bühne hat denselben Bau: Kopf · Liste · eine kurze
+   SCHLUSSZEILE, die sagt, was NICHT zu sehen ist („+11 weitere", „Stand
+   10:32", „Stand" der gecachten Werte) — oder eine Knopfzeile. Bis hierher
+   war die Liste starr und die Schlusszeile das, was hinausgedrückt wurde.
+   Das ist die schlimmste mögliche Reihenfolge: die Zeile, die den Fehlbestand
+   MELDET, verschwindet als erste, und die Kachel behauptet danach
+   Vollständigkeit.
+
+   Gemessen (`tools/zuhause-probe/schnitt.mjs`, 23.08., vorher): „+11 weitere"
+   lag 65 px unter der Kante, „+5 weitere" 43 px, der Sauger-„Stand" 29 px —
+   alle GANZ WEG, in 20 von 58 Fällen lief die Kachel über.
+
+   Jetzt trägt die Liste die Enge: sie nimmt, was übrig ist (`flex: 1 1 auto`,
+   `min-height: 0`), und wird zum eigenen Scroll-Käfig — dieselbe Bauart, die
+   das Lagebild seit S1 hat und die dort begründet ist (§4-S1: „they scroll
+   INSIDE the window, and `overscroll-behavior` keeps that scroll from chaining
+   out to the page"). Was über den Deckel geht, ist damit eine Fingerbreite
+   entfernt statt weg — UND die Zeile, die es ankündigt, steht sichtbar da.
+   Nichts wird still gelöscht; genau das ist der Unterschied zu `display:none`
+   auf den letzten Posten.
+
+   Warum im `@container`-Block und nicht als Grundregel: die Kachel muss dafür
+   eine DEFINITE Höhe haben. Die hat sie auf der Bühne immer (`grid-auto-rows:
+   minmax(0,1fr)`), aber nur dort — in der Übersicht steht dieselbe `.tile` in
+   einem Raster mit Inhaltshöhe, und ein `flex:1 1 auto` mit `min-height:0`
+   wäre dort eine Einladung, auf 0 zu kollabieren. `@container kachel` gilt nur
+   innerhalb eines Größen-Containers, und den setzt ausschließlich
+   `.idle__tile`. Die Bedingung `(min-width: 0)` ist wahr, sobald es einen gibt. */
+@container kachel (min-width: 0) {
+  /* Auch die ZWEISPALTIGEN XL-Listen (`--two`, ein Grid): sie waren zuerst
+     ausgenommen, und die Messung hat das sofort bestraft — der Einkauf ließ
+     auf XL „2× Milch" 103 px unter der Kante liegen. Ein Grid ist als
+     Flex-KIND genauso dehnbar wie eine Flex-Spalte; nur seine Innenordnung
+     ist eine andere. */
+  .idle__cardlist,
+  .idle__newslist {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* Die Schlusszeilen: sie schrumpfen NIE mit. */
+  .idle__cardmore,
+  .idle__newsrest,
+  .idle__newsstand,
+  .idle__hometilewhisper,
+  .idle__hometileactions {
+    flex: 0 0 auto;
+  }
+  /* Dasselbe eine Etage tiefer beim Wetter-XL: der Stunden-Verlauf ist das
+     dehnbare Glied, die Mehrtage-Zeile darunter steht fest. Vorher schob der
+     64-px-Boden des Diagramms die sieben Tages-Spalten 2 px unter die Kante
+     (834 × 1112) — sichtbar als angeschnittene Lagentexte in JEDER Spalte. */
+  .idle__now[data-size='XL'] .idle__hourly {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .idle__now[data-size='XL'] .idle__outlook {
+    flex: 0 0 auto;
+  }
+}
+
+@container kachel (max-height: 180px) {
+  /* ---- Lagebild: Kopf und „Stand" stehen fest, die Liste bekommt den Rest --
+     Ohne diese drei Zeilen wächst die Liste nach unten und schiebt die
+     „Stand"-Zeile aus der Kachel — der Fuß verschwindet, obwohl er das
+     BILLIGSTE Feld der Kachel ist (20 px). Jetzt ist die Liste das
+     dehnbare Glied und trägt die Kürzung, nicht der Fuß. */
+  .idle__news .idle__newslist {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .idle__news .idle__newsstand {
+    flex: 0 0 auto;
+    /* 10 px Vorspann sind auf einer 108-px-Kachel ein Zehntel der Höhe. */
+    margin-top: 4px;
+  }
+  /* Eine flache Kachel trägt GENAU EINE Meldung. Zwei kosteten 100 px Liste,
+     verfügbar sind 43–58 px — die zweite war nie zu sehen, sie hat nur die
+     Zeilen darunter hinausgedrückt. */
+  .idle__news .idle__newsitem:nth-child(n + 2) {
+    display: none;
+  }
+  /* Und ihre Schlagzeile endet nach zwei Zeilen statt nach dreien: 18 px ×
+     1,3 × 3 = 70 px passen in keine 58. Der Auslassungspunkt ist hier die
+     ehrlichere Kürzung — eine Schlagzeile ist von Natur aus beliebig lang,
+     ihr „ganzes Feld" gibt es nicht. */
+  .idle__news .idle__newstitle {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
+  /* ---- Sauger: die Rückmeldezeile fällt weg, nicht die Knöpfe -------------
+     Die Knopfzeile kostet 69 px (6 Vorspann + 44 Knopf + 4 Fuge + 15 Zeile);
+     Kopf + Zustand + Fugen kosten 58. Auf 108 px passt das nicht. Was geht,
+     ist das Feld mit dem geringsten Gewicht: die Rückmeldezeile. Sie bleibt
+     als `.sr-only`-Zwilling NICHT bestehen — sie ist dasselbe Element, nur
+     unsichtbar gestellt, damit `aria-live` weiter spricht. Sichtbares
+     Feedback trägt hier der gesperrte Knopf. */
+  /* Die Knopfzeile verlässt die Spalte und legt sich in die freie untere
+     RECHTE Ecke. Sie kostet damit **null** senkrechte Zeilen — und genau die
+     hatte die Kachel nicht: Kopf 23 + Zustand 23 + Knöpfe 44 + „Stand" 15 +
+     drei Fugen = 123 px, verfügbar sind auf dem iPad hoch 108. Vorher fiel
+     dabei der „Stand"-Flüsterer hinaus (4 px, gemessen). Jetzt fällt gar
+     nichts: die Knöpfe behalten ihre 44 px, der Flüsterer seine Zeile, und
+     der Platz, den sie sich teilen, war ohnehin leer.
+     `right/bottom` = das Kachelpolster, damit der Knopf auf derselben Linie
+     endet wie jeder Text darüber. */
+  .idle__hometileactions {
+    padding-top: 0;
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+  }
+  .idle__hometileactionnote {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+/* Schmal UND flach (die 1×1-Kachel): die Quellen-/Alterszeile fällt als
+   GANZES Feld weg. In einer 257 px breiten Kachel wickelt sich die
+   Schlagzeile über zwei Zeilen (47 px) — zusammen mit der Quellenzeile
+   (20 px) sind das 67 px, verfügbar sind 49. Die Quelle ist das Feld, das
+   ein Blick aus 3 m am ehesten entbehrt; die Schlagzeile ist der Grund,
+   warum die Kachel da ist. Auf M (2 Spalten) bleibt sie stehen. */
+@container kachel (max-height: 180px) and (max-width: 400px) {
+  .idle__news .idle__hometilesub {
+    display: none;
+  }
+}
+
+/* ── XL: zweispaltige Kachel-Listen (W5, §3.3/§3.5/§3.6) ──────────────────
+   Klima, Läuft und Einkauf tragen auf XL dieselben Zeilen wie auf L — nur
+   in zwei Spalten. Gitter statt CSS-Mehrspaltensatz aus demselben Grund wie
+   beim Lagebild: eine Kachel scrollt senkrecht, Spaltensatz liefe waagerecht
+   aus ihr heraus. `minmax(0, 1fr)` ist Pflicht, sonst sprengt ein langer
+   Raumname („Arbeitszimmer 21,1° → 21°") die Spalte statt zu kürzen.
+   Der `.idle__hometilerest`-Nachschlag bleibt bewusst EINspaltig — er ist ein
+   Anhang, keine zweite Liste. */
+.idle__cardlist--two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(16px, 2.6vw, 40px);
+  row-gap: clamp(6px, 1vh, 14px);
+  align-content: start;
+}
+/* Aus 2 m (Selbstabnahme W5): die ersten XL-Bilder waren L-Inhalt in einem
+   XL-Kasten — dieselbe 18-px-Zeile, derselbe 4-px-Takt, alles im oberen
+   Drittel von 880 × 550 px zusammengeschoben. Auf der ganzen Bühne dürfen
+   dieselben Felder wachsen; das Lagebild-XL macht es mit seiner Schlagzeile
+   (`.idle__news--xl .idle__newstitle`) längst genauso. Kein neues Feld, keine
+   neue Zeile — nur die Größe, die die Fläche hergibt.
+   Der einspaltige `.idle__hometilerest`-Nachschlag bleibt klein: er ist ein
+   Anhang und soll die Liste über ihm nicht überstimmen. */
+.idle__cardlist--two.idle__cardlist--climate li {
+  font-size: clamp(18px, 1.7vw, 23px);
+}
+
+/* ---- Zuhause-Fußleiste (Andi-Bestellung 19.08.) --------------------------
+   „Ich möchte unten links die Statusmeldung mit dem ● online · Stimme: lokal.
+   Das aber auch schön eingebunden (etwas wie die Leiste oben, nur unten)."
+
+   Also das GEGENSTÜCK zur Nav-Insel, nicht ihre Kopie: dieselbe Milchglas-
+   Formel, dieselbe Haarlinie, derselbe Radius — aber flacher (Polster 7 statt
+   10), ohne eigene Schriftgröße (die Chips bleiben bei ihren 13 px) und mit
+   einem Schatten, der nach OBEN fällt statt nach unten. Eine Leiste, die auf
+   dem Fensterboden liegt, wirft ihr Licht nach oben; wäre es derselbe
+   Schatten wie oben, sähe die Seite aus, als hinge sie schief.
+
+   KANTENGLEICHHEIT mit der Nav ist der halbe Effekt: `.nav` sitzt mit
+   `margin-inline: clamp(8px,2vw,16px)` in `.app`, diese Leiste sitzt im
+   `.app__main`, das schon 20 px Innenpolster hat. Die negative Differenz
+   unten zieht ihre LINKE Kante exakt auf die linke Nav-Kante (bei 1366 px:
+   16−20 = −4 px). Ändert sich die Nav-Zahl, muss diese mit — darum steht sie
+   wörtlich gleich da.
+
+   **Breite = Inhalt, seit W6** (Andi 20.08.: „Die Leiste unten mit ● online ·
+   Stimme: lokal soll nicht über die komplette Breite gehen; es reicht leicht
+   dezent auf der Länge von den Worten dort."). Bis dahin lief sie über die
+   ganze Spalte — 888 px bei 1366, 802 px bei 834 — für rund 170 px Wörter.
+   Eine Leiste, die zu 80 % aus leerem Glas besteht, behauptet Gewicht, das
+   ihr Inhalt nicht hat: sie las sich wie eine Statusleiste des Betriebs-
+   systems und nicht wie die beiläufige Randnotiz, die sie ist.
+
+   `align-self: start` ist der ganze Trick. `.app__main` ist eine Flex-Spalte,
+   ihre Kinder werden quer gestreckt (`stretch`); ein Kind, das sich davon
+   ausnimmt, wird genau so breit wie sein Inhalt. Deshalb steht hier auch KEINE
+   `width`-Zahl: die Wörter sind in fünf Sprachen verschieden lang und der
+   Stimme-Chip fehlt ganz, wenn das Backend kein `voice`-Feld liefert — jede
+   feste Breite wäre in einem dieser Fälle falsch. `max-width: 100%` ist der
+   Riegel nach oben: im ganz schmalen Fenster darf die Pille die Spalte füllen
+   und ihre Chips umbrechen, aber nie über den Rand hinausragen.
+   Das rechte Margin fällt damit weg — die rechte Kante liegt jetzt am Wortende,
+   nicht an der Nav-Kante. Genau das war die Bestellung. */
+.homefoot {
+  flex: none;
+  align-self: start;
+  max-width: 100%;
+  /* W6: die 10 px oben tragen jetzt den Namen des Rhythmus statt eine eigene
+     Zahl zu sein — derselbe Wert wie über dem Orb, damit der Block gleich weit
+     von Bühne und Fußleiste steht. Die Fuge Hinweis↔Fußleiste gehört seit W6
+     ALLEIN dieser Zeile (der Orb-Block hat sein unteres Polster abgegeben). */
+  margin: var(--home-orb-gap, 10px) 0 2px calc(clamp(8px, 2vw, 16px) - 20px);
+  padding: 7px 18px;
+  border: 1px solid var(--bg-hairline);
+  border-radius: 18px;
+  background: var(--bg-surface);
+  background: color-mix(in oklab, var(--bg-surface) var(--surface-mix), transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
+  box-shadow: 0 -8px 28px -18px rgb(0 0 0 / 0.55);
+}
+
+/* Stille Text-Chips — Text statt Pillen; nur der Health-Punkt trägt Farbe.
+   Seit 19.08. sind sie der Inhalt der Fußleiste (vorher die vierte `.idle`-
+   Zeile); `align-self: start` ist mit dem Umzug ersatzlos entfallen — es war
+   der Riegel gegen ein Schweben in der leeren Bühnenzeile, und diese Zeile
+   gibt es nicht mehr. */
+/* W6: `grid-row: 4` ist hier mit weggefallen — dieselbe Begründung wie beim
+   `align-self`, nur eine Runde später übersehen. Die Chips liegen seit 19.08.
+   in der Fußleiste, und die ist ein Flex-Block: eine Zeilen-Zuweisung an ein
+   Flex-Kind tut nichts. Sie stehen zu lassen wäre eine Behauptung über ein
+   Grid, in dem dieses Element gar nicht mehr liegt. */
 .idle__chips {
   display: flex;
   flex-wrap: wrap;
@@ -1126,13 +3158,55 @@ button.ops__pill {
   font-size: 12.5px;
   color: var(--text-4);
 }
+/* Ehrlicher Sortier-Hinweis über dem unfiltrierten Raster (Andi-Auftrag
+   2026-08-11) — dieselbe leise Optik wie `.rooms__nomatch`, eigene Klasse
+   nur weil er semantisch kein „kein Treffer" ist. */
+.rooms__hint {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--text-4);
+}
 
 /* ---- Räume (echte Geräte-Liste, Scheibe 1 des Geräte-Zuordnungs-Konzepts) ----
    `.rooms` erbt Raster+Eintritts-Stagger von `.tiles` (beide Klassen am
    Container) — nur die Spaltenbreite wird hier verbreitert, eine Raum-Karte
-   braucht mehr Platz als eine Status-Kachel. */
+   braucht mehr Platz als eine Status-Kachel.
+   GRID STATT LISTE (Andi-Auftrag 2026-08-11, Konzept §2): minmax auf ~340px
+   angehoben (1-3 Spalten je Breite statt voller Zeilenbreite) + `align-items:
+   start`, damit eine hohe Karte (viele Geräte) NICHT die ganze Grid-Zeile auf
+   ihre Höhe streckt — jede Karte behält ihre natürliche, kompakte Höhe. */
 .rooms {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  align-items: start;
+}
+/* „Stille Räume"-Fach (Konzept §4): zugeklappt per Default (natives
+   `<details>`, kein eigener State — Muster `.settings__themegroup`/
+   `.feed__details`), ehrlich benannt statt versteckt. */
+.rooms__silentgroup {
+  margin-top: 16px;
+}
+.rooms__silentgroup .tiles.rooms {
+  margin-top: 12px;
+}
+.rooms__silentsummary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+  list-style: none;
+}
+.rooms__silentsummary::-webkit-details-marker {
+  display: none;
+}
+.rooms__silentsummary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--text-4);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.rooms__silentgroup[open] > .rooms__silentsummary::before {
+  transform: rotate(90deg);
 }
 .room__empty,
 .room__hint {
@@ -2068,7 +4142,11 @@ button.ops__pill {
   padding: 10px 12px;
   border-radius: 22px;
   border: 1px solid var(--bg-hairline);
+  /* Erste Zeile = Fallback ohne color-mix, zweite = `--surface-mix` (s. `:root`).
+     Die Leiste ist die zentrale Fläche des Chat-Reiters; sie lässt die Szene
+     jetzt genauso durchscheinen wie Kacheln und Karten. */
   background: var(--bg-surface);
+  background: color-mix(in oklab, var(--bg-surface) var(--surface-mix), transparent);
   transition: border-color var(--dur-base) var(--ease-standard);
 }
 .compose__bar:focus-within {
@@ -2506,16 +4584,164 @@ button.ops__pill {
   flex: none;
 }
 
-/* ---- Erste Breiten-Media-Query des Projekts (Andi-Auftrag 2026-07-26) ----
-   Bewusst MINIMAL gehalten: nur das Jetzt-Band klappt auf schmalen Screens
-   (Handy-Breite) unter die Uhr statt daneben — sonst würde die Wetterlage auf
-   sehr schmalen Screens gegen die Uhr gequetscht. */
+/* ---- Breiten-Media-Query der Kopf-Gruppe (Andi-Auftrag 2026-07-26) --------
+   Bewusst MINIMAL gehalten: auf schmalen Screens (Handy-Breite) stapelt die
+   Kopf-Gruppe explizit, statt sich auf den `flex-wrap`-Umbruch zu verlassen.
+   Der Unterschied ist sichtbar: mit `wrap` allein bliebe eine schmale
+   Wetter-Spalte notfalls neben einer schmalen Uhr stehen und beide würden
+   umbrechen; `flex-direction: column` gibt jedem der beiden die volle Breite.
+   Die frühere Rechtsbündigkeit des Bands ist seit „Komposition v2" (15.08.)
+   ohnehin weg — das Band ist auf JEDER Breite linksbündig, hier wechselt nur
+   noch die Achse. */
 @media (max-width: 560px) {
   .idle__head {
-    grid-template-columns: 1fr;
-  }
-  .idle__now {
+    flex-direction: column;
     align-items: flex-start;
-    text-align: left;
+    gap: 6px;
   }
+}
+
+/* ---- Lagebild window (order F5, wave 1; W1 size steps, DESIGN-widget-
+   raster-2026-08-18 §3.4) ----------------------------------------------------
+   Lives in the SAME `.idle__tiles` grid as the vacuum/climate tiles and reuses
+   their `.tile`/`.tile__head` frame; only the headline lines are new. Sizes are
+   borrowed from the home tiles on purpose (`.idle__hometileline` 18px for the
+   headline, `.idle__hometilesub` 13px for source + age) so the window reads as
+   one of them and not as a second design system.
+   At L/XL ("big" — ex-"mehr" expansion, now the `size` prop, §8.3) the window
+   carries the full list incl. teasers, so it takes the whole grid row instead
+   of staying in one 280px column.
+   `grid-column: 1/-1` below only ever WINS in the unmeasured/first-paint
+   fallback (`.idle__page` without an explicit grid, `homeLayout.ts`
+   `measured: false`) — once the stage is measured, `HomeStage` writes each
+   tile's real cell as an inline style (Codex-Gegenprüfung 18.08. §1), and an
+   inline style always beats a class rule regardless of specificity. Kept
+   here on purpose: it is the honest "we don't know the box yet" span for
+   that one brief pre-measurement frame. */
+.idle__news--big {
+  grid-column: 1 / -1;
+  /* S1: der Rahmen der großen Kachel selbst steht still — Kopf und „Stand"-Fuß
+     bleiben immer sichtbar, gescrollt wird ausschließlich die Liste darin
+     (Regel darunter). Überschreibt bewusst das generische `overflow-y:auto`
+     der `.idle__tile`-Regel. */
+  overflow: hidden;
+}
+.idle__newslist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* Stage guard of the expansion (live finding 2026-08-15, iPad: the app is ONE
+   window that must never scroll). The item cap lives in the component
+   (CURRENT_AFFAIRS_EXPANDED_COUNT); this is the SECOND, independent lock for the
+   case where six long headlines with teasers still outgrow a short viewport:
+   they scroll INSIDE the window, and `overscroll-behavior` keeps that scroll
+   from chaining out to the page. Applies to the expanded state only — collapsed
+   the window is three cards and needs no cage.
+   S1 (DESIGN §2.2/§4-S1) replaced the former `max-height: min(52vh, 420px)`
+   with a STAGE-relative cage. The viewport number was the wrong yardstick: it
+   knew nothing about the clock, the alarm row, the chips or the orb above and
+   below it, so on an iPad in landscape (~173px of stage) a 420px cage still
+   burst the window. The card now sits in a grid row of definite height
+   (`.idle__tiles { grid-auto-rows: minmax(0,1fr) }`), so the list can simply
+   claim what is left of its own card — head and footer keep their space, the
+   list takes the rest, and it is right by construction on EVERY screen
+   instead of right at one guessed viewport height. */
+.idle__news--big .idle__newslist {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* "+N weitere" under the capped list — the quiet footer voice of `.idle__newsstand`. */
+.idle__newsrest {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-4);
+}
+.idle__newsitem {
+  display: flex;
+  flex-direction: column;
+}
+.idle__newstitle {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-1);
+  text-decoration: none;
+}
+.idle__newstitle:hover,
+.idle__newstitle:focus-visible {
+  text-decoration: underline;
+}
+.idle__newssnippet {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+.idle__newsopen {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+/* "Stand HH:MM" — quiet footer of the window (pattern `.idle__cardmore`). */
+.idle__newsstand {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+}
+/* Discreet amber age hint while freshness = STALE — same amber idiom as
+   `.idle__hometilewarn`/`.ops__pill--warn`, never a second `--error` red. */
+.idle__newsage {
+  color: var(--warn);
+  font-weight: 600;
+}
+/* The "mehr"/"weniger" toggle button (`.idle__newsmore`) is gone without
+   replacement (W1, §3.4/§8.3) — the `size` prop IS the expansion now, so
+   there is no interactive state left for this rule to style. */
+
+/* ── Lagebild XL (W5, §3.4): dieselben sechs Meldungen, zweispaltig ────────
+   Bewusst `grid` und nicht CSS-Mehrspaltensatz (`columns: 2`): die Liste
+   scrollt in sich (`.idle__news--big .idle__newslist`), und Spaltensatz
+   fließt bei Überlänge WAAGERECHT weiter — das ergäbe eine Liste, die nach
+   rechts aus der Kachel läuft. Ein Gitter überläuft nach unten, dorthin, wo
+   der vorhandene Scroll-Käfig schon wartet. Leseordnung ist damit
+   zeilenweise (links, rechts, links …) — bei Karten die vertraute, bei einem
+   Spaltensatz wäre sie senkrecht. */
+.idle__news--xl .idle__newslist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(16px, 2.4vw, 36px);
+  row-gap: 14px;
+  align-content: start;
+}
+/* „Snippets länger" (§3.4) — und zwar messbar: L klemmt den Teaser auf drei
+   Zeilen, XL auf sechs. Das Feld selbst (`feedSnippet`) ist unberührt; es
+   wird nur mehr davon gezeigt. Ohne den L-Deckel gäbe es kein „länger",
+   sondern nur „gleich" — und ein einzelner Riesen-Teaser könnte die L-Liste
+   allein füllen. */
+.idle__news--big .idle__newssnippet {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.idle__news--xl .idle__newssnippet {
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+}
+/* Aus 2 m: die Schlagzeile darf auf der ganzen Bühne wachsen. */
+.idle__news--xl .idle__newstitle {
+  font-size: clamp(18px, 1.6vw, 21px);
+}
+.idle__news--xl .idle__newssnippet {
+  font-size: clamp(14px, 1.25vw, 16px);
 }

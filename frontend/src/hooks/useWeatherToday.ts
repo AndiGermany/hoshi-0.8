@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { API_BASE, TOKEN } from '../api/config';
+import { startVisiblePolling } from './visiblePolling';
 
 /**
  * Heutiges Wetter aus `GET /api/v1/weather/today` — die Datenquelle der
@@ -58,6 +59,40 @@ export interface WeatherToday {
   sunsetEpochMs?: number;
   /** Die nächsten ~12 h, kompakt — leer/fehlend, wenn Open-Meteo keine `hourly`-Daten liefert. */
   hourly?: HourlyPoint[];
+  /**
+   * Sieben-Tage-Ausblick (BE-Vertrag `RESULT-wetter-mehrtage-2026-08-21` §1.2,
+   * additiv ans Ende) — **fehlt bei Alt-Backends**; dann bleibt die Zeile auf
+   * der XL-Kachel ehrlich weg. Enthält HEUTE als `offset = 0` und ist damit
+   * selbsttragend.
+   */
+  outlook?: DayOutlook[];
+}
+
+/**
+ * Ein Tag des Mehrtage-Ausblicks ({@link WeatherToday.outlook}).
+ *
+ * **Wire-Namen ausgeschrieben** (`tempMin`/`tempMax`, nicht `tMin`/`tMax`): das
+ * BE hat unterwegs gelernt, dass Jackson `tMin` → `getTMin()` → `tmin`
+ * serialisiert hätte — die Namen hier sind die, die wirklich über die Leitung
+ * gehen (BE-RESULT §1.2, „Wire-Fund unterwegs").
+ *
+ * **`dateIso` statt Epoch-ms** (anders als {@link HourlyPoint.epochMs}): ein Tag
+ * ist ein KALENDERDATUM. Über Epoch-ms müsste das FE eine Zeitzone raten, um
+ * „welcher Wochentag ist das?" zu beantworten — genau die Drift, die bei
+ * Sonnenauf-/-untergang schon einmal korrigiert werden musste.
+ */
+export interface DayOutlook {
+  /** 0 = heute, 6 = letzter Tag des Horizonts. */
+  offset: number;
+  /** Kalendertag, „2026-06-28" — KEIN Zeitpunkt. */
+  dateIso: string;
+  tempMin: number;
+  tempMax: number;
+  /** WMO-Text, schon in der Anzeigesprache. */
+  codeText: string;
+  precipMm: number;
+  /** Fehlt = keine Angabe ⇒ Prozent weglassen, **nie „0 %"** (BE-Vertrag). */
+  precipProbability?: number;
 }
 
 /** Ein Stunden-Punkt des kompakten Verlaufs ({@link WeatherToday.hourly}). */
@@ -114,7 +149,47 @@ export function parseWeatherToday(body: unknown): WeatherToday | null {
     const hourly = parseHourlyPoints(b.hourly);
     if (hourly.length > 0) result.hourly = hourly;
   }
+  if (Array.isArray(b.outlook)) {
+    const outlook = parseOutlookDays(b.outlook);
+    if (outlook.length > 0) result.outlook = outlook;
+  }
   return result;
+}
+
+/**
+ * Verwirft jeden Tag, der nicht dem Pflichtteil des `DayOutlook`-Vertrags folgt
+ * — nie ein Teil-Tag (Muster {@link parseHourlyPoints}). `precipProbability`
+ * ist der EINZIGE optionale Wert: fehlt er, bleibt er weg, statt zu „0 %" zu
+ * werden — „keine Angabe" und „ganz sicher trocken" sind zwei verschiedene
+ * Aussagen, und nur eine davon steht in den Daten.
+ */
+function parseOutlookDays(raw: unknown[]): DayOutlook[] {
+  return raw.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const e = entry as Record<string, unknown>;
+    if (
+      typeof e.offset !== 'number' ||
+      typeof e.dateIso !== 'string' ||
+      e.dateIso === '' ||
+      typeof e.tempMin !== 'number' ||
+      typeof e.tempMax !== 'number' ||
+      typeof e.codeText !== 'string' ||
+      e.codeText === '' ||
+      typeof e.precipMm !== 'number'
+    ) {
+      return [];
+    }
+    const day: DayOutlook = {
+      offset: e.offset,
+      dateIso: e.dateIso,
+      tempMin: e.tempMin,
+      tempMax: e.tempMax,
+      codeText: e.codeText,
+      precipMm: e.precipMm,
+    };
+    if (typeof e.precipProbability === 'number') day.precipProbability = e.precipProbability;
+    return [day];
+  });
 }
 
 /** Verwirft jeden Punkt, der nicht dem `{epochMs, tempC, precipProbability}`-Vertrag folgt — nie ein Teil-Punkt. */
@@ -168,11 +243,13 @@ export function useWeatherToday(intervalMs = 10 * 60 * 1000): WeatherTodayState 
     };
 
     void tick();
-    const id = window.setInterval(() => void tick(), intervalMs);
+    // Gate statt Frequenz: sichtbar taktet es unveraendert, dunkles
+    // Display pausiert, Sichtbarwerden holt sofort frisch nach.
+    const stopPolling = startVisiblePolling(() => void tick(), intervalMs);
     return () => {
       aliveRef.current = false;
       controller.abort();
-      window.clearInterval(id);
+      stopPolling();
     };
   }, [intervalMs]);
 

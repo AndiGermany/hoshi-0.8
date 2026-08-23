@@ -1,8 +1,12 @@
 package de.hoshi.adapters.ha
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import de.hoshi.core.pipeline.lang.FRESHNESS_PLACEHOLDER
 import de.hoshi.core.pipeline.lang.HaExecutorPack
 import de.hoshi.core.pipeline.lang.LanguagePackRegistry
+import de.hoshi.core.pipeline.lang.freshnessMarker
+import de.hoshi.core.port.AreaCatalogPort
+import de.hoshi.core.port.displayNameOrNull
 import de.hoshi.core.port.ToolPort
 import de.hoshi.core.tools.ToolAreas
 import de.hoshi.core.tools.ToolCall
@@ -12,6 +16,9 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.time.Clock
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import java.time.Duration
 
 /**
@@ -89,11 +96,23 @@ import java.time.Duration
  * Phrase wann fällt — ist davon unberührt: die Ehrlichkeits-Abstufung liegt in der
  * Klassifikation, nicht in der Sprache.
  *
- * **Raumnamen sind Nutzerdaten und werden NIE übersetzt.** Sie kommen aus der
- * HA-Registry und werden nur in den `{room}`-Slot gesetzt — „Wohnzimmer" bleibt
- * „Wohnzimmer", auch im englischen Satz. Beibehalten ist auch, WELCHE Form je
- * Phrase eingesetzt wird: der Licht-Readback nennt den rohen Area-Slug
- * (`kueche`), Klima/Temperatur das sprechbare [ToolAreas.label] (`Küche`).
+ * **Raumnamen sind Nutzerdaten: sie werden NIE übersetzt UND NIE verstümmelt.** Sie
+ * werden nur in den `{room}`-Slot gesetzt — „Wohnzimmer" bleibt „Wohnzimmer", auch
+ * im englischen Satz.
+ *
+ * **EINE Form für ALLE Quittungen (Andi 2026-08-22):** jeder gesprochene Satz trägt
+ * den HA-ANZEIGENAMEN aus [areaCatalog] (`Küche`), nie die `area_id` (`kuche`).
+ * Vorher galt das nur für Klima/Temperatur, während der Licht-Pfad und die
+ * „an die Geräte geschickt"-Quittung den rohen Slug in den Satz setzten — das TTS
+ * sagte hörbar „Kuche" statt „Küche" (Andis Befund am Vollzugs-Satz). Ein Slug ist
+ * ein SCHLÜSSEL, kein Name: HA slugifiziert ü→u, der kapitalisierte Slug ist also
+ * kaputtes Nutzerdatum.
+ *
+ * Auflösung + ehrlicher Fallback siehe [areaDisplayName]/[spokenRoom]: Katalog →
+ * kuratierte [ToolAreas.LABELS] → das vage [HaExecutorPack.roomFallbackName]. Kein
+ * Name auffindbar heißt lieber „im gewünschten Raum" als ein verstümmeltes „Kuche".
+ * Der SLUG bleibt unangetastet, wo er hingehört: als Matching-Schlüssel im
+ * Service-Call, im Log und im Diary (`targetAreaId`).
  */
 class HaToolPort(
     baseUrl: String,
@@ -122,6 +141,18 @@ class HaToolPort(
      * Licht) — ein kurzes Budget hält die Sprach-Antwort flott, ohne im Race zu raten.
      */
     private val climateReadbackSettleMs: Long = 1500,
+    /**
+     * Source of the spoken room label (see [areaLabel]). Default [AreaCatalogPort.STATIC]
+     * is behaviour-neutral: its labels ARE the [ToolAreas] map. The port is never-throw
+     * and falls back on its own (last good cache, then STATIC) — no guarding here.
+     */
+    private val areaCatalog: AreaCatalogPort = AreaCatalogPort.STATIC,
+    /**
+     * Zeitquelle für die Frische-Phrasen (F2-Rest), s. [lastGoodTemperature]/
+     * [freshnessMarker]. Default die echte Uhr; Tests injizieren eine feste
+     * [Clock], um Alters-Stufen deterministisch zu treffen (kein `Thread.sleep`).
+     */
+    private val clock: Clock = Clock.systemUTC(),
 ) : ToolPort {
     private val log = LoggerFactory.getLogger(javaClass)
     private val base = baseUrl.trimEnd('/')
@@ -129,6 +160,36 @@ class HaToolPort(
     private val client = HttpClient.newBuilder()
         .connectTimeout(Duration.ofMillis(timeoutMs))
         .build()
+
+    /** Ein LIVE gelesener Temperatur-Wert, gemerkt für den Last-known-Fallback (s. [lastGoodTemperature]). */
+    private data class LastGoodTemperature(val value: Double, val seenAt: Instant)
+
+    /**
+     * **In-Prozess Last-known-Cache für Temperatur-Reads** (F2-Rest, Andi-Auftrag
+     * „'Stand: vor X min' sprechbar", 5 Sprachen): merkt sich je Area (Schlüssel
+     * `area_id`, [HOUSE_CACHE_KEY] fürs Haus-Aggregat) den letzten LIVE gelesenen
+     * Wert. Schlägt ein Live-Read fehl (kein Wert/HTTP-Fehler/Exception) UND liegt
+     * ein gemerkter Wert vor, spricht [readTemperature] ihn MIT Alters-Angabe
+     * ([HaExecutorPack.temperatureInAreaStale]/[HaExecutorPack.temperatureHouseAverageStale])
+     * statt ehrlich zu verstummen ([HaExecutorPack.noValue]/[HaExecutorPack.temperatureUnavailable]).
+     *
+     * **Bewusst NICHT [LastKnownStateStore]:** jener Store kennt echte HA-
+     * `entity_id`s (befüllt vom States-Poll des [HaHomeRegistryAdapter], FE-
+     * Registry-Pfad) — dieser Port löst die Area-Temperatur serverseitig per
+     * Jinja-Template auf ([areaTemperatureTemplate]) und kennt gar keine
+     * Entity-IDs; ein Rate-Mapping „area → entity_id" wäre genau die Art
+     * Vermutung, die die F2-Untersuchung an anderer Stelle als Bug einstufte
+     * (`vault/tracks/UNTERSUCHUNG-f2-hier-2026-08-14.md`). Ein geteilter,
+     * live-aktueller [LastKnownStateStore] bräuchte außerdem EINE Bean-Instanz
+     * über `HomeRegistryConfig` UND `PipelineConfig` hinweg — genau die Trennung,
+     * die `HomeRegistryConfig`s eigene KDoc als Entwurfsentscheidung festhält
+     * („PipelineConfig bleibt UNANGETASTET"). Darum ein eigener, simplerer
+     * In-Prozess-Cache statt Cross-Adapter-Wiring (s. RESULT.md Rate-Stellen).
+     *
+     * Kein Neustart-Überleben (reines RAM, wie [InMemoryLastKnownStateStore]) —
+     * ein Prozess-Neustart verliert den Stand; das ist ein kalter Cache, kein Schaden.
+     */
+    private val lastGoodTemperature = ConcurrentHashMap<String, LastGoodTemperature>()
 
     /**
      * Die Quittungs-Texte der Sprache DIESES Turns. Kein Feld, kein globaler
@@ -152,8 +213,8 @@ class HaToolPort(
         // NICHT blockiert (fail-open), sonst würde ein Lese-Problem die echte Tat kosten.
         val climateArea = areaOf(call)?.takeIf { call.domain == "climate" }
         if (climateArea != null && hasClimateEntity(climateArea) == false) {
-            // Area-LABEL (sprechbar), NICHT der Slug — Nutzerdatum, unübersetzt.
-            return ToolResult.NoEffect(phrases(call).noThermostatInArea.room(ToolAreas.label(climateArea)))
+            // Area-LABEL (sprechbar), NICHT der Slug — Nutzerdatum, unübersetzt ([areaLabel]).
+            return ToolResult.NoEffect(phrases(call).noThermostatInArea.room(spokenRoom(climateArea, phrases(call))))
         }
         return try {
             // Delta-Baseline VOR dem Schalten (NUR nacktes light.turn_on mit area, s. KDoc):
@@ -348,14 +409,18 @@ class HaToolPort(
             "[ha-tool] readback area={} service={} baseline={} → gesamt={} an={} offline={}",
             area, call.service, baseline?.on ?: "-", counts.total, counts.on, counts.unavailable,
         )
-        // Alle Licht-Phrasen tragen den ROHEN Area-Slug (wie im Bestand), nie ein
-        // übersetztes Wort — der Raumname ist Nutzerdatum aus der HA-Registry.
+        // Alle Licht-Phrasen tragen den HA-ANZEIGENAMEN (`Küche`), nie den rohen
+        // `area_id`-Slug (`kuche`) und nie ein übersetztes Wort — der Raumname ist
+        // Nutzerdatum aus der HA-Registry und wird weder übersetzt NOCH verstümmelt
+        // (Andi 2026-08-22: „Das TTS sagt aber leider Kuche und nicht Küche."). Der
+        // Slug bleibt interner Schlüssel: er steht weiter im Log oben und im Diary.
         val p = phrases(call)
+        val room = spokenRoom(area, p)
         if (call.service == "turn_off") {
             return if (counts.on == 0) {
-                ToolResult.Ok(p.lightOffArea.room(area))
+                ToolResult.Ok(p.lightOffArea.room(room))
             } else {
-                ToolResult.NoEffect(p.lightSomeStillOn.room(area))
+                ToolResult.NoEffect(p.lightSomeStillOn.room(room))
             }
         }
         val offlineHint = if (counts.unavailable > 0) {
@@ -364,19 +429,19 @@ class HaToolPort(
             p.offlineHintVague
         }
         return when {
-            counts.total == 0 -> ToolResult.NoEffect(p.noLightsInArea.room(area))
+            counts.total == 0 -> ToolResult.NoEffect(p.noLightsInArea.room(room))
             // Bewusst OHNE genaue Zahl: der Poll früh-stoppt beim ersten Delta-/„on"-
             // Treffer, eine weitere Lampe kann Millisekunden später kommen → „1 von 8"
             // wäre ein Unterzähl-Race (live gemessen). „ist an" ist verifiziert + ehrlich.
-            baseline != null && counts.on > baseline.on -> ToolResult.Ok(p.lightOnArea.room(area))
+            baseline != null && counts.on > baseline.on -> ToolResult.Ok(p.lightOnArea.room(room))
             baseline != null && counts.on >= 1 && reachable(counts) > 0 && baseline.on >= reachable(counts) ->
-                ToolResult.Ok(p.lightAlreadyOnArea.room(area))
+                ToolResult.Ok(p.lightAlreadyOnArea.room(room))
             baseline != null && counts.on >= 1 -> ToolResult.NoEffect(
-                p.lightNothingNewOn.room(area) + offlineHint,
+                p.lightNothingNewOn.room(room) + offlineHint,
             )
-            baseline == null && counts.on >= 1 -> ToolResult.Ok(p.lightOnArea.room(area))
+            baseline == null && counts.on >= 1 -> ToolResult.Ok(p.lightOnArea.room(room))
             else -> ToolResult.NoEffect(
-                p.lightNoneWentOn.room(area) + offlineHint,
+                p.lightNoneWentOn.room(room) + offlineHint,
             )
         }
     }
@@ -429,7 +494,7 @@ class HaToolPort(
         val p = phrases(call)
         return if (value != null && Math.round(value).toInt() == target) {
             // Area-LABEL (sprechbar) + Zielwert — beides unübersetzte Nutzer-/Messdaten.
-            ToolResult.Ok(p.climateSetArea.room(ToolAreas.label(area)).value(target.toString()))
+            ToolResult.Ok(p.climateSetArea.room(spokenRoom(area, p)).value(target.toString()))
         } else {
             ToolResult.NoEffect(p.climateNotYet)
         }
@@ -506,11 +571,39 @@ class HaToolPort(
     private fun areaOf(call: ToolCall): String? =
         (call.data["area_id"] as? String)?.takeIf { it.isNotBlank() }
 
+    /**
+     * `area_id` → the REAL spoken room name, or `null` when no trustworthy name is
+     * known. ONE name per room: the same name the clarify question and the FE rooms
+     * view use.
+     *
+     * Lookup order — [areaCatalog] (the live HA area registry: `area_id` `kuche`
+     * carries the registry name `Küche`), then the curated [ToolAreas.LABELS] map as
+     * the offline anchor. No try/catch: [AreaCatalogPort] implementations are
+     * never-throw with their own static fallback.
+     *
+     * **Why this returns `null` instead of a capitalized slug** (Andi, 2026-08-22:
+     * „Das TTS sagt aber leider Kuche und nicht Küche."): an `area_id` is a KEY, not
+     * a name — HA slugifies ü→u, so `kuche.replaceFirstChar { uppercase() }` is
+     * „Kuche", a MUTILATED piece of user data. Mutilating user data breaks the same
+     * iron rule as translating it. Callers therefore fall back to a deliberately
+     * vague word ([HaExecutorPack.roomFallbackName]) rather than speak a broken one
+     * — see [spokenRoom].
+     */
+    private fun areaDisplayName(areaId: String?): String? = areaCatalog.displayNameOrNull(areaId)
+
+    /**
+     * The string that goes into a `{room}` slot — ALWAYS safe to speak: the real HA
+     * display name ([areaDisplayName]), else the honest vague noun
+     * ([HaExecutorPack.roomFallbackName], translated per language). NEVER a slug.
+     */
+    private fun spokenRoom(areaId: String?, p: HaExecutorPack): String =
+        areaDisplayName(areaId) ?: p.roomFallbackName
+
     /** Warme, EHRLICHE Quittung — behauptet nur „an HA geschickt", nennt die Ziel-Area falls vorhanden. */
     private fun okPhrase(call: ToolCall): String {
         val area = areaOf(call)
         val p = phrases(call)
-        return if (area != null) p.sentToArea.room(area) else p.sentToHome
+        return if (area != null) p.sentToArea.room(spokenRoom(area, p)) else p.sentToHome
     }
 
     private fun failed(call: ToolCall): ToolResult =
@@ -550,14 +643,15 @@ class HaToolPort(
             val resp = client.send(req, HttpResponse.BodyHandlers.ofString())
             if (resp.statusCode() !in 200..299) {
                 log.warn("[ha-tool] Temperatur-Read /api/template → HTTP {}", resp.statusCode())
-                return readFailed(call)
+                return staleOrFailed(area, call)
             }
             val value = parseTemperature(resp.body())
-                ?: return ToolResult.NoEffect(phrases(call).noValue)
+                ?: return staleOrNoValue(area, call)
+            rememberGood(area, value)
             ToolResult.Ok(temperaturePhrase(area, value, phrases(call)))
         } catch (e: Exception) {
             log.warn("[ha-tool] Temperatur-Read warf: {}", e.message)
-            readFailed(call)
+            staleOrFailed(area, call)
         }
     }
 
@@ -568,20 +662,71 @@ class HaToolPort(
         return s.toDoubleOrNull()
     }
 
+    /** Merkt einen LIVE gelesenen Wert für den Last-known-Fallback (s. [lastGoodTemperature]-KDoc). */
+    private fun rememberGood(area: String?, value: Double) {
+        lastGoodTemperature[area ?: HOUSE_CACHE_KEY] = LastGoodTemperature(value, clock.instant())
+    }
+
     /**
-     * Warme Antwort in der Turn-Sprache; ganze Werte ohne Nachkomma (21.0 → „21"),
-     * sonst mit dem Dezimal-Trenner der Sprache (DE/ES/FR/IT „21,5", EN „21.5" —
-     * [HaExecutorPack.decimalSeparator]). Der Raumname bleibt das unübersetzte
-     * [ToolAreas.label] aus der HA-Registry.
+     * Live-Wert war `none`/nicht-numerisch: letzter gemerkter Wert MIT Alters-Phrase,
+     * sonst ehrlich [HaExecutorPack.noValue] (unverändertes Verhalten ohne gemerkten Wert).
+     */
+    private fun staleOrNoValue(area: String?, call: ToolCall): ToolResult =
+        staleFallback(area, call) ?: ToolResult.NoEffect(phrases(call).noValue)
+
+    /**
+     * HTTP-Fehler/Timeout/Exception: letzter gemerkter Wert MIT Alters-Phrase,
+     * sonst ehrlich [readFailed] (unverändertes Verhalten ohne gemerkten Wert).
+     */
+    private fun staleOrFailed(area: String?, call: ToolCall): ToolResult =
+        staleFallback(area, call) ?: readFailed(call)
+
+    /** `null`, solange [lastGoodTemperature] für diese Area/das Haus nichts gemerkt hat. */
+    private fun staleFallback(area: String?, call: ToolCall): ToolResult.Ok? {
+        val cached = lastGoodTemperature[area ?: HOUSE_CACHE_KEY] ?: return null
+        val ageMillis = Duration.between(cached.seenAt, clock.instant()).toMillis()
+        return ToolResult.Ok(temperaturePhraseStale(area, cached.value, ageMillis, phrases(call)))
+    }
+
+    /**
+     * Rundet auf eine Nachkommastelle und formatiert sprachgerecht: ganze Werte
+     * ohne Nachkomma (21.0 → „21"), sonst mit dem Dezimal-Trenner der Sprache
+     * (DE/ES/FR/IT „21,5", EN „21.5" — [HaExecutorPack.decimalSeparator]).
+     */
+    private fun formatDegrees(value: Double, p: HaExecutorPack): String {
+        val rounded = Math.round(value * 10.0) / 10.0
+        return if (rounded % 1.0 == 0.0) rounded.toLong().toString()
+        else rounded.toString().replace(".", p.decimalSeparator)
+    }
+
+    /**
+     * Warme Antwort in der Turn-Sprache — LIVE-Wert, spricht „gerade"/„right now"
+     * etc. (s. [HaExecutorPack.temperatureInArea]). The room name is the
+     * untranslated spoken label from [areaLabel] (HA registry via [areaCatalog],
+     * [ToolAreas] only as fallback).
      */
     private fun temperaturePhrase(area: String?, value: Double, p: HaExecutorPack): String {
-        val rounded = Math.round(value * 10.0) / 10.0
-        val num = if (rounded % 1.0 == 0.0) rounded.toLong().toString()
-        else rounded.toString().replace(".", p.decimalSeparator)
+        val num = formatDegrees(value, p)
         return if (area != null) {
-            p.temperatureInArea.room(ToolAreas.label(area)).value(num)
+            p.temperatureInArea.room(spokenRoom(area, p)).value(num)
         } else {
             p.temperatureHouseAverage.value(num)
+        }
+    }
+
+    /**
+     * Warme Antwort für einen gemerkten (nicht mehr live bestätigten) Wert —
+     * Vergangenheitsform ([HaExecutorPack.temperatureInAreaStale]/
+     * [HaExecutorPack.temperatureHouseAverageStale]) MIT der Alters-Phrase aus
+     * [freshnessMarker] ([FRESHNESS_PLACEHOLDER]-Slot).
+     */
+    private fun temperaturePhraseStale(area: String?, value: Double, ageMillis: Long, p: HaExecutorPack): String {
+        val num = formatDegrees(value, p)
+        val freshness = p.freshnessMarker(ageMillis)
+        return if (area != null) {
+            p.temperatureInAreaStale.room(spokenRoom(area, p)).value(num).replace(FRESHNESS_PLACEHOLDER, freshness)
+        } else {
+            p.temperatureHouseAverageStale.value(num).replace(FRESHNESS_PLACEHOLDER, freshness)
         }
     }
 
@@ -607,6 +752,9 @@ class HaToolPort(
             "{{ (temps | average | round(1)) if (temps | count) > 0 else 'none' }}"
 
     private companion object {
+        /** Cache-Schlüssel des Haus-Aggregats (kein `area_id`) in [lastGoodTemperature]. */
+        const val HOUSE_CACHE_KEY = "__house__"
+
         /** Slot für den HA-Raumnamen — **Nutzerdatum**, wird eingesetzt und NIE übersetzt. */
         const val ROOM_SLOT = "{room}"
 

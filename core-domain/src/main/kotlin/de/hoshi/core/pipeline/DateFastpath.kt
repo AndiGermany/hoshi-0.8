@@ -78,17 +78,9 @@ class DateFastpath(
      * das lesen die TTS-Engines unterschiedlich vor), zur vollen Stunde „Es ist 20 Uhr.".
      * EN 12-Stunden-Form: „It's 8:15 pm." / „It's 8 pm.".
      */
-    private fun timeReceipt(time: LocalTime, language: Language): String {
-        val h = time.hour
-        val m = time.minute
-        return if (language.fallsBackToEnglish) {
-            val suffix = if (h < 12) "am" else "pm"
-            val h12 = when (val x = h % 12) { 0 -> 12; else -> x }
-            if (m == 0) "It's $h12 $suffix." else "It's $h12:${m.toString().padStart(2, '0')} $suffix."
-        } else {
-            if (m == 0) "Es ist $h Uhr." else "Es ist $h Uhr $m."
-        }
-    }
+    private fun timeReceipt(time: LocalTime, language: Language): String =
+        if (language.fallsBackToEnglish) "It's ${spokenClock(time, language)}."
+        else "Es ist ${spokenClock(time, language)}."
 
     /**
      * Ob [text] eine eindeutige Datums-Frage ist (DE+EN) — reine, uhrfreie Erkennung.
@@ -128,6 +120,27 @@ class DateFastpath(
 
         /** Nie-antwortender Default (Flag-OFF): der Date-Zweig ist tot ⇒ byte-neutral. */
         val DISABLED = DateFastpath(enabled = false)
+
+        /**
+         * The ONE spoken clock format of the product — a bare time, no carrier
+         * sentence, so every caller (time receipt, news "as of …") speaks it the
+         * same way.
+         *
+         * DE deliberately "20 Uhr 15" instead of "20:15": TTS engines read the
+         * colon form inconsistently. EN uses the 12-hour form ("8:15 pm").
+         * ES/FR/IT follow [fallsBackToEnglish] like every other inline variant.
+         */
+        fun spokenClock(time: LocalTime, language: Language): String {
+            val h = time.hour
+            val m = time.minute
+            return if (language.fallsBackToEnglish) {
+                val suffix = if (h < 12) "am" else "pm"
+                val h12 = when (val x = h % 12) { 0 -> 12; else -> x }
+                if (m == 0) "$h12 $suffix" else "$h12:${m.toString().padStart(2, '0')} $suffix"
+            } else {
+                if (m == 0) "$h Uhr" else "$h Uhr $m"
+            }
+        }
 
         /**
          * Kuratierte Datums-Fragephrasen (DE+EN), gegen den normalisierten Text als

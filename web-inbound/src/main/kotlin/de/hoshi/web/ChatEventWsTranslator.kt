@@ -20,7 +20,7 @@ import de.hoshi.core.dto.ChatEvent
  * | `TtsAudioStart`           | `tts_audio_start{provider[,estimatedMs]}` |
  * | `AudioChunk{data,seq}`    | `llm_audio{seq,data}` **(byte-1:1)**     |
  * | `TtsAudioEnd`             | `tts_audio_end{actualMs}`                |
- * | `Done{ttsHandled}`        | `llm_done{ttsHandled}`                   |
+ * | `Done{ttsHandled}`        | `llm_done{ttsHandled[,expectReply,pendingKind]}` |
  * | `Error{message,stage}`    | `llm_error{stage,message}`               |
  * | `Step`                    | `null` (Transkript-Frame baut der Handler selbst) |
  * | `Speaker{recognizedSpeaker}` | `speaker{speakerId}` **NUR sicherer Treffer + Flag ON**, sonst `null` |
@@ -54,7 +54,7 @@ object ChatEventWsTranslator {
         is ChatEvent.TtsAudioEnd ->
             """{"type":"tts_audio_end","actualMs":${event.actualMs}}"""
         is ChatEvent.Done ->
-            """{"type":"llm_done","ttsHandled":${event.ttsHandled}}"""
+            llmDone(event.ttsHandled, event.expectsReply, event.pendingKind)
         is ChatEvent.Error ->
             """{"type":"llm_error","stage":${j(event.stage)},"message":${j(event.message)}}"""
         // Step trägt das Transkript als Domänen-Event; auf dem WS-Rand baut der
@@ -94,9 +94,45 @@ object ChatEventWsTranslator {
     fun llmError(stage: String, message: String): String =
         """{"type":"llm_error","stage":${j(stage)},"message":${j(message)}}"""
 
-    /** Terminaler Frame eines Turns. */
-    fun llmDone(ttsHandled: Boolean = false): String =
-        """{"type":"llm_done","ttsHandled":$ttsHandled}"""
+    /**
+     * Terminaler Frame eines Turns.
+     *
+     * **Additiv seit 2026-08-21 (Andi-Livetest):** endet der Turn mit einer OFFENEN
+     * Rückfrage, tragen [expectsReply]/[pendingKind] das ANS ENDE des Frames — Muster
+     * K4/`timer_ring` (`vault/tracks/RESULT-k4-timer-ring-2026-08-20.md`). `null`/`false`
+     * ⇒ BEIDE Keys fehlen komplett (kein `"expectReply":false` auf dem Draht) ⇒ das
+     * Frame ist byte-identisch zum bisherigen `{"type":"llm_done","ttsHandled":…}`, und
+     * ein Alt-Parser sieht keinen Unterschied.
+     *
+     * Die never-silent-Notausgänge im [AudioWebSocketHandler] (Audio-Cap, Session-Guard,
+     * Stream-Fehler, `abort`) rufen diese Funktion bewusst OHNE die neuen Argumente:
+     * ein abgebrochener Turn hat KEINE offene Rückfrage, und das Mikro darf danach nicht
+     * von selbst aufgehen.
+     */
+    fun llmDone(
+        ttsHandled: Boolean = false,
+        expectsReply: Boolean? = null,
+        pendingKind: String? = null,
+    ): String {
+        val head = """{"type":"llm_done","ttsHandled":$ttsHandled"""
+        if (expectsReply != true) return "$head}"
+        val kind = pendingKind?.let { ""","pendingKind":${j(it)}""" } ?: ""
+        return """$head,"expectReply":true$kind}"""
+    }
+
+    /**
+     * **Unaufgeforderter Sprech-Push** (Andi-Livetest 2026-08-21) — die Ankündigung,
+     * dass gleich Audio kommt, das NICHT zum aktuellen Turn des Geräts gehört.
+     *
+     * Bewusst nur die Ankündigung: das Audio selbst folgt im BESTEHENDEN Idiom
+     * (`tts_audio_start`/`llm_audio`/`tts_audio_end`), damit ein Alt-Client, der
+     * `speak_push` nicht kennt, es ignoriert und die Antwort **trotzdem spricht** —
+     * statt sie zu verlieren. [turnId] nennt den VERDRÄNGTEN Turn (nicht den
+     * laufenden) und fehlt, wenn dieser keine hatte.
+     */
+    fun speakPush(reason: String, turnId: String?): String =
+        if (turnId.isNullOrEmpty()) """{"type":"speak_push","reason":${j(reason)}}"""
+        else """{"type":"speak_push","reason":${j(reason)},"turnId":${j(turnId)}}"""
 
     /** Half-Duplex-Barge-in-Quittung; `turnId` nur gesetzt, wenn der Turn eine hatte. */
     fun turnAborted(turnId: String?): String =

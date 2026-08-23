@@ -294,12 +294,17 @@ describe('playChime — sanfte Glocke, 2× mit Pause', () => {
 describe('playAlarmChime — lazy Singleton, Autoplay-Policy, ehrlicher Rückgabewert', () => {
   afterEach(() => resetChimeContext());
 
-  it('suspendierter Context (keine Geste): schedult + resume(), meldet aber false (JETZT unhörbar)', () => {
+  // Bis 23.08.2026 schedulte der Chime AUCH in den suspendierten Context („Klang steht
+  // bereit"). Genau das war Andis Bug: dort steht currentTime still, jeder 4-s-Takt legte
+  // weitere Anschläge nach, und die erste Geste (Display aufklappen) spielte den ganzen
+  // Stapel — auch wenn der Wecker längst gelöscht/quittiert war. Jetzt wird im gesperrten
+  // Context NICHTS geplant, nur entsperrt (Riegel: test/deletedalarm.test.tsx).
+  it('suspendierter Context (keine Geste): schedult NICHTS, entsperrt nur, meldet false', () => {
     const oscs: OscRecord[] = [];
     const resumeCalls = { count: 0 };
     const ctx = makeFakeChimeContext(oscs, [], 'suspended', resumeCalls);
     expect(playAlarmChime(() => ctx)).toBe(false); // ehrlich: niemand hört das gerade
-    expect(oscs).toHaveLength(CHIME_STRIKES * CHIME_PARTIALS.length); // Klang steht bereit
+    expect(oscs).toHaveLength(0); // kein Ton-Stau, der später detonieren könnte
     expect(resumeCalls.count).toBeGreaterThanOrEqual(1); // best-effort entsperren
   });
 

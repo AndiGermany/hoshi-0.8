@@ -1,0 +1,548 @@
+/* ════════════════ HANAIKADA (花筏) — das Blütenfloß ═══════════════════════════
+   Ein Kirschblütenwald am Fluss, an einem hellen Tag im April. Die Blüte ist über
+   ihrem Höhepunkt: sie fällt. Was der Wind aus den Kronen holt, treibt der Fluss
+   davon, und wo genug davon zusammenkommt, liegt ein rosa Teppich auf dem Wasser
+   und zieht flussabwärts. Dieser Teppich heißt 花筏 — Blütenfloß. Es ist kein
+   Bauwerk im Bild und keine Figur; die Szene besteht aus Wald, Wasser und dem,
+   was zwischen beiden passiert.
+
+   ABGRENZUNG ZU HANASHIGURE (花時雨), dem anderen Kirschblüten-Thema — sie ist
+   Bauplan, nicht Nuance:
+     • Hanashigure ist STADT im Blütenregen: Pagode im Vordergrund links, Torii im
+       Nebel, nasser Stein. Ein BAUWERK trägt das Bild. Hier steht keines.
+     • Hanashigure ist grau-nass (--bg-base L 0.918, kühles Blaugrau) mit einem
+       rostroten Akzent (#963826). Hanaikada ist heller Tag: warmes Washi
+       (L 0.957), Sakura als Akzent (#a73459), Fluss-Blaugrün als Tinte.
+     • Bei Hanashigure fällt Blüte als seltener Gast — vier Blüten, nur in der
+       rechten Randspalte, nur oberhalb 1280 px. Hier fällt sie über die GANZE
+       Breite, vierzig Stück in vier Tiefenklassen, und sie ist der Dauerzustand
+       des Bildes, nicht sein Ereignis.
+     • Und Hanashigure hat kein Wasser. Der Fluss und das Floß auf ihm sind das,
+       was dieses Thema überhaupt zu einem eigenen macht.
+   Nebeneinander in der Galerie liest man sie sofort auseinander: das eine ist ein
+   grauer Regentag in einer Stadt, das andere ein heller Tag im Wald am Fluss.
+
+   ZWEI HERZSCHLÄGE, beide in hanaikada-szene.svg:
+     1. Die fallenden Blüten (Andis ausdrücklicher Wunsch). Vierzig, in vier
+        Größen- und Tempoklassen, jede mit eigener Fall- und eigener Taumel-Uhr.
+     2. Das treibende Floß: fünf Blütenbänder auf verschiedenen Wassertiefen,
+        jedes eine nahtlose Endlosschleife mit eigener Geschwindigkeit — das ferne
+        braucht 118 s je Kachel, das nächste 41 s. Diese Parallaxe ist der Grund,
+        warum der Fluss als liegende Fläche liest und nicht als Streifen.
+   Sie stehen IM Bild und nicht hier, weil eine `background-image`-Ebene ihre
+   eigene Uhr mitbringt: Chrome animiert das SVG deklarativ mit, und nur so ist die
+   Bewegung im Frame-Beweis überhaupt nachweisbar (die Themen-CSS-Animation eines
+   Wirtsdokuments treibt `--virtual-time-budget` nicht).
+
+   NACHTRAG 23.08.2026 — DIESER KLAMMERSATZ WAR FALSCH, und er ist teuer
+   gewesen. Nachgemessen mit einer Seite, deren einzige Bewegung eine
+   Wirts-CSS-Animation ist: Chrome rechnet sie unter `--virtual-time-budget`
+   sehr wohl durch (t=1 s und t=9 s zeigen die Scheibe an verschiedenen
+   Stellen). Der Frame-Beweis hätte also nie verlangt, dass die Uhren in die
+   Zeichnung wandern.
+   Das ist deshalb bitter, weil der Preis in genau die andere Richtung zeigt
+   als der Absatz zur Szene unten annimmt: eine CSS-`transform`-Animation auf
+   einer eigenen Ebene wird vom Compositor bewegt und kostet fast nichts, ein
+   ANIMIERTES SVG als Hintergrundbild dagegen wird in jedem Bild komplett neu
+   gerastert und kostete Andi in Firefox 782 % CPU. Die Zahlen und der ganze
+   Befund stehen beim Still-Schalter weiter unten.
+
+   EIGENSTÄNDIG LADBAR: dieser Block setzt JEDEN der 23 Token, die die Themen in
+   frontend/public/themes/ setzen (Amayadori/Nagori als Vollständigkeits-Maßstab),
+   plus die body-Hintergrund-Regel. Das ist kein Zierat: tools/theme-contrast/
+   frames.sh lädt NUR index.css und diese Datei, ohne styles/themes.css — was hier
+   fehlt, fehlt dort ersatzlos.
+
+   ZWEI SELEKTOREN je Token-Block (`:root[data-theme='hanaikada']` UND
+   `[data-theme='hanaikada']`), exakt wie die übrigen Themen: der zweite trägt die
+   Token auch an ein verschachteltes Element, das `data-theme` selbst setzt — genau
+   das macht die echte Farbvorschau im Theme-Picker (.settings__swatch).
+
+   KONTRASTE (WCAG 2.1, sRGB, gerechnet mit tools/theme-contrast/color.mjs;
+   angegeben ist jeweils das SCHLECHTESTE der vier realen Untergründe
+   --bg-surface / --bg-base / --bg-subtle / --bg-user):
+     text-1 12,39:1 · text-2 8,13:1 · text-3 6,05:1 · text-4 4,87:1
+     accent 5,15:1 · success 5,10:1 · warn 5,04:1 · error 5,09:1
+   Zusätzlich geprüft, weil helle Themen genau hier kippen:
+     • Farbe auf ihrer EIGENEN *-soft-Fläche (16 % über --bg-surface, so bauen die
+       Pills/Badges in index.css): accent 4,81 · success 4,81 · warn 4,79 ·
+       error 4,77 — alle ≥ 4,5. (Der erste Akzent stand bei L 0.53 und fiel hier
+       auf 4,38 durch, während er auf allen vier Flächen bequem bestand. Diese
+       Prüfung ist die, die helle Themen fängt.)
+     • --accent-ink auf --accent (Text im gefüllten CTA): 6,24:1.
+   Alle Werte liegen im sRGB-Gamut (per Bisektion gegen die Chroma-Decke gewählt,
+   kein Kanal wird beim Rendern geklippt) — bei Rosa ist das keine Formalie: bei
+   L 0.95 ist im Rosaton schon bei Chroma 0.027 Schluss.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root[data-theme='hanaikada'],
+[data-theme='hanaikada'] {
+  /* ── Die Luft als Flächen-Stapel (erste Schicht = oberste) ─────────────────
+     Der Ersatzhimmel für den Fall, dass die Zeichnung nicht (oder noch nicht)
+     da ist — und zugleich das, was die Vorschau-Kachel im Theme-Picker zeigt.
+     Er erzählt dieselbe Geschichte in vier Flächen: unten das Blaugrün des
+     Wassers, darüber ein Hauch Sakura in Kronenhöhe, oben das warme Washi-Licht
+     eines Apriltags. Alles sind Alpha-Aufhellungen auf --bg-base; die dunkelste
+     entstehende Stelle liegt über L 0.93 und ist damit weit von jeder
+     Textgrenze entfernt. */
+  --theme-atmosphere:
+    linear-gradient(180deg, transparent 58%, oklch(0.95 0.024 200 / 0.5) 100%),
+    linear-gradient(
+      180deg,
+      transparent 6%,
+      oklch(0.95 0.02 16 / 0.42) 26%,
+      oklch(0.955 0.014 18 / 0.16) 44%,
+      transparent 58%
+    ),
+    radial-gradient(
+      circle 34vmin at 74% 8%,
+      oklch(0.985 0.014 78 / 0.55),
+      oklch(0.975 0.012 66 / 0.2) 46%,
+      transparent 76%
+    ),
+    linear-gradient(180deg, oklch(0.965 0.012 42 / 0.6), transparent 38%), var(--bg-base);
+
+  /* ── Flächen ───────────────────────────────────────────────────────────────
+     Umgekehrte Treppe zum Dunkel-Kanon: die gehobene Fläche ist HELLER, nicht
+     dunkler. --bg-base ist das Washi-Papier im Tageslicht, --bg-surface das
+     hellere Blatt darauf, --bg-elevated fast Weiß. --bg-subtle ist die einzige
+     Fläche, die spürbar nach unten geht (Hover/Füllung) — sie bleibt der harte
+     Kontrast-Prüfstein und steht in der Kontrast-Tabelle oben überall als der
+     schlechteste der vier Untergründe. */
+  --bg-base: oklch(0.957 0.009 40); /* Washi im Tageslicht, #f8f2ee */
+  --bg-surface: oklch(0.987 0.005 38); /* das hellere Blatt, #fefaf8 */
+  --bg-elevated: oklch(0.995 0.002 40); /* #fefdfc */
+  --bg-subtle: oklch(0.928 0.014 36); /* Hover-/Füllfläche, #ece2db */
+  --bg-hairline: oklch(0.838 0.018 34); /* #cfc0b7 — trennt, ohne zu zeichnen */
+  --bg-hairline-dashed: oklch(0.782 0.02 32); /* #bdaca2, für „ehrlich leer" */
+
+  /* ── Schrift: die Tinte ist der Fluss ──────────────────────────────────────
+     Kein Schwarz und kein Grau, sondern das tiefe Blaugrün des Wassers (h≈200).
+     Das ist die zweite Hälfte der Idee: der Hintergrund ist Papier und Blüte,
+     die Schrift ist der Fluss. Nach hinten wird sie leiser UND blasser. */
+  --text-1: oklch(0.26 0.03 205); /* #11282b */
+  --text-2: oklch(0.375 0.028 203); /* #2f4448 */
+  --text-3: oklch(0.445 0.026 200); /* #3f5459 */
+  --text-4: oklch(0.495 0.026 198); /* #4a6167 — 4,87:1 auch auf --bg-subtle */
+
+  /* ── Akzent: Sakura, ins Lesbare gedunkelt ─────────────────────────────────
+     Die Blüte im Bild steht bei L 0.79–0.93; als Schriftfarbe auf hellem Washi
+     wäre sie unsichtbar. Der Akzent ist dieselbe Blüte im Schatten: ein tiefes,
+     leicht blaustichiges Rosa (L 0.505 / h 5). Er trägt Stimme, CTA und Auswahl
+     — sonst nichts. --accent-ink ist das Washi-Weiß, das im gefüllten Button
+     darauf sitzt. */
+  --accent: oklch(0.505 0.152 5); /* #a73459 */
+  --accent-soft: oklch(0.505 0.152 5 / 0.16);
+  --accent-faint: oklch(0.505 0.152 5 / 0.08);
+  --accent-glow: oklch(0.505 0.152 5 / 0.28);
+  --accent-ink: oklch(0.992 0.004 38); /* #fefcfa */
+
+  /* ── Status: dunkel und entsättigt ─────────────────────────────────────────
+     Auf hellem Grund braucht Semantik TIEFE statt Leuchtkraft. Alle drei liegen
+     bei L≈0.48–0.51 und bleiben auch auf ihrer eigenen *-soft-Fläche über
+     4,5:1. Das Grün ist bewusst das Blattgrün des Ufers und nicht ein fremdes
+     Signalgrün — es soll in dieser Szene wohnen können. */
+  --success: oklch(0.475 0.105 158); /* #1a6d51 */
+  --warn: oklch(0.495 0.098 72); /* #845713 */
+  --error: oklch(0.505 0.145 25); /* #a83a38 */
+  --success-soft: oklch(0.475 0.105 158 / 0.16);
+  --warn-soft: oklch(0.495 0.098 72 / 0.16);
+  --error-soft: oklch(0.505 0.145 25 / 0.16);
+
+  /* Du-Blase: das Wasser, nicht die Blüte. Eine Spur kühler und tiefer als das
+     Papier, damit sie im Blatt liegt statt darauf. Kein Akzent-Fill (Projekt-
+     Konvention seit Yoru) — und bewusst NICHT rosa: das Rosa gehört im ganzen
+     Produkt dem Akzent, sonst wird die eigene Stimme zur Blüte unter Blüten. */
+  --bg-user: oklch(0.933 0.018 200); /* #dbe9ea */
+
+  color-scheme: light;
+}
+
+/* Der Charakter des Themas erscheint als Raum um die Inhalte. Karten bleiben auf
+   ihren Flächentoken, darum verändert der Verlauf weder Statusfarben noch
+   Textkontrast. (styles/themes.css hat dieselbe Regel generisch für
+   `:root[data-theme]`; sie steht hier noch einmal, damit die Datei allein geladen
+   vollständig ist — gleiche Spezifität, gleicher Wert, kein Konflikt.) */
+:root[data-theme='hanaikada'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── z -3: DIE SZENE ──────────────────────────────────────────────────────────
+   hanaikada-szene.svg (73 KB, flache Vektorflächen, viewBox 1600×1000): Blütendach
+   über der vollen Breite, drei Tiefenränge Wald, der Fluss quer durchs untere
+   Drittel mit Spiegelung, Strömung und zwei Steinen, das Blütenfloß darauf, davor
+   das nahe Ufer mit Schilf, und ganz vorn zwei Vordergrundbäume in den Randspalten.
+
+   Hängung: `cover` + `center bottom`. Der viewBox ist 1.6:1 und damit flacher als
+   jedes übliche Fenster, also beschneidet cover OBEN — die Uferlinie bei 59 %
+   Höhe und alles darunter stehen fest, verloren geht nur Blütendach. Deshalb
+   trägt kein Motiv oberhalb y=130 Bildinformation, die man vermissen würde.
+
+   Keine Animation auf dieser Ebene: die Zeichnung bringt ihre beiden Uhren selbst
+   mit (s. Kopf). Ein `background-image` neu zu rastern, nur um es zu bewegen,
+   wäre auf einem Gerät, das 24/7 läuft, die teuerste denkbare Art, eine Blüte
+   fallen zu lassen.
+
+   NACHTRAG 23.08.2026: der letzte Satz stimmt — nur beschreibt er nicht die
+   verworfene, sondern die GEWÄHLTE Lösung. Ein animiertes SVG als
+   Hintergrundbild wird von Gecko in jedem einzelnen Bild vollständig neu
+   gerastert, ganz gleich wie wenig sich darin bewegt. Eine CSS-Animation auf
+   dieser Ebene hätte der Compositor bewegt, ohne ein Pixel neu zu zeichnen.
+   Umgebaut wird das hier NICHT: die Parallaxe der sieben Bänder und das
+   Taumeln der vierundvierzig Blüten bräuchten je eine eigene Ebene, und so
+   viele Pseudo-Elemente hat ein Thema nicht — der Umbau würde also genau die
+   Schönheit kosten, die er retten soll. Was stattdessen greift, steht beim
+   Still-Schalter direkt unter diesem Block. */
+:root[data-theme='hanaikada'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  pointer-events: none;
+  background-image: url('hanaikada-szene.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+}
+
+/* ── Der Still-Schalter dieser Szene ──────────────────────────────────────────
+   Andi, 23.08.: „es laggt leider, besonders, wenn ich das design ausgewählt
+   habe und die widgets anpasse". Gemessen mit
+   `node tools/theme-contrast/szene-perf.mjs --themes hanaikada --modes idle,edit`
+   bei 1600×1000: FIREFOX 35,5 fps bei **782 % CPU**, Chrome 60 fps bei 45–86 %.
+   Sein Browser ist Firefox — die 551 %, die er im Aktivitätsmonitor gesehen
+   hat, sind genau das hier.
+
+   DER GRUND STEHT NICHT IN DIESER DATEI, SONDERN IN DER GATTUNG: ein
+   ANIMIERTES SVG als `background-image` kann von keinem Compositor der Welt
+   zwischengespeichert werden. Gecko rastert die GANZE Zeichnung — 312 Pfade,
+   ~2800 aufgelöste `<use>`-Instanzen, volle Fensterfläche — in JEDEM Bild neu.
+   Der Beweis ist eine Messung, keine Vermutung: eine Fassung mit GENAU EINEM
+   bewegten Knoten (alles andere eingefroren) kostet dieselben ~440 % wie die
+   mit fünfundneunzig. Es ist nicht die Menge der Bewegung. Es ist die Tatsache
+   von Bewegung.
+
+   Damit ist auch klar, was NICHT hilft: weniger Blüten, weniger Bänder,
+   billigere Filter. Das wäre Verarmung ohne Gegenwert — genau die heimliche
+   Verarmung, die diese Runde ausdrücklich nicht liefern soll.
+
+   Was hilft, ist ANHALTEN, wenn niemand hinsieht. `animation-play-state` des
+   Wirtsdokuments erreicht die Uhr eines Hintergrundbildes nicht; ein
+   FRAGMENT erreicht sie: unter `…#still` greift in der Zeichnung
+   `#still:target`, und sie hält sich selbst an. Gemessen wird daraus
+   **60 fps bei 13 %** (Firefox) bzw. 5 % (Chrome) — Faktor 20 bis 60.
+
+   `animation-play-state:paused` und NICHT `animation:none`: `none` setzt jede
+   Blüte auf ihre Grundstellung oberhalb des Bildrands zurück, und das Bild
+   verlöre genau das, wofür Andi es bestellt hat — die Blüten IN DER LUFT.
+   `paused` hält sie dort an, wo ihr negativer `animation-delay` sie gerade
+   hat: vierundvierzig Blüten über den ganzen Fall verteilt, das Floß mitten
+   auf seiner Bahn. Der stehende Frame ist eine Fotografie dieser Szene, kein
+   ausgeräumtes Bild; mit eigenen Augen gegen den laufenden Frame gehalten.
+
+   WANN es greift, entscheidet nicht dieses Thema: `data-scene-motion` setzt
+   `HomeStage`, sobald man Widgets anordnet, und `styles/themes.css` hält
+   dieselbe Zusage generisch für alle Themen (dort steht auch, warum die
+   übrigen Szenen heute nur ihre CSS-Uhren anhalten und nicht ihre SVG-Uhren).
+
+   Der Kontrast ändert sich nicht: `measure.mjs` misst über alle sechs
+   Szenarien dieselben 11,60:1 / 4,53:1 wie zuvor — und der stehende Zustand
+   ist einer der gemessenen, nicht ein neuer. */
+:root[data-theme='hanaikada'][data-scene-motion='still'] body::after {
+  background-image: url('hanaikada-szene.svg#still');
+}
+
+/* ── z -2: DER SCHLEIER (der eigentliche Vertrag) ─────────────────────────────
+   SEINE FARBE IST LICHT, NICHT MILCH. Ein fast weißer Schleier über einem rosa
+   und blaugrünen Bild ergibt Grau, und Grau ist genau das Wort „ausgewaschen"
+   (die Lektion, die Natsu no Hi teuer bezahlt hat). Also trägt er die Farbe
+   dessen, was unter ihm liegt, und wandert dabei mit dem Bild: oben, über den
+   Kronen, ist er Blütenlicht (h 18); in der Mitte, über Stämmen und Ufer, warmes
+   Washi (h 40); unten, über dem Fluss, ist er Wasserlicht (h 200). Dieselbe
+   Deckung, derselbe gemessene Kontrast — aber das Bild bleibt in seiner Farbe.
+
+   Technisch stehen zwei Achsen auf diesem Element: der senkrechte FARBVERLAUF ist
+   das background-image, die waagerechte DECKUNG ist die Maske. Ein einziger
+   Verlauf könnte beides nicht.
+
+   SEIN ALPHA IST ERMESSEN, NICHT GEWÄHLT: 0.90 ist der Wert, bei dem der
+   dunkelste Bildpunkt, der unter der Spalte überhaupt vorkommen DARF (L 0.535,
+   der Schatten des nahen Ufers — der Generator lässt nichts Dunkleres zu), gegen
+   --text-4 auf 4,68:1 kommt; gegen --text-1 auf 11,90:1. Über dem Wasser sind es
+   5,00:1, über den Kronen 5,16:1. Der Boden gilt für JEDEN Animationsframe, denn
+   alles, was sich bewegt — Blüten und Floß —, ist HELLER als der Grund, über den
+   es zieht: Bewegung kann diese Zahlen nur heben.
+
+   DER SAUM ist die Lehre aus dem REZEPT: nicht zwei Stops, sondern fünf, und mit
+   schnell-dann-flacher Kurve (0.60/0.36/0.17/0.06). Ein linearer Zwei-Stop-Saum
+   hinterlässt eine sichtbare Naht genau an der Spaltenkante — dort, wo das Auge
+   ohnehin schon eine Kante sucht. Seine Länge ist ein Kompromiss mit der
+   Fensterbreite: 170 px. Bei 1366 px Fenster stehen der Zeichnung neben der
+   920er Spalte nur 223 px je Seite zur Verfügung; ein Saum von 330 px fräße
+   davon alles und das Bild liefe nirgends in voller Stärke. Mit 170 px bleiben
+   bei 1366 px rund 40 px unverschleierte Zeichnung je Seite, bei 1600 px rund
+   160 px — genau dort stehen die beiden Vordergrundbäume.
+
+   944 px breit statt 920 (`50% - 472px`): das gibt der Spalte 12 px Luft je
+   Seite. Unter ~1064 px Fensterbreite fällt der calc auf 0, der Schleier deckt
+   alles, und die Zeichnung wird zum Gespenst statt zu verschwinden; der
+   Textvertrag bleibt unverändert. */
+:root[data-theme='hanaikada']::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  --veil: max(0px, 50% - 472px);
+  background-image: linear-gradient(
+    180deg,
+    oklch(0.955 0.02 18 / 0.74) 0%,
+    oklch(0.955 0.02 18 / 0.74) 38%,
+    oklch(0.96 0.015 40 / 0.74) 60%,
+    oklch(0.958 0.026 200 / 0.63) 74%,
+    oklch(0.958 0.026 200 / 0.63) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--veil) - 96px),
+    rgb(0 0 0 / 0.06) calc(var(--veil) - 77px),
+    rgb(0 0 0 / 0.17) calc(var(--veil) - 58px),
+    rgb(0 0 0 / 0.36) calc(var(--veil) - 38px),
+    rgb(0 0 0 / 0.6) calc(var(--veil) - 19px),
+    #000 var(--veil),
+    #000 calc(100% - var(--veil)),
+    rgb(0 0 0 / 0.6) calc(100% - var(--veil) + 19px),
+    rgb(0 0 0 / 0.36) calc(100% - var(--veil) + 38px),
+    rgb(0 0 0 / 0.17) calc(100% - var(--veil) + 58px),
+    rgb(0 0 0 / 0.06) calc(100% - var(--veil) + 77px),
+    transparent calc(100% - var(--veil) + 96px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--veil) - 96px),
+    rgb(0 0 0 / 0.06) calc(var(--veil) - 77px),
+    rgb(0 0 0 / 0.17) calc(var(--veil) - 58px),
+    rgb(0 0 0 / 0.36) calc(var(--veil) - 38px),
+    rgb(0 0 0 / 0.6) calc(var(--veil) - 19px),
+    #000 var(--veil),
+    #000 calc(100% - var(--veil)),
+    rgb(0 0 0 / 0.6) calc(100% - var(--veil) + 19px),
+    rgb(0 0 0 / 0.36) calc(100% - var(--veil) + 38px),
+    rgb(0 0 0 / 0.17) calc(100% - var(--veil) + 58px),
+    rgb(0 0 0 / 0.06) calc(100% - var(--veil) + 77px),
+    transparent calc(100% - var(--veil) + 96px),
+    transparent 100%
+  );
+}
+
+/* ── Der Schleier für kleine Fenster ──────────────────────────────────────────
+   WARUM ES DIESE REGEL GIBT — sie ist der zweite Befund der Messung, und sie war
+   vorher nicht zu sehen, sondern nur zu rechnen. Die Lesespalte ist 920 VIEWPORT-
+   Pixel breit; wie viel ZEICHNUNG darunter liegt, hängt von der cover-Skala ab
+   (s = max(Breite/1600, Höhe/1000)). Die Zeichnung bringt ihre dunklen Töne
+   ausschließlich am Bildrand unter — aber „Rand" ist keine feste Stelle:
+
+       1600×1000  s 1.000 → Spalte deckt viewBox 340…1260
+       1440×900   s 0.900 → Spalte deckt viewBox 289…1311
+       1280×800   s 0.800 → Spalte deckt viewBox 225…1375
+       1024×768   s 0.768 → Spalte deckt viewBox 201…1399
+
+   Der Generator hält alles außerhalb 225…1375 frei von hellen Pflichten, und das
+   deckt jedes Fenster mit s ≥ 0.8 ab. s fällt nur dann unter 0.8, wenn das
+   Fenster BEIDES ist: schmaler als 1280 und flacher als 800 — genau die Bedingung
+   dieser Abfrage. Dann greift die Spalte über den Rand hinaus, und der einzige
+   ehrliche Ausweg ist mehr Deckung: 0.90 trägt selbst den dunkelsten Ton des
+   Bildes (der Vordergrundstamm bei L 0.36, gerechnet 4,55:1 gegen --text-4).
+
+   Das kostet auf kleinen Fenstern das Bild — dort ist neben der Spalte ohnehin
+   kein Rand mehr, in dem es zu sehen wäre. Es wird zum Gespenst, statt zu
+   verschwinden; genau die Lösung, die Asagiri für denselben Fall gewählt hat.
+   Gemessen bei 1024×768: ohne diese Regel 4,37:1 (durchgefallen), mit ihr sicher
+   darüber. */
+@media (max-width: 1279px) and (max-height: 799px) {
+  :root[data-theme='hanaikada']::after {
+    background-image: linear-gradient(
+      180deg,
+      oklch(0.955 0.02 18 / 0.9) 0%,
+      oklch(0.955 0.02 18 / 0.9) 38%,
+      oklch(0.96 0.015 40 / 0.9) 60%,
+      oklch(0.958 0.026 200 / 0.9) 74%,
+      oklch(0.958 0.026 200 / 0.9) 100%
+    );
+  }
+}
+
+/* ── z -1: DIE ZWEI NÄCHSTEN BLÜTEN ───────────────────────────────────────────
+   Vierzig Blüten fallen in der Zeichnung. Diese beiden fallen VOR ihr — vor dem
+   Schleier, in der Ebene des Betrachters, und darum sind sie größer, satter und
+   schneller als alles im Bild. Sie sind der Grund, warum der Blick eine
+   Fensterscheibe zwischen sich und dem Wald nicht spürt.
+
+   Warum sie hier oben wohnen und nicht auch im SVG: die Zeichnung liegt hinter
+   dem Schleier und wird von ihm um 90 % gedämpft. Eine Blüte, die in der Ebene
+   des Betrachters sein soll, kann nicht hinter dem Schleier liegen — sie wäre
+   dann per Konstruktion die blasseste statt der kräftigsten.
+
+   WO SIE FALLEN — der Lesbarkeits-Vertrag: beide stehen samt vollem Seitwärts-
+   Schwung in den Randspalten (links zwischen `50% - 588px` und `50% - 524px`,
+   rechts zwischen `50% + 516px` und `50% + 578px`). Die Spaltenkante liegt bei
+   `50% ± 460px`: keine der beiden kreuzt je einen Buchstaben, keine braucht
+   Schleier, keine trägt Kontrastrisiko. Unterhalb 1280 px ist kein Rand mehr da,
+   dann sind sie aus (gleiche Schwelle und gleicher Grund wie Momijis Blatt und
+   Hanashigures vier Blüten).
+
+   Ihre Farben sind die des Bildes (#e79db0 und #f0bcc6 sind zwei Stufen der
+   Blüten-Leiter aus dem Generator) — es kommt kein neues Rosa ins Thema. */
+:root[data-theme='hanaikada']::before,
+:root[data-theme='hanaikada'] #root::before {
+  content: '';
+  position: fixed;
+  top: -48px;
+  z-index: -1;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+/* Links: die größte und schnellste — 31 s für den ganzen Weg. */
+:root[data-theme='hanaikada']::before {
+  left: calc(50% - 556px);
+  width: 28px;
+  height: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23e79db0' d='M50 97C33 88 15 71 13 47C11 27 24 11 38 5C42 9 46 15 50 19C54 15 58 9 62 5C76 11 89 27 87 47C85 71 67 88 50 97Z'/%3E%3C/svg%3E");
+  animation-name: hanaikada-nah-a;
+  animation-duration: 31s;
+  animation-delay: -13s;
+}
+
+/* Rechts: etwas kleiner, blasser, langsamer — 43 s, teilerfremd zur linken. */
+:root[data-theme='hanaikada'] #root::before {
+  left: calc(50% + 547px);
+  width: 21px;
+  height: 21px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23f0bcc6' d='M50 97C33 88 15 71 13 47C11 27 24 11 38 5C42 9 46 15 50 19C54 15 58 9 62 5C76 11 89 27 87 47C85 71 67 88 50 97Z'/%3E%3C/svg%3E");
+  animation-name: hanaikada-nah-b;
+  animation-duration: 43s;
+  animation-delay: -29s;
+}
+
+/* Die beiden Fälle. Der senkrechte Fortschritt ist absichtlich fast gleichmäßig
+   (≈25 vh je Viertel) — eine Blüte hat kein Gewicht, das beschleunigen könnte.
+   Der Seitwärts-Schwung und die Drehung laufen gegeneinander, und scaleX bis
+   0.3 ist die Blüte, die sich dem Auge zur Kante dreht. Anders als bei
+   Hanashigure gibt es hier kein Warten unter dem Bildrand: der Weg ist ein
+   geschlossener Kreis von oben nach unten, also ist immer eine Blüte zu sehen —
+   fallende Blüte ist hier Zustand, nicht Ereignis. */
+@keyframes hanaikada-nah-a {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(-16deg) scaleX(1);
+  }
+  25% {
+    transform: translate3d(26px, 30vh, 0) rotate(30deg) scaleX(0.38);
+  }
+  50% {
+    transform: translate3d(-14px, 60vh, 0) rotate(-18deg) scaleX(0.95);
+  }
+  75% {
+    transform: translate3d(22px, 90vh, 0) rotate(34deg) scaleX(0.46);
+  }
+  100% {
+    transform: translate3d(0, 120vh, 0) rotate(-16deg) scaleX(1);
+  }
+}
+
+@keyframes hanaikada-nah-b {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(24deg) scaleX(0.9);
+  }
+  25% {
+    transform: translate3d(-19px, 30vh, 0) rotate(-26deg) scaleX(1);
+  }
+  50% {
+    transform: translate3d(17px, 60vh, 0) rotate(38deg) scaleX(0.3);
+  }
+  75% {
+    transform: translate3d(-12px, 90vh, 0) rotate(-14deg) scaleX(0.88);
+  }
+  100% {
+    transform: translate3d(0, 120vh, 0) rotate(24deg) scaleX(0.9);
+  }
+}
+
+/* Kein Rand mehr → keine nahen Blüten (sie zögen sonst über die Lesespalte).
+   Die vierzig in der Zeichnung fallen weiter: die liegen hinter dem Schleier und
+   sind dort ausdrücklich erwünscht. */
+@media (max-width: 1280px) {
+  :root[data-theme='hanaikada']::before,
+  :root[data-theme='hanaikada'] #root::before {
+    display: none;
+  }
+}
+
+/* Eigenes reduced-motion-Gate: die globale Regel in index.css kürzt Dauern nur,
+   und eine gekürzte Fall-Animation friert die Blüte bei 0 % ein — also oberhalb
+   des Bildrands, unsichtbar. Hier hält sie stattdessen an einer Stelle, an der
+   sie WIRKLICH steht: mitten im Bild, voll gezeichnet. Aus dem Blütenfall wird,
+   was er vorher war, ein Bild. Die Zeichnung stellt sich selbst still (das SVG
+   trägt dieselbe Regel intern), und weil sich dort nur Geometrie bewegt und
+   keine Deckung, ist der stillstehende Zustand kontrastgleich zum bewegten. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='hanaikada']::before,
+  :root[data-theme='hanaikada'] #root::before {
+    animation: none;
+  }
+  :root[data-theme='hanaikada']::before {
+    transform: translate3d(18px, 38vh, 0) rotate(24deg) scaleX(0.7);
+  }
+  :root[data-theme='hanaikada'] #root::before {
+    transform: translate3d(-13px, 66vh, 0) rotate(-20deg) scaleX(0.92);
+  }
+}
+
+/* Die Kopfzeile ist ein Blatt Washi über der Szene: fast weiß, leicht
+   durchscheinend, mit einer warmen Papierkante statt eines Schattens (Muster wie
+   Asagiri/Natsu no Hi, die ihre Nav ebenfalls nur tönen). */
+:root[data-theme='hanaikada'] .nav {
+  background: oklch(0.985 0.006 38 / 0.84);
+  box-shadow: 0 1px 0 oklch(0.838 0.018 34 / 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Der Sprachstern ist eine Blüte im Gegenlicht: fast weiß im Kern, über Sakura
+   zum tiefen Akzent am Rand. Form und Bewegung bleiben die des Basis-Orbs — das
+   Thema ist Farbe. */
+:root[data-theme='hanaikada'] .vc-orb__core {
+  background: radial-gradient(
+    circle at 42% 36%,
+    oklch(0.99 0.008 30),
+    oklch(0.85 0.09 8) 50%,
+    var(--accent) 100%
+  );
+}
+
+/* Der Bloom kippt von Sakura (innen) ins Wasser-Blaugrün (außen) — die beiden
+   Farben des Themas in genau der Reihenfolge, in der sie im Bild vorkommen:
+   Blüte fällt, Wasser trägt. */
+:root[data-theme='hanaikada'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    oklch(0.7 0.05 200 / 0.18) 46%,
+    transparent 74%
+  );
+}
+
+/* Die Pegel-Ringe als Wasserringe: kühles Blaugrün statt Akzent, damit die
+   Stimme im hellen Bild nicht zum roten Ausrufezeichen wird. Keine neue
+   Mechanik — nur Farbe auf dem bestehenden Ring. */
+:root[data-theme='hanaikada'] .vc-orb__ring {
+  border-color: oklch(0.68 0.035 200 / 0.5);
+  box-shadow: 0 0 0 5px oklch(0.72 0.03 200 / 0.12);
+}

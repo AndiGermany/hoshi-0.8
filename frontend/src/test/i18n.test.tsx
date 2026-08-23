@@ -21,6 +21,7 @@ import {
 import { NightModeDeviceListView } from '../components/NightModeSection';
 import { SettingsPanel, WeatherLocationSectionView } from '../components/SettingsPanel';
 import { FiredToast } from '../components/FiredToast';
+import { HomeStatusBar } from '../components/HomeStatusBar';
 import type { FiredItem } from '../hooks/useFiredItems';
 import { IdleFace } from '../components/IdleFace';
 import { TopNav } from '../components/TopNav';
@@ -103,7 +104,7 @@ describe('i18n — de ist byte-gleich zum bisherigen Stand', () => {
         onDelete={() => {}}
         onEnroll={() => {}}
         onContinue={() => {}}
-        onDeleteSample={() => {}}
+        onRecordings={() => {}}
       />,
     );
     expect(speaker).toContain('Erkannte Sprecher');
@@ -147,7 +148,7 @@ describe('i18n — ein Sprachwechsel rendert die andere Sprache', () => {
         onDelete={() => {}}
         onEnroll={() => {}}
         onContinue={() => {}}
-        onDeleteSample={() => {}}
+        onRecordings={() => {}}
       />,
     );
     expect(speaker).toContain('Enroll my voice');
@@ -236,8 +237,6 @@ describe('i18n — IdleFace/TopNav (Video-Tag-Befund 21.07): deutsches Rendering
     const html = renderToStaticMarkup(
       <IdleFace
         nowMs={IDLE_NOW}
-        health="up"
-        voice={null}
         scheduled={[]}
         weather={null}
         shopping={[]}
@@ -248,7 +247,12 @@ describe('i18n — IdleFace/TopNav (Video-Tag-Befund 21.07): deutsches Rendering
     expect(html).toContain('Kein Wecker gestellt');
     expect(html).toContain('Wird gerade gelesen.'); // Jetzt-Band: erster Fetch läuft (weather=null)
     expect(html).toContain('Zuhause'); // section aria-label
-    expect(html).toContain('online'); // Status-Chip
+    // Die Statusmeldung steht seit 19.08. nicht mehr IM Idle-Gesicht, sondern
+    // in der Fußleiste darunter (Andi-Bestellung) — dieselbe Sprache, andere
+    // Stelle. Der Video-Tag-Riegel prüft sie darum dort.
+    const foot = renderToStaticMarkup(<HomeStatusBar health="up" voice={{ engine: 'piper', cloud: false }} />);
+    expect(foot).toContain('online'); // Status-Chip
+    expect(foot).toContain('Stimme: lokal');
   });
 
   it('TopNav rendert im Default (de) die vier deutschen Reiter-Labels + Bedienelemente', () => {
@@ -270,8 +274,6 @@ describe('i18n — setActiveUiLanguage("en") macht den ersten Bildschirm wirklic
     const html = renderToStaticMarkup(
       <IdleFace
         nowMs={IDLE_NOW}
-        health="up"
-        voice={null}
         scheduled={[]}
         weather={null}
         shopping={[]}
@@ -285,6 +287,9 @@ describe('i18n — setActiveUiLanguage("en") macht den ersten Bildschirm wirklic
     expect(html).not.toContain('Guten Morgen');
     expect(html).not.toContain('Dienstag');
     expect(html).not.toContain('Kein Wecker gestellt');
+    const foot = renderToStaticMarkup(<HomeStatusBar health="up" voice={{ engine: 'piper', cloud: false }} />);
+    expect(foot).toContain('Voice: local');
+    expect(foot).not.toContain('Stimme: lokal');
   });
 
   it('TopNav: die vier Reiter + Bedienelemente werden englisch', () => {
@@ -336,7 +341,7 @@ describe('i18n — Español/Français/Italiano rendern echte Übersetzungen (Sti
     setActiveUiLanguage('es');
 
     const idle = renderToStaticMarkup(
-      <IdleFace nowMs={IDLE_NOW} health="up" voice={null} scheduled={[]} weather={null} shopping={[]} />,
+      <IdleFace nowMs={IDLE_NOW} scheduled={[]} weather={null} shopping={[]} />,
     );
     expect(idle).toContain('Buenos días');
 
@@ -358,7 +363,7 @@ describe('i18n — Español/Français/Italiano rendern echte Übersetzungen (Sti
     setActiveUiLanguage('fr');
 
     const idle = renderToStaticMarkup(
-      <IdleFace nowMs={IDLE_NOW} health="up" voice={null} scheduled={[]} weather={null} shopping={[]} />,
+      <IdleFace nowMs={IDLE_NOW} scheduled={[]} weather={null} shopping={[]} />,
     );
     expect(idle).toContain('Bonjour');
 
@@ -380,7 +385,7 @@ describe('i18n — Español/Français/Italiano rendern echte Übersetzungen (Sti
     setActiveUiLanguage('it');
 
     const idle = renderToStaticMarkup(
-      <IdleFace nowMs={IDLE_NOW} health="up" voice={null} scheduled={[]} weather={null} shopping={[]} />,
+      <IdleFace nowMs={IDLE_NOW} scheduled={[]} weather={null} shopping={[]} />,
     );
     expect(idle).toContain('Buongiorno');
 
@@ -410,6 +415,15 @@ describe('i18n — Español/Français/Italiano rendern echte Übersetzungen (Sti
 describe('i18n — Sprecher-Anlern-Flow folgt der aktiven Sprache (Stichproben)', () => {
   const speaker = { name: 'andi', enrolledAt: 1720000000000, samples: 3 };
 
+  /**
+   * Bild ② des Anlern-Overlays (Redesign §3.3: EIN Schritt pro Bild). Der Satz in
+   * Anführungszeichen wohnt seit dem Umbau dort und nicht mehr auf dem ersten
+   * Bild — `lockName` überspringt das Namensfeld, genau wie „Weiter anlernen" es
+   * im echten Betrieb tut. Der Mikro-Hinweis steht auf beiden Bildern.
+   */
+  const speakScreen = () =>
+    renderToStaticMarkup(<EnrollDialog onClose={() => {}} onEnrolled={() => {}} lockName />);
+
   it('Español: Fortschritt, Anlern-Datum, Profil-Zeile, Anführungszeichen und Mikro-Hinweis', () => {
     setActiveUiLanguage('es');
     expect(sampleProgress(1)).toBe('Frase 1 de 3');
@@ -421,7 +435,7 @@ describe('i18n — Sprecher-Anlern-Flow folgt der aktiven Sprache (Stichproben)'
         onDelete={() => {}}
         onEnroll={() => {}}
         onContinue={() => {}}
-        onDeleteSample={() => {}}
+        onRecordings={() => {}}
       />,
     );
     expect(list).toContain('registrado el'); // enrolledOn-Präfix
@@ -429,7 +443,7 @@ describe('i18n — Sprecher-Anlern-Flow folgt der aktiven Sprache (Stichproben)'
     expect(list).toContain('Eliminar perfil andi'); // deleteProfileAria
 
     expect(micSupport().ok).toBe(false); // jsdom kennt kein navigator.mediaDevices
-    const dialog = renderToStaticMarkup(<EnrollDialog onClose={() => {}} onEnrolled={() => {}} />);
+    const dialog = speakScreen();
     expect(dialog).toContain('«'); // Anführungszeichen der Anlern-Sätze
     expect(dialog).toContain(CATALOGS.es.speaker.noMic);
   });
@@ -445,7 +459,7 @@ describe('i18n — Sprecher-Anlern-Flow folgt der aktiven Sprache (Stichproben)'
         onDelete={() => {}}
         onEnroll={() => {}}
         onContinue={() => {}}
-        onDeleteSample={() => {}}
+        onRecordings={() => {}}
       />,
     );
     expect(list).toContain('enregistré le');
@@ -453,7 +467,7 @@ describe('i18n — Sprecher-Anlern-Flow folgt der aktiven Sprache (Stichproben)'
     expect(list).toContain('Supprimer le profil andi');
 
     expect(micSupport().ok).toBe(false);
-    const dialog = renderToStaticMarkup(<EnrollDialog onClose={() => {}} onEnrolled={() => {}} />);
+    const dialog = speakScreen();
     expect(dialog).toContain('«');
     expect(dialog).toContain(CATALOGS.fr.speaker.noMic);
   });
@@ -469,7 +483,7 @@ describe('i18n — Sprecher-Anlern-Flow folgt der aktiven Sprache (Stichproben)'
         onDelete={() => {}}
         onEnroll={() => {}}
         onContinue={() => {}}
-        onDeleteSample={() => {}}
+        onRecordings={() => {}}
       />,
     );
     expect(list).toContain('registrato il');
@@ -477,7 +491,7 @@ describe('i18n — Sprecher-Anlern-Flow folgt der aktiven Sprache (Stichproben)'
     expect(list).toContain('Elimina il profilo andi');
 
     expect(micSupport().ok).toBe(false);
-    const dialog = renderToStaticMarkup(<EnrollDialog onClose={() => {}} onEnrolled={() => {}} />);
+    const dialog = speakScreen();
     expect(dialog).toContain('«');
     expect(dialog).toContain(CATALOGS.it.speaker.noMic);
   });
@@ -493,7 +507,7 @@ describe('i18n — Sprecher-Anlern-Flow folgt der aktiven Sprache (Stichproben)'
         onDelete={() => {}}
         onEnroll={() => {}}
         onContinue={() => {}}
-        onDeleteSample={() => {}}
+        onRecordings={() => {}}
       />,
     );
     expect(list).toContain('angelernt');

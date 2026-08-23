@@ -1,5 +1,6 @@
 package de.hoshi.web
 
+import com.sun.net.httpserver.HttpServer
 import de.hoshi.core.supervision.SidecarHealth
 import de.hoshi.core.supervision.SidecarPort
 import de.hoshi.core.supervision.SidecarSpec
@@ -8,12 +9,17 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.net.InetSocketAddress
 import java.nio.file.Path
 
 /**
  * **SidecarHealthServiceTest** — beweist die Status-Klassifikation (OK/DEGRADED/DOWN),
  * die Consecutive-Failure-Glättung und die Mac-RAM-Druck-Ableitung aus der Brain-Health
  * OHNE Live-Infra: eine scriptbare Fake-[SidecarPort] + eine Fake-[BrainHealthSource].
+ *
+ * Since S4 ("HA wird sichtbar") the same holds for the Home Assistant row: a fake
+ * [HaHealthSource] for the service contract, plus a loopback HTTP server standing in
+ * for HA to prove [HttpHaHealthSource] itself stays a READ-ONLY `GET /api/`.
  */
 class SidecarHealthServiceTest {
 
@@ -51,6 +57,9 @@ class SidecarHealthServiceTest {
         brainModelStore: JsonFileBrainModelStore? = null,
         ttsImpl: String = "",
         ttsEngineStore: JsonFileTtsEngineStore? = null,
+        // Default seam = "HA not configured" ⇒ no HA row, so every pre-S4 assertion
+        // (sidecar count, overall) keeps its meaning unchanged.
+        haHealth: HaHealthSource = HaHealthSource { null },
     ) = SidecarHealthService(
         enabled = enabled,
         brainUrl = "http://localhost:8041",
@@ -67,6 +76,7 @@ class SidecarHealthServiceTest {
         brainHealth = { brainBody },
         brainModelStore = brainModelStore,
         ttsEngineStore = ttsEngineStore,
+        haHealth = haHealth,
     )
 
     private fun OpsStatus.sidecar(name: String): SidecarStatus =
@@ -241,6 +251,33 @@ class SidecarHealthServiceTest {
             directHealth(level = "critical", detail = "Kritischer RAM-Druck: nur 477 MB frei, Kompressor wächst weiter."),
         )
         assertEquals("CRITICAL", m.level)
+        assertEquals("brain-memory", m.source)
+    }
+
+    // ── Andi-Rekalibrierung 2026-08-19: Swap allein ist kein Warngrund mehr ─────
+    //
+    // Andis Befund: 16 GB Mac, 5874 MB frei+inaktiv, Swap 60 % belegt löste eine
+    // Warnung aus. Die Schwelle wohnte in `sidecars/brain/server.py#_classify_memory`
+    // (macOS lagert Idle-Pages routinemäßig aus; Swap allein > 50 % war der
+    // Fehlalarm) — dort jetzt kalibriert: warn erst bei frei+inaktiv < 1,5 GB ODER
+    // Swap > 85 % UND frei+inaktiv gleichzeitig < 3 GB. Diese Tests beweisen, dass
+    // der Kotlin-Service das rekalibrierte `level` unverändert durchreicht.
+
+    @Test
+    fun `Andis Fall (16GB, 5874 MB frei+inaktiv, Swap 60 Prozent) ist KEINE Warnung`() {
+        val m = BrainMemoryHeuristic.classify(
+            directHealth(level = "ok", detail = "RAM entspannt: 5874 MB frei+inaktiv."),
+        )
+        assertEquals("OK", m.level, "Swap allein bei reichlich frei+inaktiv ist kein Druck")
+        assertEquals("brain-memory", m.source)
+    }
+
+    @Test
+    fun `echter Druck (Swap ueber 85 Prozent UND frei+inaktiv unter 3 GB) ist eine Warnung`() {
+        val m = BrainMemoryHeuristic.classify(
+            directHealth(level = "warn", detail = "RAM wird knapp: 2400 MB frei+inaktiv, Swap 88% belegt."),
+        )
+        assertEquals("WARN", m.level, "Swap hoch UND frei knapp zusammen bleibt ein echter Alarm")
         assertEquals("brain-memory", m.source)
     }
 
@@ -453,7 +490,142 @@ class SidecarHealthServiceTest {
         assertEquals(null, svc.statusOf("gibt-es-nicht"), "unbekannter Sidecar-Name ⇒ UNKNOWN")
     }
 
+    // ── Home Assistant row (S4 "HA wird sichtbar") ──────────────────────────────
+    //
+    // HA has no `/health` sidecar contract, so it comes through its own seam
+    // (HaHealthSource, READ-ONLY `GET /api/`). The row exists ONLY when HA is
+    // configured for this install; a configured-but-unreachable HA is critical
+    // (no light obeys) and must reach `overall`. Visibility only — nothing is healed.
+
+    @Test
+    fun `HA nicht konfiguriert (Flag aus oder kein Token) - KEINE HA-Zeile, overall unberuehrt`() {
+        val svc = service(ScriptedProbe(), haHealth = { null })
+        svc.refresh()
+
+        val status = svc.current() as OpsStatus
+        assertFalse(status.sidecars.any { it.name == HA_NAME }, "HA-lose Box zeigt keine erfundene HA-Zeile")
+        assertEquals("OK", status.overall)
+        assertEquals(null, svc.statusOf(HA_NAME), "kein Snapshot-Eintrag ⇒ ehrliches UNKNOWN")
+    }
+
+    @Test
+    fun `HA erreichbar - eigene Zeile mit OK, overall bleibt OK`() {
+        val svc = service(ScriptedProbe(), haHealth = { SidecarHealth.ok("status=ok (API running)") })
+        svc.refresh()
+
+        val status = svc.current() as OpsStatus
+        assertEquals("OK", status.sidecar(HA_NAME).status)
+        assertEquals("OK", status.overall)
+        assertEquals(6, status.sidecars.size, "vier Basis-Sidecars, gewählte say-TTS und HA")
+    }
+
+    @Test
+    fun `HA down - erst geglaettet, ab Schwelle DOWN und overall DOWN`() {
+        val svc = service(ScriptedProbe(), threshold = 2, haHealth = { SidecarHealth.down("keine Antwort") })
+
+        svc.refresh() // 1st failure → smoothed like every other seam
+        assertEquals("OK", (svc.current() as OpsStatus).sidecar(HA_NAME).status, "ein Blip alarmiert nicht")
+
+        svc.refresh() // 2nd failure → honest DOWN
+        val status = svc.current() as OpsStatus
+        assertEquals("DOWN", status.sidecar(HA_NAME).status)
+        assertEquals("DOWN", status.overall, "ein konfiguriertes, totes HA darf nicht hinter dem stillen OK-Punkt verschwinden")
+    }
+
+    @Test
+    fun `HA down laesst das lokale Schloss unberuehrt - HA ist kein Sprech-Pfad`() {
+        val svc = service(ScriptedProbe(), threshold = 1, haHealth = { SidecarHealth.down("keine Antwort") })
+        svc.refresh()
+        assertTrue((svc.current() as OpsStatus).allLocal, "allLocal misst STT+Brain+TTS, nicht das Haus")
+    }
+
+    @Test
+    fun `HA-Probe wirft - never-throw, wird zu DOWN`() {
+        val svc = service(ScriptedProbe(), threshold = 1, haHealth = { error("boom") })
+        svc.refresh() // must not escape the scheduler tick
+
+        val ha = (svc.current() as OpsStatus).sidecar(HA_NAME)
+        assertEquals("DOWN", ha.status)
+        assertTrue(ha.detail.contains("boom"), "der ehrliche Grund steht im Detail")
+    }
+
+    // ── HttpHaHealthSource — die echte READ-ONLY-Probe gegen ein Fake-HA ─────────
+
+    @Test
+    fun `HttpHaHealthSource - GET auf api mit Bearer-Token, API running ist OK`() = withFakeHa { url, seen ->
+        val health = HttpHaHealthSource(baseUrl = url, token = "secret-token", enabled = true).probe()
+
+        assertEquals("OK", health?.state?.name)
+        assertEquals("/api/", seen.path, "READ-ONLY Liveness-Pfad von HA, kein States-/Service-Call")
+        assertEquals("GET", seen.method, "nie schreiben")
+        assertEquals("Bearer secret-token", seen.auth)
+    }
+
+    @Test
+    fun `HttpHaHealthSource - abgelehnter Token (401) ist DOWN`() = withFakeHa(status = 401, body = "nope") { url, _ ->
+        val health = HttpHaHealthSource(baseUrl = url, token = "wrong", enabled = true).probe()
+
+        assertEquals("DOWN", health?.state?.name)
+        assertTrue(health!!.detail.contains("401"), "der Statuscode steht ehrlich im Detail")
+        assertFalse(health.detail.contains("wrong"), "das Token darf NIE in Detail/Log landen")
+    }
+
+    @Test
+    fun `HttpHaHealthSource - 2xx ohne API-running-Marker ist DEGRADED, nicht Fake-OK`() =
+        withFakeHa(body = """{"message":"something else"}""") { url, _ ->
+            assertEquals("DEGRADED", HttpHaHealthSource(baseUrl = url, token = "t", enabled = true).probe()?.state?.name)
+        }
+
+    @Test
+    fun `HttpHaHealthSource - Flag aus oder kein Token ist null (keine Zeile, KEIN Call)`() = withFakeHa { url, seen ->
+        assertEquals(null, HttpHaHealthSource(baseUrl = url, token = "t", enabled = false).probe())
+        assertEquals(null, HttpHaHealthSource(baseUrl = url, token = null, enabled = true).probe())
+        assertEquals(null, HttpHaHealthSource(baseUrl = url, token = "  ", enabled = true).probe())
+        assertEquals(null, seen.path, "unkonfiguriertes HA wird nicht einmal angeklopft")
+    }
+
+    @Test
+    fun `HttpHaHealthSource - HA unerreichbar ist DOWN (never-throw)`() {
+        // Port 1 is reliably closed — the honest "connection refused" path.
+        val health = HttpHaHealthSource(baseUrl = "http://127.0.0.1:1", token = "t", enabled = true).probe()
+        assertEquals("DOWN", health?.state?.name)
+    }
+
+    /** What the fake HA saw — proves the probe stays READ-ONLY and sends the Bearer token. */
+    private class SeenRequest {
+        var path: String? = null
+        var method: String? = null
+        var auth: String? = null
+    }
+
+    /** Fake HA on a loopback port (JDK HttpServer, Muster [HomeRegistryControllerTest]). */
+    private fun withFakeHa(
+        status: Int = 200,
+        body: String = """{"message":"API running."}""",
+        block: (String, SeenRequest) -> Unit,
+    ) {
+        val seen = SeenRequest()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/") { ex ->
+            seen.path = ex.requestURI.path
+            seen.method = ex.requestMethod
+            seen.auth = ex.requestHeaders.getFirst("Authorization")
+            val bytes = body.toByteArray()
+            ex.sendResponseHeaders(status, bytes.size.toLong())
+            ex.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            block("http://127.0.0.1:${server.address.port}", seen)
+        } finally {
+            server.stop(0)
+        }
+    }
+
     companion object {
+        /** Wire name of the HA row — same contract string the FE renders verbatim. */
+        private const val HA_NAME = SidecarHealthService.HA_SIDECAR
+
         private const val OK_HEALTH =
             """{"status":"ok","model":"gemma","wired":{"memorystatus_level":60,"release_lvl":25,"reapply_lvl":40}}"""
 

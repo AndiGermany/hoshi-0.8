@@ -1,0 +1,436 @@
+/* ════════════════ YORU (夜) — der Blick von der Veranda ═══════════════════════
+   Spät, und man ist zu Hause. Man sitzt auf dem Engawa: über dem Kopf die
+   Traufe, unter den Füßen die Dielen, links und rechts ein Pfosten. Draußen
+   die nahen Ziegeldächer der Nachbarn, ein paar Fenster stehen noch warm, auf
+   der Gartenmauer sitzt die Katze. Vom Traufbalken läuft eine Laternenkette
+   nach hinten in den Garten und wird dabei kleiner und dunkler. Darüber ein
+   Himmel voller atmender Sterne und eine Mondsichel.
+
+   Yoru ist Hoshis ZUHAUSE-GESICHT. Mut-Stufe DEZENT — die Szene darf niemanden
+   anspringen. „Dezent" heißt hier aber ausdrücklich nicht „leer": die erste
+   Fassung war zu ~90 % Schwarz und ist genau daran gescheitert.
+
+   ────────────────────────────────────────────────────────────────────────────
+   SONDERFALL — hier stehen KEINE Basistoken
+   ────────────────────────────────────────────────────────────────────────────
+   Alle anderen Szenen-Themen setzen jeden Token selbst, weil sie eine eigene
+   Farbwelt mitbringen. Yoru bringt keine mit: Yoru IST der Basis-Token-Satz der
+   App. Er wohnt seit jeher in `src/index.css` (`:root, [data-theme='yoru']`) und
+   ist damit immer im Bundle, auch bevor diese Datei geladen ist. Eine Kopie
+   dieser Farbliste hier wäre eine ZWEITE WAHRHEIT, die beim ersten Nachjustieren
+   an einer der beiden Stellen auseinanderläuft. Darum trägt diese Datei genau
+   drei Dinge und sonst nichts:
+
+     1. die weitergedachte Laternen-Atmosphäre (`--theme-atmosphere`),
+     2. die Szene (yoru-szene.svg) samt ihrem Lesbarkeits-Schleier,
+     3. zwei bewegte Licht-Ebenen — Laternenschein und Shoji-Licht.
+
+   Wer Yorus Farben ändern will, ändert `src/index.css`. Wer die Nacht ändern
+   will, ändert diese Datei. Die Trennlinie ist genau das wert, was sie kostet.
+
+   Weil hier kein Token-Block steht, überspringt ihn auch der CSS-Riegel in
+   `themegroups.test.tsx`: der Swatch-Vergleich greift nur, wo eine Themen-Datei
+   ihren sRGB-Wert selbst im Kommentar nennt. Yorus Manifest-Swatch
+   (#0e0c0a/#ffa275/#f4f1ed) ist deshalb aus `src/index.css` gelesen und
+   headless gegengeprüft — und er darf hier NICHT wiederholt werden. (Er wäre
+   sogar falsch: Chrome rendert `--text-1` auf `#f4f1ee`, ein Bit Blau neben dem
+   Manifest-Wert. Ein zweiter Farbsatz hier würde aus diesem einen Bit einen
+   roten Test machen.)
+
+   BEIDE SELEKTOREN bleiben trotzdem Pflicht (`:root[data-theme='yoru']` UND
+   `[data-theme='yoru']`): der zweite trägt die Atmosphäre auch an ein
+   verschachteltes Element, das `data-theme` selbst setzt — die echte
+   Farbvorschau im Theme-Picker (.settings__swatch) lebt davon.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DIE HÄRTESTE ZAHL DIESES THEMAS — und warum der Schleier hier LEICHT ist
+   ────────────────────────────────────────────────────────────────────────────
+   Aus dem Sonderfall folgt eine Grenze, die kein anderes Thema hat. Yorus
+   Textleiter ist die des Basissatzes, und sie ist dunkel:
+
+     --text-1 #f4f1ed  Lrel 0.884   --text-3 #8a8580  Lrel 0.238
+     --text-2 #bbb6b2  Lrel 0.474   --text-4 #605a54  Lrel 0.103
+
+   `--text-3` erreicht 4,5:1 nur über einem Untergrund mit Lrel ≤ 0.01397 —
+   das ist OKLCH-L 0.24, in sRGB etwa #211f1c. Nagareboshi durfte seinen
+   hellsten Mittelgrund-Pixel auf 49/255 stellen, weil es sein `--text-4` selbst
+   von L 0.60 auf 0.74 anheben konnte. Yoru kann das nicht: seine Token stehen
+   in `src/index.css`, und die anzufassen verbietet der Sonderfall.
+
+   DARAUS FOLGT DIE GANZE ARCHITEKTUR DIESER DATEI. Die erste Fassung hat aus
+   derselben Not den umgekehrten Schluss gezogen: sie hat die Zeichnung in der
+   Lesespalte per Maske auf 6 % HERUNTERMULTIPLIZIERT. Das ist lesbar, aber es
+   schneidet ein schwarzes Rechteck mitten durch das Bild — derselbe Fehler, den
+   aoi an seiner 2-Stopp-Naht gefunden hat, nur in groß. Solange die Zeichnung
+   fast leer war, ist es niemandem aufgefallen.
+
+   Diese Fassung dreht es um: nicht der Schleier hält die Grenze ein, sondern
+   die ZEICHNUNG SELBST. Im Generator (`tools/theme-contrast/yoru-szene.gen.mjs`)
+   wirft `night()` bei jeder Farbe, die den Luminanz-Deckel 0.01397 reißt
+   (OKLCH-L ≈ 0.240, je nach Buntheit); Licht darüber gibt es nur dort, wo die
+   920-px-Spalte bei KEINER gemessenen Breite hinreicht (viewBox x < 201 bzw.
+   x > 1399). Die Lesbarkeit ist damit strukturell garantiert und nicht
+   „gemessen und hoffentlich stabil".
+
+   Und weil sie das ist, darf der Schleier LEICHT sein: 0,16 statt 0,94. Die
+   Zeichnung läuft sichtbar hinter der Lesespalte durch — Dächer, Mauer, Katze,
+   Sterne, Mond —, sie wird dort nur ruhiger. Kein Rechteck, keine Naht.
+
+   DRITTE RUNDE, 21.08. — „YORU IST LEIDER SEHR DUNKEL" (Andi). Die zweite
+   Fassung hielt den Deckel mit Abstand ein: der hellste Spaltenpixel stand bei
+   text-3 4,77:1, erlaubt waren 4,50. Zusammen mit einem 0,18er Schleier war der
+   Abstand DOPPELT bezahlt. Das Bild maß p50 12/255 — der typische Bildpunkt lag
+   bei 12 von 255, während der hellste erlaubte bei 34 lag. Gefühlte Helligkeit
+   ist der Median, nicht das Maximum; `measure.mjs` kann das per Konstruktion
+   nicht sehen (es sucht den hellsten Pixel). Seitdem misst
+   `tools/theme-contrast/helligkeit.mjs` die Verteilung mit. Jetzt: p50 20/255,
+   text-3 4,62:1. Beides gemessen, beides im RESULT.
+
+   ────────────────────────────────────────────────────────────────────────────
+   ZWEI SCHLEIER, ZWEI RICHTUNGEN — und warum das kein Widerspruch ist
+   ────────────────────────────────────────────────────────────────────────────
+   In einer Nacht ist die Schrift hell und der Grund fast schwarz. Jeder
+   transluzente Wash kann darum nur LICHT ADDIEREN — und jedes bisschen Licht
+   senkt hier den Kontrast. Ein „Lesbarkeits-Schleier" nach dem Vorbild der
+   hellen Themen (Asagiri, Momiji, Ukiyo) würde die Lesbarkeit aktiv zerstören.
+
+   Deshalb arbeiten die beiden Ebenen-Sorten mit verschiedenen Werkzeugen:
+
+     · DIE ZEICHNUNG liegt UNTEN und ist selbst schon dunkel genug. Über sie
+       legt sich ein Verlauf im Grundton `--bg-base`. Er kann nur abdunkeln
+       (nichts im Bild liegt unter --bg-base), und er dunkelt die Spalte um
+       16 % ab. Fünf Stopps über 330 px, Kurve schnell-dann-flach — die
+       2-Stopp-Naht aus aois Befund entsteht so gar nicht erst.
+
+     · DIE LICHT-EBENEN liegen OBEN und addieren Wärme. Bei ihnen wäre ein
+       dunkler Verlauf sinnlos (er läge ja über dem Licht, das er dämpfen
+       soll). Sie tragen darum eine MASKE, die in der Spalte nur 12 % von
+       ihnen stehen lässt. Eine Maske kann konstruktionsbedingt nur wegnehmen;
+       sie hat keinen Regler, mit dem sie Licht hinzufügen könnte. Weil beide
+       Ebenen reine Weichverläufe ohne Kanten sind, ist von der Rampe nichts
+       zu sehen.
+
+   Weil eine Maske mit ihrer Ebene MITWANDERT, wenn diese ein `transform`
+   bekommt, ist die gedimmte Zone beidseitig um `--yoru-slack` (40 px) breiter
+   als die App-Spalte — und keine Drift in dieser Datei ist größer als 9 px.
+   Der Spaltenrand kann also nicht aufreißen (dasselbe Rezept wie Ukiyos
+   Gischt).
+
+   Unter ~1000 px Fensterbreite fällt `--yoru-edge` auf 0 zusammen: dann liegt
+   die Spalte über der ganzen Bühne, Plateau überall, keine Rampe mehr. Genau
+   dafür ist der Schleier leicht — bei 1024 wäre eine 0,94-Maske ein schwarzes
+   Fenster, ein 0,16-Verlauf ist ein ruhigerer Abend. Und genau hier kostet
+   jeder Zehntel Schleier am meisten: bei 1024 IST die Lesespalte fast das
+   ganze Fenster, ein Schleierwert wirkt dort auf die volle Bildfläche.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DIE UNBEQUEME WAHRHEIT ÜBER --text-4
+   ────────────────────────────────────────────────────────────────────────────
+   `--text-4` erreicht 4,5:1 NICHT und kann es nicht. Seine relative Luminanz
+   ist 0.10345; gegen einen beliebig dunklen Grund ist der bestmögliche Wert
+   (0.10345 + 0.05) / 0.05 = **3,07:1**, erreicht nur gegen reines Schwarz. Das
+   ist keine Eigenschaft dieser Szene, sondern des Basis-Token-Satzes: auf
+   Yorus eigenem `--bg-subtle` steht `--text-4` bei 2,17:1 und `--text-3` bei
+   4,07:1, in der ausgelieferten App, ohne jede Szene. Diese Datei kann das
+   weder verursachen noch heilen — sie kann nur dafür sorgen, es nicht
+   schlimmer zu machen, und genau das ist gemessen (s. RESULT.md).
+
+   Der Vertrag dieser Datei ist deshalb zweiteilig und in beiden Teilen gemessen:
+     1. `--text-1`, `--text-2` und `--text-3` halten in der 920-px-Spalte
+        überall ≥ 4,5:1 — bei jeder gemessenen Breite und zu jedem Zeitpunkt
+        beider Uhrwerke.
+     2. `--text-4` bleibt so gut, wie der Basissatz es zulässt, und die Szene
+        macht ihn nicht schlechter als Yorus eigene Atmosphäre allein.
+
+   Im Seitenraum läuft die Zeichnung mit voller Kraft — dort steht nie eine
+   Glyphe, `.app` ist 920 px breit und zentriert. Wer `.app` verbreitert, muss
+   `--yoru-half` mitziehen, den Generator mit neuen Grenzen laufen lassen und
+   neu messen.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root[data-theme='yoru'],
+[data-theme='yoru'] {
+  /* ── Die Atmosphäre: dieselbe Laternen-Pfütze, nur mit mehr Nacht darum ─────
+     Sie ist Yorus Wiedererkennungswert und bleibt in ihrer Form stehen: die
+     warme Pfütze unten rechts (das Laternenlicht, das auf die Straße fällt)
+     und der kühle Dunst oben links.
+
+     Ihre Rolle hat sich allerdings verschoben, und das gehört hierher gesagt:
+     die Zeichnung ist jetzt FLÄCHENDECKEND (`cover`, deckender Himmel), sie
+     verdeckt die Atmosphäre also im laufenden Betrieb vollständig. Was bleibt,
+     ist trotzdem wichtig genug, um sie zu pflegen — sie ist (a) der Grund, auf
+     dem die Seite steht, bevor die SVG geladen ist, (b) die Farbe der
+     Vorschau-Kachel im Theme-Picker, die kein `::after` hat, und (c) der
+     Rückfall, wenn ein Browser das Bild nicht lädt. Die lebende Wärme über der
+     Zeichnung tragen die beiden Licht-Ebenen weiter unten.
+
+     Erste Schicht = oberste. */
+  --theme-atmosphere:
+    radial-gradient(ellipse at 82% 108%, oklch(0.8 0.13 45 / 0.075), transparent 38%),
+    radial-gradient(ellipse 34% 26% at 16% 112%, oklch(0.78 0.1 52 / 0.03), transparent 46%),
+    radial-gradient(ellipse at 12% -12%, oklch(0.36 0.025 67 / 0.12), transparent 40%),
+    linear-gradient(180deg, oklch(0.05 0.012 255 / 0.42), transparent 72%), var(--bg-base);
+
+  /* ── Die Zahlen, an denen die Lesbarkeit hängt ─────────────────────────────
+     Sie stehen als Token da, damit ein späterer Eingriff sie an EINER Stelle
+     findet statt in drei Verlaufs-Deklarationen.
+
+     `--yoru-edge` ist der Punkt, an dem das Plateau beginnt: die halbe
+     Fensterbreite minus der halben Spalte minus der Reserve. `max(0px, …)`
+     fängt schmale Fenster ab, in denen die Spalte breiter ist als der Platz. */
+  --yoru-half: 460px; /* = .app (920px) / 2 */
+  --yoru-slack: 40px; /* Reserve, weil die Maske mit ihrer Ebene wandert */
+  --yoru-edge: max(0px, 50% - 460px - 40px);
+  /* 0,12, und das ist die REserve gegen die beiden Licht-Ebenen — nicht die
+     Lesbarkeits-Zusage. Die trägt die Palette des Generators (CEIL, gegen den
+     Luminanz-Deckel geprüft): die Zeichnung hält die Grenze auch bei Schleier 0
+     ein. Genau deshalb darf dieser Wert klein sein.
+
+     Ein schwererer Schleier macht die Spalte NICHT lesbarer, er STAUCHT nur:
+     die Grenze liegt auf dem fertigen Pixel, also skaliert jede Erhöhung bloß
+     denselben erlaubten Endbereich aus einer helleren Zeichnung heraus — und
+     vergrößert dabei den Sprung zwischen Randraum und Spalte. Er kostet aber
+     etwas, und zwar genau das, worum es in dieser Runde geht: 0,18 hat die
+     ganze Lesespalte um 18 % abgedunkelt, und die Lesespalte IST bei 1024 px
+     fast das ganze Fenster. Von 0,18 auf 0,12 ist das ein Grauwert auf der
+     halben Bildfläche, geschenkt. */
+  --yoru-veil: 0.16; /* Deckkraft des Grundton-Verlaufs ÜBER der Zeichnung */
+  --yoru-keep: 0.12; /* Restanteil der LICHT-Ebenen innerhalb der Spalte */
+}
+
+/* Der Charakter des Themas erscheint als Raum um die Inhalte. (themes.css hat
+   dieselbe Regel generisch für `:root[data-theme]`; sie steht hier noch einmal,
+   damit die Datei allein geladen vollständig ist — gleiche Spezifität, gleicher
+   Wert, kein Konflikt.) */
+:root[data-theme='yoru'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── DIE SZENE: Veranda, Dächer, Mond, Laternenkette (body::after) ────────────
+   Schichtung von hinten nach vorn: body-Hintergrund (--theme-atmosphere) →
+   body::after (diese Zeichnung samt Schleier, z-index -2) → body::before und
+   :root::after (die beiden Licht-Ebenen, z-index -1) → Inhalt. Alle drei
+   Pseudo-Elemente liegen hinter jedem In-Flow-Kasten; die Karten sind deckend,
+   die Nacht zieht also HINTER der Lesespalte durch.
+
+   Maßstab: `cover` + `center bottom`. Die viewBox ist 1600×1000 (1,6:1) und
+   damit flacher als ein hohes Fenster — `cover` schneidet deshalb OBEN ab. Das
+   Bild ist genau darum unten verankert: Dielen, Mauer, Dächer und Laternen
+   stehen bei JEDEM Format, verloren geht nur Himmel (bei 16:9 die oberen ~100
+   viewBox-Einheiten, also gerade die Traufe).
+
+   Die Zeichnung selbst BEWEGT SICH NICHT als Ganzes — eine Stadt driftet nicht.
+   Was sich bewegt, sind die Sterne und die Laternen, und deren Uhren stehen IM
+   SVG (`<style>` mit `@keyframes`, samt eigener reduced-motion-Abfrage). Diese
+   Ebene braucht deshalb kein Gate und keine Reserve: was sich nicht verschiebt,
+   kann seinen Schleier nicht verschieben.
+
+   ERSTE SCHICHT IST DER SCHLEIER, zweite die Zeichnung. Fünf Stopps je Seite
+   über 330 px, Kurve schnell-dann-flach (0,06 / 0,17 / 0,36 / 0,60 → 1,00 des
+   Plateauwerts). Gleichmäßig fallende Stopps dämpfen den Rand zu früh und die
+   Naht wandert nur; diese Kurve ist die aus dem REZEPT. */
+:root[data-theme='yoru'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(var(--yoru-edge) - 330px),
+      oklch(0.115 0.006 66 / calc(var(--yoru-veil) * 0.06)) calc(var(--yoru-edge) - 260px),
+      oklch(0.115 0.006 66 / calc(var(--yoru-veil) * 0.17)) calc(var(--yoru-edge) - 190px),
+      oklch(0.115 0.006 66 / calc(var(--yoru-veil) * 0.36)) calc(var(--yoru-edge) - 120px),
+      oklch(0.115 0.006 66 / calc(var(--yoru-veil) * 0.6)) calc(var(--yoru-edge) - 55px),
+      oklch(0.115 0.006 66 / var(--yoru-veil)) var(--yoru-edge),
+      oklch(0.115 0.006 66 / var(--yoru-veil)) calc(100% - var(--yoru-edge)),
+      oklch(0.115 0.006 66 / calc(var(--yoru-veil) * 0.6)) calc(100% - var(--yoru-edge) + 55px),
+      oklch(0.115 0.006 66 / calc(var(--yoru-veil) * 0.36)) calc(100% - var(--yoru-edge) + 120px),
+      oklch(0.115 0.006 66 / calc(var(--yoru-veil) * 0.17)) calc(100% - var(--yoru-edge) + 190px),
+      oklch(0.115 0.006 66 / calc(var(--yoru-veil) * 0.06)) calc(100% - var(--yoru-edge) + 260px),
+      transparent calc(100% - var(--yoru-edge) + 330px),
+      transparent 100%
+    ),
+    url('yoru-szene.svg');
+  background-repeat: no-repeat;
+  background-position:
+    center center,
+    center bottom;
+  background-size:
+    100% 100%,
+    cover;
+}
+
+/* ── ERSTE LICHT-EBENE: der Laternenschein (body::before) ─────────────────────
+   Die Kette selbst ist in der SVG gemalt; hier hängt nur ihr Schein. Er sitzt
+   dort, wo im Bild die NAHEN Laternen hängen (rechts oben, am Traufbalken) und
+   folgt der Kette schräg nach hinten links — ein zweites, schwächeres Warm, das
+   im Garten ausläuft. Dazu die Pfütze unten rechts, die auf die Dielen fällt.
+
+   Zwei Uhren, beide sehr langsam und teilerfremd:
+     • yoru-lantern-breath (71 s) — der Atem einer Kerze hinter Papier. `from`
+       ist die VOLLE Deckkraft, damit der stehende Zustand der gemessene ist.
+     • yoru-lantern-swing (163 s) — die Kette schaukelt am Draht: ±9 px seitlich
+       und ±4 px hoch, also eine flache Bogenbewegung. 9 px < 40 px Reserve. */
+:root[data-theme='yoru'] body::before {
+  content: '';
+  position: fixed;
+  inset: -3%;
+  z-index: -1;
+  pointer-events: none;
+  /* WO DIESE VERLÄUFE STEHEN DÜRFEN, ist am Bild entschieden worden, nicht am
+     Reißbrett. Der erste Wurf legte zwei von ihnen in die Bildmitte (68 %/34 %
+     und 40 %/46 %), weil dort die Kette durchläuft. Am gemessenen Frame stand
+     dadurch quer über den halben Himmel ein warmer Grauschleier — und die
+     Sterne, die genau dort ihren dunklen Grund brauchen, waren weg. Wärme
+     gehört an die Lichtquellen, nicht auf den Himmel: an das NAHE Ende der
+     Kette (rechts oben), auf die Dielen darunter und an die Steinlaterne
+     links. Dazwischen bleibt Nacht. */
+  background-image:
+    radial-gradient(ellipse 26vmin 20vmin at 93% 13%, oklch(0.82 0.13 52 / 0.2), transparent 70%),
+    radial-gradient(ellipse 14vmin 10vmin at 78% 27%, oklch(0.8 0.12 50 / 0.06), transparent 74%),
+    radial-gradient(ellipse 30vmin 16vmin at 90% 95%, oklch(0.8 0.13 45 / 0.1), transparent 72%),
+    radial-gradient(ellipse 12vmin 9vmin at 17% 86%, oklch(0.79 0.11 52 / 0.05), transparent 76%);
+  -webkit-mask-image: var(--yoru-mask);
+  mask-image: var(--yoru-mask);
+  animation:
+    yoru-lantern-breath 71s ease-in-out infinite alternate,
+    yoru-lantern-swing 163s ease-in-out infinite alternate;
+}
+
+/* ── ZWEITE LICHT-EBENE: das Licht aus dem Zimmer (:root::after) ──────────────
+   Hinter dem Betrachter steht die Shoji, und ihr Papierlicht fällt schräg auf
+   die Dielen. In der Zeichnung ist der Lichtfleck gemalt; hier liegt der weiche
+   Saum darum, der ihn erst warm macht. Er wohnt auf `:root::after`, weil body
+   seine beiden Pseudo-Elemente schon vergeben hat (Szene, Laternenschein). Der
+   `:root`-gebundene Selektor hält ihn außerdem aus der Vorschau-Kachel des
+   Theme-Pickers heraus, die `data-theme` auf ein einfaches <div> setzt.
+
+   Eine eigene Uhr, teilerfremd zu den beiden oben (97 gegen 71/163 — alle drei
+   sind Primzahlen, die gemeinsame Wiederkehr liegt bei über dreißig Jahren).
+   Sie atmet noch flacher als die Laternen: ein Zimmerlicht flackert nicht, es
+   wird nur wahrgenommen oder nicht. */
+:root[data-theme='yoru']::after {
+  content: '';
+  position: fixed;
+  inset: -3%;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 24vmin 16vmin at 4% 94%, oklch(0.8 0.1 60 / 0.14), transparent 72%),
+    radial-gradient(ellipse 16vmin 12vmin at 97% 90%, oklch(0.78 0.09 52 / 0.08), transparent 74%);
+  -webkit-mask-image: var(--yoru-mask);
+  mask-image: var(--yoru-mask);
+  animation: yoru-shoji-breath 97s ease-in-out infinite alternate;
+}
+
+/* ── Die Maske der beiden Licht-Ebenen ───────────────────────────────────────
+   Dieselbe Kurve wie der Schleier, nur als ALPHA dessen, was STEHEN BLEIBT:
+   außen 1, innen `--yoru-keep`. Sie steht einmal als Token da, weil sie an
+   zwei Stellen wortgleich gebraucht wird und ein Auseinanderlaufen der beiden
+   Kopien genau die Naht erzeugen würde, die sie verhindern soll. */
+:root[data-theme='yoru'],
+[data-theme='yoru'] {
+  --yoru-mask: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(var(--yoru-edge) - 330px),
+    rgb(0 0 0 / calc(1 - (1 - var(--yoru-keep)) * 0.06)) calc(var(--yoru-edge) - 260px),
+    rgb(0 0 0 / calc(1 - (1 - var(--yoru-keep)) * 0.17)) calc(var(--yoru-edge) - 190px),
+    rgb(0 0 0 / calc(1 - (1 - var(--yoru-keep)) * 0.36)) calc(var(--yoru-edge) - 120px),
+    rgb(0 0 0 / calc(1 - (1 - var(--yoru-keep)) * 0.6)) calc(var(--yoru-edge) - 55px),
+    rgb(0 0 0 / var(--yoru-keep)) var(--yoru-edge),
+    rgb(0 0 0 / var(--yoru-keep)) calc(100% - var(--yoru-edge)),
+    rgb(0 0 0 / calc(1 - (1 - var(--yoru-keep)) * 0.6)) calc(100% - var(--yoru-edge) + 55px),
+    rgb(0 0 0 / calc(1 - (1 - var(--yoru-keep)) * 0.36)) calc(100% - var(--yoru-edge) + 120px),
+    rgb(0 0 0 / calc(1 - (1 - var(--yoru-keep)) * 0.17)) calc(100% - var(--yoru-edge) + 190px),
+    rgb(0 0 0 / calc(1 - (1 - var(--yoru-keep)) * 0.06)) calc(100% - var(--yoru-edge) + 260px),
+    #000 calc(100% - var(--yoru-edge) + 330px),
+    #000 100%
+  );
+}
+
+/* `from` = volle Deckkraft: ohne Animation steht exakt das gemessene Bild, und
+   jede Uhr kann den Untergrund nur DUNKLER machen, nie heller als den Messwert.
+   Das ist der Grund, warum der Kontrastbeweis ohne Zugriff auf die laufende
+   Animation auskommt. */
+@keyframes yoru-lantern-breath {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.62;
+  }
+}
+@keyframes yoru-lantern-swing {
+  from {
+    transform: translate3d(-9px, -4px, 0);
+  }
+  to {
+    transform: translate3d(9px, 4px, 0);
+  }
+}
+@keyframes yoru-shoji-breath {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.74;
+  }
+}
+
+/* Eigenes reduced-motion-Gate: die globale Regel in index.css stellt die Uhren
+   ohnehin still, aber diese Datei muss auch allein geladen korrekt sein. Die
+   Nacht BLEIBT stehen (sie ist Fläche, keine Information) — sie hört nur auf zu
+   atmen, und zwar bei voller Deckkraft (`from`-Frame beider Deckkraft-Uhren),
+   also genau im gemessenen Bild. Die Uhren IM Bild hält die SVG selbst an; ihre
+   Medienabfrage steht in der Datei. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='yoru'] body::before,
+  :root[data-theme='yoru']::after {
+    animation: none;
+  }
+}
+
+/* Die Kopfzeile ist dichteres Nachtglas als die Basis-Insel (92 % statt 86 %):
+   hinter ihr steht Himmel, und Himmel hat Lichtpunkte — ein zu dünnes Glas
+   ließe einen Stern durch eine Beschriftung scheinen. Unten liegt die
+   Goldlippe, Yorus Signatur, so leise, dass sie eher Wärme als Linie ist. */
+:root[data-theme='yoru'] .nav {
+  background: color-mix(in oklab, var(--bg-surface) 92%, transparent);
+  box-shadow:
+    0 1px 0 oklch(0.8 0.13 45 / 0.14),
+    0 10px 30px -22px oklch(0 0 0 / 0.9);
+}
+
+/* Der Sprachstern IST hier eine Laterne: warmes Papierweiß im Kern, das nach
+   außen ins Laternen-Gold fällt. Form und Bewegung bleiben die des Basis-Orbs —
+   das Thema ist Farbe. */
+:root[data-theme='yoru'] .vc-orb__core {
+  background: radial-gradient(
+    circle at 42% 36%,
+    oklch(0.97 0.035 72),
+    oklch(0.87 0.1 52) 48%,
+    var(--accent) 100%
+  );
+}
+
+/* Der Bloom ist der Schein, den die Laterne in die Nachtluft wirft: Gold innen,
+   nach außen in ein sehr leises Nachtblau abkühlend. */
+:root[data-theme='yoru'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    oklch(0.45 0.05 255 / 0.16) 46%,
+    transparent 76%
+  );
+}
+
+/* Die Pegel-Ringe bleiben im Gold, aber sehr zurückgenommen — in einer Nacht
+   ist ein Ring um ein Licht ein Hof, kein Rahmen. */
+:root[data-theme='yoru'] .vc-orb__ring {
+  border-color: oklch(0.8 0.13 45 / 0.32);
+  box-shadow: 0 0 0 5px oklch(0.8 0.13 45 / 0.08);
+}

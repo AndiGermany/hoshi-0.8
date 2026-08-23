@@ -14,7 +14,7 @@
 #      kickstart -k.
 #   5. Auf Health warten (max 60s, GET /api/health == 200).
 #   6. Verifikation OHNE Licht:
-#        (a) 401-Wand: /api/v1/ping über LAN-IP (= nicht-loopback) ohne Token
+#        (a) 401-Wand: /api/v1/home/registry über LAN-IP (= nicht-loopback) ohne Token
 #            → 401, mit Bearer-Token → 200.
 #        (b) 1 NICHT-Licht-Turn: POST /api/v1/chat/stream ("Sag in einem warmen
 #            Satz Hallo.") → nicht-leere Antwort.
@@ -54,6 +54,11 @@
 # ist das Typ-Netz, vitest allein typprüft nicht) und syncet dist/ nach
 # $REMOTE_WEB_DIR (rsync -a --delete, Fallback scp -r). Opt-out für reine
 # Jar-Hotfixes: HOSHI_DEPLOY_SKIP_FE=true (Default false).
+# Härtung 2026-08-13: --remote verifizierte bis dahin nur Health + Bundle-Name —
+# schwächer als --local. Nach dem Health-Poll läuft jetzt dieselbe Verifikation
+# OHNE Licht wie lokal (remote_verify_without_light: 401-Wand + 1 echter
+# Nicht-Licht-Turn, Token aus der REMOTE secrets.env, harte curl -m-Timeouts).
+# Schlägt sie fehl, ist der Deploy-Exit ≠0, auch wenn Health 200 war.
 
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -719,6 +724,93 @@ remote_sync_frontend() {
     return 0
 }
 
+# ── 🔎 Verify OHNE Licht — Remote-Parität zum lokalen Deploy ──────────────────
+# Until 2026-08-13, --remote only checked health + bundle filename — weaker
+# than --local (401-wall + a real turn, see do_local Verify a/b). This brings
+# remote verification to the same level, over the same ssh+curl-127.0.0.1
+# pattern the file already uses in remote_health_poll/remote_status:
+#   (a) 401-wall: the perimeter filter checks the Authorization header itself
+#       (not just loopback-vs-LAN), so a request without a token must 401
+#       even from ct-106's own loopback; with the token it must 200.
+#   (b) one real turn over /api/v1/chat/stream, non-empty answer expected.
+# Token comes from the REMOTE secrets.env (not the locally-resolved
+# $API_TOKEN) — that proves write_remote_secrets_env() actually took effect,
+# not just that the local value looks right. Every probe has curl's own -m
+# hard timeout (no bash `timeout` — this script also runs on macOS, which has
+# no `timeout` builtin); any failure counts into $fails and returns 1, so a
+# red verify makes the whole --remote deploy exit non-zero even if health was 200.
+remote_verify_without_light() {
+    local fails=0
+    echo
+    say "Verify (Remote, Parität zu --local) — 401-Wand + Nicht-Licht-Turn"
+
+    local remote_token
+    remote_token="$(ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" \
+        "grep -m1 '^HOSHI_API_TOKEN=' /etc/hoshi-0.8/secrets.env 2>/dev/null | cut -d= -f2-" 2>/dev/null)"
+    if [ -z "$remote_token" ]; then
+        fail "Verify: konnte HOSHI_API_TOKEN nicht aus $REMOTE_HOST:/etc/hoshi-0.8/secrets.env lesen — (a)+(b) übersprungen"
+        return 1
+    fi
+
+    # (a) 401 wall — probed from THIS machine against the LAN address, NOT via
+    #     loopback: live-disproven 14.08. that the filter ignores the source
+    #     (loopback answered 200 without token, the LAN path gives the real
+    #     401). The ssh alias is not curl-resolvable, so resolve it first.
+    local remote_ip
+    remote_ip="$(ssh -G "$REMOTE_HOST" 2>/dev/null | awk '/^hostname /{print $2}')"
+    say "Verify (a) 401-Wand: $remote_ip:$REMOTE_PORT/api/v1/home/registry (LAN, ohne Token)"
+    local c_noauth c_auth
+    c_noauth="$(curl -sS $CURL_K -o /dev/null -w '%{http_code}' -m 5 \
+        "$HEALTH_SCHEME://$remote_ip:$REMOTE_PORT/api/v1/home/registry" 2>/dev/null)"
+    if [ "$c_noauth" = "401" ]; then ok "/api/v1/home/registry ohne Token → 401 (Wand dicht)"
+    else fail "/api/v1/home/registry ohne Token → ${c_noauth:-000} (erwartet 401)"; fails=$((fails+1)); fi
+    c_auth="$(ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" \
+        "curl -sS $CURL_K -o /dev/null -w '%{http_code}' -m 5 -H 'Authorization: Bearer $remote_token' $HEALTH_SCHEME://127.0.0.1:$REMOTE_PORT/api/v1/home/registry" 2>/dev/null)"
+    if [ "$c_auth" = "200" ]; then ok "/api/v1/home/registry mit Bearer-Token → 200 (Token kommt durch)"
+    else fail "/api/v1/home/registry mit Bearer-Token → ${c_auth:-000} (erwartet 200)"; fails=$((fails+1)); fi
+
+    # (b) 1 NICHT-Licht-Turn — -m 90 wie lokal (do_local Verify b), kein
+    #     endloses Hängen; die rohe SSE-Antwort landet in einer Datei und wird
+    #     erst danach geparst (nie `| head` direkt auf einen Live-SSE-Stream).
+    echo
+    say "Verify (b) 1 NICHT-Licht-Turn: $REMOTE_HOST 127.0.0.1:$REMOTE_PORT/api/v1/chat/stream"
+    ensure_log_dir
+    local sse_out="$PIPELINE_LOG_DIR/deploy-remote-turn-$(timestamp).sse"
+    ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" \
+        "curl -sN $CURL_K -m 90 -X POST -H 'Authorization: Bearer $remote_token' -H 'Content-Type: application/json' -d '{\"text\":\"Sag in einem warmen Satz Hallo.\",\"language\":\"DE\",\"speak\":false}' $HEALTH_SCHEME://127.0.0.1:$REMOTE_PORT/api/v1/chat/stream" \
+        >"$sse_out" 2>/dev/null
+    local satz
+    satz="$(python3 - "$sse_out" <<'PY'
+import json, sys
+texts = []
+with open(sys.argv[1], encoding="utf-8", errors="replace") as f:
+    for raw in f:
+        line = raw.strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[len("data:"):].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            ev = json.loads(payload)
+        except Exception:
+            continue
+        if ev.get("event") == "delta":
+            texts.append(ev.get("text", ""))
+print("".join(texts).strip())
+PY
+)"
+    if [ -n "${satz// /}" ]; then
+        ok "Turn lieferte nicht-leere Antwort: \"$satz\""
+    else
+        fail "Turn lieferte LEERE Antwort (SSE: ${sse_out#$REPO_ROOT/})"
+        tail -10 "$sse_out" 2>/dev/null | sed 's/^/    /'
+        fails=$((fails+1))
+    fi
+
+    [ "$fails" -eq 0 ] && return 0 || return 1
+}
+
 # ── --remote (Default-Action: deploy) ─────────────────────────────────────────
 remote_deploy() {
     cd "$REPO_ROOT" || { fail "REPO_ROOT nicht erreichbar"; return 1; }
@@ -879,11 +971,25 @@ remote_deploy() {
     remote_guarded_restart || return 1
 
     if remote_health_poll; then
+        if ! remote_verify_without_light; then
+            echo
+            fail "REMOTE-DEPLOY: Health 200, aber Verify (401-Wand/Nicht-Licht-Turn) fehlgeschlagen — Dienst lief an, ist aber NICHT vollständig verifiziert."
+            log "Rollback: bash pipeline/deploy.sh --remote --rollback"
+            return 1
+        fi
         echo
         say "${C_GREEN}REMOTE-DEPLOY GRÜN${C_RESET} — 0.8 läuft auf $REMOTE_HOST:$REMOTE_PORT (parallel zu 0.5:8081)."
+        say "  Health 200 · 401-Wand dicht · Nicht-Licht-Turn nicht-leer (Parität zu --local)."
         if [ "$SKIP_FE" = "1" ]; then
             log "FE ÜBERSPRUNGEN (Flag) — nur Jar deployt, Frontend unangetastet gelassen"
         else
+            # FE-diff signal: compares the Vite bundle filename (index-<hash>.js)
+            # before/after sync. The hash covers the JS graph AND (since the
+            # content-derived __HOSHI_BUILD_ID__, vite.config.ts) public/ — a
+            # theme/manifest.json-only change now moves this filename too.
+            # Before that, __HOSHI_BUILD_ID__ was Date.now(), so the filename
+            # changed on EVERY build regardless of content and this line always
+            # said "changed" (useless). Now unchanged really means unchanged.
             local fe_bundle_new
             fe_bundle_new="$(ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" \
                 "curl -sS $CURL_K -m 3 $HEALTH_SCHEME://127.0.0.1:$REMOTE_PORT/ 2>/dev/null | grep -o 'index-[^.]*\.js' | head -1" 2>/dev/null)"
@@ -1044,12 +1150,12 @@ do_local() {
         warn "keine LAN-IP gefunden — 401-Check via Loopback-Bypass entschärft (ehrlich vermerkt)"
     fi
     local c_noauth c_auth
-    c_noauth="$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://$lan_ip:$PORT/api/v1/ping" 2>/dev/null || echo 000)"
-    c_auth="$(curl -s -o /dev/null -w '%{http_code}' -m 5 -H "Authorization: Bearer $TOKEN" "http://$lan_ip:$PORT/api/v1/ping" 2>/dev/null || echo 000)"
-    if [ "$c_noauth" = "401" ]; then ok "/api/v1/ping ohne Token → 401 (Wand dicht)"
-    else fail "/api/v1/ping ohne Token → $c_noauth (erwartet 401)"; fails=$((fails+1)); fi
-    if [ "$c_auth" = "200" ]; then ok "/api/v1/ping mit Bearer-Token → 200 (Token kommt durch)"
-    else fail "/api/v1/ping mit Bearer-Token → $c_auth (erwartet 200)"; fails=$((fails+1)); fi
+    c_noauth="$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://$lan_ip:$PORT/api/v1/home/registry" 2>/dev/null || echo 000)"
+    c_auth="$(curl -s -o /dev/null -w '%{http_code}' -m 5 -H "Authorization: Bearer $TOKEN" "http://$lan_ip:$PORT/api/v1/home/registry" 2>/dev/null || echo 000)"
+    if [ "$c_noauth" = "401" ]; then ok "/api/v1/home/registry ohne Token → 401 (Wand dicht)"
+    else fail "/api/v1/home/registry ohne Token → $c_noauth (erwartet 401)"; fails=$((fails+1)); fi
+    if [ "$c_auth" = "200" ]; then ok "/api/v1/home/registry mit Bearer-Token → 200 (Token kommt durch)"
+    else fail "/api/v1/home/registry mit Bearer-Token → $c_auth (erwartet 200)"; fails=$((fails+1)); fi
 
     # (b) 1 NICHT-Licht-Turn (warmes Hallo, KEINE Smart-Home-Eingabe)
     echo

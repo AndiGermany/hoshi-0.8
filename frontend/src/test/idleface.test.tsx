@@ -3,18 +3,25 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   ALARM_PROGRESS_WINDOW_MS,
   IdleFace,
+  LAEUFT_TILE_L_VISIBLE,
+  SHOPPING_TILE_L_VISIBLE,
+  SHOPPING_TILE_XL_VISIBLE,
   SHOPPING_VISIBLE_COUNT,
   alarmLineText,
   alarmProgress,
+  alarmTileBody,
   diaryTodayStats,
+  einkaufTileBody,
   fmtP50,
   fmtPrecip,
+  laeuftTileBody,
   nextAlarm,
   rainOnsetEpochMs,
   statusChips,
   todayTileValue,
   weatherCategory,
   weatherNowContent,
+  weatherTileBody,
 } from '../components/IdleFace';
 import type { ScheduledItem } from '../hooks/useScheduledItems';
 import type { DiaryTurn } from '../hooks/useDiary';
@@ -71,8 +78,6 @@ const render = (over: Partial<Parameters<typeof IdleFace>[0]> = {}) =>
   renderToStaticMarkup(
     <IdleFace
       nowMs={NOW}
-      health="up"
-      voice={null}
       scheduled={[]}
       weather={null}
       shopping={[]}
@@ -154,6 +159,12 @@ describe('IdleFace-Helfer — pur, ohne DOM', () => {
       tomorrow: null,
       rainFrom: null,
       sun: null,
+      // W5: `hourly` wird jetzt ROH durchgereicht (die XL-Stufe zeichnet
+      // daraus) — ohne Stunden-Daten ein leeres Array, nie erfundene Punkte.
+      hourly: [],
+      // Kachel-Ausbau 21.08.: `outlook` folgt derselben Regel — ein Backend
+      // ohne das Feld ergibt ein leeres Array, und die XL-Zeile bleibt weg.
+      outlook: [],
     });
 
     const withRain = weatherNowContent(
@@ -170,6 +181,8 @@ describe('IdleFace-Helfer — pur, ohne DOM', () => {
       tomorrow: null,
       rainFrom: null,
       sun: null,
+      hourly: [],
+      outlook: [],
     });
   });
 
@@ -199,6 +212,123 @@ describe('IdleFace-Helfer — pur, ohne DOM', () => {
     );
     if (partial.kind !== 'live') throw new Error('unreachable');
     expect(partial.tomorrow).toBeNull();
+  });
+
+  it('Wetter-Dichte je Stufe (§3.1 + Andi 19.08.): S knapp, M mit Fakten-Spalte, L unverändert', () => {
+    // Andis Befund: „wenn ich die mittlere Größe auswähle, habe ich echt viel
+    // Platz". M ist 2×1 — breit und oft niedrig; die Fakten stehen darum in
+    // einer eigenen Spalte NEBEN der Lage (`.idle__nowfacts`), inklusive der
+    // Morgen-Zeile. Regen-ab und Sonne bleiben, was L von M unterscheidet.
+    const voll = weatherNowContent(
+      {
+        kind: 'live',
+        data: {
+          ...heute29,
+          nowTemp: 21,
+          nowCodeText: 'teilweise bewölkt',
+          tomorrowMin: 12,
+          tomorrowMax: 22,
+          tomorrowCodeText: 'sonnig',
+          hourly: [{ epochMs: NOW + 3 * H, tempC: 18, precipProbability: 70 }],
+          sunriseEpochMs: NOW - H,
+          sunsetEpochMs: NOW + 8 * H,
+        },
+      },
+      NOW,
+    );
+    const html = (size: 'S' | 'M' | 'L' | 'XL') =>
+      renderToStaticMarkup(<>{weatherTileBody(voll, size)}</>);
+
+    // S: nur Icon + Jetzt-Temperatur, keine Fakten.
+    expect(html('S')).not.toContain('idle__nowfacts');
+    expect(html('S')).not.toContain('idle__nowspan');
+
+    // M: Fakten-Spalte mit Spanne · Niederschlag · Morgen — aber NICHT
+    // Regen-ab/Sonne (die sind L vorbehalten, „M ist kurze Liste").
+    const m = html('M');
+    expect(m).toContain('idle__nowfacts');
+    expect(m).toContain('idle__nowspan');
+    expect(m).toContain('idle__nowprecip');
+    expect(m).toContain('morgen 12–22°, sonnig');
+    expect(m).not.toContain('idle__nowline--sun');
+    expect(m).not.toContain('Regen ab');
+
+    // L: unverändert flach untereinander — KEINE Fakten-Spalte, dafür alle
+    // drei Zusatzzeilen.
+    const l = html('L');
+    expect(l).not.toContain('idle__nowfacts');
+    expect(l).toContain('morgen 12–22°, sonnig');
+    expect(l).toContain('idle__nowline--sun');
+    // XL ist seit W5 eine EIGENE Stufe — nicht mehr L (§3.1).
+    expect(html('XL')).not.toBe(l);
+  });
+
+  it('Wetter-XL (§3.1/W5): Fakten waagerecht + Stunden-Verlauf, alles aus echten Feldern', () => {
+    const stunden = [
+      { epochMs: NOW, tempC: 21, precipProbability: 0 },
+      { epochMs: NOW + H, tempC: 23, precipProbability: 0 },
+      { epochMs: NOW + 2 * H, tempC: 22, precipProbability: 40 },
+      { epochMs: NOW + 3 * H, tempC: 18, precipProbability: 80 },
+    ];
+    const voll = weatherNowContent(
+      {
+        kind: 'live',
+        data: {
+          ...heute29,
+          nowTemp: 21,
+          nowCodeText: 'teilweise bewölkt',
+          tomorrowMin: 12,
+          tomorrowMax: 22,
+          tomorrowCodeText: 'sonnig',
+          hourly: stunden,
+          sunriseEpochMs: NOW - H,
+          sunsetEpochMs: NOW + 8 * H,
+        },
+      },
+      NOW,
+    );
+    const xl = renderToStaticMarkup(<>{weatherTileBody(voll, 'XL')}</>);
+
+    // 1 · Die fünf L-Zeilen sind DA, aber in der waagerechten Fakten-Zeile.
+    expect(xl).toContain('idle__nowfacts--row');
+    expect(xl).toContain('18–29°');
+    expect(xl).toContain('morgen 12–22°, sonnig');
+    expect(xl).toContain('Regen ab');
+    expect(xl).toContain('idle__nowline--sun');
+
+    // 2 · Das SVG existiert und ist aus der hourly-Fixture gebaut:
+    //     4 Punkte ⇒ Polyline mit 4 Koordinatenpaaren, 2 Balken (die zwei
+    //     trockenen Stunden bekommen KEINEN Balken der Höhe 0).
+    expect(xl).toContain('idle__hourlychart');
+    expect(xl.split('idle__hourlybar').length - 1).toBe(2);
+    const line = /class="idle__hourlyline" points="([^"]+)"/.exec(xl);
+    expect(line).not.toBeNull();
+    expect(line![1].split(' ')).toHaveLength(4);
+    // Die Temperatur-Marken tragen die ECHTEN Extremwerte des Fensters.
+    expect(xl).toContain('>23°</span>');
+    expect(xl).toContain('>18°</span>');
+  });
+
+  it('Wetter-XL ohne hourly: die Fakten stehen, das Bild fehlt ehrlich (§2.3)', () => {
+    const ohneStunden = weatherNowContent(
+      { kind: 'live', data: { ...heute29, nowTemp: 21 } }, // kein hourly
+      NOW,
+    );
+    const xl = renderToStaticMarkup(<>{weatherTileBody(ohneStunden, 'XL')}</>);
+    expect(xl).toContain('idle__nowfacts--row');
+    expect(xl).toContain('18–29°');
+    expect(xl).not.toContain('idle__hourly'); // keine erfundene Kurve
+  });
+
+  it('Wetter-M ohne echte Morgen-Daten bleibt zweizeilig — keine erfundene Zeile', () => {
+    const ohneMorgen = weatherNowContent(
+      { kind: 'live', data: { ...heute29, nowTemp: 21, tomorrowMin: 12 } }, // max/codeText fehlen
+      NOW,
+    );
+    const m = renderToStaticMarkup(<>{weatherTileBody(ohneMorgen, 'M')}</>);
+    expect(m).toContain('idle__nowfacts');
+    expect(m).not.toContain('idle__nowline');
+    expect(m).not.toContain('morgen');
   });
 
   it('rainOnsetEpochMs: erste Stunde >20% Regenwahrscheinlichkeit, sonst null (kein Zahlenfriedhof)', () => {
@@ -499,23 +629,85 @@ describe('IdleFace — das Flur-Display-Layout', () => {
     expect(html).not.toContain('Einkauf');
   });
 
-  it('beide Haushalts-Karten leer ⇒ kein Karten-Container im Markup', () => {
-    const html = render({ scheduled: [], shopping: [] });
+  it('beide Haushalts-Karten leer ⇒ kein Karten-Container im Markup (Wetter, Uhr UND Wecker hier bewusst ausgeschaltet — W1/W4/W6: alle drei sind selbst Buehnen-Widgets, default AN, s. §1.1)', () => {
+    const html = render({
+      scheduled: [],
+      shopping: [],
+      wetterTileEnabled: false,
+      uhrTileEnabled: false,
+      // W6: der Wecker ist die dritte Kachel, die auch OHNE Daten rendert
+      // („Kein Wecker gestellt"). Er allein hielte die Buehne sonst offen —
+      // die Frage dieses Tests ist aber, ob die HAUSHALTS-Karten sie oeffnen.
+      weckerTileEnabled: false,
+    });
     expect(html).not.toContain('idle__tiles');
   });
 
-  it('stille Text-Chips: Health ehrlich, Stimme nur wenn gemessen (SVG statt Emoji)', () => {
-    expect(render()).toContain('online');
-    expect(render({ health: 'down' })).toContain('offline');
-    expect(render()).not.toContain('Stimme:'); // voice=null ⇒ kein Chip
-    const cloud = render({ voice: { engine: 'openai', cloud: true } });
-    expect(cloud).toContain('Stimme: Cloud');
-    expect(cloud).toContain('glyph--cloud'); // Wolken-SVG …
-    expect(cloud).not.toContain('☁'); // … kein Emoji im Chip
-    const local = render({ voice: { engine: 'voxtral', cloud: false } });
-    expect(local).toContain('Stimme: lokal');
-    expect(local).toContain('glyph--lock'); // Schloss-SVG …
-    expect(local).not.toContain('🔒'); // … kein Emoji im Chip
+  it('W4: die UHR ist eine Kachel — sie liegt auf der Buehne, nicht mehr im Kopf', () => {
+    const html = render({ scheduled: [], shopping: [], wetterTileEnabled: false, weckerTileEnabled: false });
+    expect(html).toContain('idle__tiles');
+    expect(html).toContain('idle__clocktile');
+    // Der Kopf traegt nur noch den Gruss — die Uhr steht in ihrer Zelle.
+    expect(html).toContain('idle__greet');
+  });
+
+  it('W4: Uhr aus ⇒ das DATUM kehrt in die Kopfzeile zurueck (es haengt nicht am Uhr-Schalter)', () => {
+    const off = render({ scheduled: [], shopping: [], uhrTileEnabled: false });
+    expect(off).not.toContain('idle__clocktile');
+    expect(off).toMatch(/idle__greet[^>]*>[^<]*·/);
+  });
+
+  it('W4/W6: Wecker aus ⇒ die Wecker-KACHEL rendert GAR NICHT (auch nicht als „kein Wecker")', () => {
+    const off = render({ weckerTileEnabled: false });
+    expect(off).not.toContain('idle__alarm');
+  });
+
+  it('W6: der WECKER ist eine Kachel — er liegt auf der Buehne, nicht mehr im Kopf', () => {
+    // Der Kopf traegt nur noch den Gruss. Alles, was frueher unter ihm stand,
+    // ist eine Zelle geworden, die Andi legen und abschalten kann.
+    const html = render({ scheduled: [], shopping: [], wetterTileEnabled: false, uhrTileEnabled: false });
+    expect(html).toContain('idle__tiles');
+    expect(html).toContain('idle__alarmtile');
+    expect(html).toContain('data-widget-id="wecker"');
+    // Die Wecker-Zeile liegt IN der Kachel, nicht als Geschwister des Kopfes.
+    expect(html).toMatch(/idle__tile--alarm[\s\S]*idle__alarmtile[\s\S]*idle__alarm\b/);
+    expect(html).toContain('idle__greet');
+  });
+
+  it('W6: die Wecker-Kachel bei M traegt Haarlinie UND Vertrauens-Satz, bei S nur die Zeile', () => {
+    // Genau die Stufen-Tabelle aus `homeWidgets.ts` — und die Begruendung,
+    // warum es kein L gibt: mehr Felder hat der Wecker nicht.
+    const set = alarm(NOW + 2 * H);
+    const m = renderToStaticMarkup(<>{alarmTileBody(set, NOW, 'M')}</>);
+    expect(m).toContain('idle__alarmtrack');
+    expect(m).toContain('klingelt auch offline');
+    const small = renderToStaticMarkup(<>{alarmTileBody(set, NOW, 'S')}</>);
+    expect(small).not.toContain('idle__alarmtrack');
+    expect(small).not.toContain('klingelt auch offline');
+    // Die Zeile selbst traegt BEIDE Stufen — sie ist der Inhalt.
+    for (const html of [m, small]) expect(html).toContain('Wecker 09:04');
+  });
+
+  it('W6: ohne Wecker zeigt die Kachel die ehrliche Leerzeile — ohne Linie ueber nichts', () => {
+    const none = renderToStaticMarkup(<>{alarmTileBody(null, NOW, 'M')}</>);
+    expect(none).toContain('Kein Wecker gestellt');
+    expect(none).not.toContain('idle__alarmtrack');
+    expect(none).not.toContain('klingelt auch offline');
+  });
+
+  it('nur Wetter aktiv (Default) ⇒ der Container traegt trotzdem auf, mit dem Gap-Zustand (kein Ladefehler)', () => {
+    const html = render({ scheduled: [], shopping: [] });
+    expect(html).toContain('idle__tiles');
+    expect(html).toContain('idle__nowgap');
+  });
+
+  it('die stillen Text-Chips stehen NICHT mehr im Idle-Gesicht (sie sind die Fußleiste)', () => {
+    // Andi-Bestellung 19.08.: „unten links … etwas wie die Leiste oben, nur
+    // unten". Der Streifen musste dafür unter den Orb, also aus dieser Ansicht
+    // heraus. Was er dort zeigt, prüft `homestatusbar.test.tsx` — hier bleibt
+    // nur der Riegel, dass er nicht doppelt rendert.
+    expect(render()).not.toContain('idle__chips');
+    expect(render()).not.toContain('Stimme:');
   });
 
   it('Wecker-Zeile trägt das Wecker-SVG, kein ⏰-Emoji (Emoji-Sweep 2026-07-06)', () => {
@@ -527,6 +719,47 @@ describe('IdleFace — das Flur-Display-Layout', () => {
     expect(without).not.toContain('⏰');
   });
 
+  it('Einkauf-XL (§3.6/W5): 16 Einträge zweispaltig, der Rest wird gezählt', () => {
+    // 19 Einträge, damit der Deckel greift: die Selbstabnahme hat ihn von 12
+    // auf 16 gehoben, weil 12 Zeilen bei 15 echten Einträgen drei wegzählten,
+    // während die untere Kachelhälfte leer stand.
+    const items = Array.from({ length: 19 }, (_, i) =>
+      shopItem({ id: `s${i}`, text: `Ware ${i + 1}`, quantity: 1 }),
+    );
+    const html = renderToStaticMarkup(<>{einkaufTileBody(items, 'XL')}</>);
+    expect(html).toContain('idle__cardlist--two');
+    expect(html.split('<li').length - 1).toBe(SHOPPING_TILE_XL_VISIBLE);
+    expect(html).toContain('Ware 16');
+    expect(html).not.toContain('Ware 17');
+    expect(html).toContain('+3 weitere');
+    // L bleibt bei 8 und EINspaltig — die zweite Spalte gehört XL.
+    const l = renderToStaticMarkup(<>{einkaufTileBody(items, 'L')}</>);
+    expect(l).not.toContain('idle__cardlist--two');
+    expect(l.split('<li').length - 1).toBe(SHOPPING_TILE_L_VISIBLE);
+  });
+
+  it('Einkauf-XL erfindet nichts: fünf echte Einträge ⇒ fünf Zeilen, keine „+N"', () => {
+    const items = Array.from({ length: 5 }, (_, i) => shopItem({ id: `s${i}`, text: `Ware ${i + 1}` }));
+    const html = renderToStaticMarkup(<>{einkaufTileBody(items, 'XL')}</>);
+    expect(html.split('<li').length - 1).toBe(5);
+    expect(html).not.toContain('idle__cardmore');
+  });
+
+  it('Läuft-XL (§3.5/W5): ALLE Countdowns zweispaltig, darum keine „+N"-Zeile', () => {
+    const items = Array.from({ length: 9 }, (_, i) => timer(NOW + (i + 1) * 60000, `t${i}`, `Timer ${i + 1}`));
+    const html = renderToStaticMarkup(<>{laeuftTileBody(items, NOW, 'XL')}</>);
+    expect(html).toContain('idle__cardlist--two');
+    expect(html.split('<li').length - 1).toBe(9);
+    expect(html).toContain('Timer 9');
+    // Nichts wird verschwiegen ⇒ es gibt nichts zu zählen.
+    expect(html).not.toContain('idle__cardmore');
+    // L deckelt weiterhin bei 6 und bleibt einspaltig.
+    const l = renderToStaticMarkup(<>{laeuftTileBody(items, NOW, 'L')}</>);
+    expect(l).not.toContain('idle__cardlist--two');
+    expect(l.split('<li').length - 1).toBe(LAEUFT_TILE_L_VISIBLE);
+    expect(l).toContain('+3 weitere');
+  });
+
   it('rendert KEINE Welle — ruhiges Papier (hier hört Hoshi nichts, Korrektur 20260706-1729)', () => {
     // Andi-Feedback 2026-07-06: „Da hört Hoshi nichts." Gesetz: nichts
     // leuchtet, was nichts misst — die Welle existiert nur im Chat-Voice-Flow
@@ -535,6 +768,23 @@ describe('IdleFace — das Flur-Display-Layout', () => {
     expect(html).not.toContain('vc-wave');
     expect(html).not.toContain('idle__wave');
     expect(html).not.toContain('<canvas');
+  });
+
+  it('W6: KEIN Kachel-Kopf der Bühne trägt noch die live-Pille (Andi 20.08.)', () => {
+    // Andi wörtlich: „Das Live kann aus den Widgets raus, das gibt uns etwas
+    // Platz." Der Riegel prüft die GANZE Bühne auf einmal, nicht Kachel für
+    // Kachel: die Pille war in fünf Köpfen dieselbe Zeile Markup, und genau so
+    // schleicht sie sich beim nächsten neuen Widget wieder ein.
+    const html = render({
+      scheduled: [alarm(NOW + H), timer(NOW + 2 * H, 't9', 'Wäsche')],
+      weather: liveWeather,
+      shopping: [shopItem()],
+    });
+    expect(html).not.toContain('tile__pill');
+    // Gegenprobe, dass der Riegel etwas prüft: die Köpfe selbst stehen noch,
+    // sie tragen nur den Namen statt Name + Abzeichen.
+    expect(html).toContain('tile__head');
+    expect(html).toContain('tile__name');
   });
 
   it('rendert KEINE „Heute"-Turn-Statistik mehr (zog in die Diagnose-Sektion auf Aktivität um)', () => {

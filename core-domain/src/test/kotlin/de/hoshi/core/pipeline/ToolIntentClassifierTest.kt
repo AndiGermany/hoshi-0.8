@@ -2,6 +2,7 @@ package de.hoshi.core.pipeline
 
 import de.hoshi.core.dto.Language
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
@@ -24,13 +25,15 @@ class ToolIntentClassifierTest {
     }
 
     @Test
-    fun `DE mach das Licht aus mappt auf turn_off mit Default-Area wohnzimmer`() {
+    fun `DE mach das Licht aus ohne Raum laesst area_id WEG (kein geratener Raum)`() {
         val call = classifier.classify("mach das Licht aus", Language.DE)!!
         assertEquals("light", call.domain)
         assertEquals("turn_off", call.service)
         assertNull(call.entityId)
-        // Kein Raum genannt ⇒ Default-Area wohnzimmer (so funktioniert „Licht aus" ohne Raum weiter).
-        assertEquals("wohnzimmer", call.data["area_id"])
+        // F2/S2: kein Raum genannt ⇒ KEIN area_id. Der Classifier raet nicht mehr
+        // „wohnzimmer" (Ballsaal-Vorfall 14.08.) — der Orchestrator loest den Raum
+        // auf (Satelliten-Raum/Anapher) oder fragt nach.
+        assertFalse(call.data.containsKey("area_id"), "roomless ⇒ kein area_id, war: ${call.data}")
     }
 
     @Test

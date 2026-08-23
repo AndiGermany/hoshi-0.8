@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="de">
+  <title>Golem.de</title>
+  <updated>2026-08-15T09:30:00+02:00</updated>
+  <entry>
+    <title>Golem Meldung eins – aktualisiert</title>
+    <link rel="alternate" href="https://www.golem.de/news/golem-eins-2608-200001.html"/>
+    <published>2026-08-15T08:30:00+02:00</published>
+    <id>https://www.golem.de/news/golem-eins-2608-200001.html</id>
+    <summary>Der redigierte Anriss.</summary>
+  </entry>
+  <entry>
+    <title>Golem Meldung zwei</title>
+    <link rel="alternate" href="https://www.golem.de/news/golem-zwei-2608-200002.html"/>
+    <published>2026-08-15T06:30:00+02:00</published>
+    <id>https://www.golem.de/news/golem-zwei-2608-200002.html</id>
+    <summary>Ein zweiter Anriss.</summary>
+  </entry>
+  <entry>
+    <title>Golem Meldung drei</title>
+    <link rel="alternate" href="https://www.golem.de/news/golem-drei-2608-200003.html"/>
+    <published>2026-08-15T09:30:00+02:00</published>
+    <id>https://www.golem.de/news/golem-drei-2608-200003.html</id>
+    <summary>Neu hinzugekommen.</summary>
+  </entry>
+</feed>

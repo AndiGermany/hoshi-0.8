@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchListItems, type ListItem } from '../api/lists';
+import { startVisiblePolling } from './visiblePolling';
 
 /**
  * Poll-Hook der Einkaufs-Karte auf der Übersicht (Andi-JA 2026-07-08 „Listen
@@ -24,11 +25,13 @@ export function useShoppingList(intervalMs = 30_000): ListItem[] {
     };
 
     void tick();
-    const id = window.setInterval(() => void tick(), intervalMs);
+    // Gate statt Frequenz: sichtbar taktet es unveraendert, dunkles
+    // Display pausiert, Sichtbarwerden holt sofort frisch nach.
+    const stopPolling = startVisiblePolling(() => void tick(), intervalMs);
     return () => {
       aliveRef.current = false;
       controller.abort();
-      window.clearInterval(id);
+      stopPolling();
     };
   }, [intervalMs]);
 

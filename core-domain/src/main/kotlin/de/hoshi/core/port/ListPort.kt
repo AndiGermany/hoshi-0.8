@@ -3,35 +3,11 @@ package de.hoshi.core.port
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * **ListPort** — die hexagonale Naht für die brain-freie Einkaufs-/Notizliste
- * (ListFastpath, Andi-JA 2026-07-08 „Listen auf die Ring-1-Karte" — die letzte
- * Ring-1-Lücke neben dem Wecker). Essenz EXAKT nach dem [ScheduledItemPort]-
- * Muster der Wecker-Lane portiert (Restart-Überleben dort bereits bewiesen).
+ * Brain-free storage port for shopping/list entries.
  *
- * Ein [ListEntry] trägt puren Freitext ([ListEntry.text], z.B. „500 g Hack") —
- * **KEINE Einheiten-Ontologie** (Andi-Entscheidung 2026-07-08): der Parser zerlegt
- * Mengenangaben nicht, das Item bleibt genau der Wortlaut, den der Nutzer nannte.
- * [ListEntry.quantity] ist NICHT die Menge des Items selbst, sondern der
- * **Dedupe-Zähler**: dasselbe Item ein zweites Mal angesagt ⇒ derselbe Eintrag
- * (gleiche id) mit `quantity+1` statt eines Duplikats (Andi-Entscheidung: „Milch"
- * zweimal → „2× Milch", nicht ablehnen). Die Dedupe-Entscheidung selbst trifft
- * NICHT der Port (der bleibt ein dummer, keyed Store — exakt wie
- * [ScheduledItemPort.set]) — sie lebt EINMAL in [addWithDedupe], geteilt zwischen
- * [de.hoshi.core.pipeline.ListFastpath] (Voice/Text) und der REST-Naht
- * (`ListsController`), damit In-Mem- und File-Backed-Impl niemals auseinanderdriften.
- *
- * `listId` ist von Tag 1 im Datenmodell (Andi-Entscheidung 2026-07-08: „EINE
- * Einkaufsliste, aber list_id im Modell") — v1 verdrahtet ausschließlich
- * [DEFAULT_LIST_ID] („einkauf"); benannte Zweit-Listen (Notizen etc.) sind eine
- * spätere Scheibe, die nur den Aufrufer ändert, nicht den Port.
- *
- * **Abhaken/„done"-Status ist NICHT Teil dieser Scheibe** (Andi-Entscheidung:
- * UI-Folge-Scheibe) — der Port kennt nur „da" ([add]/[items]) oder „weg"
- * ([remove]/[clear]), keine Zwischenstufe.
- *
- * [NONE] ist der verhaltens-neutrale Default (speichert nie, liefert nie) —
- * passend zum Default-OFF-Flag `HOSHI_LIST_ENABLED`: ohne das Flag wird der
- * Pfad nie betreten.
+ * ADR-002-listen-modell-v1: v1 is a Ring-1 capability with one default list,
+ * verbatim item text, shared deduplication and no done state.
+ * [NONE] matches `HOSHI_LIST_ENABLED=false`: it never stores or returns data.
  */
 interface ListPort {
     /**
@@ -52,7 +28,7 @@ interface ListPort {
     fun clear(listId: String = DEFAULT_LIST_ID): Int
 
     companion object {
-        /** v1-Default-/Einzige Liste (Andi-Entscheidung 2026-07-08: „einkauf"). */
+        /** ADR-002-listen-modell-v1: v1 exposes only this list while retaining `listId` in the model. */
         const val DEFAULT_LIST_ID = "einkauf"
 
         /** Default: speichert nie, liefert nie ⇒ kein Listen-Effekt (Flag-OFF-passend). */
@@ -66,16 +42,16 @@ interface ListPort {
 }
 
 /**
- * Ein Listen-Eintrag — bewusst reine Daten (Spring-frei, uhrfrei).
+ * Framework- and clock-free list data.
  *
- * @property id        eindeutige id (z.B. UUID), Schlüssel im Store.
- * @property listId    welche Liste (v1 immer [ListPort.DEFAULT_LIST_ID]).
- * @property text      Freitext-Item genau wie gesagt (z.B. „Milch", „500 g Hack") —
- *                     KEINE Einheiten-/Mengen-Zerlegung (Andi-Entscheidung 2026-07-08).
- * @property quantity  Dedupe-Zähler (Default 1); >1 heißt „N× genannt", NICHT „N Stück"
- *                     im Sinn einer geparsten Menge — s. Klassen-KDoc.
- * @property addedAtEpochMs Anlage-Zeitpunkt (Epoch-Millis) — nur fürs Sortieren/Debugging,
- *                     kein funktionales Verhalten hängt daran (anders als beim Timer).
+ * ADR-002-listen-modell-v1: [text] stays verbatim; [quantity] counts duplicate
+ * mentions and never represents a parsed amount or unit.
+ *
+ * @property id globally unique store key.
+ * @property listId target list; v1 uses [ListPort.DEFAULT_LIST_ID].
+ * @property text verbatim user item, for example `Milk` or `500 g mince`.
+ * @property quantity deduplication counter, starting at one.
+ * @property addedAtEpochMs ordering/debug timestamp; no timer semantics depend on it.
  */
 data class ListEntry(
     val id: String,
@@ -118,13 +94,9 @@ class InMemoryListStore : ListPort {
 }
 
 /**
- * **Die EINE Dedupe-Regel** (Andi-Entscheidung 2026-07-08): [text] gegen die
- * vorhandenen Einträge von [listId] case-insensitiv/getrimmt abgleichen — Treffer
- * ⇒ derselbe Eintrag mit `quantity+1` (die ERSTE Schreibweise gewinnt, kein
- * Text-Flackern bei wiederholtem Ansagen), sonst ein neuer Eintrag mit
- * `quantity=1`. Geteilt zwischen [de.hoshi.core.pipeline.ListFastpath]
- * (Voice/Text-Turn) und der REST-Naht (`ListsController`, web-inbound) — EINE
- * Wahrheit, keine Drift zwischen den beiden Eingängen.
+ * ADR-002-listen-modell-v1: the shared deduplication rule for voice and REST.
+ * A case-insensitive text match keeps the first spelling and increments its
+ * counter; otherwise a new entry is created.
  */
 fun ListPort.addWithDedupe(
     listId: String,

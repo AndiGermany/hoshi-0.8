@@ -55,7 +55,8 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * **Outbound-Frames:** `transcribing_started`·`transcript{text}`·`no_input`·
  * `llm_thinking`·`llm_start`·`llm_delta`·`tts_audio_start`·`llm_audio{seq,data}`·
- * `tts_audio_end`·`llm_done{ttsHandled}`·`llm_error{stage,message}`·`turn_aborted{turnId}`·
+ * `tts_audio_end`·`llm_done{ttsHandled[,expectReply,pendingKind]}`·
+ * `llm_error{stage,message}`·`turn_aborted{turnId}`·
  * `speaker{speakerId}` (LED-Erkennungs-Schimmer, nur bei sicherem Treffer,
  * [speakerFrameEnabled]).
  *
@@ -67,9 +68,9 @@ import java.util.concurrent.ConcurrentHashMap
  * [PerimeterPort] wie die HTTP-Wand — ungültig/fehlend (non-loopback) ⇒ Close 1008
  * (POLICY_VIOLATION). Loopback bleibt frei (lokaler Probe-Client).
  *
- * Testbarkeit: der Turn ist ein **Funktions-Seam** ([runTurn] = `orchestrator::handle`),
- * sodass der Handler-Test einen kanned `Flux<ChatEvent>` injizieren kann statt den
- * Brain zu booten (`AudioWebSocketHandlerTest`).
+ * Testbarkeit: Der Turn bleibt ein **Funktions-Seam** ([runTurn]), wird vor dem
+ * Aufruf aber immer vom [InboundTurnGateway] verriegelt. Handler-Tests können so
+ * einen canned `Flux<ChatEvent>` injizieren, ohne den Brain zu booten.
  */
 class AudioWebSocketHandler(
     private val stt: de.hoshi.core.port.SttPort,
@@ -237,8 +238,37 @@ class AudioWebSocketHandler(
      * hier `brainAutoSwitchPort::onVoiceSessionStart` durch.
      */
     private val onVoiceSessionStart: () -> Unit = {},
+    /**
+     * **Späte Antwort statt stillem Verpuffen (Andi-Livetest 2026-08-21) — flag-gated
+     * (`HOSHI_WS_LATE_ANSWER_ENABLED`), default OFF ⇒ byte-neutral.**
+     *
+     * **Der bewiesene Verlust:** `TurnOrchestrator.escalationTurn` emittiert
+     * `Start` → `TextDelta("Klar, Moment — ich schau schnell.")` → *[bis 8 s
+     * Lookup-Lücke]* → Antwort → `Done` in EINEM Flux. Trifft in der Lücke ein neues
+     * `start`-Frame ein, verdrängte [onStart] den laufenden Turn bisher per
+     * `dispose()`. Reactors Cancel-Signal feuert WEDER `onComplete` NOCH `onError` —
+     * und da NUR diese beiden Subscriber-Callbacks Frames schreiben, verschwand die
+     * Antwort **spurlos**: kein `llm_delta`, kein `llm_audio`, kein `llm_done`, kein
+     * `llm_error`. Das Gerät hing in einem nie beendeten Turn. Genau Andis Befund:
+     * „Nachdem sie online geschaut hat, wurde mir keine Antwort ausgegeben, nur das
+     * ‚ich schaue nach'."
+     *
+     * Mit dem `expectReply`-Signal (Naht 1) wird dieses neue `start` zum REGELFALL,
+     * weil die Firmware nach einer Rückfrage von selbst wieder aufnimmt.
+     *
+     * **Bei ON** wird ein verdrängter Turn nicht mehr stillgelegt, sondern
+     * STUMMGESCHALTET zu Ende gehört: seine restlichen [ChatEvent.TextDelta] werden
+     * gesammelt und nach Turn-Ende als `speak_push` + TTS-Audio in DERSELBEN (offen
+     * bleibenden) Session nachgereicht ([deliverLateAnswer]). **Kagami-Regel:** bleibt
+     * kein sprechbarer Text übrig (Fehler/leerer Ausgang), wird die bestehende
+     * `escalationUnavailable`-Phrase des Sprachpakets gesprochen — lieber ehrlich als
+     * still. Ein ausdrückliches `abort` (Barge-in) bleibt ein HARTER Stopp ohne Push:
+     * wer unterbricht, will die Antwort nicht mehr hören.
+     */
+    private val lateAnswerEnabled: Boolean = false,
 ) : WebSocketHandler {
 
+    private val inboundTurns = InboundTurnGateway(runTurn)
     private val log = LoggerFactory.getLogger(javaClass)
     private val T = ChatEventWsTranslator
 
@@ -268,6 +298,12 @@ class AudioWebSocketHandler(
     // für die Downlink-Registrierung ([registerDevice]) und das saubere Aufräumen
     // in [closeSession] (Muster [speakers]/[languages]).
     private val satelliteIds = ConcurrentHashMap<String, String>()
+    // Room of the satellite that speaks in this session, from the `start` frame
+    // (F2/Irori "the room travels along"): held exactly like [satelliteIds], reset
+    // per turn like [requestedPersonas] so a frame WITHOUT `room` never drags the
+    // room of an earlier turn along. Raw device string ("kueche") — the resolution
+    // against the real HA areas happens in the orchestrator, not here.
+    private val rooms = ConcurrentHashMap<String, String>()
     /**
      * **Gesprächsverlauf je ws-Session (Andi-Befund 2026-07-21, "Coldplay"-Bug):**
      * Folgefragen über den Satelliten verloren ihren Bezug, weil der [ChatRequest]
@@ -297,6 +333,28 @@ class AudioWebSocketHandler(
     internal val activeTurns = ConcurrentHashMap<String, Disposable>()
     // Idempotenz-Guard gegen Doppel-stop (FE/Gerät schickt stop ggf. doppelt).
     private val stopHandled = ConcurrentHashMap.newKeySet<String>()
+    /**
+     * Ein Turn, dessen Antwort ggf. NACH seiner Verdrängung noch eintrifft
+     * ([lateAnswerEnabled]). [muted] ⇒ der Subscriber schreibt keine Turn-Frames mehr,
+     * sammelt den Antworttext aber weiter in [late]; [handle] erlaubt [closeSession],
+     * einen so weiterlaufenden Turn beim Session-Ende doch hart zu beenden.
+     */
+    private class DisplaceableTurn(
+        val turnId: String?,
+        val language: Language,
+        val handle: Disposable,
+    ) {
+        val muted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val late = StringBuilder()
+    }
+
+    // Der aktuell laufende, verdrängbare Turn je Session (nur bei [lateAnswerEnabled]
+    // befüllt ⇒ OFF: die Map bleibt leer, kein Zustand, kein Verhalten).
+    private val displaceable = ConcurrentHashMap<String, DisplaceableTurn>()
+    // Verdrängte, aber WEITERLAUFENDE Turns je Session — damit [closeSession] auch sie
+    // sauber beendet (sie stehen nicht mehr in [activeTurns]).
+    private val displacedTurns = ConcurrentHashMap<String, reactor.core.Disposable.Composite>()
+
     // Audio-Cap-Guard: Turns, deren Audio-Puffer die Byte-Grenze gerissen hat (Ticket #9).
     // Solange gesetzt, werden weitere binäre Frames verworfen UND ein `stop` ignoriert
     // (der Cap-Abbruch hat den Turn bereits never-silent abgeschlossen). Reset bei `start`.
@@ -368,8 +426,14 @@ class AudioWebSocketHandler(
         speakers.remove(sessionId)
         languages.remove(sessionId)
         requestedPersonas.remove(sessionId)
+        rooms.remove(sessionId)
         conversationHistories.remove(sessionId)
         activeTurns.remove(sessionId)?.dispose()
+        // Verdrängte, stumm weiterlaufende Turns ([lateAnswerEnabled]) stehen NICHT
+        // mehr in [activeTurns] — beim Session-Ende gibt es niemanden mehr, dem man
+        // etwas nachreichen könnte, also hart beenden (kein Leak, kein Zombie-Lookup).
+        displaceable.remove(sessionId)
+        displacedTurns.remove(sessionId)?.dispose()
         stopHandled.remove(sessionId)
         cappedSessions.remove(sessionId)
         sessionGuard.disarm(sessionId)
@@ -463,7 +527,21 @@ class AudioWebSocketHandler(
         // (Wortsalat) UND ein späteres abort{turnId=neu} findet activeTurns[sid] bereits
         // vom neuen Turn überschrieben und disposed nie den alten. Im Normalfall (sauberes
         // start→stop→done, kein Overlap) ist hier längst nichts mehr drin ⇒ no-op.
-        activeTurns.remove(sessionId)?.dispose()
+        //
+        // Späte Antwort (s. [lateAnswerEnabled]): ist der verdrängte Turn noch am
+        // Nachschlagen, wäre `dispose()` genau der stille Tod aus Andis Befund —
+        // Reactors Cancel feuert weder onComplete noch onError, also schreibt NIEMAND
+        // mehr ein Frame. Bei ON wird er deshalb nur STUMMGESCHALTET (keine
+        // Turn-Frames mehr, kein Wortsalat mit dem neuen Turn) und weiter gehört;
+        // sein Ergebnis kommt danach als `speak_push`. OFF ⇒ exakt die Zeile von vorher.
+        val displaced = if (lateAnswerEnabled) displaceable.remove(sessionId) else null
+        if (displaced != null) {
+            displaced.muted.set(true)
+            activeTurns.remove(sessionId) // Handle abgeben, aber NICHT disposen
+            displacedTurns.computeIfAbsent(sessionId) { Disposables.composite() }.add(displaced.handle)
+        } else {
+            activeTurns.remove(sessionId)?.dispose()
+        }
         val turnId = node.path("turnId").asText("").takeIf { it.isNotEmpty() }
         if (turnId != null) turnIds[sessionId] = turnId else turnIds.remove(sessionId)
         node.path("language").asText("").takeIf { it.isNotBlank() }?.let {
@@ -481,7 +559,10 @@ class AudioWebSocketHandler(
         val personaRaw = node.path("persona").asText("").takeIf { it.isNotBlank() }
         if (personaRaw != null) requestedPersonas[sessionId] = Persona.fromCode(personaRaw)
         else requestedPersonas.remove(sessionId)
+        // The frame already carries `room` (journal 21.07.: room=kueche) — until F2 it
+        // was logged and dropped, so a kitchen satellite switched the living room.
         val room = node.path("room").asText("").takeIf { it.isNotBlank() }
+        if (room != null) rooms[sessionId] = room else rooms.remove(sessionId)
         val satelliteId = node.path("satelliteId").asText("").takeIf { it.isNotBlank() }
         if (satelliteId != null) {
             satelliteIds[sessionId] = satelliteId
@@ -615,12 +696,31 @@ class AudioWebSocketHandler(
                 }
             }
 
+        // Späte-Antwort-Buchführung (s. [lateAnswerEnabled]): OFF ⇒ `record` bleibt
+        // null, jede Zeile unten fällt auf den heutigen Pfad zurück ⇒ byte-neutral.
+        val record = if (lateAnswerEnabled) DisplaceableTurn(turnIds[sessionId], lang, turnHandle) else null
+        if (record != null) displaceable[sessionId] = record
+
         val subscription = turnFlux
             .subscribe(
-                { event -> T.translate(event, speakerFrameEnabled)?.let { sink.tryEmitNext(withTurnId(sessionId, it)) } },
+                { event ->
+                    if (record != null && record.muted.get()) {
+                        // Verdrängt: KEINE Turn-Frames mehr (der neue Turn schreibt
+                        // bereits auf denselben Sink), aber die Antwort weiter sammeln.
+                        if (event is ChatEvent.TextDelta) record.late.append(event.text)
+                    } else {
+                        T.translate(event, speakerFrameEnabled)?.let { sink.tryEmitNext(withTurnId(sessionId, it)) }
+                    }
+                },
                 { e ->
                     // Stream-Fehler nach Subscribe: never-silent abschließen.
                     log.error("[audio-ws] Turn-Stream-Fehler: {}", e.message)
+                    if (record != null && record.muted.get()) {
+                        // Der verdrängte Turn ist gescheitert — Kagami: ehrlich sagen,
+                        // nicht schweigen ([deliverLateAnswer] nimmt die Absage-Phrase).
+                        finishDisplaced(sessionId, record)
+                        return@subscribe
+                    }
                     sink.tryEmitNext(withTurnId(sessionId, T.llmError(ChatEvent.Stage.LLM, e.message ?: "stream error")))
                     sink.tryEmitNext(withTurnId(sessionId, T.llmDone(false)))
                     // Identitätsbasiert: NUR den EIGENEN Eintrag entfernen (remove(key,value)
@@ -629,7 +729,13 @@ class AudioWebSocketHandler(
                     // hinterlegt, bleibt der unangetastet — kein Cross-Turn-Stomp (P1-Fix).
                     activeTurns.remove(sessionId, turnHandle)
                 },
-                { activeTurns.remove(sessionId, turnHandle) },
+                {
+                    activeTurns.remove(sessionId, turnHandle)
+                    if (record != null) {
+                        displaceable.remove(sessionId, record)
+                        if (record.muted.get()) finishDisplaced(sessionId, record)
+                    }
+                },
             )
         // Erst JETZT den echten Subscription-Handle einhängen. War [turnHandle] zwischen-
         // zeitlich schon disposed (z.B. onStart/onAbort/closeSession griff, während die
@@ -688,33 +794,37 @@ class AudioWebSocketHandler(
         // S-B: die effektive Persona aus der Fallback-Kette (explizites Frame-Feld > Server-Store
         // > STANDARD, flag-gegatet im Resolver). Ohne Wiring (Default-Seam) ⇒ STANDARD ⇒ byte-neutral.
         val effectivePersona = resolvePersona(requestedPersonas[sessionId])
-        val request = ChatRequest(
-            text = transcript,
-            speak = true,
-            chatId = sessionId,
-            speakerContext = speakerContext,
-            language = lang,
-            persona = effectivePersona,
-            // Eingangs-Rand (Tagesnote-Naht): dieser Turn kam über den Voice-PE-WebSocket —
-            // dieselbe Kennung wie im Turn-Diary.
-            source = TurnDiaryTap.SOURCE_WS,
-            // PREP-wecker-am-satelliten (Scheibe 1): die im `start`-Frame geparste `satelliteId`
-            // (falls das Gerät eine mitschickt) reist NUR hier mit — Chat/FE setzen dieses Feld
-            // nie. `null` (kein `satelliteId`-Feld im Frame) ⇒ byte-neutraler Alt-Pfad, exakt wie
-            // heute. Unabhängig vom Downlink-Push-Flag: dieselbe Session→Satellit-Kennung, die
-            // [registerDevice] (falls scharf) auch in die Registry hängt.
-            originSatelliteId = satelliteIds[sessionId],
-            // Session-Gedächtnis (Andi-Befund 2026-07-21, "Coldplay"-Bug): der bisher lückenlos
-            // leere Default hier war die WURZEL des Bugs — jeder Sprach-Turn kam ohne Bezug zum
-            // vorherigen an. Leer, solange kein Vorgänger-Turn erfolgreich abgeschlossen hat ⇒
-            // erster Turn einer Session ist BYTE-IDENTISCH zum bisherigen `emptyList()`-Default.
-            history = conversationHistories[sessionId] ?: emptyList(),
+        val inbound = inboundTurns.webSocket(
+            ChatRequest(
+                text = transcript,
+                speak = true,
+                chatId = sessionId,
+                speakerContext = speakerContext,
+                language = lang,
+                persona = effectivePersona,
+                // PREP-wecker-am-satelliten (Scheibe 1): die im `start`-Frame geparste `satelliteId`
+                // (falls das Gerät eine mitschickt) reist NUR hier mit — Chat/FE setzen dieses Feld
+                // nie. `null` (kein `satelliteId`-Feld im Frame) ⇒ byte-neutraler Alt-Pfad, exakt wie
+                // heute. Unabhängig vom Downlink-Push-Flag: dieselbe Session→Satellit-Kennung, die
+                // [registerDevice] (falls scharf) auch in die Registry hängt.
+                originSatelliteId = satelliteIds[sessionId],
+                // F2/Irori: the room this turn is spoken in travels WITH the request (the
+                // `start` frame's `room`, raw). Absent field ⇒ null ⇒ byte-neutral old path.
+                originAreaId = rooms[sessionId],
+                // Session-Gedächtnis (Andi-Befund 2026-07-21, "Coldplay"-Bug): der bisher lückenlos
+                // leere Default hier war die WURZEL des Bugs — jeder Sprach-Turn kam ohne Bezug zum
+                // vorherigen an. Leer, solange kein Vorgänger-Turn erfolgreich abgeschlossen hat ⇒
+                // erster Turn einer Session ist BYTE-IDENTISCH zum bisherigen `emptyList()`-Default.
+                history = conversationHistories[sessionId] ?: emptyList(),
+            ),
+            sessionId,
         )
+        val request = inbound.request
         // S-D: Gedächtnis-Write NUR bei echt erkanntem Sprecher. [rememberAfter] umhüllt den
         // ORCHESTRATOR-Strom VOR der TtsStage (wie am Chat-Rand: es sammelt die Antwort-TextDelta
         // und schreibt on-complete, kein zweiter Brain-Call). Kein erkannter Sprecher ⇒ Identity
         // ⇒ kein Write ⇒ byte-neutral.
-        val turnRaw = runTurn(request)
+        val turnRaw = inbound.run()
         val remembered = if (rememberSpeaker != null) rememberAfter(request, turnRaw) else turnRaw
         // Session-Gedächtnis Fortsetzung: dieselbe Sammel-Technik wie [rememberAfter] (TextDelta
         // einsammeln, NACH `onComplete` schreiben, kein zweiter Brain-Call) — hier ins ws-Session-
@@ -736,6 +846,61 @@ class AudioWebSocketHandler(
             // Perf-Diary: die am Rand gemessene STT-Dauer (Parameter-Naht des Taps).
             sttMs = sttMs,
         )
+    }
+
+    /**
+     * Ein verdrängter Turn ist zu Ende gelaufen: Buchführung aufräumen und sein
+     * Ergebnis nachreichen. Idempotent über [DisplaceableTurn.handle] — der Composite
+     * gibt den Handle frei, damit [closeSession] nicht auf tote Turns zeigt.
+     */
+    private fun finishDisplaced(sessionId: String, record: DisplaceableTurn) {
+        displacedTurns[sessionId]?.remove(record.handle)
+        deliverLateAnswer(sessionId, record)
+    }
+
+    /**
+     * **Der unaufgeforderte Sprech-Push** (Andi-Livetest 2026-08-21). Die Antwort eines
+     * verdrängten Turns wird in DERSELBEN, weiterhin offenen ws-Session ausgespielt:
+     * ein ankündigendes `speak_push`-Frame (damit das Gerät weiß, dass das NICHT zu
+     * seinem aktuellen Turn gehört), dann echtes Audio im BESTEHENDEN Idiom über
+     * dieselbe [TtsStage] wie jeder normale Turn — kein zweiter TTS-Weg.
+     *
+     * **Kagami-Regel:** ist kein sprechbarer Text übrig (Fehler, leerer Ausgang,
+     * Timeout), wird die bestehende `escalationUnavailable`-Phrase des Sprachpakets
+     * gesprochen — in der Sprache DIESER Session (ein englischer Satellit wird nicht
+     * deutsch vertröstet). Lieber ehrlich „ich komm grad nicht ran" als stilles
+     * Verpuffen.
+     *
+     * Das terminale [ChatEvent.Done] wird bewusst NICHT als `llm_done` übersetzt: der
+     * Push ist kein Turn, und ein `llm_done` würde dem Gerät das Ende seines LAUFENDEN
+     * Turns vortäuschen. Es fließt nur in die [TtsStage] (die daran den letzten Satz
+     * flusht) und wird danach am Rand weggefiltert.
+     *
+     * Ist die Session inzwischen zu (Gerät weg), passiert schlicht nichts.
+     */
+    private fun deliverLateAnswer(sessionId: String, record: DisplaceableTurn) {
+        val sink = sinks[sessionId] ?: return
+        val pack = LanguagePackRegistry.forLanguage(record.language)
+        val text = record.late.toString().trim().ifBlank { pack.escalationUnavailable }
+        log.info(
+            "[audio-ws] späte Antwort für verdrängten Turn {} ({} Zeichen) — speak_push",
+            record.turnId ?: "-", text.length,
+        )
+        sink.tryEmitNext(T.speakPush(SPEAK_PUSH_LATE_ANSWER, record.turnId))
+        val synthetic = Flux.just<ChatEvent>(
+            ChatEvent.TextDelta(text, provider = LATE_ANSWER_PROVIDER),
+            ChatEvent.Done(provider = LATE_ANSWER_PROVIDER),
+        )
+        val late = ttsStage.transform(synthetic, record.language)
+            .subscribe(
+                { ev ->
+                    // KEIN withTurnId: der Push gehört zu keinem laufenden Turn — welcher
+                    // Turn gemeint ist, steht im `speak_push`-Frame.
+                    if (ev !is ChatEvent.Done) T.translate(ev, speakerFrameEnabled)?.let { sink.tryEmitNext(it) }
+                },
+                { e -> log.warn("[audio-ws] später Sprech-Push fehlgeschlagen: {}", e.message) },
+            )
+        displacedTurns.computeIfAbsent(sessionId) { Disposables.composite() }.add(late)
     }
 
     /**
@@ -880,6 +1045,16 @@ class AudioWebSocketHandler(
 
     companion object {
         const val WS_AUDIO_PATH = "/ws/audio"
+
+        /** `reason` des einzigen heute existierenden [ChatEventWsTranslator.speakPush]-Anlasses. */
+        const val SPEAK_PUSH_LATE_ANSWER = "late_answer"
+
+        /**
+         * Provider-Etikett der nachgereichten Antwort. Bewusst `LOCAL`: gesprochen wird
+         * sie hier, am Rand — die Herkunft des INHALTS hat der verdrängte Turn längst in
+         * seiner eigenen Trace bilanziert.
+         */
+        const val LATE_ANSWER_PROVIDER = "LOCAL"
 
         /**
          * Content-Type-Label der Identify-Probe (S-C) — 1:1 das

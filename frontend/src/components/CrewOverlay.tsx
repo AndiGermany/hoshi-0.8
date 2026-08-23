@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchCrew, type CrewMember } from '../api/crew';
+import { Overlay } from './Overlay';
 import { StarGlyph } from './icons';
 
 interface Props {
@@ -21,76 +22,59 @@ interface Props {
  * Prop-getrieben (kein Hook/Netz hier) → via `renderToStaticMarkup` testbar; den
  * Live-Fetch verdrahtet {@link CrewOverlayLive}. Ein-/Austritt ueber die
  * `is-open`-Klasse; reduced-motion respektiert die globale Regel in index.css.
- * Esc und ein Klick auf den abgedunkelten Hintergrund schliessen.
+ *
+ * The modal frame (backdrop + click-to-close, role/aria-modal, Escape,
+ * autofocus, card geometry) is no longer owned here: it moved into the shared
+ * {@link Overlay} shell (design 2026-08-15 §3.2). Crew is its FIRST user and
+ * keeps its historic BEM roots (`crew-overlay`/`crew`) plus its markup byte for
+ * byte — `test/crew.test.tsx` is the non-regression latch. Autofocus still
+ * lands on the close button: the shell focuses the first focusable descendant,
+ * and that is the header button below.
  */
 export function CrewOverlay({ open, members, loading, error, onClose }: Props) {
-  const closeRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
   return (
-    <div
-      className={`crew-overlay ${open ? 'is-open' : ''}`}
-      onClick={onClose}
-      aria-hidden={!open}
+    <Overlay
+      open={open}
+      onClose={onClose}
+      label="Die Crew"
+      backdropClassName="crew-overlay"
+      cardClassName="crew"
     >
-      <aside
-        className="crew"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Die Crew"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="crew__head">
-          <h2 className="crew__title">
-            <span className="crew__star" aria-hidden="true">
-              <StarGlyph />
-            </span>
-            Stellar Bloom — die Crew
-          </h2>
-          <button
-            ref={closeRef}
-            type="button"
-            className="crew__close"
-            onClick={onClose}
-            aria-label="Crew schließen"
-          >
-            ✕
-          </button>
-        </header>
+      <header className="crew__head">
+        <h2 className="crew__title">
+          <span className="crew__star" aria-hidden="true">
+            <StarGlyph />
+          </span>
+          Stellar Bloom — die Crew
+        </h2>
+        <button type="button" className="crew__close" onClick={onClose} aria-label="Crew schließen">
+          ✕
+        </button>
+      </header>
 
-        <p className="crew__motto">warm. lokal. wach.</p>
+      <p className="crew__motto">warm. lokal. wach.</p>
 
-        {loading && members.length === 0 && <p className="crew__note">lädt…</p>}
-        {error && (
-          <p className="crew__note" role="alert">
-            {error}
-          </p>
-        )}
+      {loading && members.length === 0 && <p className="crew__note">lädt…</p>}
+      {error && (
+        <p className="crew__note" role="alert">
+          {error}
+        </p>
+      )}
 
-        <ul className="crew__list">
-          {members.map((m) => (
-            <li className="crew__member" key={m.name}>
-              <div className="crew__memhead">
-                <span className="crew__name">{m.name}</span>
-                <span className="crew__role">{m.role}</span>
-              </div>
-              <p className="crew__mantra">{m.mantra}</p>
-            </li>
-          ))}
-        </ul>
+      <ul className="crew__list">
+        {members.map((m) => (
+          <li className="crew__member" key={m.name}>
+            <div className="crew__memhead">
+              <span className="crew__name">{m.name}</span>
+              <span className="crew__role">{m.role}</span>
+            </div>
+            <p className="crew__mantra">{m.mantra}</p>
+          </li>
+        ))}
+      </ul>
 
-        <p className="crew__foot">captain: andi · 流れ星</p>
-      </aside>
-    </div>
+      <p className="crew__foot">captain: andi · 流れ星</p>
+    </Overlay>
   );
 }
 

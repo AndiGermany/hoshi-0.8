@@ -54,3 +54,34 @@ fun interface AreaCatalogPort {
         }
     }
 }
+
+/**
+ * **`area_id` → der ECHTE, sprechbare Raumname — oder `null`.** Die EINE Auflösung,
+ * die jeder gesprochene/angezeigte Raumname nimmt (`de.hoshi.adapters.ha.HaToolPort`
+ * für die Quittungen, `de.hoshi.core.pipeline.TurnOrchestrator` für den Diary-Namen).
+ *
+ * Reihenfolge: der Katalog (die LIVE HA-Area-Registry — `kuche` trägt dort den
+ * Registry-Namen `Küche`), dann die kuratierte [ToolAreas.LABELS]-Karte als
+ * Offline-Anker. Never-throw wie der Port selbst.
+ *
+ * **Warum `null` statt eines kapitalisierten Slugs** (Andi 2026-08-22: „Das TTS sagt
+ * aber leider Kuche und nicht Küche."): eine `area_id` ist ein SCHLÜSSEL, kein Name.
+ * HA slugifiziert ü→u, also ist `kuche.replaceFirstChar { uppercase() }` = „Kuche"
+ * ein VERSTÜMMELTES Nutzerdatum — und Nutzerdaten verstümmeln bricht dieselbe eiserne
+ * Regel wie Nutzerdaten übersetzen. Wer keinen Namen findet, sagt lieber vage „im
+ * gewünschten Raum" (`HaExecutorPack.roomFallbackName`) als etwas Kaputtes.
+ */
+fun AreaCatalogPort.displayNameOrNull(areaId: String?): String? {
+    val id = areaId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    // Never-throw, obwohl der Port-Vertrag es schon verlangt: diese Auflösung liegt
+    // seit 2026-08-22 auf JEDEM Tool-Turn (auch dem SCHALTENDEN), nicht mehr nur auf
+    // dem Temperatur-Lesepfad. Ein kaputter Katalog darf eine echte Tat niemals
+    // kippen — er kostet höchstens den schönen Namen, nie das Licht.
+    val fromCatalog = runCatching {
+        areas()
+            .firstOrNull { it.areaId.equals(id, ignoreCase = true) }
+            ?.label?.trim()
+            ?.takeIf { it.isNotEmpty() }
+    }.getOrNull()
+    return fromCatalog ?: ToolAreas.LABELS[id.lowercase()]
+}

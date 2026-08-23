@@ -156,10 +156,10 @@ DIRTY_RELEVANT="$(
 if [ -n "$DIRTY_RELEVANT" ]; then
     if [ "$ALLOW_DIRTY" = 1 ]; then
         warn "Arbeitsbaum NICHT sauber — $(echo "$DIRTY_RELEVANT" | wc -l | tr -d ' ') betroffene Pfade (per --allow-dirty geduldet, nur Trockenlauf)"
-        echo "$DIRTY_RELEVANT" | sed 's/^/      /' | head -10
+        echo "$DIRTY_RELEVANT" | sed 's/^/      /' | awk 'NR<=10'
     else
         fail "Arbeitsbaum nicht sauber — der Export würde ungecommittete Arbeit enthalten."
-        echo "$DIRTY_RELEVANT" | sed 's/^/      /' | head -20
+        echo "$DIRTY_RELEVANT" | sed 's/^/      /' | awk 'NR<=20'
         log "Committe oder stashe zuerst. Für einen reinen Trockenlauf: --allow-dirty"
         exit 1
     fi
@@ -520,13 +520,17 @@ if [ "$((ADDED + MODIFIED + DELETED))" -eq 0 ]; then
 fi
 
 ok "Diff gegen $PUBLIC_REPO@$PUBLIC_HEAD: +$ADDED neu, ~$MODIFIED geändert, -$DELETED gelöscht"
+
+# Listen-Kappung mit awk statt `| head`: head schließt die Pipe nach N Zeilen,
+# der Schreiber stirbt an SIGPIPE und `pipefail` reißt das ganze Skript mit
+# (rc=141 beim 0.9.0-Lauf: erstmals >40 neue Dateien). awk liest zu Ende.
 if [ "$ADDED" -gt 0 ]; then
     log "neu:"
-    git -C "$PUBLIC_CLONE" diff --cached --name-only --diff-filter=A | sed 's/^/      + /' | head -40
+    git -C "$PUBLIC_CLONE" diff --cached --name-only --diff-filter=A | sed 's/^/      + /' | awk 'NR<=40'
 fi
 if [ "$DELETED" -gt 0 ]; then
     log "gelöscht:"
-    git -C "$PUBLIC_CLONE" diff --cached --name-only --diff-filter=D | sed 's/^/      - /' | head -40
+    git -C "$PUBLIC_CLONE" diff --cached --name-only --diff-filter=D | sed 's/^/      - /' | awk 'NR<=40'
 fi
 echo
 

@@ -62,7 +62,14 @@ class Fts5GroundingAdapter(
      * Antworten identisch, daher bleibt das Prompt-Parsing unverändert.
      */
     private val useKnowledgePackV1: Boolean = false,
-    private val timeout: Duration = Duration.ofSeconds(5),
+    /**
+     * Upper bound on ONE bridge call. Grounding is best-effort, so this is a tail
+     * budget, not a correctness knob: exceeding it costs an empty block, never the
+     * turn. 2s sits above the measured p99 (1832ms over 514 grounded turns,
+     * 01.07.–14.08.); the previous 5s only ever bought the three turns that sat on
+     * the ceiling itself (vault/knowledge/MESSUNG-latenz-diary-2026-08-13.md).
+     */
+    private val timeout: Duration = Duration.ofSeconds(2),
     private val mapper: ObjectMapper = jacksonObjectMapper(),
     // Sidecar-Token-Wand (opt-in, s. SidecarTokenHeader-KDoc): leer (Default) ⇒ KEIN
     // Header ⇒ byte-identisch zu vor der Wand.

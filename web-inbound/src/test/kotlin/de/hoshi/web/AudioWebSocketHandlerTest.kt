@@ -6,6 +6,7 @@ import de.hoshi.core.dto.ChatRequest
 import de.hoshi.core.dto.Language
 import de.hoshi.core.dto.Persona
 import de.hoshi.core.dto.SpeakerContext
+import de.hoshi.core.pipeline.ConversationKeys
 import de.hoshi.core.pipeline.EntityMemoryWriter
 import de.hoshi.core.pipeline.PersonaResolver
 import de.hoshi.core.pipeline.TtsStage
@@ -695,6 +696,11 @@ class AudioWebSocketHandlerTest {
 
         assertEquals("sat-kueche", captured.get()!!.originSatelliteId, "die satelliteId aus dem start-Frame reist im Turn mit")
         assertNull(captured.get()!!.deviceId, "originSatelliteId ist GETRENNT von deviceId (FE-Ursprungs-Bimmeln bleibt unberuehrt)")
+        assertEquals(
+            ConversationKeys.forSession("fake-session"),
+            captured.get()!!.conversationKey,
+            "Conversation-Key kommt aus der serverseitigen WS-Session, nie aus einem Frame-Claim",
+        )
         sub.dispose()
     }
 
@@ -710,6 +716,61 @@ class AudioWebSocketHandlerTest {
         session.completeInbound()
 
         assertNull(captured.get()!!.originSatelliteId, "kein Feld im Frame ⇒ originSatelliteId=null")
+        sub.dispose()
+    }
+
+    // ── F2/S1 „Der Raum reist mit" (start.room → ChatRequest.originAreaId) ───────
+    // Das Frame-Feld kommt seit je (Journal 21.07.: room=kueche) und wurde bis F2
+    // nur geloggt — genau darum schaltete ein Küchen-Satellit das Wohnzimmer.
+
+    @Test
+    fun `start mit room - der Turn traegt ihn als ChatRequest originAreaId`() {
+        val captured = java.util.concurrent.atomic.AtomicReference<ChatRequest?>(null)
+        val h = handler(SttPort { _, _ -> Mono.just("mach das licht an") }) { req -> captured.set(req); Flux.just(ChatEvent.Done(provider = "LOCAL")) }
+        val session = FakeWebSocketSession(loopback = true)
+        val sub = h.handle(session).subscribe()
+        // Exakt der Frame aus dem Prod-Journal (Geraete-Schreibweise "kueche", NICHT die HA-area_id).
+        session.pushText("""{"type":"start","room":"kueche","satelliteId":"kueche-voice-pe"}""")
+        session.pushBinary(ByteArray(100))
+        session.pushText("""{"type":"stop"}""")
+        session.completeInbound()
+
+        assertEquals("kueche", captured.get()!!.originAreaId, "der room aus dem start-Frame reist im Turn mit — roh")
+        sub.dispose()
+    }
+
+    @Test
+    fun `start ohne room - originAreaId bleibt null (byte-neutraler Alt-Pfad)`() {
+        val captured = java.util.concurrent.atomic.AtomicReference<ChatRequest?>(null)
+        val h = handler(SttPort { _, _ -> Mono.just("hallo") }) { req -> captured.set(req); Flux.just(ChatEvent.Done(provider = "LOCAL")) }
+        val session = FakeWebSocketSession(loopback = true)
+        val sub = h.handle(session).subscribe()
+        session.pushText("""{"type":"start"}""") // KEIN room-Feld
+        session.pushBinary(ByteArray(100))
+        session.pushText("""{"type":"stop"}""")
+        session.completeInbound()
+
+        assertNull(captured.get()!!.originAreaId, "kein Feld im Frame ⇒ originAreaId=null")
+        sub.dispose()
+    }
+
+    @Test
+    fun `zweiter start ohne room schleppt den Raum des Vorgaenger-Turns NICHT mit`() {
+        val captured = mutableListOf<ChatRequest>()
+        val h = handler(SttPort { _, _ -> Mono.just("licht an") }) { req -> captured.add(req); Flux.just(ChatEvent.Done(provider = "LOCAL")) }
+        val session = FakeWebSocketSession(loopback = true)
+        val sub = h.handle(session).subscribe()
+        session.pushText("""{"type":"start","room":"kueche"}""")
+        session.pushBinary(ByteArray(100))
+        session.pushText("""{"type":"stop"}""")
+        session.pushText("""{"type":"start"}""") // derselbe Satellit, diesmal OHNE room
+        session.pushBinary(ByteArray(100))
+        session.pushText("""{"type":"stop"}""")
+        session.completeInbound()
+
+        assertEquals(2, captured.size, "zwei Turns erwartet")
+        assertEquals("kueche", captured[0].originAreaId)
+        assertNull(captured[1].originAreaId, "Raum wird pro Turn zurueckgesetzt (Muster persona) — kein Nachhall")
         sub.dispose()
     }
 

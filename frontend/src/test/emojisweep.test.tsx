@@ -302,7 +302,7 @@ describe('Emoji-Sweep — Chrome/Controls emoji-frei (SVG-Glyphs oder gestrichen
         onDelete={() => {}}
         onEnroll={() => {}}
         onContinue={() => {}}
-        onDeleteSample={() => {}}
+        onRecordings={() => {}}
       />,
     );
     expect(html).toContain('glyph--mic');

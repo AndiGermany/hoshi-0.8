@@ -118,6 +118,9 @@ class WebSocketConfig {
         // ── ws-Sprecher-Nähte (S-C Erkennung + S-D Memory-Write) — EIN Flag, default OFF ⇒
         // byte-neutral (kein identify-Call, kein Memory-Write) ──
         @Value("\${hoshi.ws.speaker.enabled:\${HOSHI_WS_SPEAKER_ENABLED:false}}") wsSpeakerEnabled: Boolean,
+        // ── Späte Antwort statt stillem Verpuffen (Andi-Livetest 2026-08-21) — flag-gated,
+        // default OFF ⇒ byte-neutral: ein verdrängter Turn wird wie bisher hart disposed ──
+        @Value("\${hoshi.ws.late-answer.enabled:\${HOSHI_WS_LATE_ANSWER_ENABLED:false}}") lateAnswerEnabled: Boolean,
         // Vertrauens-Gate der Memory-Writes — DIESELBEN Properties wie am Chat-Rand
         // (ChatStreamController): eine Messlatte, kein zweiter driftender Schwellwert.
         @Value("\${HOSHI_SPEAKER_TRUST_ENFORCED:false}") speakerTrustEnforced: Boolean,
@@ -133,15 +136,18 @@ class WebSocketConfig {
             ttsStage = ttsStage,
             perimeter = PerimeterPort(enabled = perimeterEnabled, configuredToken = perimeterToken),
             objectMapper = objectMapper,
-            // Der Turn-Seam läuft durchs Admission-Gate (OFF ⇒ gate{ } == orchestrator.handle
-            // direkt ⇒ byte-neutral). Cancel/Barge-in gibt das Permit über doFinally frei.
+            // Der Turn-Seam läuft durchs Admission-Gate (OFF ⇒ direkter Gateway-Passthrough,
+            // byte-neutral). Cancel/Barge-in gibt das Permit über doFinally frei.
             // S-B: languageResolver VORGESCHALTET (Muster der anderen Ränder) — der ws-Request
             // trägt keine languagePolicy ⇒ resolve() gibt die Frame-Sprache unverändert zurück
             // ⇒ byte-neutral; ein künftiges policy-Feld griffe automatisch.
-            runTurn = { req ->
-                val resolved = req.copy(language = languageResolver.resolve(req))
-                admissionGate.gate(resolved.language) { orchestrator.handle(resolved) }
-            },
+            runTurn = InboundTurnGateway(
+                orchestrator = orchestrator,
+                execution = InboundTurnGateway.Execution { req, turn ->
+                    val resolved = req.copy(language = languageResolver.resolve(req))
+                    admissionGate.gate(resolved.language) { turn(resolved) }
+                },
+            )::runPrepared,
             audioCapEnabled = audioCapEnabled,
             maxAudioBytesPerTurn = audioCapMaxBytes,
             sessionGuard = AudioSessionGuard(
@@ -151,6 +157,9 @@ class WebSocketConfig {
             ),
             turnTrace = turnTrace,
             speakerFrameEnabled = speakerFrameEnabled,
+            // Andi-Livetest 21.08.: ohne dieses Flag stirbt die Eskalations-Antwort still,
+            // sobald das Gerät in der Lookup-Lücke neu aufnimmt (s. Handler-KDoc).
+            lateAnswerEnabled = lateAnswerEnabled,
             deviceRegistry = wsDeviceRegistry,
             downlinkPushEnabled = downlinkPushEnabled,
             // Scheibe 2: der Nachtmodus-Initialzustand — KRITISCH, weil das Gerät keine

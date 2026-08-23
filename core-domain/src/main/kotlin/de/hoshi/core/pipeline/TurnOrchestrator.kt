@@ -11,6 +11,8 @@ import de.hoshi.core.dto.TurnPrompt
 import de.hoshi.core.pipeline.lang.LangDe
 import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import de.hoshi.core.pipeline.lang.deOr
+import de.hoshi.core.port.AreaCatalogPort
+import de.hoshi.core.port.displayNameOrNull
 import de.hoshi.core.port.BrainPort
 import de.hoshi.core.port.CapabilityPort
 import de.hoshi.core.port.EscalationPort
@@ -34,7 +36,6 @@ import de.hoshi.core.tools.AreaClarifyIntent
 import de.hoshi.core.tools.CalcIntent
 import de.hoshi.core.tools.GateDecision
 import de.hoshi.core.tools.ListIntent
-import de.hoshi.core.tools.ToolAreas
 import de.hoshi.core.tools.TimerIntent
 import de.hoshi.core.tools.ToolCall
 import de.hoshi.core.tools.ToolGrammarParser
@@ -46,6 +47,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -208,6 +210,15 @@ class TurnOrchestrator(
      */
     private val workshopNote: WorkshopNoteFastpath = WorkshopNoteFastpath.DISABLED,
     /**
+     * **CurrentAffairsFastpath — "was ist heute wichtig?", brain-free** (F5
+     * Lagebild). Renders the top headlines deterministically from the
+     * [de.hoshi.core.port.CurrentAffairsPort] seam; STALE data names its age,
+     * EMPTY/UNAVAILABLE say so honestly — never "current". Default
+     * [CurrentAffairsFastpath.DISABLED] ⇒ `handle()`==null ⇒ dead branch ⇒
+     * byte-neutral, exactly like Calc/Timer/Date/Probe.
+     */
+    private val currentAffairs: CurrentAffairsFastpath = CurrentAffairsFastpath.DISABLED,
+    /**
      * **FactCoverageGate — die Anti-Konfabulations-Wand.** Eine FACT_SHORT-Frage,
      * deren Grounding NICHTS fand, darf der Brain NICHT freestylen (er erfindet
      * dann Falsches). Stattdessen ehrlich deflekten. Default [FactCoverageGate.DISABLED]
@@ -253,7 +264,7 @@ class TurnOrchestrator(
     private val researchEscalationProvider: String = "",
     /**
      * Session-Gedächtnis des offenen „soll ich kurz nachschauen?"-Angebots
-     * (Key: `chatId ?: speakerId ?: "local"`, TTL+one-shot im Store). Default
+     * (kanalgebundener [ConversationKeys]-Key, TTL+one-shot im Store). Default
      * [PendingLookupPort.NONE] (merkt nie, liefert nie) ⇒ byte-neutral.
      */
     private val pendingLookup: PendingLookupPort = PendingLookupPort.NONE,
@@ -277,15 +288,36 @@ class TurnOrchestrator(
     private val weatherAsk: WeatherLocationAskPort = WeatherLocationAskPort.NONE,
     /**
      * Session-Gedächtnis der offenen „Für welchen Ort denn?"-Nachfrage —
-     * EXAKT das [pendingLookup]-Muster (Key `chatId ?: speakerId ?: "local"`,
+     * EXAKT das [pendingLookup]-Muster (kanalgebundener [ConversationKeys]-Key,
      * TTL + one-shot im Store), aber ein EIGENER Store: getrennte Ketten
      * können sich strukturell nie vermischen (Begründung im
      * [PendingLocationQuestionPort]). Default [PendingLocationQuestionPort.NONE]
      * (merkt nie, liefert nie) ⇒ byte-neutral.
      */
     private val pendingLocation: PendingLocationQuestionPort = PendingLocationQuestionPort.NONE,
+    /**
+     * Session memory of the open "which room?" ask (F1-4, live find 2026-08-13:
+     * the room ask was stateless, the answer evaporated). Same store idiom as
+     * [pendingLocation], but ALWAYS ON by default (live in-memory store, no
+     * flag) — this repairs broken behaviour, like [executionClaim]; injectable
+     * only so tests can pin the clock/TTL.
+     */
+    private val pendingAreaClarify: PendingAreaClarifyPort = InMemoryPendingAreaClarifyStore(),
+    /**
+     * Room registry for matching a clarify ANSWER ("Wohnzimmer"/"im Wohnzimmer")
+     * — the same catalog seam the classifier asks from. [AreaCatalogPort.STATIC]
+     * is the verified real-registry snapshot; wire the live HA catalog here
+     * whenever the classifier gets it (one truth for question AND answer).
+     */
+    private val areaCatalog: AreaCatalogPort = AreaCatalogPort.STATIC,
     /** Timeout des Eskalations-Lookups (~8 s) — danach der warme Unavailable-Pfad (never-silent). */
     private val escalationTimeout: Duration = ESCALATION_LOOKUP_TIMEOUT,
+    /**
+     * Harte Turn-Decke (~60 s, s. [TURN_DEADLINE]) — danach die warme Fehler-Phrase
+     * statt eines endlos offenen Turns. Injizierbar wie [escalationTimeout], damit
+     * Tests den Riss mit virtueller Zeit auslösen können.
+     */
+    private val turnDeadline: Duration = TURN_DEADLINE,
     /**
      * Finaler Diagnose-Rand des Eskalations-Turns. Default NOOP haelt den Kern
      * rein; das Web-Wiring injiziert den Logger-Adapter. Genau hier ist erstmals
@@ -440,7 +472,19 @@ class TurnOrchestrator(
      * umgebogen (s. [routedTurn]) — ein Befehl bleibt ein Befehl.
      */
     private val playfulMode: PlayfulModeDetector = PlayfulModeDetector.DISABLED,
+    /**
+     * **Execution-claim latch — always on, no feature flag** (honesty is not a
+     * feature). Wraps the brain prose stream in [brainStreamTurn]: if the turn ran
+     * WITHOUT a tool call and the final answer claims a switching act, the answer is
+     * replaced by an honest ask-back. Injectable only so tests can watch it; there
+     * is no "off". Unarmed turns get the stream back untouched (identity), so the
+     * default costs nothing on every non-device turn.
+     * See `vault/knowledge/BEFUND-brain-behauptet-vollzug-2026-08-11.md`.
+     */
+    private val executionClaim: ExecutionClaimGate = ExecutionClaimGate(),
 ) {
+    /** Eine Rückfrage-Art pro Conversation-Key; die drei Alt-Ports bleiben kompatibel injizierbar. */
+    private val pendingArbiter = PendingTurnArbiter(pendingLookup, pendingLocation, pendingAreaClarify)
 
     /**
      * Fährt einen kompletten Turn: Text rein → Routing → Honesty → Prompt →
@@ -476,7 +520,8 @@ class TurnOrchestrator(
         //    (Decke offen, Setting aus) gibt es den ehrlich-warmen Setting-Hinweis
         //    statt eines stillen Calls. Default (NONE-Store) ⇒ consume()==null ⇒
         //    dieser Zweig ist tot ⇒ byte-neutral.
-        val pendingConsumed = pendingLookup.consume(key)
+        val pendingDecision = pendingArbiter.consume(key)
+        val pendingConsumed = (pendingDecision.selected as? PendingTurnArbiter.State.Lookup)?.pending
         // ── Die ZWEI Sorten des einen Stores strikt getrennt (s. [PendingLookup]-KDoc,
         //    Andi-Vorfall 2026-07-25): [pendingThink] ist das klassische ANGEBOT
         //    („soll ich nachschauen?" — Thema bekannt, Zustimmung fehlt), [pendingTopic]
@@ -490,9 +535,14 @@ class TurnOrchestrator(
         //    one-shot konsumiert (auch ein Fremd-Turn räumt sie — kein alter
         //    Orts-Köder), noch BEVOR unten entschieden wird, ob sie einlöst.
         //    Default (NONE-Store) ⇒ null ⇒ toter Zweig ⇒ byte-neutral.
-        val pendingPlace = pendingLocation.consume(key)
+        val pendingPlace = (pendingDecision.selected as? PendingTurnArbiter.State.Location)?.pending
+        // ── Open room ask (F1-4): consumed one-shot on EVERY turn of this key —
+        //    a declining/other-intent turn clears it, expiry discards silently
+        //    (diary-only visibility). Redemption sits AFTER the extended-think/
+        //    location seams below, so the existing chains keep their precedence.
+        val pendingArea = (pendingDecision.selected as? PendingTurnArbiter.State.Area)?.pending
         if (pendingThink != null && AffirmationRecognizer.matches(ctx.text)) {
-            return redeemPendingLookup(ctx, pendingThink)
+            return tagArbiterAreaLifecycle(redeemPendingLookup(ctx, pendingThink), pendingDecision)
         }
         // ── Naht C (Lookup-Intent, Live-Fix 2026-07-16): eine EXPLIZITE Nachschlag-
         //    Bitte („schau online nach") IST selbst der Consent — sie darf NICHT als
@@ -529,7 +579,10 @@ class TurnOrchestrator(
             // abgeräumt und ist SELBST wieder eine themenlose Bitte ⇒ die Rückfrage
             // darf sich NICHT erneut merken (sonst schaukeln sich Bitte und Rückfrage
             // endlos auf). Die Rückfrage kommt trotzdem — nur eben ohne neues Pending.
-            return lookupIntentTurn(ctx, pendingThink, research, topicAskOpen = pendingTopic != null)
+            return tagArbiterAreaLifecycle(
+                lookupIntentTurn(ctx, pendingThink, research, topicAskOpen = pendingTopic != null),
+                pendingDecision,
+            )
         }
         // ── Naht B2-Einlösung: NUR wenn KEIN Extended-Think-Angebot in flight war
         //    (Ketten sauber getrennt — ein Orts-Name löst NIE während einer offenen
@@ -538,9 +591,120 @@ class TurnOrchestrator(
         //    konsumiert und verfällt.
         if (pendingThink == null && pendingPlace != null) {
             LocationAnswerRecognizer.place(ctx.text)?.let { place ->
-                return locationAnswerTurn(place, pendingPlace, ctx, speakerId)
+                return tagArbiterAreaLifecycle(locationAnswerTurn(place, pendingPlace, ctx, speakerId), pendingDecision)
             }
         }
+        // ── Room-ask redemption (F1-4): a bare/prepositional room answer against
+        //    the live catalog completes the parked call and runs it through the
+        //    NORMAL tool path (capability gate, executor receipt — never around
+        //    the kernel). Anything else abandons the already-consumed pending and
+        //    runs its own course; an expired ask only leaves its diary mark.
+        if (pendingArea != null && pendingThink == null && pendingPlace == null) {
+            AreaAnswerRecognizer.areaId(ctx.text, areaCatalog.areas())?.let { areaId ->
+                return tagPendingClarify(
+                    redeemAreaClarify(pendingArea, areaId, speakerId, ctx),
+                    PendingAreaClarifyPort.OUTCOME_RESOLVED,
+                )
+            }
+            return tagPendingClarify(
+                fastpathChainTurn(request, ctx, speakerId, pendingTopic, pendingPlace),
+                PendingAreaClarifyPort.OUTCOME_ABANDONED,
+            )
+        }
+        return tagArbiterAreaLifecycle(
+            fastpathChainTurn(request, ctx, speakerId, pendingTopic, pendingPlace),
+            pendingDecision,
+        )
+    }
+
+    /** Macht auch verdrängte/abgelaufene Legacy-Area-Pendings im bestehenden Diary-Feld sichtbar. */
+    private fun tagArbiterAreaLifecycle(
+        events: Flux<ChatEvent>,
+        decision: PendingTurnArbiter.Consumption,
+    ): Flux<ChatEvent> {
+        // Wird dieser Helper erreicht, hat kein Area-Resolve-Zweig übernommen.
+        // Auch ein vom Arbiter ausgewähltes (= gezogenes) Area-Pending ist dann
+        // fachlich abandoned, etwa wenn der neue Turn explizit online nachschlägt.
+        val outcome = areaLifecycleOutcome(decision.transitions, consumedMeansAbandoned = true) ?: return events
+        return tagPendingClarify(events, outcome)
+    }
+
+    /**
+     * Offer-Konflikte werden auf DEM Turn bilanziert, der den alten Zustand verdrängt.
+     *
+     * **Zusätzlich seit dem Andi-Livetest 2026-08-21 die „erwarte Folgeantwort"-Naht:**
+     * ein [PendingTurnArbiter.OfferResult] BEWEIST, dass dieser Turn gerade eine
+     * Rückfrage geschrieben hat — also endet er mit einer offenen Frage, und der
+     * Satellit muss das erfahren ([ChatEvent.Done.expectsReply]). Die Art kommt aus
+     * [PendingTurnArbiter.OfferResult.active], nicht aus einer zweiten Taxonomie am
+     * Rand ([pendingKindOf]). `null` (kein Offer) ⇒ Strom unverändert ⇒ byte-neutral.
+     */
+    private fun tagArbiterAreaLifecycle(
+        events: Flux<ChatEvent>,
+        result: PendingTurnArbiter.OfferResult?,
+    ): Flux<ChatEvent> {
+        if (result == null) return events
+        val outcome = areaLifecycleOutcome(result.transitions)
+        return tagExpectsReply(events, pendingKindOf(result.active), outcome)
+    }
+
+    /** Die EINE Abbildung Arbiter-Art → Wire-Wert; nichts anderes darf `pendingKind` füllen. */
+    private fun pendingKindOf(kind: PendingTurnArbiter.Kind): String = when (kind) {
+        PendingTurnArbiter.Kind.LOOKUP -> ChatEvent.PendingKind.LOOKUP
+        PendingTurnArbiter.Kind.LOCATION -> ChatEvent.PendingKind.LOCATION
+        PendingTurnArbiter.Kind.AREA -> ChatEvent.PendingKind.AREA
+    }
+
+    /**
+     * Stempelt das terminale [ChatEvent.Done] mit der offenen Rückfrage (und, falls
+     * vorhanden, im selben Durchgang dem Area-Diary-Lifecycle — EIN `map` statt zwei
+     * gestapelter). [areaOutcome] `null` ⇒ das bestehende `pendingClarify` bleibt
+     * unangetastet.
+     */
+    private fun tagExpectsReply(
+        events: Flux<ChatEvent>,
+        kind: String,
+        areaOutcome: String? = null,
+    ): Flux<ChatEvent> =
+        events.map { ev ->
+            if (ev is ChatEvent.Done) {
+                ev.copy(
+                    expectsReply = true,
+                    pendingKind = kind,
+                    pendingClarify = areaOutcome ?: ev.pendingClarify,
+                )
+            } else {
+                ev
+            }
+        }
+
+    private fun areaLifecycleOutcome(
+        transitions: List<PendingTurnArbiter.Transition>,
+        consumedMeansAbandoned: Boolean = false,
+    ): String? {
+        val area = transitions.lastOrNull {
+            it.kind == PendingTurnArbiter.Kind.AREA &&
+                (consumedMeansAbandoned || it.outcome != PendingTurnArbiter.Outcome.CONSUMED)
+        } ?: return null
+        return if (area.outcome == PendingTurnArbiter.Outcome.EXPIRED) {
+            PendingAreaClarifyPort.OUTCOME_EXPIRED
+        } else {
+            PendingAreaClarifyPort.OUTCOME_ABANDONED
+        }
+    }
+
+    /**
+     * Tail of [handleTurn] after the pending seams (extracted unchanged so the
+     * clarify-abandon path can tag its diary outcome around the SAME chain):
+     * settings/note/probe fastpaths → topic redemption (C4) → [routedTurn].
+     */
+    private fun fastpathChainTurn(
+        request: ChatRequest,
+        ctx: TurnPrompt,
+        speakerId: String?,
+        pendingTopic: PendingLookup?,
+        pendingPlace: PendingLocationQuestion?,
+    ): Flux<ChatEvent> {
         // ── Stufen-Fastpath (Extended Think per Sprache/Chat, Andi-Intent
         //    2026-07-05): „frag mich erst, bevor du online gehst" ⇒ ERST_FRAGEN —
         //    VOR dem Routing (ein Settings-Satz würde sonst als Smalltalk zum
@@ -576,6 +740,15 @@ class TurnOrchestrator(
         probe.handle(ctx.text, ctx.language)?.let { phrase ->
             return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_PROBE, phrase, language = ctx.language)
         }
+        // ── News fastpath (F5 Lagebild): "was ist heute wichtig?" ⇒ the top
+        //    headlines straight from the CurrentAffairsPort seam, brain-free.
+        //    Before routing like its siblings: a news question must not be chatted
+        //    away as smalltalk, and it must win over the topic redemption below (a
+        //    standing "what should I look up?" is answered by the seam, not sent
+        //    out). Default (DISABLED) ⇒ null ⇒ dead branch ⇒ byte-neutral. ──
+        currentAffairs.handle(ctx.text, ctx.language)?.let { phrase ->
+            return warmDirectAnswer(RouteProvider.LOCAL.name, CATEGORY_NEWS, phrase, language = ctx.language)
+        }
         // ── Naht C4 (Themen-Rückfrage-Einlösung, Andi-Vorfall 2026-07-25) ──
         //    Hoshi hat „was genau soll ich nachschauen?" gefragt ⇒ DIESE Nachricht IST
         //    das Thema, und sie wird online nachgeschlagen statt lokal beantwortet.
@@ -586,7 +759,7 @@ class TurnOrchestrator(
         //    verfallen. Das ist die „offensichtlicher Themenwechsel"-Regel, ohne
         //    zweite Heuristik: ein Befehl ist nie ein Nachschlag-Thema.
         if (lookupIntentEnabled && pendingTopic != null && pendingPlace == null &&
-            TopicAnswerRecognizer.isTopic(ctx.text) && !claimedByCommand(ctx, speakerId)
+            TopicAnswerRecognizer.isTopic(ctx.text) && !claimedByCommand(ctx)
         ) {
             // Recherche-Modell-Wahl aus der URSPRÜNGLICHEN Bitte (dort stand ggf.
             // „recherchiere…", nicht im Thema selbst) — [PendingLookup.query] trägt
@@ -608,10 +781,13 @@ class TurnOrchestrator(
      * Ohne diese Klausel würde „mach das Licht an" direkt nach der Rückfrage als
      * Nachschlag-Thema nach draußen gehen, statt das Licht zu schalten.
      */
-    private fun claimedByCommand(ctx: TurnPrompt, speakerId: String?): Boolean =
+    private fun claimedByCommand(ctx: TurnPrompt): Boolean =
         date.handle(ctx.text, ctx.language) != null ||
             radio.matches(ctx.text) ||
-            resolveToolCall(intent.classify(ctx.text, ctx.language), ctx.text, speakerId) != null
+            // The CLASSIFIED intent decides, not the resolved one: since F2 a
+            // roomless command resolves to null (⇒ room ask) — it is still a
+            // command and must never be sent out as a lookup topic.
+            intent.classify(ctx.text, ctx.language) != null
 
     /**
      * **Verhör-Detektor (S1, MESSEN-first, additiv) — hüllt [stream] mit einer
@@ -714,9 +890,10 @@ class TurnOrchestrator(
                     }
             }
             // ── Tool-Pfad: eindeutiger Befehl ⇒ Gate → Executor, OHNE Brain ──
-            // Anaphern-Auflösung (pro Sprecher): ein roomless Licht-/Klima-Befehl darf
-            // auf die zuletzt geschaltete Area dieses Sprechers fallen ([resolveToolCall]).
-            val toolCall = resolveToolCall(intent.classify(ctx.text, ctx.language), ctx.text, speakerId)
+            // Room chain (F2/Irori): named room > anaphora+memory > the room the turn
+            // is spoken in > memory > ask — see [resolveToolCall].
+            val classified = intent.classify(ctx.text, ctx.language)
+            val toolCall = resolveToolCall(classified, ctx.text, speakerId, request.originAreaId)
             if (toolCall != null) {
                 // ── Timer-Fastpath: ein `timer`-Befehl geht an die ScheduledItemPort-
                 //    Naht (NICHT durchs HA-Schreib-Gate), brain-frei. Ohne Flag emittiert
@@ -743,10 +920,19 @@ class TurnOrchestrator(
                     //    OHNE Tat liefern) — brain-frei, exakt wie Timer/Calc/List. Der
                     //    Classifier klassifiziert diesen Zweig NUR, wenn HOSHI_TOOLS_ENABLED
                     //    (SMART_HOME-Skill) ohnehin an ist ⇒ kein neues Flag nötig. ──
-                    clarifyTurn(toolCall, decision, ctx.language)
+                    clarifyTurn(toolCall, decision, ctx)
                 } else {
                     toolTurn(toolCall, decision, speakerId, ctx.language)
                 }
+            }
+            // ── Room ask for an unresolved device command (F1-4 + F2): a classified
+            //    write intent for which the room chain found NO room (none named,
+            //    no satellite room, no anaphora/memory) used to fall through to the
+            //    brain — prose about switching, the root of the fake-completion
+            //    find — or, worse, to be silently guessed as "wohnzimmer" (Ballsaal,
+            //    14.08.). Now: honest room question + parked intent instead.
+            if (classified != null && isRoomTargetedWrite(classified)) {
+                return@flatMapMany areaClarifyAskTurn(classified, decision, ctx)
             }
             // ── Wetter-Orts-Nachfrage (Wetter S3): eine WETTER-Frage, für die WEDER
             //    der Laufzeit-Store NOCH ein Deploy-Seed einen echten Ort trägt
@@ -758,12 +944,18 @@ class TurnOrchestrator(
             //    needsLocation konstant false ⇒ toter Zweig ⇒ byte-neutral; in Prod
             //    (echte Seeds konfiguriert) feuert der Zweig NIE.
             if (weatherAsk.needsLocation(ctx.text, decision.category)) {
-                pendingLocation.offer(pendingKey(ctx), PendingLocationQuestion(query = ctx.text, language = ctx.language))
-                return@flatMapMany warmDirectAnswer(
-                    decision.provider.name,
-                    decision.category.name,
-                    weatherLocationAsk(ctx.language),
-                    language = ctx.language,
+                val offered = pendingArbiter.offerLocation(
+                    pendingKey(ctx),
+                    PendingLocationQuestion(query = ctx.text, language = ctx.language),
+                )
+                return@flatMapMany tagArbiterAreaLifecycle(
+                    warmDirectAnswer(
+                        decision.provider.name,
+                        decision.category.name,
+                        weatherLocationAsk(ctx.language),
+                        language = ctx.language,
+                    ),
+                    offered,
                 )
             }
             // ── Ehrlichkeits-Gate VOR dem Brain — OFF der Event-Loop ──
@@ -876,42 +1068,178 @@ class TurnOrchestrator(
      * — er kennt Sprache + Areas, s. [DeterministicToolIntentClassifier]-KDoc
      * Schritt (5)). Leer ⇒ warmer Fallback (never-silent).
      */
-    private fun clarifyTurn(call: ToolCall, decision: RouteDecision, language: Language): Flux<ChatEvent> {
+    private fun clarifyTurn(call: ToolCall, decision: RouteDecision, ctx: TurnPrompt): Flux<ChatEvent> {
         val phrase = call.data[AreaClarifyIntent.PHRASE] as? String ?: ""
-        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = language)
+        // Park the intent behind the ask (F1-4) so the next turn's room answer
+        // can complete it; absent keys ⇒ ask-only (old callers byte-identical).
+        val domain = call.data[AreaClarifyIntent.PENDING_DOMAIN] as? String
+        val service = call.data[AreaClarifyIntent.PENDING_SERVICE] as? String
+        val answer = warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = ctx.language)
+        if (domain == null || service == null) return answer
+        pendingArbiter.offerArea(
+            pendingKey(ctx),
+            PendingAreaClarify(domain = domain, service = service, language = ctx.language),
+        )
+        return tagPendingClarify(answer, PendingAreaClarifyPort.OUTCOME_ASKED)
     }
 
     /**
-     * **Deterministische Anaphern-Auflösung** (pro Sprecher) eines roomless Licht-/
-     * Klima-Befehls — die Essenz des Live-Befunds „Wohnzimmerlicht an" (klappt) →
-     * „schalt das Licht wieder aus" (kein Raum ⇒ Hoshi wusste nicht welches Licht).
-     *
-     * Konservativ + byte-erhaltend (passthrough, außer ein klarer Anaphern-Fall):
-     *  - [call]==null ⇒ unverändert (⇒ Brain, wie ohne eindeutigen Befehl).
-     *  - speakerId-los / anonym ⇒ unverändert durch (kein Store, kein Fallback) —
-     *    der bestehende Pfad inkl. Classifier-Default-Area bleibt byte-identisch.
-     *  - kein Last-Area-fähiger Befehl (kein schreibender Licht/Klima-Call mit area_id)
-     *    ⇒ unverändert.
-     *  - genannter Raum ([ToolAreas.mentionsRoom]) ⇒ der explizite Raum gewinnt (unverändert).
-     *  - roomless + echter Sprecher MIT Historie ⇒ `area_id` := zuletzt geschaltete Area.
-     *  - roomless + echter Sprecher OHNE Historie ⇒ `null` (⇒ Brain; NICHT raten).
+     * Room ask for a classified-but-unresolved device write command (F1-4): the
+     * intent is parked WITHOUT its guessed `area_id` (the room comes from the
+     * answer, never from a default), the honest catalog question is spoken.
      */
-    private fun resolveToolCall(call: ToolCall?, text: String, speakerId: String?): ToolCall? {
-        if (call == null) return null
-        if (LastAreaPort.isAnonymous(speakerId)) return call
-        if (!isLastAreaEligible(call) || ToolAreas.mentionsRoom(text)) return call
-        val remembered = lastArea.lastArea(speakerId!!) ?: return null
-        return call.copy(data = call.data + ("area_id" to remembered))
+    private fun areaClarifyAskTurn(classified: ToolCall, decision: RouteDecision, ctx: TurnPrompt): Flux<ChatEvent> {
+        pendingArbiter.offerArea(
+            pendingKey(ctx),
+            PendingAreaClarify(
+                domain = classified.domain,
+                service = classified.service,
+                slots = classified.data - "area_id",
+                language = ctx.language,
+            ),
+        )
+        return tagPendingClarify(
+            warmDirectAnswer(
+                decision.provider.name,
+                decision.category.name,
+                AreaClarifyIntent.phrase(areaCatalog.areas(), ctx.language),
+                language = ctx.language,
+            ),
+            PendingAreaClarifyPort.OUTCOME_ASKED,
+        )
     }
+
+    /**
+     * Completes the parked room ask with the answered [areaId] and runs it via
+     * the NORMAL write path ([toolTurn] ⇒ capability gate ⇒ executor). Kagami
+     * invariant: the receipt is the executor's real outcome phrase — no
+     * synthetic completion claim, no lane past the kernel.
+     */
+    private fun redeemAreaClarify(
+        pending: PendingAreaClarify,
+        areaId: String,
+        speakerId: String?,
+        ctx: TurnPrompt,
+    ): Flux<ChatEvent> {
+        val call = ToolCall(
+            domain = pending.domain,
+            service = pending.service,
+            entityId = null,
+            data = pending.slots + ("area_id" to areaId),
+            language = ctx.language,
+        )
+        val decision = RouteDecision(RouteCategory.SMART_HOME, RouteProvider.LOCAL, AREA_CLARIFY_ROUTE_REASON)
+        return toolTurn(call, decision, speakerId, ctx.language)
+    }
+
+    /**
+     * Stamps the additive diary field [ChatEvent.Done.pendingClarify] on this turn's terminal Done.
+     *
+     * [PendingAreaClarifyPort.OUTCOME_ASKED] means — by definition of that constant — that a
+     * room question is OPEN when this turn ends, so the same Done also carries the device-facing
+     * [ChatEvent.Done.expectsReply] (Andi live test 2026-08-21). The other outcomes
+     * (`resolved`/`expired`/`abandoned`) close a pending instead of opening one and stay
+     * byte-identical.
+     */
+    private fun tagPendingClarify(events: Flux<ChatEvent>, outcome: String): Flux<ChatEvent> =
+        events.map { ev ->
+            if (ev is ChatEvent.Done) {
+                if (outcome == PendingAreaClarifyPort.OUTCOME_ASKED) {
+                    ev.copy(
+                        pendingClarify = outcome,
+                        expectsReply = true,
+                        pendingKind = ChatEvent.PendingKind.AREA,
+                    )
+                } else {
+                    ev.copy(pendingClarify = outcome)
+                }
+            } else {
+                ev
+            }
+        }
+
+    /**
+     * **Where does this command act? — the ONE room chain** (F2/Irori), applied to a
+     * room-targeted write BEFORE anything is gated or executed. Priority:
+     *
+     *  1. **Named room** — the classifier already resolved it ⇒ untouched, always wins.
+     *  2. **Anaphora + memory** — the sentence points back ("mach das wieder aus")
+     *     ⇒ the last area of THIS speaker, even from a satellite in another room
+     *     (Hand's rule: presence beats memory, UNLESS the sentence refers back).
+     *  3. **Presence** — [de.hoshi.core.dto.ChatRequest.originAreaId], the room the
+     *     turn is spoken in (satellite `start` frame), resolved against the catalog.
+     *  4. **Memory without a cue** — chat/FE have no presence to beat; the
+     *     pre-F2 anaphora behaviour for identified speakers stays exactly as it was.
+     *  5. **Nothing** ⇒ `null`: the caller asks ([areaClarifyAskTurn]).
+     *     LL-2026-08-14-ballsaal-hardcode: never guess a room; ask.
+     *
+     * Anonymous speakers have no memory ([LastAreaPort.isAnonymous]) — for them the
+     * chain is 1 → 3 → ask. Non-room calls (scenes, reads, timer/calc/list, entity-
+     * targeted) pass through untouched.
+     */
+    private fun resolveToolCall(call: ToolCall?, text: String, speakerId: String?, originAreaId: String?): ToolCall? {
+        if (call == null) return null
+        if (call.domain == AreaClarifyIntent.DOMAIN) return resolveClarify(call, text, speakerId, originAreaId)
+        if (!isRoomTargetedWrite(call) || call.data.containsKey("area_id")) return call
+        val area = anaphoricArea(text, speakerId, allowWeakCue = false)
+            ?: originArea(originAreaId)
+            ?: lastAreaOf(speakerId)
+            ?: return null
+        return call.copy(data = call.data + ("area_id" to area))
+    }
+
+    /**
+     * The honest ask ([AreaClarifyIntent], classifier branch 5) gets the SAME chain —
+     * "mach das wieder aus" / "mach an" from a satellite name no device at all, so a
+     * weak cue counts here (see [AnaphoraCue]). Resolved ⇒ the parked intent becomes
+     * the real call and runs the normal gated path; unresolved ⇒ the ask stands.
+     */
+    private fun resolveClarify(call: ToolCall, text: String, speakerId: String?, originAreaId: String?): ToolCall {
+        val area = anaphoricArea(text, speakerId, allowWeakCue = true) ?: originArea(originAreaId) ?: return call
+        val domain = call.data[AreaClarifyIntent.PENDING_DOMAIN] as? String ?: return call
+        val service = call.data[AreaClarifyIntent.PENDING_SERVICE] as? String ?: return call
+        return ToolCall(
+            domain = domain,
+            service = service,
+            entityId = null,
+            data = mapOf("area_id" to area),
+            language = call.language,
+        )
+    }
+
+    /** The remembered area of this speaker — but only if the sentence points back ([AnaphoraCue]). */
+    private fun anaphoricArea(text: String, speakerId: String?, allowWeakCue: Boolean): String? =
+        if (AnaphoraCue.present(text, allowWeakCue)) lastAreaOf(speakerId) else null
+
+    /** Last area of an IDENTIFIED speaker; anonymous/guest ⇒ no memory (store contract). */
+    private fun lastAreaOf(speakerId: String?): String? =
+        if (LastAreaPort.isAnonymous(speakerId)) null else lastArea.lastArea(speakerId!!)
+
+    /**
+     * The spoken-in room resolved against the LIVE catalog: the device sends its own
+     * string ("kueche"), HA slugifies ü→u ("kuche") — one truth, the catalog. A room
+     * the catalog does not know ⇒ `null`: an unknown room is asked about, never
+     * switched (LL-2026-08-14-ballsaal-hardcode).
+     */
+    private fun originArea(raw: String?): String? {
+        val room = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return AreaAnswerRecognizer.areaId(room, areaCatalog.areas())
+    }
+
+    /**
+     * A WRITE whose target is a ROOM (light/climate) — the calls the room chain
+     * resolves. Scenes/reads stay untouched, and so does an ENTITY-targeted call
+     * ([ToolCall.entityId] set): it already names its effect target and needs no room.
+     */
+    private fun isRoomTargetedWrite(call: ToolCall): Boolean =
+        !call.read && call.entityId == null && (call.domain == "light" || call.domain == "climate")
 
     /**
      * Ein Last-Area-fähiger Befehl: ein SCHREIBENDER Licht-/Klima-Call mit
      * `area_id`-Targeting (Szenen/Reads/entity-getargetete Calls bleiben unberührt).
      */
     private fun isLastAreaEligible(call: ToolCall): Boolean =
-        !call.read &&
-            (call.domain == "light" || call.domain == "climate") &&
-            call.data.containsKey("area_id")
+        isRoomTargetedWrite(call) && call.data.containsKey("area_id")
 
     /**
      * Merkt die geschaltete Area als „zuletzt aktiv" für DIESEN Sprecher — NUR nach
@@ -950,7 +1278,18 @@ class TurnOrchestrator(
         }
             .subscribeOn(Schedulers.boundedElastic())
             .flatMapMany { phrase ->
-                warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = language)
+                // Räume-Nutzungs-Naht (additiv, s. warmDirectAnswer-KDoc): die bereits
+                // klassifizierte area_id dieses Lese-Calls reist mit ins Diary.
+                warmDirectAnswer(
+                    decision.provider.name,
+                    decision.category.name,
+                    phrase,
+                    language = language,
+                    targetAreaId = call.data["area_id"] as? String,
+                    // A READ is a tool call too — [tools].execute ran right above. Same
+                    // term as ExecutionClaimGate.armed ("including every smart-home READ").
+                    toolCallRan = true,
+                )
             }
 
     /**
@@ -970,8 +1309,12 @@ class TurnOrchestrator(
         decision: RouteDecision,
         speakerId: String?,
         language: Language = Language.DEFAULT,
-    ): Flux<ChatEvent> =
-        when (val gate = capability.check(call)) {
+    ): Flux<ChatEvent> {
+        // Räume-Nutzungs-Naht (additiv, s. warmDirectAnswer-KDoc): die bereits
+        // klassifizierte/aufgelöste area_id reist mit ins Diary — GRANT wie DENY,
+        // ein „das darf ich nicht" ist genauso ein angesteuerter Raum wie ein Grant.
+        val targetAreaId = call.data["area_id"] as? String
+        return when (val gate = capability.check(call)) {
             is GateDecision.Grant -> {
                 val executed = call.copy(data = gate.normalizedData)
                 Mono.fromCallable {
@@ -987,12 +1330,29 @@ class TurnOrchestrator(
                 }
                     .subscribeOn(Schedulers.boundedElastic())
                     .flatMapMany { phrase ->
-                        warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = language)
+                        warmDirectAnswer(
+                            decision.provider.name,
+                            decision.category.name,
+                            phrase,
+                            language = language,
+                            targetAreaId = targetAreaId,
+                            // THE set point: the kernel granted and [tools].execute was
+                            // invoked right above — the call, not its outcome (see
+                            // ChatEvent.Done.toolCallRan). Deny below never gets here.
+                            toolCallRan = true,
+                        )
                     }
             }
             is GateDecision.Deny ->
-                warmDirectAnswer(decision.provider.name, decision.category.name, gate.phrase, language = language)
+                warmDirectAnswer(
+                    decision.provider.name,
+                    decision.category.name,
+                    gate.phrase,
+                    language = language,
+                    targetAreaId = targetAreaId,
+                )
         }
+    }
 
     /**
      * Deckelt die Persona-Temperatur fuer eine [RouteCategory.FACT_SHORT]-Route auf
@@ -1163,6 +1523,11 @@ class TurnOrchestrator(
         // Working-Session (S1+S2): history-Quelle + Segment-Diary-Felder GENAU EINMAL
         // bestimmen — speist den Brain-Call UND das ehrliche Start-Event.
         val session = effectiveSession(ctx)
+        // Anaphora hint (Andi live bug 2026-08-15): computed ONCE here, where the
+        // session is already in reach — the two seams below that park or escalate
+        // this turn's raw text would otherwise send a pronoun without a referent.
+        // No anaphora ⇒ null ⇒ every branch stays byte-identical.
+        val contextHint = contextHintFrom(ctx, session)
         // Sprache aus dem Turn an die Persona durchstechen → der System-Prompt
         // instruiert die Antwortsprache explizit (Multilingual-Sprachsteuerung).
         val baseSystemPrompt = promptAssembler.baseSystemPrompt(speaker, ctx.language, ctx.persona)
@@ -1260,25 +1625,30 @@ class TurnOrchestrator(
                             ctx.language,
                             decision.provider.name,
                             decision.category.name,
+                            contextHint = contextHint,
                         )
                     }
                     if (escalationMode() != EscalationMode.OFFLINE) {
-                        pendingLookup.offer(
+                        val offered = pendingArbiter.offerLookup(
                             pendingKey(ctx),
                             PendingLookup(
                                 query = ctx.text,
                                 language = ctx.language,
                                 retryLocalKnowledge = true,
+                                contextHint = contextHint,
                             ),
                         )
-                        return@flatMapMany warmDirectAnswer(
-                            decision.provider.name,
-                            decision.category.name,
-                            FactCoverageGate.deflection(ctx.language),
-                            // Perf-Diary: das Grounding LIEF (und fand nichts Deckendes) —
-                            // seine ehrlich gemessene Dauer reist auch am Deflect-Done mit.
-                            stageTimings = assembled.groundingMs?.let { ChatEvent.StageTimings(groundingMs = it) },
-                            language = ctx.language,
+                        return@flatMapMany tagArbiterAreaLifecycle(
+                            warmDirectAnswer(
+                                decision.provider.name,
+                                decision.category.name,
+                                FactCoverageGate.deflection(ctx.language),
+                                // Perf-Diary: das Grounding LIEF (und fand nichts Deckendes) —
+                                // seine ehrlich gemessene Dauer reist auch am Deflect-Done mit.
+                                stageTimings = assembled.groundingMs?.let { ChatEvent.StageTimings(groundingMs = it) },
+                                language = ctx.language,
+                            ),
+                            offered,
                         )
                     }
                     // ── OFFLINE (kein `return`!): kein Cloud-Call, keine Ausweich-Phrase —
@@ -1294,6 +1664,12 @@ class TurnOrchestrator(
                 //    im Done-stageTimings an den Rand. ──
                 val brainT0 = AtomicLong(0)
                 val brainTtftMs = AtomicLong(-1)
+                // ── Brain timeout latch: a timed-out brain call is indistinguishable
+                //    from "no brain call" in the diary, because both leave brainTtftMs
+                //    null — that blindness hid 8 wedge turns for seven weeks. Set from
+                //    the error signal BEFORE any Done is built (Reactor orders
+                //    onError → onErrorResume), so the timings supplier below sees it. ──
+                val brainTimedOut = AtomicBoolean(false)
                 // ── Antwort-Entropie (S1, additiv — nur Messung): laufende Summe +
                 //    Zähler der Token-Surprisals (−logprob) statt einer Liste — kein
                 //    Speicher-Wachstum, egal wie lang der Turn wird. Deltas OHNE
@@ -1316,6 +1692,9 @@ class TurnOrchestrator(
                 //    before wie [answerBuf]). `false` bleibt der Default (Flag OFF /
                 //    kein Abstain) ⇒ [neverSilent] hängt nichts an ⇒ byte-neutral. ──
                 val offeredPendingAudibly = AtomicBoolean(false)
+                // Falls dieses Offer ein offenes Raum-Pending verdrängt, muss DER
+                // verursachende Turn dessen Lifecycle im Done ehrlich bilanzieren.
+                val offeredPendingClarify = AtomicReference<String?>(null)
                 val brainStream: Flux<ChatEvent> = brain.streamChat(
                     prompt = ctx.text,
                     systemPrompt = assembled.finalPrompt,
@@ -1348,32 +1727,53 @@ class TurnOrchestrator(
                     // Naht D: NACH allen Deltas (Antwort-Bytes unverändert), VOR dem Done —
                     // bei ehrlichem Passen ein Nachschlag-Angebot registrieren. `null`-Puffer
                     // (Flag OFF) ⇒ Lambda ist ein reiner Pass-through-No-op ⇒ byte-neutral.
-                    val offered = answerBuf?.let { maybeOfferAbstainPending(ctx, decision, it.toString()) } ?: false
+                    val offered =
+                        answerBuf?.let { maybeOfferAbstainPending(ctx, decision, it.toString(), contextHint) }
                     // Naht D Hörbarkeit: HÖRBAR wird das Angebot NUR, wenn der Escalation-
                     // Modus Nachfragen überhaupt erlaubt (NICHT AUS) — bei AUS bliebe ein
                     // „ja" ohnehin folgenlos ([redeemLookup] landet dann im ehrlichen
                     // Setting-Hinweis, s. dessen KDoc), ein lautes Angebot wäre da
                     // irreführend. Das stille `offer` selbst (s.o.) bleibt UNABHÄNGIG
                     // davon bestehen — nur das Aussprechen hängt am Modus.
-                    offeredPendingAudibly.set(offered && escalationMode() != EscalationMode.AUS)
-                }
+                    offeredPendingAudibly.set(offered != null && escalationMode() != EscalationMode.AUS)
+                    offeredPendingClarify.set(offered?.let { areaLifecycleOutcome(it.transitions) })
+                }.doOnError { if (isTimeout(it)) brainTimedOut.set(true) }
                 // Timings-SUPPLIER (erst bei Done-Emission gelesen — dann sind TTFT-
                 // und Entropie-Messung sicher passiert): alle null ⇒ null ⇒ Done
                 // byte-identisch.
                 val stageTimings: () -> ChatEvent.StageTimings? = {
                     val ttft = brainTtftMs.get().takeIf { it >= 0 }
                     val entropy = surprisalCount.get().takeIf { it > 0 }?.let { surprisalSum.sum() / it }
-                    if (assembled.groundingMs == null && ttft == null && entropy == null) null
+                    val timedOut = brainTimedOut.get()
+                    if (assembled.groundingMs == null && ttft == null && entropy == null && !timedOut) null
                     else ChatEvent.StageTimings(
                         groundingMs = assembled.groundingMs,
                         brainTtftMs = ttft,
                         answerEntropy = entropy,
+                        // Only a real timeout is a fact; false stays absent on the wire.
+                        brainTimeout = if (timedOut) true else null,
                     )
                 }
+                // ── Execution-claim latch: this path is structurally tool-free (the
+                //    brain never executes anything), so `toolCallRan = false` is a
+                //    fact here, not an assumption — every tool turn returns from
+                //    `routedTurn` long before this line. The latch only buffers when
+                //    the user text is device-shaped and not a state question; every
+                //    other turn streams unchanged. ──
+                val claimFired = AtomicBoolean(false)
+                val gatedStream = executionClaim.transform(
+                    brainStream,
+                    userText = ctx.text,
+                    language = ctx.language,
+                    toolCallRan = false,
+                    onFired = { claimFired.set(true) },
+                )
                 neverSilent(
-                    brainStream, decision, ctx.language, grounded, cacheHit, session, stageTimings, cacheHitSource,
+                    gatedStream, decision, ctx.language, grounded, cacheHit, session, stageTimings, cacheHitSource,
                     abstainOffer = offeredPendingAudibly::get,
+                    pendingClarifyOutcome = offeredPendingClarify::get,
                     preamble = localLookup?.preamble ?: offlineDisclaimer,
+                    claimGateFired = claimFired::get,
                 )
             }
             // Die normale Pipeline behält ihr bestehendes Fehlerverhalten. Nur
@@ -1507,6 +1907,9 @@ class TurnOrchestrator(
                 if (call == null) {
                     warmDirectAnswer(provider, category, agenticRefusal(language))
                 } else {
+                    // Räume-Nutzungs-Naht (additiv, s. warmDirectAnswer-KDoc): dieselbe
+                    // bereits bekannte area_id wie am deterministischen Pfad — GRANT wie DENY.
+                    val targetAreaId = call.data["area_id"] as? String
                     // (Inv. 1) Der Kernel gatet ALLES — Ausführung NUR auf Grant.
                     when (val gate = capability.check(call)) {
                         // (P0 Event-Loop-Fix) Dieser Zweig läuft NACH dem Brain-collectList
@@ -1521,10 +1924,27 @@ class TurnOrchestrator(
                                 }
                             }
                                 .subscribeOn(Schedulers.boundedElastic())
-                                .flatMapMany { phrase -> warmDirectAnswer(provider, category, phrase, language = language) }
+                                .flatMapMany { phrase ->
+                                    // Same set point as the deterministic path: the kernel
+                                    // granted, the executor ran. Without it an agentic act
+                                    // would look tool-free to FALSE_EXECUTION_CLAIM.
+                                    warmDirectAnswer(
+                                        provider,
+                                        category,
+                                        phrase,
+                                        language = language,
+                                        targetAreaId = targetAreaId,
+                                        toolCallRan = true,
+                                    )
+                                }
                         // Deny ⇒ warme Absage, der Executor wird NIE gerufen.
                         is GateDecision.Deny ->
-                            warmDirectAnswer(provider, category, gate.phrase.ifBlank { agenticRefusal(language) })
+                            warmDirectAnswer(
+                                provider,
+                                category,
+                                gate.phrase.ifBlank { agenticRefusal(language) },
+                                targetAreaId = targetAreaId,
+                            )
                     }
                 }
             }
@@ -1535,6 +1955,41 @@ class TurnOrchestrator(
             ToolGrammarParser.Result.Malformed ->
                 warmDirectAnswer(provider, category, agenticRefusal(language))
         }
+    }
+
+    /**
+     * Stamps `brainTimeout` on the timings of a turn that died on a TIMEOUT — the
+     * diary field already exists ([ChatEvent.StageTimings.brainTimeout]) and the
+     * merge follows the established `(timings ?: StageTimings()).copy(...)` pattern.
+     *
+     * Why here and not only at the brain's own latch: the inner latch
+     * (`doOnError { if (isTimeout(it)) … }`) sees a timeout only when the BRAIN
+     * stream errors. A turn killed by the outer [turnDeadline] cancels that inner
+     * stream instead of erroring it, so the latch would stay false and the diary
+     * would show a plain error — indistinguishable from a crash. One line at the
+     * single seam where every fatal turn error passes closes that blind spot.
+     *
+     * Non-timeout errors pass through untouched, so every non-timeout turn stays
+     * byte-identical on the wire (`false` never travels, only a real `true`).
+     */
+    private fun timeoutAware(timings: ChatEvent.StageTimings?, error: Throwable): ChatEvent.StageTimings? =
+        if (!isTimeout(error)) timings
+        else (timings ?: ChatEvent.StageTimings()).copy(brainTimeout = true)
+
+    /**
+     * Was this error a timeout? Walks the cause chain (adapters wrap the raw
+     * [TimeoutException] of `Flux.timeout` into their own "unreachable" error),
+     * bounded depth so a self-referencing cause cannot spin.
+     */
+    private fun isTimeout(error: Throwable): Boolean {
+        var e: Throwable? = error
+        var depth = 0
+        while (e != null && depth < MAX_CAUSE_DEPTH) {
+            if (e is TimeoutException) return true
+            e = e.cause.takeIf { it !== e }
+            depth++
+        }
+        return false
     }
 
     /**
@@ -1605,11 +2060,35 @@ class TurnOrchestrator(
         stageTimings: () -> ChatEvent.StageTimings? = { null },
         cacheHitSource: String? = null,
         abstainOffer: () -> Boolean = { false },
+        /** Lifecycle eines durch ein spätes Abstain-Offer verdrängten Raum-Pendings. */
+        pendingClarifyOutcome: () -> String? = { null },
         preamble: String? = null,
+        /**
+         * Execution-claim latch (additive, pattern [abstainOffer]): read only when a
+         * Done is built — by then the gated stream has completed, so the value is
+         * final. `true` ⇒ the Done carries `claimGateFired=true` into the diary;
+         * `false` ⇒ the wire field stays absent (Done byte-identical).
+         */
+        claimGateFired: () -> Boolean = { false },
     ): Flux<ChatEvent> {
         val provider = decision.provider.name
         val sawText = AtomicBoolean(false)
         val chars = AtomicInteger(0)
+        val done: () -> ChatEvent.Done = {
+            // Naht D (spätes Abstain-Offer) ist die vierte Stelle, an der ein Turn mit
+            // einer OFFENEN Rückfrage endet — hier erst NACH der Antwort bekannt, darum
+            // (wie [claimGateFired]) über den Supplier statt als Parameter. `false` ⇒
+            // beide Keys fehlen im JSON ⇒ Done byte-identisch zu heute.
+            val offered = abstainOffer()
+            ChatEvent.Done(
+                provider = provider,
+                stageTimings = stageTimings(),
+                claimGateFired = if (claimGateFired()) true else null,
+                pendingClarify = pendingClarifyOutcome(),
+                expectsReply = if (offered) true else null,
+                pendingKind = if (offered) ChatEvent.PendingKind.LOOKUP else null,
+            )
+        }
 
         val start: ChatEvent = ChatEvent.Start(
             provider = provider,
@@ -1623,13 +2102,39 @@ class TurnOrchestrator(
             escalationSource = cacheHitSource ?: "",
         )
 
+        // ── Turn-Decke (s. [turnDeadline]): der Companion-Delay schneidet den Stream
+        //    ab, der Stolperdraht dahinter macht daraus eine TimeoutException. Warum
+        //    nicht `.timeout(Duration)`: das ist in Reactor ein INAKTIVITÄTS-Timeout
+        //    zwischen zwei Events — ein tröpfelnder Turn liefe damit unbegrenzt.
+        //    Warum nicht `takeUntilOther` allein: das schnitte STILL ab, und ein
+        //    still abgeschnittener Turn ist der lautlose Tod, den never-silent
+        //    verbietet. Als TimeoutException landet der Riss dagegen exakt im
+        //    `onErrorResume` unten — also in der warmen Fehler-Phrase (kein Text
+        //    war raus) bzw. in einem sauberen Done (Text war schon raus). Ohne Riss
+        //    ist der Draht ein leeres `concatWith` ⇒ jeder gesunde Turn bleibt
+        //    byte-identisch. ──
+        val deadlineRipped = AtomicBoolean(false)
         val body = stream
+            .takeUntilOther(
+                // Kein Log: core-domain bleibt logger-frei (reine Domäne). Die Spur
+                // des Risses ist das Diary-Feld `brainTimeout` (s. [timeoutAware]).
+                Mono.delay(turnDeadline).doOnNext { deadlineRipped.set(true) },
+            )
             .doOnNext { ev ->
                 if (ev is ChatEvent.TextDelta && ev.text.isNotEmpty()) {
                     sawText.set(true)
                     chars.addAndGet(ev.text.length)
                 }
             }
+            .concatWith(
+                Flux.defer {
+                    if (deadlineRipped.get()) {
+                        Flux.error<ChatEvent>(TimeoutException("turn deadline ${turnDeadline.toSeconds()}s exceeded"))
+                    } else {
+                        Flux.empty()
+                    }
+                },
+            )
             .concatWith(
                 Flux.defer {
                     if (sawText.get()) {
@@ -1639,10 +2144,10 @@ class TurnOrchestrator(
                         if (abstainOffer()) {
                             Flux.just<ChatEvent>(
                                 ChatEvent.TextDelta(formatter.abstainLookupOffer(language), provider = provider),
-                                ChatEvent.Done(provider = provider, stageTimings = stageTimings()),
+                                done(),
                             )
                         } else {
-                            Flux.just<ChatEvent>(ChatEvent.Done(provider = provider, stageTimings = stageTimings()))
+                            Flux.just<ChatEvent>(done())
                         }
                     } else {
                         // Leerer Brain-Stream (kein Text, kein Fehler) → warme LEER-Phrase.
@@ -1650,13 +2155,18 @@ class TurnOrchestrator(
                     }
                 },
             )
-            .onErrorResume { _ ->
+            .onErrorResume { error ->
                 if (sawText.get()) {
                     // Text war schon raus → nur sauber schließen, kein Doppel.
-                    Flux.just<ChatEvent>(ChatEvent.Done(provider = provider, stageTimings = stageTimings()))
+                    // Das Diary erfährt den Timeout trotzdem (s. [timeoutAware]):
+                    // ein Turn, der MITTEN im Satz an einer Deadline gerissen ist,
+                    // sieht sonst wie ein sauber beendeter aus.
+                    Flux.just<ChatEvent>(
+                        done().let { it.copy(stageTimings = timeoutAware(it.stageTimings, error)) },
+                    )
                 } else {
                     // Fehler vor Text → warme FEHLER-Phrase statt stillem Tod.
-                    fallbackStream(provider, errorFallback(language), stageTimings())
+                    fallbackStream(provider, errorFallback(language), timeoutAware(stageTimings(), error))
                 }
             }
 
@@ -1682,30 +2192,54 @@ class TurnOrchestrator(
         phrase: String,
         stageTimings: ChatEvent.StageTimings? = null,
         language: Language = Language.DEFAULT,
+        /**
+         * **Räume-Nutzungs-Naht (additiv, Default `null` — Muster [stageTimings]):**
+         * die bereits bekannte `area_id` eines Tool-Turns, reist unverändert ins
+         * additive [ChatEvent.Start.targetAreaId] (s. dessen KDoc). Fastpaths ohne
+         * Area-Konzept (Timer/Calc/List/Datum/Radio/Honesty/Fehler/…) lassen den
+         * Default stehen ⇒ byte-neutral.
+         */
+        targetAreaId: String? = null,
+        /**
+         * **Did the tool executor run before this answer?** (additive, Default `false`
+         * — pattern [targetAreaId]): `true` ONLY from the three seams that really call
+         * [tools].execute; it travels into the additive [ChatEvent.Done.toolCallRan]
+         * (see its KDoc). Every other warm answer (deny, ask, timer/calc/list/radio/
+         * error/…) keeps the default ⇒ the Done stays byte-identical.
+         */
+        toolCallRan: Boolean = false,
     ): Flux<ChatEvent> {
         val text = phrase.ifBlank { warmFallback(language) }
         return Flux.just(
-            ChatEvent.Start(provider = provider, category = category, model = "policy"),
+            ChatEvent.Start(
+                provider = provider,
+                category = category,
+                model = "policy",
+                targetAreaId = targetAreaId,
+                // Raumname-Naht (additiv, Andi 2026-08-22): der SLUG bleibt die
+                // Matching-Wahrheit, der echte HA-Anzeigename reist daneben mit —
+                // EINE Auflösung für alle (dieselbe, die die Quittung spricht).
+                targetAreaName = areaCatalog.displayNameOrNull(targetAreaId),
+            ),
             ChatEvent.TextDelta(text, provider = provider),
-            ChatEvent.Done(provider = provider, stageTimings = stageTimings),
+            // Only a real executor call is a fact; false stays absent on the wire.
+            ChatEvent.Done(
+                provider = provider,
+                stageTimings = stageTimings,
+                toolCallRan = if (toolCallRan) true else null,
+            ),
         )
     }
 
     /**
-     * **Session-Schlüssel des Pending-Angebots** (Extended Think S2, dokumentierter
-     * Entscheid zur größten Design-Unbekannten): `chatId ?: speakerId ?: "local"`.
-     * Der Voice-Pfad baut den ChatRequest heute OHNE chatId und OHNE speakerContext
-     * ⇒ er fällt auf den Ein-Haushalt-Single-Slot [PendingLookupPort.LOCAL_KEY]
-     * (ehrlich + sicher: max. EIN offenes Angebot, TTL + one-shot). Upgrade-Pfad:
-     * liefert die Sprecher-ID-Lane (S3) eine echte speakerId in den Voice-Pfad,
-     * greift automatisch die mittlere Stufe — pro Sprecher, ohne Umbau hier.
-     * Bewusst `ctx.request.chatId` (nullable) statt `ctx.chatId` (fällt auf
-     * "default"): der Fallback soll sichtbar der dokumentierte Single-Slot sein.
+     * **Conversation-Schlüssel aller Pending-Arten.** Der Inbound liefert einen
+     * kanalgebundenen Schlüssel; [ConversationKeys.resolve] hält alte/direkte
+     * Aufrufer kompatibel. Chat/Voice mit derselben Geräte-ID bleiben getrennt,
+     * WS bindet an seine Server-Session. Nur ein per [SpeakerTrust] verifizierter
+     * Claim darf als Fallback dienen; sonst bleibt ein eigener Kanal-Local-Slot.
      */
     private fun pendingKey(ctx: TurnPrompt): String =
-        ctx.request.chatId?.takeIf { it.isNotBlank() }
-            ?: ctx.speaker?.speakerId?.takeIf { it.isNotBlank() }
-            ?: PendingLookupPort.LOCAL_KEY
+        ConversationKeys.resolve(ctx.request, speakerTrustThreshold)
 
     /**
      * Zweite Quelle DESSELBEN offenen Nachschlag-Angebots: ein HonestyGate-
@@ -1722,9 +2256,19 @@ class TurnOrchestrator(
         decision: RouteDecision,
         explicit: Boolean,
     ): Flux<ChatEvent> {
-        pendingLookup.offer(pendingKey(ctx), PendingLookup(query = ctx.text, language = ctx.language))
+        // Andi live bug 2026-08-15: this is the seam that produced „Gute Frage —
+        // soll ich kurz nachschauen?" for „Wozu isst man ihn denn?". The referent
+        // is parked WITH the question, so the redeemed „ja" escalates something
+        // answerable. Runs off the event loop (honesty gate is on boundedElastic).
+        val offered = pendingArbiter.offerLookup(
+            pendingKey(ctx),
+            PendingLookup(query = ctx.text, language = ctx.language, contextHint = contextHintFor(ctx)),
+        )
         val phrase = if (explicit) formatter.cloudConsentAskExplicit(ctx.language) else formatter.cloudConsentAsk(ctx.language)
-        return warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = ctx.language)
+        return tagArbiterAreaLifecycle(
+            warmDirectAnswer(decision.provider.name, decision.category.name, phrase, language = ctx.language),
+            offered,
+        )
     }
 
     /**
@@ -1751,6 +2295,14 @@ class TurnOrchestrator(
      * potenziell erneut als Consent-Fall erkennen. Stattdessen bauen wir aus
      * dem AKTUELLEN Session-/Sprecherkontext einen LOCAL/FACT_SHORT-Turn mit der
      * GESPEICHERTEN Originalfrage und genau einem Assembly-/Brain-Durchlauf.
+     *
+     * **Deliberate boundary of [PendingLookup.contextHint]:** the local wiki
+     * retry keeps the BARE original question. Widening it would help the wiki
+     * query, but [ctx].text is also the local brain's prompt and the coverage
+     * gate's input — a "Kontext: …/Frage: …" shape there risks the local model
+     * speaking the framing out loud, for a grounding gain we cannot prove. The
+     * hint therefore rides only the escalation leg (`onMiss` below), where the
+     * answer is spoken VERBATIM from a model that was asked to resolve it.
      */
     private fun redeemPendingLookup(
         current: TurnPrompt,
@@ -1758,7 +2310,7 @@ class TurnOrchestrator(
         research: Boolean = false,
     ): Flux<ChatEvent> {
         if (!pending.retryLocalKnowledge) {
-            return redeemLookup(pending.query, pending.language, research)
+            return redeemLookup(pending.query, pending.language, research, contextHint = pending.contextHint)
         }
         val original = current.copy(text = pending.query, language = pending.language)
         val decision = RouteDecision(
@@ -1773,6 +2325,7 @@ class TurnOrchestrator(
                     language = pending.language,
                     research = research,
                     preflightGroundingMs = groundingMs,
+                    contextHint = pending.contextHint,
                 )
             },
             preamble = LanguagePackRegistry.forLanguage(pending.language).localLookupFoundPrefix,
@@ -1791,12 +2344,17 @@ class TurnOrchestrator(
      * [preflightGroundingMs] stammt ausschließlich von einem zuvor fehlgeschlagenen
      * lokalen Wiki-Versuch und reist als gemessene Stage-Latenz weiter. `null`
      * hält alle bisherigen Einlösungen byte-neutral.
+     *
+     * [contextHint] is the parked referent of an anaphoric question
+     * ([PendingLookup.contextHint]); `null` (every non-anaphoric redemption)
+     * leaves the outbound query byte-identical.
      */
     private fun redeemLookup(
         query: String,
         language: Language,
         research: Boolean = false,
         preflightGroundingMs: Long? = null,
+        contextHint: String? = null,
     ): Flux<ChatEvent> =
         when (escalationMode()) {
             EscalationMode.AUS, EscalationMode.OFFLINE -> warmDirectAnswer(
@@ -1816,6 +2374,7 @@ class TurnOrchestrator(
                     port,
                     label,
                     preflightGroundingMs,
+                    contextHint,
                 )
             }
         }
@@ -1895,17 +2454,24 @@ class TurnOrchestrator(
         if (previous != null) {
             return redeemLookup(previous, ctx.language, research)
         }
-        if (!topicAskOpen) {
-            pendingLookup.offer(
+        val offered = if (!topicAskOpen) {
+            // No [PendingLookup.contextHint] here, deliberately: this sort parks a
+            // topicLESS request and the NEXT message becomes the query (seam C4).
+            // A hint taken now would describe the clarify exchange itself („was
+            // genau soll ich nachschauen?"), not the referent — noise, not context.
+            pendingArbiter.offerLookup(
                 pendingKey(ctx),
                 PendingLookup(query = ctx.text, language = ctx.language, awaitsTopic = true),
             )
-        }
-        return warmDirectAnswer(
-            RouteProvider.LOCAL.name,
-            RouteCategory.FACT_SHORT.name,
-            lookupIntentClarify(ctx.language),
-            language = ctx.language,
+        } else null
+        return tagArbiterAreaLifecycle(
+            warmDirectAnswer(
+                RouteProvider.LOCAL.name,
+                RouteCategory.FACT_SHORT.name,
+                lookupIntentClarify(ctx.language),
+                language = ctx.language,
+            ),
+            offered,
         )
     }
 
@@ -1944,20 +2510,46 @@ class TurnOrchestrator(
      * `doOnComplete` des Brain-Streams (nach allen Deltas, vor dem Done) — die
      * Antwort-Bytes sind dadurch unverändert.
      *
-     * @return `true` gdw. GENAU JETZT ein Pending registriert wurde — der Aufrufer
+     * @return das explizite Offer-/Verdrängungs-Ergebnis, wenn GENAU JETZT ein
+     *   Pending registriert wurde, sonst `null` — der Aufrufer
      *   ([brainStreamTurn]) nutzt das, um das hörbare Angebot ([neverSilent]s
      *   `abstainOffer`) zu steuern (s. dortiges KDoc): das REGISTRIEREN bleibt
      *   unverändert bedingungslos (auch bei [EscalationMode.AUS] — ein
      *   verwaistes Pending schadet nicht, es verfällt per TTL/one-shot), NUR das
      *   HÖRBARMACHEN hängt zusätzlich am Modus (s. [brainStreamTurn]).
      */
-    private fun maybeOfferAbstainPending(ctx: TurnPrompt, decision: RouteDecision, answer: String): Boolean {
-        if (!lookupIntentEnabled) return false
-        if (decision.provider != RouteProvider.LOCAL || decision.category != RouteCategory.FACT_SHORT) return false
-        if (!BrainAbstainRecognizer.isAbstain(answer)) return false
-        pendingLookup.offer(pendingKey(ctx), PendingLookup(query = ctx.text, language = ctx.language))
-        return true
+    private fun maybeOfferAbstainPending(
+        ctx: TurnPrompt,
+        decision: RouteDecision,
+        answer: String,
+        contextHint: String? = null,
+    ): PendingTurnArbiter.OfferResult? {
+        if (!lookupIntentEnabled) return null
+        if (decision.provider != RouteProvider.LOCAL || decision.category != RouteCategory.FACT_SHORT) return null
+        if (!BrainAbstainRecognizer.isAbstain(answer)) return null
+        // [contextHint] is passed in (not computed here): this runs on the brain
+        // stream's doOnComplete, where a session read would be blocking I/O on
+        // that thread. The caller already resolved it once per turn.
+        return pendingArbiter.offerLookup(
+            pendingKey(ctx),
+            PendingLookup(query = ctx.text, language = ctx.language, contextHint = contextHint),
+        )
     }
+
+    /**
+     * **The anaphora hint of THIS turn** — `null` unless
+     * [AnaphoraRecognizer.carriesUnresolvedReference] fires, so the session read
+     * stays behind the (pure, cheap) recognizer and never happens for an ordinary
+     * turn. See [PendingLookup.contextHint] for the privacy contract.
+     */
+    private fun contextHintFor(ctx: TurnPrompt): String? =
+        if (!AnaphoraRecognizer.carriesUnresolvedReference(ctx.text)) null
+        else ContextHint.of(effectiveSession(ctx).turns, ctx.language)
+
+    /** [contextHintFor] for callers that already resolved the session — one read per turn. */
+    private fun contextHintFrom(ctx: TurnPrompt, session: WorkingSessionSegment): String? =
+        if (!AnaphoraRecognizer.carriesUnresolvedReference(ctx.text)) null
+        else ContextHint.of(session.turns, ctx.language)
 
     /**
      * **Der Orts-Folge-Turn (Wetter S3)** — die Einlösung der „Für welchen Ort
@@ -2019,7 +2611,11 @@ class TurnOrchestrator(
      *     Brücke „Klar, Moment — ich schau schnell." — bis S2 ungenutzt),
      *  3. GENAU EIN [EscalationPort.lookup] mit der Original-[query] (v1: NUR die
      *     Frage, groundingSnippets bewusst leer — Tom-freundlichste Auslegung;
-     *     NIE finalPrompt/History/Memory),
+     *     NIE finalPrompt/History/Memory). **Einzige Ausnahme, eng gezäunt:** ein
+     *     [contextHint] (nur bei erkannter Anapher, s. [PendingLookup.contextHint])
+     *     stellt der Frage die letzte Wortmeldung als „Kontext:"-Zeile voran —
+     *     sonst sieht die Cloud ein Pronomen ohne Referenten und findet ehrlich
+     *     nichts (Andi-Live-Bug 2026-08-15). Weiterhin NIE finalPrompt/Memory.
      *  4. das Ergebnis als warme TextDelta(s):
      *     - [EscalationResult.Answer] ⇒ lokale Rahmung + Antwort **VERBATIM**
      *       (WikiNumber-Lehre: keine Brain-Umformulierung) + Quelle als Nachsatz.
@@ -2057,7 +2653,12 @@ class TurnOrchestrator(
         escalationPort: EscalationPort = escalation,
         providerLabel: String = LOOKUP_NOTE_PROVIDER,
         preflightGroundingMs: Long? = null,
+        contextHint: String? = null,
     ): Flux<ChatEvent> {
+        // The ONE outbound shape: no hint ⇒ [query] byte for byte; with a hint ⇒
+        // context first, question second (s. [ContextHint.escalationQuery]). Only
+        // this string leaves the box — the hint is never emitted as an event.
+        val outboundQuery = ContextHint.escalationQuery(query, contextHint, language)
         val head = Flux.just<ChatEvent>(
             ChatEvent.Start(
                 provider = provider,
@@ -2084,7 +2685,7 @@ class TurnOrchestrator(
         // H3 Diary: Cap-Erschöpfung EHRLICH von einem Netzfehler unterscheidbar.
         val capExhausted = AtomicBoolean(false)
         val startedAt = nanoTime()
-        val outcome: Flux<ChatEvent> = Mono.defer { escalationPort.lookup(query, "", language) }
+        val outcome: Flux<ChatEvent> = Mono.defer { escalationPort.lookup(outboundQuery, "", language) }
             .timeout(escalationTimeout)
             .onErrorResume { error ->
                 val reason = if (error is java.util.concurrent.TimeoutException) {
@@ -2115,7 +2716,16 @@ class TurnOrchestrator(
                 // H2 Diary: derselbe Hash, mit dem die Notiz GERADE geschrieben wurde
                 // (recordLookupNote gibt sie zurück statt einer zweiten Normalisierung —
                 // eine Wahrheit, kein Duplikat).
-                val note = recordLookupNote(query, result, providerLabel)
+                //
+                // A HINTED lookup is deliberately NOT cached (Nora veto, same shape):
+                // its key would be the anaphoric question itself — „Wozu isst man ihn
+                // denn?" matches the identical sentence about a DIFFERENT thing at
+                // Jaccard 1.0 and would come back with grounding authority. Caching the
+                // resolved form instead would persist conversation text into the 30-day
+                // store, which the hint's privacy contract forbids. So: no note. Today
+                // these turns end in UNKLAR and write nothing either — no regression,
+                // and `null` keeps every unhinted lookup byte-identical.
+                val note = if (contextHint == null) recordLookupNote(query, result, providerLabel) else null
                 if (result is EscalationResult.Answer) {
                     costCents.set(result.costCents)
                     queryHash.set(note?.queryHash)
@@ -2287,6 +2897,17 @@ class TurnOrchestrator(
         /** Start-Kategorie des Probe-Fastpath-Turns (Golden-Utterance #20) — freie Kategorie wie "EMPTY"/"ERROR". */
         const val CATEGORY_PROBE = "PROBE"
 
+        /**
+         * Start category of a news-briefing fastpath turn (F5 Lagebild) — a free
+         * category like "EMPTY"/"ERROR". Brain-free by construction, so the diary
+         * row carries NO `brainTtft`: that absence is the queryable proof that a
+         * "what's important today" turn cost zero background brain calls.
+         */
+        const val CATEGORY_NEWS = "NEWS"
+
+        /** RouteDecision.reason of a redeemed room ask (F1-4) — synthetic hop, no router ran. */
+        const val AREA_CLARIFY_ROUTE_REASON = "area-clarify-redeem"
+
         /** Interner Routing-Beleg des Wiki-only-Vorversuchs nach einem eingelösten FactCoverage-Angebot. */
         private const val LOCAL_LOOKUP_REDEMPTION_REASON = "pending-local-knowledge-retry"
 
@@ -2308,6 +2929,9 @@ class TurnOrchestrator(
          * zusätzlich (Verteidigung in der Tiefe, s. [SttSurprisalPort]-KDoc).
          */
         val STT_SURPRISAL_TIMEOUT: Duration = Duration.ofMillis(500)
+
+        /** Cause-chain walk limit of [isTimeout] — a cyclic cause must never spin. */
+        private const val MAX_CAUSE_DEPTH: Int = 8
 
         /**
          * Die vier Guillemet-Zeichen `« » ‹ ›` — Vertrags-Marker des WikiNumberContract
@@ -2410,6 +3034,23 @@ class TurnOrchestrator(
 
         /** Timeout des Eskalations-Lookups: nach ~8 s der warme Unavailable-Pfad (never-silent). */
         val ESCALATION_LOOKUP_TIMEOUT: Duration = Duration.ofSeconds(8)
+
+        /**
+         * **Die letzte Wanduhr des Turns** (Stabilitäts-Fix 2026-08-20): nach 60 s
+         * ist ein Turn tot, egal welche Stufe hängt. Jede EINZELNE Stufe hat schon
+         * ihr eigenes Budget ([ESCALATION_LOOKUP_TIMEOUT] 8 s,
+         * [AGENTIC_COLLECT_TIMEOUT] 30 s, Brain-Gesamt 25 s) — aber sie ADDIEREN
+         * sich, und keines von ihnen misst den Turn als Ganzes. Ohne diese Decke
+         * kann ein Turn, der mehrere Stufen langsam durchläuft, minutenlang offen
+         * stehen; der Nutzer hört dann nichts und die Verbindung hängt.
+         *
+         * 60 s liegt bewusst ÜBER der Summe der wahrscheinlichen Stufen (Eskalation
+         * 8 s + Brain 25 s ≈ 33 s) — die Decke greift NUR im pathologischen Fall und
+         * schneidet nie einen gesunden Turn ab. Sie ist die LETZTE Instanz, nicht
+         * die erste: ein reissendes Stufen-Budget soll immer zuerst greifen, weil es
+         * die spezifischere (und hörbarere) Antwort kennt.
+         */
+        val TURN_DEADLINE: Duration = Duration.ofSeconds(60)
 
         /**
          * Nachgeschlagen-Notiz-TTL (S3): wie lange ein Cache-Treffer gilt, bevor

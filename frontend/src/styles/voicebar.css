@@ -138,6 +138,15 @@
   height: var(--orb-h, 36px);
   color: var(--accent);
   --lvl: 0;
+  /* Deko-Verstärkung der ÄUSSEREN Schichten (bloom/ring), immer als
+     `var(--orb-deco, 1)` gelesen: ohne setzenden Vorfahren gilt 1, also für die
+     Compose-Bar exakt die abgenommene Optik. Der Home-Orb setzt sie am
+     `.voiceorb__tap` herunter (Andi 15.08.: „mach den Orb etwas kleiner und
+     dezenter") — derselbe Orb, nur leiser um sich herum. BEWUSST NICHT hier
+     mit `--orb-deco: 1` vorbelegt: eine eigene Deklaration an `.vc-orb` würde
+     den geerbten Wert des Home-Orbs überschreiben und die Dämpfung stillegen.
+     Der KERN ist ausgenommen — er trägt die Zustands-Semantik (Atmen,
+     Schimmern, voll beim Sprechen), die nicht gedimmt werden darf. */
 }
 .vc-orb > * {
   grid-area: 1 / 1; /* alle Schichten in dieselbe Zelle → zentriert gestapelt */
@@ -169,7 +178,7 @@
   height: var(--orb-bloom, 24px);
   border-radius: 50%;
   background: var(--accent-soft);
-  opacity: calc(0.16 + var(--lvl) * 0.7);
+  opacity: calc((0.16 + var(--lvl) * 0.7) * var(--orb-deco, 1));
   transform: scale(calc(0.6 + var(--lvl) * 1.05));
   transition:
     transform 150ms linear,
@@ -183,7 +192,7 @@
   height: var(--orb-ring, 16px);
   border-radius: 50%;
   border: 1px solid var(--accent-soft);
-  opacity: calc(0.18 + var(--lvl) * 0.5);
+  opacity: calc((0.18 + var(--lvl) * 0.5) * var(--orb-deco, 1));
   transform: scale(calc(0.7 + var(--lvl) * 0.7));
   transition:
     transform 150ms linear,
@@ -199,7 +208,7 @@
   animation: vc-ring-breath var(--breath) var(--ease-standard) infinite;
 }
 .vc-orb--idle .vc-orb__bloom {
-  opacity: 0.1;
+  opacity: calc(0.1 * var(--orb-deco, 1));
 }
 @keyframes vc-breath {
   0%,
@@ -215,11 +224,11 @@
 @keyframes vc-ring-breath {
   0%,
   100% {
-    opacity: 0.12;
+    opacity: calc(0.12 * var(--orb-deco, 1));
     transform: scale(0.8);
   }
   50% {
-    opacity: 0.28;
+    opacity: calc(0.28 * var(--orb-deco, 1));
     transform: scale(1.05);
   }
 }
@@ -244,11 +253,11 @@
 @keyframes vc-ring-think {
   0%,
   100% {
-    opacity: 0.15;
+    opacity: calc(0.15 * var(--orb-deco, 1));
     transform: scale(0.75);
   }
   50% {
-    opacity: 0.4;
+    opacity: calc(0.4 * var(--orb-deco, 1));
     transform: scale(1.1);
   }
 }
@@ -278,10 +287,10 @@
     opacity: 0.8 !important;
   }
   .vc-orb__ring {
-    opacity: 0.25 !important;
+    opacity: calc(0.25 * var(--orb-deco, 1)) !important;
   }
   .vc-orb__bloom {
-    opacity: 0.14 !important;
+    opacity: calc(0.14 * var(--orb-deco, 1)) !important;
   }
   .vc-mic.is-recording {
     animation: none !important;
@@ -384,17 +393,132 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 28px 16px 20px;
+  /* Komposition v2 (15.08.): Polster von 28/20 auf 14/12 und Abstand 10 → 8.
+     Der Orb-Block war mit ~249 px der größte fixe Posten des Home-Gerüsts; die
+     Polster allein waren 48 px davon — Luft, die der Bühne fehlte. */
+  /* W6 (Andi 20.08., „mache das enger"): 8 → 6 px zwischen Orb und seiner
+     Beschriftung. Der kleinere der beiden Werte, weil die beiden EIN Ding
+     sind — die Herleitung steht bei den Konstanten in `index.css`. */
+  gap: var(--home-orb-label-gap, 6px);
+  /* 12 → 4 px unten (19.08.): der Block hat jetzt einen Boden unter sich
+     (`.homefoot`) und muss sich keinen eigenen mehr erfinden.
+     W6: oben 14 → 10, unten 4 → 0. Die 4 px unten waren der Rest desselben
+     Denkfehlers wie das untere `.idle`-Polster: darunter liegt `.homefoot` mit
+     eigenem `margin-top`, also zwei Besitzer für eine Fuge. Jetzt gehört jede
+     Fuge genau einem — oben diesem Block, unten der Fußleiste. */
+  padding: var(--home-orb-gap, 10px) 16px 0;
   text-align: center;
+  /* S1 „Ein-Fenster-Deckel" (DESIGN-widgets-settings-2026-08-15 §2.2): der
+     Orb-Block ist das zweite Kind der `.app__main`-Spalte und darf NICHT
+     gequetscht werden — er hat feste Innenmaße, ein Schrumpfen würde nur
+     seinen eigenen Inhalt überlaufen lassen. Die dehnbare Fläche ist die
+     Bühne in `.idle` (flex:1), nicht dieser Block. */
+  flex: none;
+  /* UNTEN VERANKERT (Andi 19.08.: „Der Orb richtet sich nicht nach unten
+     aus"). Der Orb landete bisher nur DESHALB unten, weil `.idle` davor
+     `flex:1` trägt und die Restfläche schluckt — eine Verankerung aus zweiter
+     Hand: sobald `.idle` sich einmal nicht mehr dehnt (leere Bühne, künftiger
+     Umbau, ein `display:none` auf `.idle`), rutschte der Orb nach oben mit.
+     `margin-top:auto` ist die Zusage selbst und nicht ihre Nebenwirkung: was
+     an Platz übrig ist, liegt ÜBER dem Orb, bei jeder Fensterhöhe. */
+  margin-top: auto;
+  /* Bezugsrahmen der Sprech-Schicht (23.08.) — ohne diese Zeile hinge sie am
+     Fenster statt am Orb. Dieselbe eine Zeile, die `.idle__stage` für die
+     Edit-Schicht trägt. */
+  position: relative;
+}
+
+/* ==== Die Sprech-Schicht (23.08., Andi: „verschiebt wieder die größe von
+   allen widgets") ========================================================
+   Was hier drin liegt (die Blase mit dem letzten Turn, der Mikrofon-Fehler),
+   ERSCHEINT und VERSCHWINDET — und darf dabei keinen einzigen Pixel Layout
+   bewegen. Vorher waren beide gewöhnliche Flex-Kinder des Orb-Blocks; der
+   Block ist `flex: none` in einer Spalte, deren einziges dehnbares Kind die
+   Bühne ist, also ging jeder Pixel der Blase direkt von der Bühne ab
+   (gemessen: Orb-Block 140 → 236 px, Kachel-Kasten 669 → 574 px, Kachelhöhe
+   +24/+46 px, Seiten 4 → 5).
+
+   `bottom: 100%` setzt die Schicht auf die Oberkante des Orb-Blocks und lässt
+   sie NACH OBEN wachsen, über die Bühne. Nach unten ist kein Platz: der
+   Orb-Block ist per `margin-top: auto` am Boden verankert, darunter steht nur
+   noch die Fußleiste. Oben wächst sie in die Bühne hinein — das ist genau die
+   bestellte Überlagerung, und die Blase hat ihren eigenen Deckel
+   (`max-height`), damit sie nie die ganze Bühne zudeckt.
+
+   `pointer-events: none` ist Pflicht, nicht Kosmetik: die Schicht ist so breit
+   wie der Orb-Block und läge sonst als unsichtbarer Deckel über den unteren
+   Kachelreihen. Nur ihre Kinder holen sich den Zeiger zurück (die Blase
+   scrollt in sich). Dasselbe Muster wie `.idle__editlayer`. */
+.voiceorb__say {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  /* Über der Bühne UND über der Edit-Schicht (`z-index: 3`): wer gerade
+     anordnet und dabei spricht, soll die Antwort trotzdem lesen können. */
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  pointer-events: none;
+}
+.voiceorb__say > * {
+  pointer-events: auto;
 }
 .voiceorb__tap {
-  /* Größen-Vars fürs .vc-orb-Kind (Custom Properties vererben sich). */
-  --orb-w: 172px;
-  --orb-h: 172px;
-  --orb-core: 54px;
-  --orb-ring: 116px;
-  --orb-bloom: 156px;
+  /* Größen-Vars fürs .vc-orb-Kind (Custom Properties vererben sich).
+     S1: der Orb ist jetzt höhenbewusst. Mit 172 px + Polstern war er mit ~249 px
+     der GRÖSSTE fixe Posten des Home-Gerüsts und wusste vom Fenster nichts.
+     `min(172px, 22vh)` deckelt ihn an der Fensterhöhe; Kern/Ring/Bloom hängen
+     als feste Verhältnisse daran (54/172, 116/172, 156/172), damit die
+     Zustands-Optik in JEDER Größe dieselbe Formel bleibt statt bei kleinem Orb
+     über den Rand zu wachsen.
+     KOMPOSITION V2 (15.08., Andi am iPad: „mach den Orb etwas kleiner und
+     dezenter"): 172 → 132 px und 22vh → 18vh. `clamp()` statt `min()` setzt
+     zugleich eine echte UNTERgrenze von 96 px — das Fingerziel darf auf einem
+     flachen Fenster nicht unter die Tap-Ziel-Schwelle rutschen (vorher konnte
+     `min(172px,22vh)` bei 400 px Fensterhöhe auf 88 px fallen).
+     Die 18vh-Komponente greift ab Fensterhöhen unter ~733 px — auf dem iPad
+     quer (834 px) steht der Orb also fest bei 132 px.
+     Ring und Bloom rücken zusätzlich enger an den Kern (0,674 → 0,60 und
+     0,907 → 0,84): der Orb wird nicht nur kleiner, sein Hof wird auch schmaler.
+     Die Deko-DECKKRAFT nimmt `--orb-deco` zurück (s. `.vc-orb`) — der Kern und
+     damit die Zustands-Semantik (Atmen, Schimmern, Puls beim Sprechen) bleibt
+     unangetastet.
+
+     ── KOMPOSITION V3 (22.08., Andi: „Der Orb nimmt fast ein Viertel des
+     Bildes ein. Mach das bitte kompakter.") ─────────────────────────────────
+     ZUERST MESSEN, WEIL DIE ZAHL ZUNÄCHST NICHT STIMMTE. Der Kreis selbst ist
+     bei 1366×1024 rund 1,2 % der Bildfläche — von einem Viertel keine Spur.
+     Gemeint ist der BLOCK (Orb + Fuge + Beschriftung + oberes Polster) und ein
+     FLACHES Fenster: `tools/zuhause-probe/orb-flaeche.mjs` misst ihn bei
+     1194 × 745 (iPad quer MIT Safari-Leisten, Andis realer Fall) mit 168 px =
+     **22,6 % der Fensterhöhe**. Das ist die Zahl, die „fast ein Viertel"
+     heißt, und nur sie ist zu senken.
+
+     WELCHE DER DREI ZAHLEN DIE ARBEIT MACHT: bei 745 px Höhe deckelte NICHT
+     die 132, sondern die 18vh (= 134 px). Der Deckel allein zu senken hätte
+     dort also gar nichts bewirkt — beide Terme müssen mit.
+       132 → 104 px  (Kante −21 %, Fläche −38 %)
+       18vh → 13,5vh (greift ab ~770 px Fensterhöhe)
+       96 → 88 px Boden — immer noch das Doppelte des 44-px-Fingerziels; er
+       greift ohnehin erst unter 652 px Fensterhöhe, also in keinem Fenster,
+       das Andi benutzt.
+     Gemessen danach: Block 135 px = **18,1 %** bei 1194 × 745, 13,6 % bei
+     1366 × 1024. Deutlich unter einem Viertel, ohne den Orb zu amputieren.
+
+     Die Verhältnisse für Kern/Ring/Bloom bleiben unangetastet (0,314 / 0,60 /
+     0,84) — der Orb wird kleiner, nicht anders. Pegel, Zustände und Animation
+     rühren sich nicht: hier steht nur eine Größe. */
+  --orb-size: clamp(88px, 13.5vh, 104px);
+  --orb-w: var(--orb-size);
+  --orb-h: var(--orb-size);
+  --orb-core: calc(var(--orb-size) * 0.314);
+  --orb-ring: calc(var(--orb-size) * 0.6);
+  --orb-bloom: calc(var(--orb-size) * 0.84);
+  --orb-deco: 0.6;
   display: grid;
   place-items: center;
   width: var(--orb-w);
@@ -421,14 +545,20 @@
 }
 
 .voiceorb__hint {
-  margin: 2px 0 0;
+  /* W6: die 2 px oben sind raus — die Fuge Orb↔Beschriftung gehört dem `gap`
+     des Blocks (`--home-orb-label-gap`), sonst addieren sich zwei Zahlen zu
+     einem Abstand, den keine von beiden benennt. */
+  margin: 0;
   font-size: 13.5px;
   color: var(--text-3);
   min-height: 1.4em; /* kein Layout-Sprung zwischen den unterschiedlich langen Labels */
 }
 
 .voiceorb__error {
-  margin-top: 4px;
+  /* Der eigene Abstand ist mit dem Umzug in die Sprech-Schicht gefallen: die
+     Fuge zwischen Fehler und Blase gehört jetzt dem `gap` der Schicht — zwei
+     Besitzer für eine Fuge waren schon beim Orb-Polster der Fehler. */
+  margin: 0;
 }
 
 /* Die Karte: NUR der letzte Turn (kein zweiter Verlauf — der volle bleibt im
@@ -436,13 +566,44 @@
    schlichte Zeilen statt der Chat-Bubble-Regeln (die hängen an .chat__log
    als Flex-Eltern und ans Aoi-Eintritts-Timing — hier reicht ruhiges Papier). */
 .voiceorb__card {
+  /* Die Breite ist die des Orb-Blocks, gedeckelt auf eine Lesespalte — in der
+     Schicht (`flex-direction: column; align-items: center`) zentriert sie sich
+     selbst. `width: 100%` bleibt, weil `max-width` sonst nichts zu deckeln
+     hätte: ein Flex-Kind mit `align-items: center` ist sonst nur so breit wie
+     sein Text, und eine Zwei-Wort-Antwort stünde in einem Fingerhut. */
   width: 100%;
   max-width: 46ch;
-  margin-top: 8px;
+  /* S1: die Karte ist der einzige Teil des Orb-Blocks, der beliebig lang
+     werden kann (eine lange Hoshi-Antwort). Unter dem Deckel würde sie sonst
+     die Bühne darüber auf null drücken und selbst abgeschnitten werden — sie
+     bekommt darum ihren eigenen Rahmen: ~ein Drittel Fensterhöhe, darin
+     scrollt sie (Idiom der Nachrichten-Expansion). Der volle Verlauf lebt
+     ohnehin im Chat-Reiter. */
+  max-height: min(34vh, 300px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Die Fuge zum Orb — seit dem Umzug in die Schicht nach UNTEN gerichtet: die
+     Blase steht jetzt über dem Orb, nicht darunter. 10 px davon trägt schon
+     das obere Polster des Orb-Blocks; diese 8 sind der Rest. */
+  margin: 0 0 8px;
   padding: 14px 16px;
   border-radius: var(--radius);
   border: 1px solid var(--bg-hairline);
+  /* **DECKEND, seit die Blase auf den Kacheln liegt** (23.08.). Bis dahin trug
+     sie den Glas-Grad des Hauses (`--surface-mix`) — richtig, solange sie im
+     Fluss unter dem Orb stand und nur die Szene hinter sich hatte. Als Schicht
+     über der Bühne hätte sie zwei durchscheinende Flächen übereinander: der
+     Antworttext läge auf dem Wetter-Text. Genau dafür gibt es die Hausregel
+     „Durchblick endet, wo etwas zudecken soll" — dieselbe, unter der Drawer,
+     Ops-Panel und die Edit-Bedienelemente deckend sind (s. `surfacemix.test`).
+     Gemessen über der Bühne (`sprechen.mjs`, Aoi, 1366 × 1024): Du-Zeile 10,9,
+     Hoshi-Zeile 16,6 — beide weit über AA 4,5. KEIN `backdrop-filter`: die
+     Transparenz-Regel des Hauses verbietet ihn (er kostet auf dem Flur-iPad
+     jede Bildwiederholung und fällt in Firefox je nach Einstellung ganz aus). */
   background: var(--bg-surface);
+  /* Und weil sie liegt statt zu stehen, bekommt sie den Schatten, mit dem im
+     Haus alles arbeitet, was auf einer Kachel liegt (`.idle__sizerrow`). */
+  box-shadow: var(--shadow-lifted, 0 8px 24px rgb(0 0 0 / 0.18));
   text-align: left;
   display: flex;
   flex-direction: column;

@@ -98,6 +98,26 @@ class JsonlTurnTraceStageFieldsTest {
         }
     }
 
+    /**
+     * brainTimeout ist der Grund, warum brainTtftMs auf einer Wedge-Zeile null ist —
+     * ohne den Key sind „Brain lief nie" und „Brain lief in den Timeout"
+     * ununterscheidbar (MESSUNG-latenz-diary-2026-08-13, KORREKTUR).
+     */
+    @Test
+    fun `brainTimeout haengt additiv am zeilenende und ist ohne timeout ehrlich false`(@org.junit.jupiter.api.io.TempDir dir: java.nio.file.Path) {
+        adapter(dir).use { a ->
+            val plain = mapper.readTree(a.serialize(sampleTrace()))
+            assertTrue(plain.has("brainTimeout"), "neue Zeilen tragen den Key immer")
+            assertFalse(plain["brainTimeout"].asBoolean(), "kein Timeout ⇒ false")
+            val keys = plain.fieldNames().asSequence().toList()
+            assertEquals(keys.indexOf("claimGateFired") + 1, keys.indexOf("brainTimeout"), "additiv ANS Zeilenende")
+
+            val wedge = mapper.readTree(a.serialize(sampleTrace().copy(brainTimeout = true, brainTtftMs = null)))
+            assertTrue(wedge["brainTimeout"].asBoolean())
+            assertTrue(wedge["brainTtftMs"].isNull, "der Wedge hat KEIN TTFT — der Timeout erklärt das null")
+        }
+    }
+
     @Test
     fun `alt-zeile ohne stage-keys bleibt parsebar - fehlender key ist NICHT null-key`() {
         // Eine echte Alt-Zeile (Format vor dem 06.07.) — ohne die Stage-Keys.

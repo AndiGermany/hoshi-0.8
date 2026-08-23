@@ -40,12 +40,75 @@ export const it: UiStrings = {
       noteEmpty: 'Onestamente vuoto — niente di inventato.',
       noteWithData: 'Numeri reali dalla tua attività di oggi.',
     },
+    stage: {
+      pagesAria: 'Pagine di riquadri',
+      page: (index, total) => `Pagina ${index} di ${total}`,
+      sizerAria: (widget) => `Dimensione di ${widget}`,
+      sizeNames: { S: 'Piccolo', M: 'Medio', L: 'Grande', XL: 'Molto grande' },
+      sizeLarger: 'Più grande',
+      sizeSmaller: 'Più piccolo',
+      sizerEffective: (name) => `Su questo schermo: ${name}`,
+      edit: {
+        title: 'Disporre i widget',
+        tileAria: (widget, index, total) => `${widget} — posto ${index} di ${total}`,
+        tileRole: 'widget spostabile',
+        keyHint: 'Le frecce scambiano con il riquadro vicino · Pag ↑/↓ cambia pagina · Invio sceglie la dimensione',
+        moved: (widget, index, total, page, pages) => `${widget} al posto ${index} di ${total}, pagina ${page} di ${pages}`,
+      },
+    },
+    uhr: {
+      name: 'Orologio',
+      sun: {
+        aria: (rise, set, phase) =>
+          `Percorso del sole, alba ${rise}, tramonto ${set}, ${phase}`,
+        dayPhase: 'il sole è sopra l’orizzonte',
+        moon: {
+          aria: (phase, percent, rise) =>
+            `Fase lunare, ${phase}, ${percent} illuminata, alba ${rise}`,
+          phases: {
+            new: 'Luna nuova',
+            waxingCrescent: 'Luna crescente',
+            firstQuarter: 'Primo quarto',
+            waxingGibbous: 'Gibbosa crescente',
+            full: 'Luna piena',
+            waningGibbous: 'Gibbosa calante',
+            lastQuarter: 'Ultimo quarto',
+            waningCrescent: 'Luna calante',
+          },
+        },
+      },
+    },
+    wecker: {
+      name: 'Sveglia',
+    },
     laeuft: {
       name: 'In corso',
     },
     einkauf: {
       name: 'Spesa',
       more: (count) => `+${count} altri`,
+    },
+    currentAffairs: {
+      name: 'Notizie',
+      meta: (source, relative) => `${source} · ${relative}`,
+      stand: (clock) => `Aggiornato alle ${clock}`,
+      staleHint: (relative) => `aggiornato ${relative}`,
+      more: (count) => `+${count} altri`,
+      less: 'meno',
+      restNotShown: (count) => `+${count} altri, non mostrati qui`,
+      openSource: 'Apri la fonte',
+      openAria: (title) => `${title} — apri la fonte in una nuova scheda`,
+      allSources: 'Tutte le fonti',
+      sourceFilterAria: 'Filtra per fonte',
+      countInfo: (shown, total) =>
+        shown === total
+          ? `${total} ${total === 1 ? 'notizia' : 'notizie'}`
+          : `${shown} di ${total} notizie`,
+    },
+    maximieren: {
+      open: 'Ingrandisci',
+      openAria: (name) => `Ingrandisci ${name}`,
+      close: 'Chiudi',
     },
     wetter: {
       name: 'Meteo',
@@ -59,6 +122,31 @@ export const it: UiStrings = {
       rainFrom: (clock) => `Pioggia da ~${clock}`,
       sunUntil: (clock) => `luce fino alle ${clock}`,
       sunFrom: (clock) => `luce da ${clock}`,
+      sections: {
+        now: 'Adesso',
+        span: 'Escursione',
+        precip: 'Precipitazioni',
+        tomorrow: 'Domani',
+        hourly: 'Ora per ora',
+        days: 'Prossimi giorni',
+        sun: 'Sole',
+        sunrise: 'Alba',
+        sunset: 'Tramonto',
+        daylight: 'Ore di luce',
+        daylightValue: ({ h, min }) => `${h} h ${min} min`,
+      },
+      hourly: {
+        aria: (hours, min, max) =>
+          `andamento orario, ${hours === 1 ? 'prossima' : 'prossime'} ${hours} ${hours === 1 ? 'ora' : 'ore'}, da ${min} a ${max}`,
+        ariaRain: (percent) => `pioggia fino al ${percent} %`,
+        ariaDry: 'nessuna pioggia prevista',
+        barTitle: (percent) => `${percent} % di pioggia`,
+      },
+      outlook: {
+        aria: (days) => `Previsioni, ${days} giorno${days === 1 ? '' : 'i'}`,
+        title: (day, span, cond) => `${day}, ${span}, ${cond}`,
+        rainChance: (percent) => ` · ${percent} % di pioggia`,
+      },
     },
     status: {
       online: 'online',
@@ -66,6 +154,86 @@ export const it: UiStrings = {
       checking: 'verifica in corso',
       voiceCloud: 'Voce: cloud',
       voiceLocal: 'Voce: locale',
+    },
+    homeTiles: {
+      age: {
+        justNow: 'proprio ora',
+        minutesAgo: (n) => `${n} min fa`,
+        hoursAgo: (n) => `${n} h fa`,
+        daysAgo: (n) => `${n} g fa`,
+      },
+      unavailableSince: (relative) => `Non raggiungibile — visto l’ultima volta ${relative}`,
+      vacuum: {
+        name: 'Aspirapolvere',
+        status: {
+          cleaning: 'Sta pulendo',
+          docked: 'Pronto nella base',
+          returning: 'Sta tornando alla base',
+          paused: 'In pausa',
+          idle: 'Pronto',
+          error: 'Ha bisogno di aiuto',
+        },
+        hybridStatus: {
+          cleaning: 'Probabilmente sta pulendo (dal sensore)',
+          charging: 'Probabilmente in carica nella base (dal sensore)',
+        },
+        withRoom: (statusText, room) => `${statusText} · in ${room}`,
+        withBattery: (statusText, percent) => `${statusText} · Batteria ${percent} %`,
+        progress: (percent) => `Avanzamento ${percent} %`,
+        battery: (percent) => `Batteria ${percent} %`,
+        vacuumErrorDetail: (value) => `Errore aspirapolvere: ${value}`,
+        dockErrorDetail: (value) => `Errore base: ${value}`,
+        unreachable: 'L’aspirapolvere non è raggiungibile al momento — qui non c’è nulla di inventato.',
+        lastKnownLine: (relative, statusText) => `Visto l’ultima volta ${relative}: ${statusText}`,
+        cacheSince: (clock) => `Dati delle ${clock}`,
+        lastCleanToday: (clock) => `ultima pulizia ${clock}`,
+        lastCleanAgo: (relative) => `ultima pulizia ${relative}`,
+        lastCleanDuration: (span) => `durata ${span}`,
+        duration: {
+          hoursMinutes: (hours, minutes) => `${hours} h ${minutes} min`,
+          minutes: (minutes) => `${minutes} min`,
+        },
+        actions: {
+          start: 'Avvia',
+          returnToBase: 'Alla base',
+          sending: 'invio…',
+          accepted: '✓ Accettato — Home Assistant ha il comando.',
+          failed: 'Non inviato.',
+          networkError: 'Non inviato — Hoshi non ha raggiunto il backend.',
+        },
+        maintenance: {
+          summary: 'Manutenzione',
+          moppDrying: 'Panno in asciugatura',
+          mainBrush: (value) => `Spazzola principale: ${value}`,
+          sideBrush: (value) => `Spazzola laterale: ${value}`,
+          filter: (value) => `Filtro: ${value}`,
+          sensor: (value) => `Sensori: ${value}`,
+          moppAttached: 'Panno montato',
+          moppNotAttached: 'Panno non montato',
+          waterboxAttached: 'Serbatoio acqua montato',
+          waterboxNotAttached: 'Serbatoio acqua non montato',
+          remaining: {
+            dueNow: 'da sostituire ora',
+            minutes: (n) => `ancora ~${n} min`,
+            hours: (n) => `ancora ~${n} h`,
+            days: (n) => `ancora ~${n} g`,
+          },
+          overdue: {
+            minutes: (n) => `in ritardo da ~${n} min`,
+            hours: (n) => `in ritardo da ~${n} h`,
+            days: (n) => `in ritardo da ~${n} g`,
+          },
+        },
+      },
+      climate: {
+        name: 'Clima',
+        roomLine: (room, current, target) => `${room} ${current} → ${target}`,
+        heating: 'riscalda',
+        roomUnreachable: (room) => `${room} non è raggiungibile al momento.`,
+        lastKnownRoomLine: (room, current, target, relative) => `${room} ${current} → ${target} · visto ${relative}`,
+        restSummary: (count) => `+${count} altre stanze`,
+        unreachable: 'Il clima non è raggiungibile al momento — qui non c’è nulla di inventato.',
+      },
     },
   },
 
@@ -276,6 +444,18 @@ export const it: UiStrings = {
     deleteRecordingAria: (index) => `Elimina registrazione ${index}`,
     deleteRecordingLastHint: 'È l’ultima registrazione — elimina invece l’intero profilo.',
     deleteRecordingFailed: 'Eliminazione della registrazione non riuscita — è ancora lì. Riprova.',
+    nameNext: 'Continua',
+    closeAria: 'Chiudi l’apprendimento della voce',
+    checkTooShort: 'È stato molto breve — di’ la frase intera e riprova.',
+    checkTooQuiet: 'Non è arrivato quasi nulla — parla più forte o avvicinati al microfono.',
+    cancelConfirmTitle: 'Vuoi davvero interrompere?',
+    cancelConfirmFresh: 'Le frasi di questa sessione vengono scartate — non resta nessun profilo a metà.',
+    cancelConfirmAppend: 'Le sessioni precedenti restano intatte; solo questa rimane incompleta.',
+    cancelConfirmYes: 'Sì, interrompi',
+    cancelConfirmNo: 'Continua',
+    recordingsTitle: 'Le tue registrazioni',
+    recordingsOpen: 'Registrazioni',
+    recordingsOpenAria: (name) => `Vedi le registrazioni di ${name}`,
     enrollErrors: {
       auth: '401 — token mancante o non valido (muro di autenticazione).',
       badName: 'Nome non valido — sono ammessi solo lettere, cifre, _ e -.',
@@ -378,7 +558,9 @@ export const it: UiStrings = {
   },
   rooms: {
     sketchRoom: 'Stanza', sketchAria: 'Schizzo: Hoshi al centro, con segnaposto di stanze ancora vuoti tutt’intorno', pickerAria: (name) => `Scegli una stanza per ${name}`,
-    assigning: 'assegnazione…', chooseRoom: 'Scegli stanza…', deviceCount: (count) => `${count} dispositiv${count === 1 ? 'o' : 'i'}`, roomEmpty: 'Non ci sono ancora dispositivi in questa stanza.',
+    assigning: 'assegnazione…', chooseRoom: 'Scegli stanza…', deviceCount: (count) => `${count} dispositiv${count === 1 ? 'o' : 'i'}`,
+    deviceCountOfTotal: (visible, total) => `${visible} di ${total} dispositiv${total === 1 ? 'o' : 'i'}`,
+    roomEmpty: 'Non ci sono ancora dispositivi in questa stanza.',
     allAssigned: 'Al momento ogni dispositivo segnalato ha una stanza in Home Assistant.', unassignedEditable: 'Questi dispositivi non hanno ancora una stanza in Home Assistant. Scegline una a destra: viene salvata direttamente in Home Assistant, dove rimane sempre visibile e reversibile.',
     unassignedReadOnly: 'Questi dispositivi non hanno ancora una stanza in Home Assistant. Per ora l’assegnazione è possibile solo direttamente in Home Assistant; Hoshi mostra qui onestamente la lacuna.',
     unassigned: 'Non assegnato', pendingTitle: 'Stanze e dispositivi', notWired: 'non collegato', unreachable: 'non raggiungibile',
@@ -396,6 +578,9 @@ export const it: UiStrings = {
     inboxHintEditable: 'Questi dispositivi non hanno ancora una stanza in Home Assistant. Un suggerimento di stanza è già preselezionato — controllalo e tocca «Conferma»; viene salvato direttamente in Home Assistant, sempre visibile e reversibile lì.',
     inboxHintReadOnly: 'Questi dispositivi non hanno ancora una stanza in Home Assistant. Al momento l’assegnazione è possibile solo direttamente in Home Assistant — Hoshi mostra qui questa lacuna con onestà.',
     roomShowMore: (hiddenCount) => `mostra gli altri ${hiddenCount}`, roomShowLess: 'Comprimi',
+    silentRooms: (count) => `Stanze silenziose (${count})`,
+    inboxRestSummary: (count) => `${count} senza legame con una stanza — sistema, diagnostica, mobili. A Hoshi non serve una stanza per questi.`,
+    sortHint: 'Ordinato per numero di dispositivi — l’ordinamento per uso reale ha ancora bisogno di una traccia dati.',
   },
   overview: {
     heroUpTitle: 'Hoshi è online', heroUpSub: 'La connessione è attiva.', heroDownTitle: 'Hoshi è offline', heroDownSub: 'La connessione non è attiva in questo momento.', heroUnknownTitle: 'Verifica dello stato …', heroUnknownSub: 'la prima risposta di stato è ancora in attesa.',
@@ -453,6 +638,8 @@ export const it: UiStrings = {
     categoryNavAria: 'Categorie delle impostazioni',
     themeLabel: 'Tema colore',
     themeGroupAria: 'Tema colore',
+    themeActiveLabel: 'Attuale',
+    themeLoading: 'Caricamento dei temi …',
     themes: {
       aoi: { label: 'Aoi', hint: "Azzurro del mattino su inchiostro (青) — l'impostazione predefinita" },
       yoru: { label: 'Yoru', hint: 'Luce calda di lanterna (夜)' },
@@ -484,9 +671,21 @@ export const it: UiStrings = {
         title: 'Segue la giornata',
         note: "Non un colore ma una regola: Hoshi cambia tema secondo l'ora di questo dispositivo.",
       },
-      tageszeiten: {
-        title: 'Momenti della giornata',
-        note: 'Questi cinque di solito si alternano da soli. Se ne scegli uno, resta fisso.',
+      morgen: {
+        title: 'Mattino',
+        note: "Nebbia, tatami, la prima luce: le ore prima della giornata vera, dal chiaro giù fino all'alba.",
+      },
+      tag: {
+        title: 'Giorno',
+        note: "Luce piena: ombre di foglie, acero, un campo d'estate, la grande onda — e in fondo il blu profondo.",
+      },
+      'abend-nacht': {
+        title: 'Sera e notte',
+        note: 'Fuochi d’artificio, pioggia sull’asfalto, luce calda di lanterna — e in fondo la notte più profonda.',
+      },
+      klassiker: {
+        title: 'Classici',
+        note: 'In pensione: questo tema non è più tra le scelte — Sora lo mostra ancora alla sua ora.',
       },
       stimmung: {
         title: 'La tua atmosfera',
@@ -504,12 +703,23 @@ export const it: UiStrings = {
       amayadori: 'al riparo dalla pioggia',
       sora: 'cielo',
     },
+    nagori: {
+      label: 'Nagori',
+      gloss: 'ciò che resta',
+      hint: 'Ora blu: la scia luminosa non si spegne (名残)',
+      note: '名残 — un presagio della 0.9',
+    },
     themeGlossSuffix: (gloss) => ` · ${gloss}`,
     themeSoraNow: (themeName) => `segue la giornata · adesso ${themeName}`,
     themeArcSeparator: ' › ',
     themeArcAria: 'Arco della giornata di Sora',
     themePinnedNote: (themeName) => `${themeName} è fissato adesso — la rotazione automatica è in pausa.`,
     themeOptionAria: (groupTitle, themeName) => `${groupTitle}: ${themeName}`,
+    themeGalleryOpen: 'Vedi tutti i design',
+    themeGalleryTitle: 'Design',
+    themeGalleryCloseAria: 'Chiudi la galleria dei design',
+    themeGalleryDone: 'Fatto',
+    themeSceneAlt: (themeName) => `Scena di ${themeName}`,
     languageLabel: 'Lingua',
     languages: {
       auto: 'Automatico (tedesco / inglese)',
@@ -551,6 +761,40 @@ export const it: UiStrings = {
     escalationHint: (seconds) =>
       `Una sveglia suona prima sul dispositivo su cui l’hai impostata — dopo ${seconds} secondi su tutti. Così la sveglia ti chiama piano dove sei e diventa forte ovunque solo se nessuno reagisce.`,
     skillsTitle: 'Skills',
+    homeTilesTitle: 'Widget casa',
+    homeTilesHint: 'Widget per la scheda Casa — i riquadri dei dispositivi ricevono un interruttore solo quando la loro fonte esiste davvero.',
+    homeTilesCrownGroupLabel: 'Intestazione',
+    homeTilesUhrLabel: 'Orologio',
+    homeTilesUhrHint: 'Mostra l’ora, il saluto e la data nell’intestazione fissa della schermata Casa.',
+    homeTilesWeckerLabel: 'Sveglia',
+    homeTilesWeckerHint: 'Mostra la tua prossima sveglia nell’intestazione fissa della schermata Casa.',
+    homeTilesStageGroupLabel: 'Palco',
+    homeTilesWetterLabel: 'Meteo',
+    homeTilesWetterHint: 'Mostra il meteo attuale nella schermata Casa.',
+    homeTilesLaeuftLabel: 'In corso',
+    homeTilesLaeuftHint: 'Mostra timer, sveglie e promemoria in corso nella schermata Casa.',
+    homeTilesEinkaufLabel: 'Spesa',
+    homeTilesEinkaufHint: 'Mostra la tua lista della spesa nella schermata Casa.',
+    homeTilesVacuumLabel: 'Riquadro aspirapolvere',
+    homeTilesVacuumHint: 'Mostra lo stato del tuo aspirapolvere nella schermata Casa.',
+    homeTilesClimateLabel: 'Riquadro clima',
+    homeTilesClimateHint: 'Mostra la temperatura attuale e quella impostata per ogni stanza con un dispositivo climatico.',
+    homeTilesCurrentAffairsLabel: 'Notizie',
+    homeTilesCurrentAffairsHint:
+      'Mostra i titoli del momento nella schermata Casa — e solo quando ce ne sono davvero. Spento: il riquadro e la vista «altri» non compaiono e non viene più scaricato nulla. Questo interruttore regola solo ciò che si vede: puoi comunque chiedere a Hoshi quando vuoi, e se i titoli esistano lo decide il server.',
+    homeTilesNewsSourcesLabel: 'Fonti attive',
+    homeTilesNewsSourcesHint:
+      'Quali fonti Hoshi consulta davvero — sia per il riquadro sia per quando glielo chiedi a voce. Con almeno una fonte selezionata viene aggiornata ogni 30 minuti; senza nessuna selezionata, onestamente non ci sono titoli.',
+    homeTilesNewsSourcesLoading: 'caricamento…',
+    homeTilesNewsSourcesLoadError: 'Impossibile caricare la selezione delle fonti.',
+    homeTilesNewsSourcesFailed: 'Salvataggio non riuscito — riprova più tardi.',
+    homeTilesNewsSourcesUnknown: 'Fonte sconosciuta.',
+    homeTilesLayoutHint:
+      'Definisci l’ordine — Hoshi dispone i riquadri in base alla larghezza dello schermo.',
+    homeTilesLayoutArrange: 'Disporre i widget',
+    homeTilesLayoutReset: 'Reimposta la disposizione',
+    homeTilesLayoutResetArmed: 'Davvero? Clicca di nuovo',
+    homeTilesLayoutResetDone: 'Disposizione reimpostata. Gli interruttori sopra restano invariati.',
     privacyTitle: 'Privacy',
     privacyIntro:
       'Stato reale, letto direttamente dal server — il lucchetto resta sulla box, la nuvola va online.',
@@ -590,6 +834,19 @@ export const it: UiStrings = {
       )[target];
       return `Eliminati: ${deleted} ${deleted === 1 ? one : many}.`;
     },
+
+    // ── Panoramica delle categorie (livello d'ingresso del pannello, design 15.08 §3.1) ──
+    categoryBlurbs: {
+      darstellung: 'Tema di colore e aspetto di Hoshi',
+      'sprache-stimme': 'Lingua, voce e come suona',
+      'online-nachschlagen': 'Quando Hoshi cerca online — e con che cosa',
+      'modell-leistung': 'Quale modello pensa, e quanto in fretta',
+      persoenlichkeit: 'Il tono di fondo di Hoshi nel dialogo',
+      'gedaechtnis-privatsphaere': 'Voci note, memoria, che cosa viene salvato',
+      'zuhause-integrationen': 'Luogo del meteo, riquadri, sveglie, modalità notte',
+    },
+    overviewBack: 'Impostazioni',
+    overviewBackAria: 'Torna alla panoramica delle categorie',
   },
 
   scheduled: {
@@ -639,7 +896,7 @@ export const it: UiStrings = {
 
   speakerChip: {
     guest: 'Ospite',
-    guestTitle: 'Non riconosciuto con certezza — meglio un ospite della persona sbagliata.',
+    guestTitle: 'Non riconosciuto con certezza — meglio un ospite che la persona sbagliata.',
     recognized: (name) => `Riconosciuto come ${name}`,
     recognizedWithConfidence: (name, percent) => `Riconosciuto come ${name} · somiglianza vocale ${percent}`,
     percent: (value) => `${value} %`,

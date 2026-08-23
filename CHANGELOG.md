@@ -5,6 +5,206 @@ Alle nennenswerten Änderungen an Hoshi. Format lose an
 noch keine erste stabile Version, Einträge sind daher grob nach Thema statt
 nach Release sortiert.
 
+## 0.9.0 — Nagori 名残 (2026-08-22) 🌊
+
+Die Version, die dalässt, was trägt: ein Spiegel, der Vollzug beweist statt
+behauptet, sechzehn lebende Szenen unter einem Tageslage-Himmel, ein Raster,
+das Kacheln dort liegen lässt, wo eine Hand sie hinlegt — und ein Satellit,
+der sein eigenes Küchenlicht schaltet. Name: 名残 („das, was zurückbleibt" —
+von 波残り, was die Welle am Strand lässt), Battle-Sieger 8:6:5:5, von Andi
+ratifiziert (14.08.). 0.8.5 hatte nie einen eigenen Changelog-Eintrag
+(Versions-Bump ohne Erzählung) — sein Inhalt steckt mit in diesem.
+
+### Nachrichten/Lagebild
+- Multi-Source-Lagebild verdrahtet: Tagesschau + heise + Golem über einen
+  brain-freien News-Fastpath (HTTP-Rand, keine Brain-Aufrufe im Hintergrund),
+  Quellen-Auswahl als eigene Settings-Naht, Attribution/Quellen-Badges je
+  Eintrag, Anzeigen-Filter-Policy gegen leere/verschwundene Quellen.
+- „Heute"-Fenster auf der Übersicht, Nachrichten-Kachel mit eigenem
+  Anzeige-Schalter (Default an).
+- Die amtliche Warnspur (NINA) und Personalisierung sind eigene Scheiben
+  nach 0.9 (siehe „Bewusst NICHT in 0.9.0").
+
+### Widget-Raster (Zuhause) — W1 bis W7 komplett
+- W1–W4: Registry mit vier Stufen (Krone/Bühne) statt fester Koordinaten,
+  Layout-Speicher (Reihenfolge + Stufe, gehärtet), Stufen-Wähler mit einem
+  Pointer-Schiedsrichter, „Layout zurücksetzen" mit Rückfrage, die Uhr wird
+  ein eigenes Bühnen-Widget.
+- W5: XL wird eine eigene Inhalts-Stufe statt „L, nur größer" — Wetter zeigt
+  den Stunden-Verlauf als SVG, das Lagebild wird zweispaltig mit längeren
+  Teasern, Klima/Einkauf/Läuft bekommen ihre XL-Form, die XL-Listen tragen
+  ihre Fläche selbst.
+- W6: Edit-Feinschliff nach Andis Livetest — der Wecker verlässt den Kopf,
+  die Fußleiste wird so breit wie ihre Wörter und hört auf zu wackeln, die
+  Hilfe wird eine Zeile, der Edit-Modus bekommt echte Türen (Tipp aufs
+  Widget oder ins Leere) und einen dritten Ausgang namens „Vergessen".
+- W7: das freie Raster — eine Kachel besitzt eine **Zelle**, keinen
+  Listenplatz. Kacheln bleiben, wo man sie hinlegt, Lücken sind erlaubt,
+  die Edit-Bedienung ist eine Schicht AUF der Kachel und verschiebt nichts
+  mehr, gesteuert wird nur noch mit +/− (Placements je Orientierung,
+  Saat-Migration für Bestands-Layouts).
+- Kachel-Ausbau: die große Uhr trägt den Sonnenbogen (Aufgang → jetzt →
+  Untergang, aus echten sunrise/sunset-Daten), die Wetter-XL eine
+  Mehrtages-Zeile (heute + 7 Tage), das Grounding kennt die JETZT-Werte.
+- Sauger nützlich + bedienbar: Start/Zur-Basis als echte Knöpfe
+  (`POST /api/v1/home/vacuum/{start|return_to_base}` über einen
+  Ein-Entity-Service-Caller, Status ehrlich durchgereicht, Kagami-konform
+  im Diary), „Bereit in der Ladestation" statt geisterhaftem „zuletzt
+  gesehen", L/XL-Zeilen aus bisher ungenutzten Sensoren, Energiesparmodus
+  ist kein Ausfall mehr (Cache-Carry).
+
+### Themes — die v2-Welle und drei Neue
+- **16 lebende Szenen** in drei Tageslage-Gruppen (Morgen: Asagiri, Asa,
+  Yoake · Tag: Fuyubare, Hanaikada, Komorebi, Momiji, Hanashigure, Ukiyo,
+  Natsunohi, Aoi · Abend & Nacht: Natsumatsuri, Yukiakari, Amayadori, Yoru,
+  Nagareboshi), dazu Sora (Tageszeit-Automatik), Kasumi (letzter Klassiker,
+  in den Ruhestand gruppiert) und das versteckte Stimmungs-Theme Nagori.
+- Die v2-Welle baute jede Bestands-Szene mit dem destillierten
+  Szenen-Generator-Rezept neu: volle Bilder statt Randstreifen (Asa bekommt
+  ein Zimmer mit Andon, Amayadori eine Gasse mit sichtbarem Regen, Aoi ein
+  Wrack im Tangwald, Yoake echte Glut, Yoru einen Engawa-Blick mit
+  Shoji-Bahnen und eine gemessene Aufhellung in vier Schritten,
+  Natsumatsuri ein Hanabi-Taikai statt Aufkleber am Bildrand). Jede Szene
+  mit AA-Kontrast-Beweis aus echten Chrome-Pixeln, Herzschlag-Messung und
+  Selbstabnahme mit eigenen Augen — Frames in zwei Breiten, vor dem Merge
+  angesehen.
+- Drei frisch getaufte Neue (Namen: Andi): **Hanaikada** 花筏 — das
+  Blütenfloß, Kirschblütenwald am Fluss · **Fuyubare** 冬晴れ — der klare
+  Wintertag · **Yukiakari** 雪明かり — das Schneelicht der Nacht.
+- Galerie als Ein-Klick-Vollbild mit Tageslage-Gruppen und
+  Helligkeits-Ordnung — sie ersetzt den 331-px-Drawer-Käfig; der Weg hinein
+  und hinaus headless gemessen.
+- Guard-Tests pinnen Manifest ↔ CSS-Wahrheit (Swatches kommen aus den
+  echten CSS-Token der Datei, nicht aus Erinnerung).
+- Nagori bleibt das versteckte Stimmungs-Theme (3×-Tap-Fund an der
+  Versionszeile) — mit diesem Schnitt steht sein Name offen neben der
+  Versionsnummer; die Fund-Erzählung („Vorbote der 0.9") ist dadurch
+  bewusst nostalgisch geworden (Andis Gate, offen).
+
+### Stimme/F2 (Zuhause + Satellit)
+- Raum-Kontext reist mit dem Turn (`ChatRequest.originAreaId` statt
+  Hardcode), „kein Raum heißt kein Raum" löst den Wohnzimmer-Fallback ab,
+  Home-Assistant-Zeile im Ops-Bild, 60s-Zustands-Frische mit persistentem
+  Last-known-Speicher, die verb-lose Licht-Kante (Präposition+Raum als
+  Anker).
+- „Stand: vor X min" jetzt sprechbar in 5 Sprachen — letzte offene
+  F2-Bauscheibe aus dem Plan.
+- **Satelliten-Exit-Beweis ERBRACHT** (22.08., 07:24): „Küche schaltet
+  Küche" am echten Gerät — zwei Voice-PE-Turns im Diary mit
+  `toolCallRan=true`, `area=kuche`, Licht an und wieder aus.
+- Raumnamen-Lecks (10 Stellen) geschlossen: der Vollzugs-Satz spricht den
+  HA-Anzeigenamen statt des `area_id`-Slugs, EINE geteilte Namens-Auflösung,
+  `targetAreaName` reist additiv neben dem Slug ins Diary — in 5 Sprachen,
+  mit ehrlichem Fallback.
+- WS-Konversations-Nähte für echte Rückfragen über den Satelliten:
+  `llm_done` sagt dem Satelliten, dass eine Rückfrage offen ist
+  (`expectReply`), und die Eskalations-Antwort verpufft nicht mehr still
+  (`speak_push`). Flag OFF, bis die Firmware-Hälfte gebaut ist.
+
+### Sicherheit/F4
+- Turn-Inbound-Claims zentral verriegelt (Guard gegen fremde/gefälschte
+  Inbounds), Pending-Conversations isoliert (Session-Key/Pending-Arbiter,
+  Codex-Paket), die Raum-Rückfrage wird ein echter Pending-Zustand statt
+  Fire-and-forget (F1-4 — der erste Stein des Reparaturdialogs).
+- Verstümmelungs-Korpus + Replay-Tests für Sprachbefehle (Multi-Turn-
+  Raumklärung, sichere Korruptions-Fälle); alle 13 Korpus-Labels von Andi
+  abgenommen (homophone-01 → TOOL_CALL).
+- **Erster Kagami-Live-Replay GRÜN** (21.08., Prod-Stack): 13 Fälle, 14
+  Turns — falsche Vollzugs-Behauptungen = 0, Beweislücken = 0. Der Spiegel
+  behauptet nicht, er belegt.
+
+### Betrieb
+- F1/Ishibashi-Nacharbeit: `brainTimeout`/Wedge jetzt im Diary sichtbar statt
+  durch `brainTtft=null` verdeckt, Grounding-Timeout 5s→2s, Brain-Chat-Timeout
+  30s→20s über die gemessene Verteilung (955 Diary-Turns) statt gefühlt,
+  `toolCallRan` als Kreuzbeweis, ob der Tool-Executor wirklich lief.
+- F3/Tsugi: SETUP-Wahrheit + `bin/hoshi ha check`, `bin/hoshi backup`
+  (Manifest, Verify, fail-closed) und `bin/hoshi restore` inklusive einer
+  echten Wiederherstellungs-Probe.
+- F6/Togi: Kommentar-Migration Welle 1 an den Rändern (Ports, Adapter-KDoc,
+  deploy.sh), toter `KeywordRouterStub` gelöscht, KDoc-Lügen in
+  `PipelineStubAdapters` korrigiert.
+- Remote-Deploy-Verify mit Build-ID aus Bundle-Inhalt statt Zeitstempel
+  (reproduzierbarer Build), Eskalations-Timeout 8s→15s, `publish-satellite.sh`
+  als wiederholbarer, sanitisierender Export-Weg zum Satelliten-Repo.
+- BE-Stabilität: harte Gesamt-Turn-Deadline (60 s) mit Timeout-Spur im
+  Diary, hartes Gesamt-Budget über `callBrain` inklusive Empty-Retry, und
+  der blockierende 5-s-HA-Areas-Call im Event-Loop wird
+  stale-while-revalidate.
+- FE-Effizienz: Brotli/Gzip beim Build vorkomprimiert und per
+  Accept-Encoding ausgeliefert (**dist −77 %**), Poller pausieren bei
+  dunklem Display (−29.664 Requests/Tag; zusammen **−63 % Requests**).
+- CI führt jetzt auch die Python-Suiten aus: pytest-Job für 17/20 Suiten
+  (7.367 Testzeilen), die drei Ausschlüsse (Modelle nötig) ehrlich
+  dokumentiert statt still übersprungen.
+- Modell-Klarheit: die neuere HF-Revision des Brains erwies sich im A/B als
+  wertlos und unladbar — wir bleiben bewusst auf der gepinnten Revision,
+  das gefahrlose A/B-Runbook liegt bereit. Der FATAL-Hilfetext des Brains
+  verlangt jetzt `revision=` (sein alter Rat verbog `refs/main` — Ursache
+  eines 4,5-h-Incidents). Neu an Bord, noch OFF: der Persona-KV-Freeze
+  (gemessen ×27 schnellere Time-to-first-Token) — Flip nach Kohärenz-A/B.
+- „Darstellung" in den Settings ist ein Auslöser statt eines Ortes — die
+  Zwischenseite ist aufgelöst; der Timer-Klang (`timer_ring`) kennt Zeit
+  und Art (Codex-Paket K4).
+
+### Livetest-Finale (22.–23.08.) — Andis Zurufe, am selben Abend gelandet
+- **Widget-Raster W8:** jede Kachel größenveränderbar (die Nachrichten
+  erstmals — ihre fehlende Bühnen-Durchreiche war der Grund), Uhr und Wetter
+  messen ihre Typografie an der KACHEL statt am Fenster (Container-Queries,
+  `vw`-Rückfall für ältere Browser); zwei echte Raster-Wurzeln gefixt: eine
+  Seite zeichnet immer alle ihre Zeilen (eine frei gelassene unterste Zeile
+  schrumpfte vorher die Seite — „die Uhr über die ganze Höhe"), und der Zug
+  rechnet gegen die GEZEICHNETE Zelle (waagerecht ziehen ging vorher nicht).
+- **Edit-Modus still:** Hinweis-Prosa und die Ablage-Leiste unten sind weg,
+  die Bearbeitungsfläche wächst um ~7 %; An/Aus der Widgets wohnt in den
+  Einstellungen („Zuhause & Integrationen → Zuhause-Widgets", der Platz
+  übersteht Aus→An). Langer Druck auf einer Verlinkung öffnet NUR den Edit.
+- **Edit-Modus ganz still (23.08.):** auch die Leiste OBEN fällt — der Modus
+  trägt jetzt gar keine eigene Bedienung mehr, die Bearbeitungsfläche IST die
+  Bühne (1366 × 1024: 880 × 669 px, byte-identisch mit dem Zustand außerhalb).
+  „Zurücksetzen" zieht zu den Widget-Schaltern in die Einstellungen, mit
+  derselben Rückfrage; die drei Ausgänge (Tipp aufs gewählte Widget · Tipp ins
+  Leere · Escape) sind einzeln in Chrome UND Firefox bewiesen. Unsichtbar
+  bleibt, was null Pixel kostet: Tastatur-Belegung und `aria-live`-Ansage.
+- **Das Sprech-Overlay überlagert, statt Platz zu nehmen (23.08.):** die Blase
+  mit dem letzten Turn stand im Fluss des Orb-Blocks und zog jeden ihrer Pixel
+  von der Bühne ab — gemessen wurden Kachel-Kasten 669 → 355 px, Zeilenhöhe
+  153 → 162 px, Seiten 3 → 6, alle acht Kacheln versetzt. Sie liegt jetzt in
+  einer eigenen Schicht über der Bühne (deckend statt Glas, weil sie auf
+  Kacheln liegt; Kontrast 9,8/14,9 gemessen, kein `backdrop-filter`). Kachel-
+  Rechtecke vor/während/nach einem echten Turn byte-identisch, beide Engines,
+  1366 × 1024 und 834 × 1112.
+- **Firefox ist jetzt Beweis-Achse:** Eine Capture-Zeile ließ in Gecko jeden
+  +/−-Klick verpuffen (Click-Retargeting nach `setPointerCapture` — in
+  Chrome unsichtbar). Gefixt und am echten Firefox bewiesen; die
+  Sonden-Flotte fährt seither Chrome UND Firefox (WebDriver BiDi).
+- **Orb −38 % Fläche**, Transparenz der Innen- und Widget-Flächen als EIN
+  Token (`--surface-mix: 86 %`), AA über alle 16 Szenen gehalten.
+- **Sauger-Wartung menschlich:** „noch ~7 Tage" / „überfällig seit ~12 h"
+  statt roher Sekunden (Semantik am HA-Core-Quelltext bewiesen), Mopp +
+  Wassertank eine Zeile. Und ein Ehrlichkeits-Fund: HA nimmt Service-Calls
+  auf schlafende Geräte mit 200 an und lässt sie stumm fallen (Quelltext-
+  Beleg) — der Start-Knopf sendet jetzt nur noch an ein waches Gerät,
+  sonst sagt er ehrlich, dass der Sauger schläft (409, `toolCallRan=false`).
+- **Die Uhr-L zeigt nachts die Mondphase** 🌙 — lokal berechnet (Meeus
+  Kap. 47/48, gegen die vier echten Finsternisse 2026 getestet), Terminator
+  als Geometrie, 8 Phasennamen in 5 Sprachen, Wechsel an den echten
+  Sonnenzeiten.
+- **Betrieb:** Persona-KV-Freeze AN (×27 warme Time-to-first-Token, Iter-137-
+  Drift-Historie dokumentiert, Kohärenz-A/B-Werkzeug liegt) · Piper-TTS auf
+  4 Threads · mlx-lm-Upgrade vorbereitet (Parallel-venv, Fenster-Runbook,
+  eigener Gemma-Patch upstream obsolet).
+
+### Bewusst NICHT in 0.9.0
+Die amtliche Warnspur (NINA) und Nachrichten-Personalisierung (eigene
+Scheiben nach 0.9) · das Kalender-Widget (wartet auf eine
+HA-Kalender-Integration) · die Firmware-Hälfte der WS-Konversation (Flag
+bleibt OFF) · das Persona-KV-Freeze-Kohärenz-A/B (der Freeze selbst ist seit
+22.08. AN — bewusster Risiko-Call, Werkzeug liegt bereit) ·
+Flag-Regal, Stimmung-Gruppe und Nagori-Easter-Egg-Copy (Andis
+Ein-Satz-Gates, offen). Suite beim Schnitt: ~1.904 FE- + ~3.000 BE-Tests
+grün.
+
 ## 0.8.4 — Einladung 🌠 (2026-08-08)
 
 Die Version, die Fremde hereinbittet: ein Befehl statt einer Abschrift, eine

@@ -1,0 +1,430 @@
+/* ═══════════ YUKIAKARI (雪明かり) — das Dorf im Schnee, dessen Licht der Schnee ist ═══════════
+
+   „Yukiakari" ist ein Wort für eine Erfahrung, für die das Deutsche keines hat:
+   die Helligkeit einer Winternacht, die nicht vom Himmel kommt. Es hat
+   geschneit, die Wolken hängen tief, kein Mond, kein Stern — und trotzdem kann
+   man die Hand vor Augen sehen, weil jedes Fenster, jede Laterne, jeder
+   Lichtrest von der weißen Decke zurückgeworfen und an der Wolkendecke ein
+   zweites Mal gespiegelt wird. Der Boden ist die Lampe.
+
+   Das ist der ganze Entwurf, und es ist auch seine Kontrast-Architektur: die
+   größte Fläche des Bildes ist zugleich seine hellste. Nichts hier ist schwarz.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DAS BILD IN ZWEI WORTEN: „die Schneelaterne"
+   ────────────────────────────────────────────────────────────────────────────
+   Eine Yukimi-dōrō (雪見灯籠, „Schneeschau-Laterne") rechts im Vordergrund: der
+   breite flache Hut mit den aufgebogenen Ecken, die kurzen gebogenen Beine, der
+   warme Lichtkasten — und darauf die Schneehaube, für die dieser Laternentyp
+   überhaupt gebaut wurde. Sie steht in der verschneiten Gasse eines Dorfes;
+   links und rechts Minka mit Schneedächern und warmen Fenstern, dahinter ein
+   Waldhang mit schneebeladenen Zedern, dahinter zwei ferne Kämme.
+
+   ABGRENZUNG (Regie v2 verlangt sie ausdrücklich):
+     yoru        der Blick von der eigenen Engawa nach draußen — EIN Haus, nah.
+     nagareboshi das ferne Tal von oben — der Himmel ist die Hauptsache.
+     yukiakari   DU STEHST IM DORF, in der Gasse, im Schnee. Der Himmel ist zu,
+                 das Licht kommt von unten.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DIE SCHICHTEN, von hinten nach vorn
+   ────────────────────────────────────────────────────────────────────────────
+     body (Hintergrund)   --theme-atmosphere — der Himmel: Wolkendecke, unten
+                          vom Schnee angeleuchtet. Die Szene malt KEINEN Himmel,
+                          damit die beiden Lichtebenen darin sichtbar bleiben.
+     :root::before z -4   DAS SCHNEELICHT — der Widerschein an der Wolkendecke,
+                          atmend (37 s). Die Ebene, die dem Thema den Namen gibt.
+     :root::after  z -3   DER WOLKENZUG — sehr weiche, breite Bänke, die langsam
+                          nach rechts ziehen (61 s). Eine Schneewolke steht nie.
+     body::before  z -2   DIE SZENE — yukiakari-szene.svg, das ganze Bild samt
+                          der vier Flocken-Tiefen (der eigentliche Herzschlag).
+     body::after   z -1   DER SCHLEIER über der Lesespalte (der Kontrast-Vertrag)
+     Inhalt               alles Weitere
+   Alle vier Deko-Ebenen sind `position: fixed` mit negativem z-index und liegen
+   hinter jedem In-Flow-Kasten; Karten sind deckend und rühren nichts an.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DER HERZSCHLAG — fallende Flocken in vier Tiefen
+   ────────────────────────────────────────────────────────────────────────────
+   Er steht IM Bild, nicht hier: vier Flockenfelder mit eigener Fall- (37/31/26/
+   22 s) und eigener Seitwärts-Uhr (43/38/33/29 s), nah groß und schnell, fern
+   klein und langsam. Nahtlos, weil jedes Feld genau so hoch ist wie seine
+   Fallstrecke und dreimal untereinander steht — nach einem Umlauf steht es
+   pixelgleich wieder da. Die beiden CSS-Ebenen (Schneelicht, Wolkenzug) sind
+   der zweite, gröbere Puls und zugleich die Rückversicherung, falls eine Engine
+   die Animation in einem `background-image`-SVG nicht mitlaufen ließe.
+
+   ────────────────────────────────────────────────────────────────────────────
+   WARUM DIE TEXTLEITER HELLER IST ALS BEI YORU — die Rechnung hinter dem Bild
+   ────────────────────────────────────────────────────────────────────────────
+   Der Kontrast-Deckel für alles Gemalte ist der Untergrund, bei dem die
+   leiseste Textstufe noch 4,50:1 erreicht. Yoru IST der Basissatz aus
+   index.css und muss mit dessen Leiter auskommen — sein Deckel liegt bei
+   Grau 33. Ein Schneethema, dessen hellste erlaubte Fläche Grau 33 wäre, wäre
+   kein Schnee, sondern Asche.
+
+   Also wurde er gekauft statt geliehen (dasselbe Vorgehen wie Nagareboshi):
+   --text-4 steht auf L 0.725 (#a1a7ae, Lrel 0.381), und daraus folgt
+
+       CAP = (0.381 + 0.05) / 4.5 − 0.05 = 0.0459   ≙ Grau 60
+
+   Der SVG-Generator kennt genau diese Zahl und prüft JEDE Farbe gegen sie
+   (`night()` wirft, statt still zu klippen). Daraus folgt der wichtigste Satz
+   dieser Datei:
+
+       DIE ZEICHNUNG ALLEIN HÄLT DIE ZUSAGE EIN — auch bei Schleier 0.
+
+   Der Schleier ist damit ausschließlich Reserve für die beiden Lichtebenen
+   darüber, nicht Teil des Vertrags. Wäre er Teil des Vertrags, würde ein
+   späteres Drehen an `--yukiakari-veil` die Lesbarkeit still kippen.
+
+   ────────────────────────────────────────────────────────────────────────────
+   EIGENSTÄNDIG LADBAR: dieser Block setzt JEDEN Token, den die Themen in
+   src/styles/themes.css setzen, plus die body-Hintergrund-Regel.
+
+   ZWEI SELEKTOREN je Token-Block (`:root[data-theme='yukiakari']` UND
+   `[data-theme='yukiakari']`): der zweite trägt die Token auch an ein
+   verschachteltes Element, das `data-theme` selbst setzt — genau das macht die
+   echte Farbvorschau im Theme-Picker (.settings__swatch).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root[data-theme='yukiakari'],
+[data-theme='yukiakari'] {
+  /* ── Der Himmel: eine geschlossene Schneewolke, von unten angeleuchtet ─────
+     1. DER WIDERSCHEIN über dem Dorf — breit, flach, warm. Er sitzt auf der
+        Höhe, auf der bei jedem gemessenen Fensterformat der Horizont liegt
+        (35–42 % der Fensterhöhe, gerechnet aus `cover` über der 1600×1000er
+        viewBox). Er ist der Grund, warum die Kämme überhaupt Silhouette sind.
+     2. EIN KÜHLER HAUCH oben links, damit die Wolkendecke nicht eine Fläche ist.
+     3. DER GRUNDVERLAUF — vom Zenit (dunkel) zum Horizont (hell). Genau
+        andersherum als eine Tapete, und in einer Schneenacht noch ausgeprägter
+        als sonst: unten wird das Licht vom Boden nachgeliefert.
+
+     JEDE SCHICHT HELLT NUR AUF, KEINE DUNKELT AB — Bedingung, kein Zufall.
+     Der Schleier deckt die Lesespalte mit --bg-base ab; läge irgendwo ein Ton
+     UNTER --bg-base, würde er dort aufhellen und als sichtbares Rechteck im
+     Himmel stehen. Wer hier ergänzt: nur aufhellen. */
+  --theme-atmosphere:
+    radial-gradient(ellipse 124% 30% at 50% 43%, oklch(0.34 0.028 76 / 0.22), transparent 74%),
+    radial-gradient(ellipse 74% 26% at 16% 6%, oklch(0.3 0.03 274 / 0.14), transparent 72%),
+    linear-gradient(
+      180deg,
+      oklch(0.203 0.03 276) 0%,
+      oklch(0.224 0.03 274) 17%,
+      oklch(0.259 0.027 268) 31%,
+      oklch(0.297 0.023 262) 40%,
+      oklch(0.309 0.019 86) 47%,
+      oklch(0.258 0.024 270) 63%,
+      var(--bg-base) 100%
+    ),
+    var(--bg-base);
+
+  /* ── Flächen: blaues Nachtgrau, eine Spur wärmer als reines Indigo ─────────
+     Der Grundton ist heller als bei den anderen Nachtthemen (L 0.180 gegen
+     Nagareboshis 0.105) — und das ist kein Geschmack, sondern dieselbe Aussage
+     wie oben: in einer Schneenacht gibt es kein Schwarz. --bg-subtle ist die
+     hellste Fläche und damit der harte Prüfstein; jede Textstufe ist gegen SIE
+     gerechnet, nicht gegen die schmeichelhafteste. */
+  --bg-base: oklch(0.18 0.022 264); /* #0d111b — der dunkelste Ton des Themas */
+  --bg-surface: oklch(0.218 0.023 264); /* #151a25 */
+  --bg-elevated: oklch(0.252 0.023 264); /* #1c222d */
+  --bg-subtle: oklch(0.288 0.022 264); /* #252b36 — Hover-/Füllfläche */
+  --bg-hairline: oklch(0.365 0.02 264); /* #393f49 */
+  --bg-hairline-dashed: oklch(0.415 0.019 264); /* #464c56, für „ehrlich leer" */
+
+  /* ── Schrift: Schneeweiß, minimal kühl ────────────────────────────────────
+     Die Leiter ist angehoben (siehe Rechnung im Kopf): sie kauft dem Bild
+     seinen Schnee. --text-4 steht auf L 0.725 und hat damit auf --bg-subtle
+     noch 5,84:1 Luft — die leiseste Stufe ist hier lauter als anderswo, was in
+     einer hellen Winternacht auch richtig aussieht. */
+  --text-1: oklch(0.965 0.006 250); /* #f0f4f7 */
+  --text-2: oklch(0.885 0.008 252); /* #d5d9de */
+  --text-3: oklch(0.805 0.01 254); /* #bbc0c6 */
+  --text-4: oklch(0.725 0.012 254); /* #a1a7ae — die Zahl, an der CAP hängt */
+
+  /* ── Akzent: Fensterlicht hinter Papier ───────────────────────────────────
+     Dieselbe Farbe wie das Licht in den Fenstern der Szene (die SVG mischt sie
+     aus demselben OKLCH-Tripel — REZEPT D3: genau EIN Gold, zwei getunte Golds
+     driften auseinander). Gegen Nagareboshis Laternen-Gold (h 72) steht dieses
+     etwas tiefer (h 66): eine Kerze hinter Shoji, keine Papierlaterne im Wind. */
+  --accent: oklch(0.825 0.125 66); /* #fdb569 */
+  --accent-soft: oklch(0.825 0.125 66 / 0.17);
+  --accent-faint: oklch(0.825 0.125 66 / 0.09);
+  --accent-glow: oklch(0.825 0.125 66 / 0.28);
+  --accent-ink: oklch(0.17 0.026 60); /* #180d04 — im gefüllten Button, 10,9:1 */
+
+  /* ── Status: leise, aber lesbar ───────────────────────────────────────────
+     Chroma gedämpft — sie informieren, sie alarmieren nicht. Alle drei bleiben
+     auch auf --bg-subtle über 4,5:1 (7,42 · 8,63 · 5,69). */
+  --success: oklch(0.78 0.11 152); /* #7fcc94 */
+  --success-soft: oklch(0.78 0.11 152 / 0.14);
+  --warn: oklch(0.84 0.105 80); /* #efc379 */
+  --warn-soft: oklch(0.84 0.105 80 / 0.14);
+  --error: oklch(0.735 0.145 25); /* #f7827a */
+  --error-soft: oklch(0.735 0.145 25 / 0.14);
+
+  /* Du-Blase: sanft gehoben, Samt statt Kante. Kein Akzent-Fill
+     (Projekt-Konvention seit Yoru). */
+  --bg-user: oklch(0.238 0.024 266); /* #191f2a */
+
+  /* Die beiden Regler dieses Themas, benannt statt eingestreut.
+     `--yukiakari-veil` ist REINE RESERVE (s. Kopf) — die Zeichnung hält die
+     Zusage allein ein. `--yukiakari-schnee` ist die Stärke des Widerscheins an
+     der Wolkendecke; sie ist der eine Wert, an dem man dreht, wenn der Himmel
+     zu leer oder zu milchig wirkt. */
+  --yukiakari-veil: 0.2;
+  --yukiakari-schnee: 0.72;
+
+  color-scheme: dark;
+}
+
+/* Der Charakter des Themas erscheint als Raum um die Inhalte. Karten bleiben auf
+   ihren Flächentoken, darum verändert der Verlauf weder Statusfarben noch
+   Textkontrast. (themes.css hat dieselbe Regel generisch für `:root[data-theme]`;
+   sie steht hier noch einmal, damit die Datei allein geladen vollständig ist —
+   gleiche Spezifität, gleicher Wert, kein Konflikt.) */
+:root[data-theme='yukiakari'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── DAS SCHNEELICHT (:root::before) ─────────────────────────────────────────
+   Der Widerschein der Schneedecke an der Wolkendecke — die Ebene, die dem Thema
+   den Namen gibt. Drei sehr breite, sehr weiche Höfe direkt über dem Horizont,
+   plus zwei kleinere über den beiden Dorfhälften: dort, wo unten die meisten
+   Fenster brennen, ist oben die Wolke am hellsten. Genau daran erkennt man auf
+   einem echten Winterfoto, wo ein Ort liegt, auch wenn man ihn nicht sieht.
+
+   SIE ATMET (37 s) UND SIE DRIFTET NICHT. Eine Wolkendecke, die als Ganzes
+   wandert, sieht aus wie ein verrutschter Hintergrund; was sich ändert, ist
+   ihre Dichte. Das Driften macht die zweite Ebene, und zwar mit STRUKTUR.
+
+   Die Ebene sitzt bei z -4 GANZ HINTEN, hinter Wolkenzug und Szene: ihr Schein
+   steht damit nur dort, wo die Szene Himmel zeigt (die Zeichnung malt bewusst
+   keinen), und verschwindet hinter Kamm, Wald und Dorf.
+
+   Sie hängt am `:root`, nicht am `[data-theme]`: die 44-px-Vorschaukachel des
+   Theme-Pickers setzt data-theme auf ein <div>, und die soll keine fixe
+   Vollbild-Ebene bekommen. */
+:root[data-theme='yukiakari']::before {
+  content: '';
+  position: fixed;
+  inset: -3%;
+  z-index: -4;
+  pointer-events: none;
+  opacity: var(--yukiakari-schnee);
+  background-repeat: no-repeat;
+  background-image:
+    /* Der breite Widerschein über dem ganzen Tal. */
+    radial-gradient(ellipse 96% 20% at 50% 44%, oklch(0.4 0.032 78 / 0.3), transparent 72%),
+    /* Zwei Kuppen über den Dorfhälften — dort brennen die Fenster. */
+    radial-gradient(ellipse 34% 15% at 22% 42%, oklch(0.42 0.038 72 / 0.26), transparent 70%),
+    radial-gradient(ellipse 32% 14% at 79% 41%, oklch(0.42 0.038 72 / 0.24), transparent 70%),
+    /* Ein kühler Gegenpol oben, damit der Himmel nach Winter riecht und nicht
+       nach Abendrot. */
+    radial-gradient(ellipse 80% 34% at 42% 2%, oklch(0.32 0.036 272 / 0.2), transparent 76%);
+  animation: yukiakari-schneelicht 37s ease-in-out infinite;
+}
+
+/* Atmen, sonst nichts. Nur `opacity` und `transform` (Projekt-Konvention,
+   s. index.css „Motion-Token"), und wie überall: von 1 nur nach UNTEN, damit
+   der stehende Zustand der hellste und damit der Kontrast-Worst-Case ist. */
+@keyframes yukiakari-schneelicht {
+  0%,
+  100% {
+    opacity: var(--yukiakari-schnee);
+  }
+  50% {
+    opacity: calc(var(--yukiakari-schnee) * 0.62);
+  }
+}
+
+/* ── DER WOLKENZUG (:root::after) ────────────────────────────────────────────
+   Eine Schneewolke steht nie. Vier sehr weiche, sehr breite Bänke ziehen
+   langsam nach rechts (61 s für 5 % Fensterbreite — das ist knapp unter der
+   Schwelle, ab der man Bewegung als Bewegung liest, und genau das ist gemeint:
+   man SIEHT es nicht ziehen, man merkt nur, dass der Himmel nicht tot ist).
+
+   WARUM ÜBERHAUPT EINE ZWEITE EBENE: der eigentliche Herzschlag (die Flocken)
+   steckt im SVG. Sollte eine Engine deklarative Animation in einem per
+   `background-image` geladenen Bild nicht mitlaufen lassen, bewegt sich hier
+   trotzdem etwas — dieselbe Rückversicherung, die Nagareboshis Flimmern ist.
+
+   `inset: -8% -14%` gibt der Verschiebung Reserve, damit nie eine Kante
+   aufreißt. Die Ebene liegt bei z -3 hinter der Szene: die Bänke ziehen im
+   Himmel, nicht über den Dächern. */
+:root[data-theme='yukiakari']::after {
+  content: '';
+  position: fixed;
+  inset: -8% -14%;
+  z-index: -3;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-image:
+    radial-gradient(ellipse 44% 9% at 24% 19%, oklch(0.31 0.03 272 / 0.34), transparent 74%),
+    radial-gradient(ellipse 52% 8% at 68% 27%, oklch(0.33 0.028 268 / 0.3), transparent 74%),
+    radial-gradient(ellipse 38% 7% at 46% 34%, oklch(0.34 0.026 264 / 0.26), transparent 74%),
+    radial-gradient(ellipse 46% 6% at 82% 12%, oklch(0.3 0.03 274 / 0.24), transparent 74%);
+  animation: yukiakari-wolkenzug 61s ease-in-out infinite;
+}
+
+@keyframes yukiakari-wolkenzug {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 0.74;
+    transform: translate3d(5%, -0.6%, 0);
+  }
+}
+
+/* ── DIE SZENE: das ganze Bild (body::before) ─────────────────────────────────
+   Maß-Vertrag: `cover` + `center bottom`. Die viewBox ist 1600×1000 (1,6:1);
+   `cover` beschneidet bei schmalen Fenstern seitlich, bei breiten oben. Die
+   sichere Zone der Zeichnung ist darum x 140–1460 und y ≥ 110 — dort steht
+   alles, was das Bild ausmacht; außerhalb liegt nur Fortsetzung (Kämme, Wald,
+   Schneewall). Geprüft für 4:3 bis 16:9.
+
+   Der Horizont sitzt bei 40–45 % Höhe der viewBox, die Schneekante des Dorfes
+   bei 60 %, der Schneewall am Fuß bei 97 % — bei `center bottom` bleiben diese
+   Linien bei jeder Fensterhöhe an derselben Stelle des Fensters.
+
+   Keine CSS-Animation auf dieser Ebene, und das ist eine Entscheidung: eine
+   Landschaft bewegt sich nicht als Ganzes. Was sich bewegt, sind die Flocken,
+   die Lichter und die Lichtpfützen — jedes für sich, IM Bild, mit eigener Uhr. */
+:root[data-theme='yukiakari'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: url('yukiakari-szene.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+}
+
+/* ── DER SCHLEIER: die Reserve als Fläche (body::after) ───────────────────────
+   Er ist die VORDERSTE Deko-Schicht (z-index -1) und liegt damit über
+   Schneelicht, Wolkenzug und Szene.
+
+   ER IST HIER NICHT DER VERTRAG, SONDERN NUR SEINE RESERVE. Bei Yoru und
+   Nagareboshi trägt der Schleier die Lesbarkeit; hier hält die Zeichnung sie
+   selbst ein (jede Farbe der SVG ist gegen CAP geprüft, s. Kopf). Der Schleier
+   deckt trotzdem mit 0,30 ab, aus zwei Gründen: er fängt die beiden
+   CSS-Lichtebenen ab, die der Generator nicht kennen kann, und er nimmt dem
+   Bild in der Lesespalte etwas Kontrast, damit die Schrift ruhig darauf sitzt.
+   Wer ihn auf 0 dreht, verliert Ruhe — aber keine Zusage.
+
+   SUBTRAKTIV, nicht additiv. Auf hellem Grund (Asagiri) deckt man mit Weiß ab
+   und der Kontrast zu dunkler Schrift kann nur besser werden; auf dunklem Grund
+   gilt das Gegenteil, und ein weißer Schleier wäre hier genau der Fehler. Also
+   deckt dieser mit dem Grundton selbst.
+
+   0,30 IST BEWUSST WENIG. Ein Schneebild, von dem in der Spalte 70 % übrig
+   bleiben, läuft sichtbar hinter der Schrift durch — genau das verlangt Regie
+   v2, Regel 1. Und es ist der Grund, warum der Median dieses Themas oben im
+   Galerie-Feld steht statt unten: ein schwerer Schleier zieht ausgerechnet die
+   größte Fläche des Bildes (den Schnee) wieder ins Graue.
+
+   DIE KANTE BRAUCHT FÜNF STOPPS ÜBER 330 px (REZEPT F). Mit einem einzigen
+   linearen Übergang hat die Deckkraft an beiden Enden einen Knick, und das Auge
+   sieht Knicke in Helligkeitsverläufen als LINIE — bei 1920 px stünde eine
+   sichtbare senkrechte Naht im Himmel. Und die Kurve fällt zuerst schnell und
+   läuft dann lange flach aus (0,60 · 0,36 · 0,17 · 0,06 der Endstärke): schon
+   120 px neben der Spalte steht das Bild zu zwei Dritteln da.
+
+   Er bedeckt die volle 920-px-Spalte und franst nach AUSSEN aus, nie nach innen.
+   Unter ~1040 px Fensterbreite fällt die calc-Kette auf 0 zusammen, der Schleier
+   deckt alles gleichmäßig, und die Zeichnung wird zum Gespenst statt zu
+   verschwinden. */
+:root[data-theme='yukiakari'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  --veil: max(0px, 50% - 460px);
+  background-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--veil) - 330px),
+    oklch(0.18 0.022 264 / calc(var(--yukiakari-veil) * 0.06)) calc(var(--veil) - 260px),
+    oklch(0.18 0.022 264 / calc(var(--yukiakari-veil) * 0.17)) calc(var(--veil) - 190px),
+    oklch(0.18 0.022 264 / calc(var(--yukiakari-veil) * 0.36)) calc(var(--veil) - 120px),
+    oklch(0.18 0.022 264 / calc(var(--yukiakari-veil) * 0.6)) calc(var(--veil) - 55px),
+    oklch(0.18 0.022 264 / var(--yukiakari-veil)) var(--veil),
+    oklch(0.18 0.022 264 / var(--yukiakari-veil)) calc(100% - var(--veil)),
+    oklch(0.18 0.022 264 / calc(var(--yukiakari-veil) * 0.6)) calc(100% - var(--veil) + 55px),
+    oklch(0.18 0.022 264 / calc(var(--yukiakari-veil) * 0.36)) calc(100% - var(--veil) + 120px),
+    oklch(0.18 0.022 264 / calc(var(--yukiakari-veil) * 0.17)) calc(100% - var(--veil) + 190px),
+    oklch(0.18 0.022 264 / calc(var(--yukiakari-veil) * 0.06)) calc(100% - var(--veil) + 260px),
+    transparent calc(100% - var(--veil) + 330px),
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* Eigenes reduced-motion-Gate: die globale Regel in index.css stellt die Ebenen
+   ohnehin still, aber diese Datei muss auch allein geladen korrekt sein.
+
+   DAS GATE LÖSCHT NICHTS. Für beide CSS-Ebenen ist der Grundzustand der Regel
+   der HELLSTE (Schneelicht steht auf `--yukiakari-schnee`, der Wolkenzug auf
+   opacity 1); sie hören auf zu atmen und zu ziehen, bleiben aber vollständig
+   stehen. Die Uhren im SVG stellt die Zeichnung selbst still — sie trägt
+   dieselbe Medienabfrage in ihrem eigenen <style>. Auch dort ist der
+   Ruhezustand der vollständige: die Flocken bewegen sich ausschließlich per
+   `transform`, hängen also gar keine Helligkeit an der Zeit; angehalten steht
+   ein kompletter Schneefall im Bild, nur eben still.
+
+   Die Szenen-Ebene (`body::before`) steht hier mit, obwohl sie heute keine
+   Animation trägt: sie ist die Ebene, an der ein späterer Griff („lass die
+   Landschaft doch ganz leicht atmen") zuerst ansetzen würde, und der
+   projektweite Riegel in src/test/sceneanimation.test.ts verlangt von einer
+   bewegten Szene genau diesen Namen im Gate. Eine Regel, die nichts abschaltet,
+   kostet nichts und hält das Versprechen auch für den nächsten Griff. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='yukiakari']::before,
+  :root[data-theme='yukiakari']::after,
+  :root[data-theme='yukiakari'] body::before {
+    animation: none;
+  }
+}
+
+/* Die Kopfzeile ist die Nacht selbst, nur dichter: fast deckender Samt mit einer
+   kaum sichtbaren kühlen Kante statt eines Schattens (Muster wie Natsu no Hi /
+   Nagori / Asagiri, die ihre Nav ebenfalls nur tönen). */
+:root[data-theme='yukiakari'] .nav {
+  background: oklch(0.196 0.022 264 / 0.9);
+  box-shadow: 0 1px 0 oklch(0.365 0.02 264 / 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Der Sprachstern ist die Lampe in der Steinlaterne: weißglühender Kern, nach
+   außen ins Fenstergold abfallend — dieselbe Farbfolge wie der Lichtkasten der
+   Yukimi-dōrō. Form und Bewegung bleiben die des Basis-Orbs; das Thema ist Farbe. */
+:root[data-theme='yukiakari'] .vc-orb__core {
+  background: radial-gradient(circle at 42% 36%, oklch(0.98 0.014 90), oklch(0.9 0.07 68) 50%, var(--accent) 100%);
+}
+
+/* Der Bloom kippt von Gold (innen) ins Blaugrau der Schneeluft (außen) —
+   Licht, das sich in fallendem Schnee verliert, statt scharf auszulaufen. */
+:root[data-theme='yukiakari'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    oklch(0.46 0.04 268 / 0.2) 44%,
+    transparent 74%
+  );
+}
+
+/* Die Pegel-Ringe bleiben im Gold, aber leise: die Stimme soll in einer
+   Schneenacht nicht zum Blinklicht werden. Keine neue Mechanik — nur Farbe auf
+   dem bestehenden Ring. */
+:root[data-theme='yukiakari'] .vc-orb__ring {
+  border-color: oklch(0.825 0.125 66 / 0.36);
+  box-shadow: 0 0 0 5px oklch(0.825 0.125 66 / 0.09);
+}

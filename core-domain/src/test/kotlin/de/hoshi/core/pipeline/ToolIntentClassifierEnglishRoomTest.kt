@@ -151,7 +151,11 @@ class ToolIntentClassifierEnglishRoomTest {
         assertEquals("wohnzimmer", classifier.classify("mach das Licht im Wohnzimmer an", Language.DE)!!.data["area_id"])
         assertEquals("schlafzimmer", classifier.classify("schalte das schlafzimmer ein", Language.DE)!!.data["area_id"])
         assertEquals("kuche", classifier.classify("schalte die Küche an", Language.DE)!!.data["area_id"])
-        assertEquals("wohnzimmer", classifier.classify("licht an", Language.DE)!!.data["area_id"], "Default ohne Raum")
+        // F2/S2: „licht an" ohne Raum traegt KEIN area_id mehr (kein geratener Default).
+        assertFalse(
+            classifier.classify("licht an", Language.DE)!!.data.containsKey("area_id"),
+            "roomless ⇒ kein area_id",
+        )
         assertNull(classifier.classify("mir ist kalt", Language.DE))
         assertNull(classifier.classify("schalte das schlafzimmer nicht ein", Language.DE))
     }

@@ -1,0 +1,477 @@
+/* ════════════════ AOI (青) — das Wasser von innen ════════════════
+   Hoshi 0.8 · eigenständige Themen-Datei (dynamisch nachladbar, kein Import nötig)
+   ────────────────────────────────────────────────────────────────────────────────────
+   DAS BILD: man steht auf dem Grund eines stillen Sees und schaut nach oben.
+   Ganz oben die Unterseite der Wasserhaut mit dem Snell-Fenster — dem hellen
+   Kreis, durch den das Tageslicht wirklich hereinkommt; außen herum spiegelt
+   die Oberfläche das dunkle Wasser zurück. Darunter das offene Blau, in das
+   ein paar Lichtschäfte fallen, links ein Tangwald, rechts ein Riff, unten der
+   Grund, auf dem das Blau aufhört. Nichts passiert. Genau das ist das Bild.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   MUT-STUFE: DEZENT (Andis Staffelung „einige mutiger, einige dezent")
+   ────────────────────────────────────────────────────────────────────────────────
+   Dezent heißt hier NICHT „wenig gezeichnet", sondern: die Szene trägt, ohne
+   sich zu zeigen. Wer hinsieht, findet Tiefe (Tang, Riff, Schäfte, Teilchen im
+   Licht); wer nicht hinsieht, findet Ruhe. Übersetzt in drei harte Regeln, an
+   denen jede spätere Änderung gemessen werden kann:
+     1. UNTER DER SPALTE IST DAS BILD LEISER ALS DIE KARTEN DAVOR. Gemessen
+        (19.08., headless, 1440×900) liegt der hellste Punkt des Bildes IM
+        920-px-Band bei sRGB-Luminanz 0.0113 — zwischen --bg-surface (0.0103)
+        und --bg-elevated (0.0166), also unter jeder erhobenen Fläche und weit
+        unter --bg-subtle (0.0209). Wo Text steht, ist der Hintergrund dunkler
+        als das Blatt, auf dem der Text liegt.
+        DANEBEN DARF ES LEUCHTEN: im Seitenraum steigt dasselbe Bild auf 0.1519
+        (#4a6f9b — die Wasserhaut). Das ist der ganze Trick des Themas, und der
+        Grund, warum „dezent" hier nicht „blass" heißt: die Szene ist 13× heller
+        als die Lesespalte, sie steht nur woanders.
+     2. BEWEGUNG UNTER DER WAHRNEHMUNGSSCHWELLE — nachgerechnet, nicht gefühlt
+        (1440 px Fensterbreite):
+          WANDERN  0,9 % Weg in 289 s = 12,96 px → 0,045 px/s.
+          WEITEN   der äußere Auslauf der großen Lichtellipse sitzt ~475 px vom
+                   Zentrum; 3,5 % Skalenhub in 149 s → 0,11 px/s.
+        Der schnellste Punkt liegt damit bei ~0,11 px/s, an der Schwelle, ab der
+        man Bewegung als Bewegung sieht (~0,1 px/s) — aber er ist kein Punkt,
+        den man verfolgen könnte: dort läuft ein Alphaverlauf gegen Null aus, es
+        gibt keine Kante. Was man sehen KÖNNTE, hat keine Gestalt; was Gestalt
+        hat (die Zeichnung), steht still. Ukiyo, das mutige Wasser-Thema, fährt
+        ~1 px/s mit sichtbarer Horizontlinie.
+     3. DIE ZEICHNUNG SELBST STEHT STILL. Bewegt wird ausschließlich LICHT.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   ABGRENZUNG ZU UKIYO (浮世) — dasselbe Element, die andere Seite der Haut
+   ────────────────────────────────────────────────────────────────────────────────
+   Ukiyo ist die Welle als DRAMA: von außen gesehen, im Moment des Brechens, als
+   Holzschnitt auf warmem Papier, hell (L 0.912), laut (Preußischblau C 0.115 auf
+   Gelb, ~160° Farbkreis Spannung), full-bleed wie ein Plakat, und sein Meer hebt
+   sich sichtbar (2,2 % Hub, ~1 px/s).
+   Aoi ist dasselbe Wasser als RUHE: von innen gesehen, dunkel (L 0.115), einfarbig,
+   und die Welle ist von unten gar keine Welle mehr, sondern nur noch eine LINIE
+   aus Licht an der Decke. Ukiyo steht am Strand und schaut hin. Aoi ist drin.
+     Ukiyo: Papier #eae2c8 · Akzent #04548d · Bewegung 73/109 s · Medium: Druck
+     Aoi:   Tinte  #0c1017 · Akzent #5ea0f2 · Bewegung 197/289/149 s · Medium: Licht
+
+   ABGRENZUNG ZU NAGORI (名残), das ebenfalls „blaue Stunde" ist: Nagoris Grund
+   IST blau (Indigo, C 0.045) und sein Licht ist WARM (Glut-Amber H 58) — ein
+   Gegenlicht im kalten Raum. Aoi dreht das um: der Grund ist fast farblose
+   Tinte (C ≈ 0.012), und das LICHT ist das Blau. Nagori setzt einen Kontrapunkt,
+   Aoi verweigert ihn — das ist die radikale Entscheidung dieses Themas:
+
+   ────────────────────────────────────────────────────────────────────────────────
+   RADIKAL: EIN THEMA OHNE GEGENFARBE
+   ────────────────────────────────────────────────────────────────────────────────
+   Jedes andere Thema des Hauses stellt seinem Grund eine zweite Familie
+   gegenüber (Asagiri Rosé, Momiji Rost, Ukiyo Blau auf Gelb, Nagori Amber).
+   Aoi hat keine. Grund, Fläche, Schrift, Haarlinie, Akzent, sogar die Du-Blase
+   liegen alle im selben kalten Viertel (H 210–235). Die Spannung entsteht
+   ausschließlich aus HELLIGKEIT — das ist die Physik der Szene: unter Wasser
+   verschluckt das Blau zuerst das Rot, dann alles andere; was übrig bleibt, ist
+   ein Bild aus einer einzigen Farbe und sehr vielen Helligkeiten.
+   Das hat eine harte, angenehme Nebenwirkung für die Bedienung: die drei
+   Statusfarben (Grün/Bernstein/Korall) sind die EINZIGEN nicht-blauen Dinge auf
+   dem Schirm. Wenn hier etwas nicht blau ist, ist es Information.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   DIE SEELE: ANDIS SPEC BLEIBT STEHEN (Cowork-Spec §1, 2026-07-02)
+   ────────────────────────────────────────────────────────────────────────────────
+   Aoi ist nicht irgendein Alt-Theme: es ist der DEFAULT der App, der Basis-Look
+   im ersten Frame (src/styles/themes.css, `:root:not([data-theme])`) und Soras
+   Tages-Fenster 10:00–17:59. Die Farbwerte stammen aus Andis abgenommener Spec
+   und werden hier NICHT neu erfunden — sie stehen als literale Hex-Werte da,
+   nicht in OKLCH, damit sie mit dem Basis-Block byte-gleich bleiben und der
+   CSS-Riegel in `src/test/themegroups.test.tsx` sie weiter zitieren kann
+   (--bg-surface / --accent / --text-1 sind dort an den Manifest-Swatch gepinnt).
+   Der Start darf nicht umspringen, wenn diese Datei nachgeladen ist.
+
+   ZWEI WERTE WEICHEN AB — und zwar nur, weil AA es erzwingt:
+     • --text-4 war in der Spec der „hint" #5d6980. Der ist kein AA-Text: er
+       steht auf --bg-base bei 3,45:1 und auf der Füllfläche bei 2,53:1. Er wird
+       im Produkt aber als echte Schriftfarbe benutzt (78 Fundstellen, u. a.
+       `.feed__daysep`, `.settings__hint`, die Meta-Zeilen). Er ist deshalb auf
+       #848fa3 gehoben — dieselbe Farbe, zwei Stufen heller (H 217, dieselbe
+       kalte Familie), und damit die leiseste Stufe, die überall AA hält.
+     • --bg-subtle (in der Spec nicht enthalten, im Basis-Block als #222c3f
+       abgeleitet) geht auf #1e2839 zurück. Der Grund ist eine einzige echte
+       Stelle: `.feed__daysep` setzt --text-4 AUF diese Fläche. Mit #222c3f wäre
+       genau dort 4,30:1 — mit #1e2839 sind es 4,54:1.
+   Beides ist im Datei-Kopf ausgewiesen, damit niemand später „zurück zur Spec"
+   patcht, ohne zu wissen, was er dabei aufgibt. Alles andere ist 1:1 Spec bzw.
+   1:1 der bisherige abgeleitete Wert.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   KONTRASTE (WCAG 2.1, sRGB, selbst nachgerechnet mit
+   tools/theme-contrast/wcag_aoi.py; angegeben ist der SCHLECHTESTE der fünf
+   realen Untergründe base/surface/elevated/subtle/user, nicht der schönste)
+   ────────────────────────────────────────────────────────────────────────────────
+                    base surface elevated subtle  user  WORST
+       --text-1    16,34   14,94   13,52  12,70  13,78  12,70
+       --text-2    10,72    9,80    8,87   8,34   9,05   8,34
+       --text-3     6,47    5,91    5,35   5,03   5,46   5,03
+       --text-4     5,84    5,34    4,83   4,54   4,93   4,54
+       --accent     7,06    6,46    5,85   5,49   5,96   5,49
+       --success    9,62    8,80    7,96   7,48   8,12   7,48
+       --warn       9,91    9,06    8,20   7,70   8,36   7,70
+       --error      6,51    5,95    5,39   5,06   5,50   5,06
+   Zusätzlich geprüft:
+     • Farbe auf ihrer EIGENEN *-soft-Fläche (16 % über --bg-base bzw.
+       --bg-surface — so bauen die Pills/Badges in index.css):
+       accent 5,59 / 4,99 · success 7,17 / 6,38 · warn 7,42 / 6,61 ·
+       error 5,28 / 4,74 — alle ≥ 4,5.
+     • --accent-ink (die Tinte) auf --accent (gefüllter CTA, Toggle-Knopf): 7,06:1.
+     • NICHT-TEXT (WCAG 1.4.11 ≥ 3:1): --bg-hairline #1f2938 liegt gegen alle
+       Flächen bei 1,01–1,30:1 und --bg-hairline-dashed bei 1,20–1,54:1. Das
+       ist bewusst SO und kommt unverändert aus Andis Spec: die Haarlinie
+       dieses Themas trennt, sie zeichnet nicht. Sie ist in keinem Steuerelement
+       die einzige Auskunft (Fokus läuft über --accent, Zustände über Farbe und
+       Text) — aber wer hier je eine Kontur zur alleinigen Information macht,
+       muss sie vorher aufhellen. Das ist die einzige offene Schwelle des Themas.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   DER SCHLEIER — die Kontrast-Rechnung der Szene
+   ────────────────────────────────────────────────────────────────────────────────
+   Die Szene liegt full-bleed hinter der App, also hinter JEDEM Text. Getragen
+   wird der Kontrast deshalb nicht von Geometrie, sondern von einer Zahl:
+   --aoi-veil = 0.88, die Deckkraft der Tinte (#0c1017) über der Lesespalte.
+
+   NEU GEGENÜBER ASAGIRI/UKIYO — DER SCHLEIER LIEGT GANZ OBEN. Dort ist der
+   Schleier eine mittlere Schicht, über die später noch Nebel bzw. Gischt
+   gemalt wird; jede Bewegung darüber muss dann einzeln als kontrast-sicher
+   bewiesen werden. Hier ist die Reihenfolge umgedreht:
+       body::before (z -2)  DIE SZENE samt allen fünf Uhren (im SVG)
+       :root::after (z -1)  der Schleier                 ← nichts liegt darüber
+   Über dem Schleier liegt nur noch Inhalt. Damit gilt die gemessene Zahl für
+   jeden Frame, den dieses Thema je zeigen kann, und nicht nur für den, den der
+   Messfühler erwischt hat.
+
+   GEMESSEN, NICHT MODELLIERT — `tools/theme-contrast/measure_aoi.py`, headless
+   Chrome mit eigenem Wegwerf-Profil, die ausgelieferte Datei im echten Stapel
+   (index.css-Basistoken → themes.css → diese Datei) samt App-Gerüst. Gesucht
+   wird der HELLSTE Pixel im 920-px-Band der App-Spalte, denn auf dunklem Grund
+   ist Helligkeit der Feind; dagegen gerechnet ist --text-4, die leiseste Stufe.
+   Lauf vom 19.08., nach dem Regler-Fix (s. u.):
+     1440×900   hellster Punkt #131c29  →  --text-4  5,25:1  ·  --text-1 14,69:1
+     1280×800   hellster Punkt #131c29  →  --text-4  5,25:1  ·  --text-1 14,69:1
+     1024×768   hellster Punkt #131c29  →  --text-4  5,25:1  ·  --text-1 14,69:1
+     1920×1080  hellster Punkt #131c29  →  --text-4  5,25:1  ·  --text-1 14,69:1
+   VIERMAL DERSELBE WERT, und das ist kein Zufall des Messfühlers: Atmosphäre,
+   Licht und Schleier sind ausnahmslos in Prozent gesetzt. Das Bild skaliert mit
+   dem Fenster, statt sich in ihm zu verschieben — die Spalte sieht in jedem
+   Fenster denselben Verlauf. Genau deshalb ist die Zusage fenstergrößen-fest.
+   Im Seitenraum steht die Zeichnung ohne Schleier; dort fällt --text-4 je nach
+   Fenster auf 2,80 (1280) bis 1,78:1 (1920) — je breiter das Fenster, desto
+   mehr Bild liegt frei. Dort steht nie ein Buchstabe: `.app` ist 920 px breit
+   und zentriert. Wer .app verbreitert, muss vorher neu messen.
+
+   WARUM 0.88 UND NICHT WENIGER — gemessene Kurve (1440×900, je ein eigener
+   Chrome-Lauf mit überschriebenem --aoi-veil):
+     0,72 → 4,40  (AA VERFEHLT)      0,80 → 4,85      0,88 → 5,25  ← gewählt
+     0,74 → 4,52                     0,84 → 5,04      0,92 → 5,46
+     0,76 → 4,63
+     0,78 → 4,74
+   Die AA-Schwelle für --text-4 reißt zwischen 0,72 und 0,74 — 0,74 hält sie mit
+   4,52 gerade eben, und „gerade eben" ist keine Zusage, die einen Theme-Wechsel
+   überlebt. 0,88 hält AA mit 0,75 Stufen Luft und lässt die Szene unter der
+   Spalte trotzdem als Ahnung stehen: genau der dezente Punkt — man sieht das
+   Wasser durch die Lesespalte, aber es drängt sich nicht auf.
+
+   ZWEI SELEKTOREN je Token-Block (Projekt-Konvention, s. themes.css):
+   `:root[data-theme='aoi']` fürs Dokument, `[data-theme='aoi']` ohne :root,
+   damit die Vorschau-Kachel im Theme-Picker (.settings__swatch setzt data-theme
+   selbst) die echten Farben zeigt.
+   ════════════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='aoi'],
+[data-theme='aoi'] {
+  /* ── Die Atmosphäre: der Wasserkörper, in dem alles andere steht ───────────
+     Vier Schichten, erste = oberste. Sie liegen UNTER der Zeichnung und dürfen
+     den Grund darum nur sehr leise tönen:
+       1. Das Licht kommt von OBEN — ein breiter, sehr blasser Bogen am oberen
+          Rand. Das ist die einzige Lichtquelle des ganzen Themas.
+       2. Der Rest-Schimmer der Oberfläche, weiter oben rechts (die Szene ist
+          nicht symmetrisch; das Fenster steht bei 46 % Breite).
+       3. Die Tiefe: von unten kriecht ein kälteres, dunkleres Blau herein.
+       4. Darunter --bg-base, die Tinte.
+     Die Werte sind bewusst dieselben rgb()-Tripel wie im Basis-Block von
+     themes.css (94 160 242 = --accent, 47 91 145 = das tiefe Wasser) — der
+     Boot-Look und das geladene Thema sollen im ersten Moment gleich aussehen. */
+  --theme-atmosphere:
+    radial-gradient(ellipse 120% 46% at 46% -12%, rgb(94 160 242 / 0.13), transparent 62%),
+    radial-gradient(ellipse at 86% -10%, rgb(94 160 242 / 0.1), transparent 38%),
+    radial-gradient(ellipse at 5% 112%, rgb(47 91 145 / 0.075), transparent 42%),
+    var(--bg-base);
+
+  /* ── Flächen: vier Tiefen desselben Wassers ───────────────────────────────
+     --bg-base ist der Grund (Spec: bg), --bg-surface das Blatt darauf (Spec:
+     surface), --bg-elevated eine Handbreit höher, --bg-subtle die Hover-/
+     Füllfläche. Die Treppe ist eng — enger als in jedem anderen Thema —, weil
+     unter Wasser nichts scharf gestuft ist. Getrennt wird über Haarlinien und
+     Schrift, nicht über Helligkeitssprünge. */
+  --bg-base: #0c1017; /* Spec: bg */
+  --bg-surface: #141a26; /* Spec: surface */
+  --bg-elevated: #1a2333; /* abgeleitet: eine Stufe über surface (Spec hat kein elevated) */
+  --bg-subtle: #1e2839; /* abgeleitet: Hover-/Füllfläche — s. Kopf (.feed__daysep) */
+  --bg-hairline: #1f2938; /* Spec: border */
+  --bg-hairline-dashed: #2a3548; /* Spec: border-dashed — die „ehrlich leer"-Kacheln */
+
+  /* ── Schrift: Licht im Wasser, kein Weiß ──────────────────────────────────
+     --text-1 ist die Farbe, die die Oberfläche selbst hat, wenn man von unten
+     hineinschaut; nach hinten wird die Treppe leiser UND blauer, wie ein Ton,
+     der in die Tiefe hinein verschluckt wird. --text-4 ist der eine Wert, der
+     Andis Spec verlässt (Begründung im Kopf: der Spec-„hint" ist kein
+     AA-Text). */
+  --text-1: #e8eef7; /* Spec: text */
+  --text-2: #b9c3d4; /* abgeleitet: Zwischenstufe text ↔ muted (0.8 hat 4 Textstufen) */
+  --text-3: #8c97ab; /* Spec: muted */
+  --text-4: #848fa3; /* Spec-„hint" #5d6980, auf AA gehoben — 4,54:1 im schlechtesten Fall */
+
+  /* ── Akzent: das Morgenblau der Spec — hier ist es das LICHT ──────────────
+     In jedem anderen Thema ist der Akzent die Gegenfarbe zum Grund. Hier ist er
+     dieselbe Farbe wie alles andere, nur mit Sättigung: das Blau, das durch die
+     Wasserhaut kommt. Genau dieser Ton (#5ea0f2) zeichnet auch die Kräuselung
+     in der Szene — Stimme, CTA und Auswahl tragen dieselbe Farbe wie das Licht
+     an der Decke, und sonst nichts.
+     --accent-ink ist die Tinte des Grundes auf dem Blau (7,06:1). */
+  --accent: #5ea0f2;
+  --accent-soft: rgb(94 160 242 / 0.2);
+  --accent-faint: rgb(94 160 242 / 0.1);
+  --accent-glow: rgb(94 160 242 / 0.38);
+  --accent-ink: #0c1017;
+
+  /* ── Status: die einzigen nicht-blauen Dinge im Bild ──────────────────────
+     Alle drei stehen unverändert aus der Spec (bzw. --error als dokumentierte
+     Ableitung) und liegen bei L 0.72–0.80: hell genug, um auf der Tinte mit
+     ≥ 5:1 zu stehen, entsättigt genug, um in einer stillen Szene nicht zu
+     schreien. Ihr Farbabstand zum Akzent ist maximal — der Akzent besetzt das
+     kalte Viertel allein (Hue-Abstände zu Blau H 217: Grün 143°, Bernstein
+     147°, Korall 200°). */
+  --success: #77c99a; /* Spec: ok */
+  --success-soft: rgb(119 201 154 / 0.16);
+  --warn: #e3b36a; /* Spec: warn */
+  --warn-soft: rgb(227 179 106 / 0.16);
+  --error: #e07a6e; /* abgeleitet: Spec §1 hat kein error — ruhiges Korall-Rot im Aoi-Ton */
+  --error-soft: rgb(224 122 110 / 0.16);
+
+  /* Du-Blase: das eigene Wort liegt eine Handbreit tiefer im Wasser als Hoshis
+     Antwort — minimal dunkler und blauer als --bg-elevated, kein Akzent-Fill
+     (Projekt-Konvention seit Yoru). --text-1 darauf 13,78:1, --text-4 4,93:1. */
+  --bg-user: #17222f;
+
+  color-scheme: dark;
+}
+
+/* Die drei Regler des Bildes — Bild-Regie, keine Farbe.
+
+   SIE STEHEN AUF :root, NICHT AUF body. Das ist keine Kosmetik, sondern die
+   einzige Stelle, an der sie überhaupt wirken: der Schleier hängt an
+   `:root::after`, und das ist ein Pseudoelement von <html>. Ein
+   Custom Property, das auf <body> deklariert ist, vererbt sich nach UNTEN —
+   <html> und sein ::after sehen es nie.
+   Gemessen am 19.08. (getComputedStyle im headless Chrome): mit den Reglern auf
+   body meldete `html` selbst `--aoi-veil: ""`, und der gerenderte Verlauf
+   benutzte still die var()-Ersatzwerte. Er SAH richtig aus — die Ersatzwerte
+   sind zufällig genau die gewünschten Zahlen —, aber `--aoi-veil` auf body zu
+   drehen änderte nichts, und `--aoi-column` rechnete nie mit --measure. Ein
+   Regler, der stumm den Ersatzwert zeigt, ist schlimmer als keiner: er lügt den
+   nächsten an, der an ihm dreht.
+
+   Der Selektor bleibt bewusst OHNE das nackte `[data-theme='aoi']` (anders als
+   der Token-Block darüber): so erbt die Vorschau-Kachel im Theme-Picker, die
+   data-theme auf ein einfaches <div> setzt, diese Regie-Werte weiterhin nicht.
+
+     --aoi-column  halbe App-Spalte; die Zusage gilt der APP-Breite (920 px),
+                   nicht der schmaleren Lesespalte --measure (672 px), sonst
+                   stünden Uhr, Gruß, Kachelränder und Meta-Zeilen ungeschützt.
+                   --measure steht in index.css auf :root, ist hier also lesbar.
+     --aoi-veil    Deckkraft der Tinte über der Spalte. GERECHNET, nicht
+                   gefühlt (Kurve im Datei-Kopf). Wer daran dreht, misst neu. */
+:root[data-theme='aoi'] {
+  --aoi-column: max(460px, var(--measure, 42rem) / 2 + 24px);
+  --aoi-feather: 300px;
+  --aoi-veil: 0.88;
+}
+
+/* Der Grund gehört dem body. themes.css macht das generisch für jedes
+   [data-theme]; die Regel steht hier noch einmal, damit diese Datei ALLEIN
+   geladen vollständig ist (gleiche Deklaration, gleiche Spezifität, kein
+   Konflikt). */
+:root[data-theme='aoi'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── DIE SZENE (body::before, z-index -2) ────────────────────────────────────
+   `aoi-szene.svg` liegt als echte Datei NEBEN dieser CSS: same-origin, vom
+   Browser cachebar, und nur wer dieses Thema wählt, lädt sie (als data-URI läge
+   sie in jeder Kopie der Themen-CSS und wäre ~1,37× so groß).
+
+   WAS DARIN STEHT: die Stille unter der Oberfläche. Oben die Unterseite der
+   Wasserhaut mit ihrem Lichtnetz, daraus neun Lichtbahnen schräg nach unten;
+   im Mittelgrund ein Fischschwarm als Schatten quer durchs Bild und darüber
+   ein Rochen als ferne Silhouette; unten links und rechts Tangwald, dazwischen
+   auf dem Sand DAS WRACK — ein aufgebrochener Bootsrumpf mit freien Spanten
+   und gebrochenem Mast. Überall steigen Lichtpunkte auf.
+
+   ANKER MITTIG (`center center`) und viewBox 1600×900. Das ist eine bewusste
+   Korrektur gegenüber v1 (1600×1000, `center top`): 16:9 ist das WEITESTE
+   gängige Fenster-Format, also beschneidet `cover` bei jedem schmaleren
+   Fenster nur noch SEITLICH — die Komposition steht vertikal immer
+   vollständig, und der Grund mit dem Wrack kann nicht mehr wegfallen. Bei
+   1366×1024 ist der Streifen x 200…1400 der viewBox sicher sichtbar; alles,
+   was außerhalb liegt, ist Zugabe für breite Schirme.
+
+   DIE BEWEGUNG STEHT JETZT IM SVG, nicht mehr hier. Zwei Gründe, beide hart:
+     1. `--virtual-time-budget` (der Frame-Beweis der Regie) treibt die
+        CSS-Uhren des WIRTS-Dokuments nicht — wohl aber die Uhren INNERHALB
+        eines als background-image geladenen SVG. Bewegung, die hier stünde,
+        wäre nicht beweisbar (REZEPT E).
+     2. Die Kette wird KURZ. v1 hatte Zeichnung × Lichtschicht × Schleier und
+        musste alle drei zusammen messen; jetzt gibt es nur noch Szene ×
+        Schleier. Die Regie-Lektion „die Kette messen" ist hier durch „die
+        Kette kürzen" beantwortet — dieselbe Antwort, die Amayadori gefunden
+        hat. */
+:root[data-theme='aoi'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: url('aoi-szene.svg');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+}
+
+/* ── DER HERZSCHLAG (im SVG, hier nur dokumentiert) ──────────────────────────
+   Fünf Uhrenfamilien, alle nur transform/opacity, alle in `aoi-szene.svg`:
+     • LICHTBAHNEN  atmen 19…43 s (opacity 1 → 0,46) und wandern seitlich
+                    27…47 s (±9/15/22 px in viewBox-Einheiten). Das ist die
+                    Hauptuhr und die einzige Bewegung, die über die ganze
+                    Fläche geht — inklusive der Lichtpfützen, die dort auf dem
+                    Sand liegen, wo die Bahnen ihn treffen.
+     • LICHTNETZ    an der Wasserhaut driftet seitlich, 21…33 s.
+     • TANG         wiegt sich um seinen Haftfuß, ±2,6°, 13…27 s. Die
+                    schnellste Uhr, weil Tang das Einzige ist, was man
+                    tatsächlich als BEWEGUNG erkennen soll.
+     • LICHTPUNKTE  steigen auf, 22…38 s, linear und ohne alternate.
+     • SCHWÄRME     ziehen, 37…61 s — die langsamsten Uhren im Bild.
+
+   DEZENT, ABER NACHWEISBAR. „Dezent" heißt in dieser Staffelung nicht
+   „unsichtbar" (das war der Befund gegen v1, dessen Bewegung mit 0,045 px/s
+   unter der Wahrnehmungsschwelle lag und damit gar nicht existierte). Es
+   heißt: die Bewegung hat keine Eile und keine Kante, die man verfolgen
+   müsste — aber sie ist da, und sie ist zwischen zwei Frames im Abstand von
+   drei Sekunden messbar (Zahlen im RESULT).
+
+   KONTRAST-VERTRAG: jede Keyframe im SVG beginnt bei `opacity: 1` und geht nur
+   RUNTER. Der gemalte Zustand ist damit der HELLSTE, und der eingefrorene
+   Zustand (`prefers-reduced-motion`, im SVG selbst gegated) ist zugleich der
+   Kontrast-Worst-Case. Die Messung trifft deshalb den echten oberen Rand und
+   nicht eine Stichprobe — ohne dass irgendjemand die Animation anhalten
+   können muss. */
+
+/* ── DER SCHLEIER (:root::after, z-index -1) ──────────────────────────────────
+   Die Tinte des Grundes (#0c1017), halbdeckend über der Lesespalte. Sie ist die
+   Kontrast-Zusage dieses Themas (Rechnung und Messwerte im Datei-Kopf) und die
+   OBERSTE Hintergrundschicht: sie wohnt auf `:root::after`, weil html in der
+   Baumreihenfolge nach body kommt und damit über beide body-Pseudoelemente
+   gemalt wird. Über ihr liegt nur noch Inhalt.
+
+   Der `:root`-gebundene Selektor hält sie außerdem aus der Vorschau-Kachel des
+   Theme-Pickers heraus, die data-theme auf ein einfaches <div> setzt.
+
+   GEOMETRIE: volle App-Spalte (2 × --aoi-column) plus 110 px Feder nach AUSSEN.
+   Nach innen zu federn würde genau den Spaltenrand ungeschützt lassen. Beide
+   Endfarben sind DIESELBE Farbe mit Alpha 0 bzw. --aoi-veil und nicht das
+   Schlüsselwort `transparent` — das ist rgba(0,0,0,0) und kann beim
+   Interpolieren einen fremden Saum erzeugen.
+
+   SCHMALE FENSTER: unter ~1140 px werden die linken Stopps negativ, die Stopps
+   clampen, und der Schleier deckt die volle Breite. Richtig so — dort gibt es
+   keinen Seitenraum, in dem ein Bild stehen könnte, und der Text braucht den
+   ruhigen Grund erst recht. Die Zeichnung wird dann zur Ahnung, statt zu
+   verschwinden. */
+:root[data-theme='aoi']::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: linear-gradient(
+    to right,
+    rgb(12 16 23 / 0) 0,
+    rgb(12 16 23 / 0) calc(50% - var(--aoi-column, 460px) - var(--aoi-feather, 300px)),
+    rgb(12 16 23 / calc(var(--aoi-veil, 0.88) * 0.06))
+      calc(50% - var(--aoi-column, 460px) - var(--aoi-feather, 300px) * 0.91),
+    rgb(12 16 23 / calc(var(--aoi-veil, 0.88) * 0.17))
+      calc(50% - var(--aoi-column, 460px) - var(--aoi-feather, 300px) * 0.65),
+    rgb(12 16 23 / calc(var(--aoi-veil, 0.88) * 0.36))
+      calc(50% - var(--aoi-column, 460px) - var(--aoi-feather, 300px) * 0.39),
+    rgb(12 16 23 / calc(var(--aoi-veil, 0.88) * 0.6))
+      calc(50% - var(--aoi-column, 460px) - var(--aoi-feather, 300px) * 0.18),
+    rgb(12 16 23 / var(--aoi-veil, 0.88)) calc(50% - var(--aoi-column, 460px)),
+    rgb(12 16 23 / var(--aoi-veil, 0.88)) calc(50% + var(--aoi-column, 460px)),
+    rgb(12 16 23 / calc(var(--aoi-veil, 0.88) * 0.6))
+      calc(50% + var(--aoi-column, 460px) + var(--aoi-feather, 300px) * 0.18),
+    rgb(12 16 23 / calc(var(--aoi-veil, 0.88) * 0.36))
+      calc(50% + var(--aoi-column, 460px) + var(--aoi-feather, 300px) * 0.39),
+    rgb(12 16 23 / calc(var(--aoi-veil, 0.88) * 0.17))
+      calc(50% + var(--aoi-column, 460px) + var(--aoi-feather, 300px) * 0.65),
+    rgb(12 16 23 / calc(var(--aoi-veil, 0.88) * 0.06))
+      calc(50% + var(--aoi-column, 460px) + var(--aoi-feather, 300px) * 0.91),
+    rgb(12 16 23 / 0) calc(50% + var(--aoi-column, 460px) + var(--aoi-feather, 300px)),
+    rgb(12 16 23 / 0) 100%
+  );
+}
+
+/* Das reduced-motion-Gate steht IM SVG (`@media(prefers-reduced-motion:reduce)
+   {*{animation:none!important}}`), weil die Uhren dort wohnen. Ein
+   Hintergrund-SVG erbt die Medienabfrage des Wirts nicht über die CSS-Kaskade,
+   wohl aber über die Umgebung des Browsers — es muss die Regel also selbst
+   tragen, und tut es.
+
+   Das Bild BLEIBT dabei vollständig sichtbar. Szene und Schleier sind Fläche,
+   keine Information; es hört nur auf, sich zu bewegen — und zwar in den
+   `from`-Frames, also in genau dem Bild, das gemessen wurde. */
+
+/* Die Kopfzeile ist die Wasserhaut über der Insel: eine Spur heller als das
+   Wasser darunter, leicht durchscheinend, abgeschlossen durch eine sehr leise
+   Lichtkante statt eines Schattens — von unten gesehen hat eine Oberfläche
+   keinen Schatten, sie hat einen Schimmer. (Muster wie Asagiri/Momiji/Nagori,
+   die ihre Nav ebenfalls nur tönen.) Text darauf: --text-1 13,1:1, --text-3
+   5,2:1, --text-4 4,7:1. */
+:root[data-theme='aoi'] .nav {
+  background: rgb(20 26 38 / 0.82);
+  box-shadow: 0 1px 0 rgb(94 160 242 / 0.16);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Der Sprachstern ist das Snell-Fenster im Kleinen: oben die helle Stelle, durch
+   die das Licht hereinkommt, unten das Wasser, das es verschluckt. LINEARER
+   Verlauf, kein radialer (Andi-Korrektur 26.07: „ich möchte es flach, ruhig") —
+   und flach heißt hier auch: keine beleuchtete Kugel, sondern eine Fläche, die
+   von oben Licht bekommt. Form, Größe und Bewegung bleiben die des Basis-Orbs;
+   das Thema ist Farbe. */
+:root[data-theme='aoi'] .vc-orb__core {
+  background: linear-gradient(168deg, #a8cdf9, #5ea0f2 46%, #1d3a5e);
+}
+
+/* Der Hof ist gestreutes Licht in trübem Wasser: innen der Akzent, außen kippt
+   es ins tiefere, kältere Blau der Szene und läuft aus. Genau die Schicht, die
+   auch die Atmosphäre und das atmende Licht tragen — der Stern gehört ins
+   selbe Wasser wie das Bild. */
+:root[data-theme='aoi'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 46%,
+    var(--accent-glow, rgb(94 160 242 / 0.38)) 0%,
+    rgb(47 91 145 / 0.2) 46%,
+    transparent 74%
+  );
+}
+
+/* Die Pegel-Ringe sind die Kräuselung, die von der Stimme ausgeht — dieselbe
+   Farbe wie die Linien an der Wasserhaut in der Szene, nur schwächer. Keine
+   neue Mechanik, nur Farbe auf dem bestehenden Ring. */
+:root[data-theme='aoi'] .vc-orb__ring {
+  border-color: rgb(94 160 242 / 0.4);
+  box-shadow: 0 0 0 5px rgb(94 160 242 / 0.1);
+}

@@ -1363,21 +1363,27 @@ def _read_memorystatus_level() -> int:
 # die ECHTE, IMMER aktive Quelle: vm_stat + sysctl vm.swapusage (Subprozesse,
 # KEINE neue Dependency — dasselbe Muster wie _read_memorystatus_level).
 #
-# Schwellen (Andis Vorgabe; reale Vorfalls-Werte als Anker: 477 MB frei /
-# 5,4 GB Swap war 'critical'):
-#   warn:     (frei + inaktiv) < 1,5 GB  ODER  Swap-belegt > 50 %.
+# Schwellen (Andi-Rekalibrierung 2026-08-19; reale Vorfalls-Werte als Anker: 477 MB
+# frei / 5,4 GB Swap war 'critical'):
+#   warn:     (frei + inaktiv) < 1,5 GB  ODER  (Swap-belegt > 85 % UND frei+inaktiv < 3 GB).
 #             (inaktive Seiten sind jederzeit reclaimbarer Datei-Cache — viel
-#             frei+inaktiv heißt "entspannt", auch wenn "frei" allein klein ist.)
+#             frei+inaktiv heißt "entspannt", auch wenn "frei" allein klein ist.
+#             Swap ALLEIN > 50 % war der Fehlalarm — Andi-Befund 2026-08-19: 16 GB
+#             Mac, 5874 MB frei+inaktiv, 60 % Swap warnte grundlos. macOS lagert
+#             Idle-Pages routinemäßig aus, das ist normal, solange reichlich
+#             frei+inaktiv bleibt — hoher Swap zählt jetzt nur noch zusammen mit
+#             knappem frei+inaktiv.)
 #   critical: frei < 500 MB  UND  der Kompressor wächst GEGENÜBER der letzten
 #             Messung. Der Wachstums-Zusatz verhindert Fehlalarm bei einem
 #             dauerhaft knappen, aber STABILEN Wert (macOS hält "frei" ohnehin
 #             oft niedrig) — critical ist ein echter DRUCK-TREND, kein Dauerzustand.
 # Jeder Mess-/Parse-Fehler (Subprozess fehlt/Timeout, unerwartetes Format) →
 # das Feld FEHLT im /health-JSON (None) statt eine erfundene Zahl zu liefern.
-_MEM_CACHE_S = 5.0                                # /health darf nicht langsamer werden
-_MEM_WARN_FREE_INACTIVE_BYTES = int(1.5 * 1024 ** 3)  # 1,5 GB
-_MEM_CRITICAL_FREE_BYTES = 500 * 1024 ** 2            # 500 MB
-_MEM_WARN_SWAP_PCT = 50.0
+_MEM_CACHE_S = 5.0                                       # /health darf nicht langsamer werden
+_MEM_WARN_FREE_INACTIVE_BYTES = int(1.5 * 1024 ** 3)     # 1,5 GB — "deutlich niedrig" allein reicht
+_MEM_CRITICAL_FREE_BYTES = 500 * 1024 ** 2               # 500 MB
+_MEM_WARN_SWAP_PCT = 85.0                                # Swap allein warnt nicht mehr (war 50)
+_MEM_WARN_SWAP_FREE_INACTIVE_BYTES = int(3 * 1024 ** 3)  # 3 GB — Companion-Schwelle für den Swap-Zweig
 
 _mem_cache: Optional[dict] = None
 _mem_cache_ts = 0.0
@@ -1452,7 +1458,11 @@ def _classify_memory(raw: dict, compressor_growing: bool) -> dict:
             f"Kritischer RAM-Druck: nur {free_mb:.0f} MB frei, Kompressor wächst weiter"
             + (f" (Swap {swap_used:.0f}/{swap_total:.0f} MB belegt)." if swap_pct is not None else ".")
         )
-    elif free_inactive_b < _MEM_WARN_FREE_INACTIVE_BYTES or (swap_pct is not None and swap_pct > _MEM_WARN_SWAP_PCT):
+    elif free_inactive_b < _MEM_WARN_FREE_INACTIVE_BYTES or (
+        swap_pct is not None
+        and swap_pct > _MEM_WARN_SWAP_PCT
+        and free_inactive_b < _MEM_WARN_SWAP_FREE_INACTIVE_BYTES
+    ):
         level = "warn"
         detail = (
             f"RAM wird knapp: {free_inactive_mb:.0f} MB frei+inaktiv"

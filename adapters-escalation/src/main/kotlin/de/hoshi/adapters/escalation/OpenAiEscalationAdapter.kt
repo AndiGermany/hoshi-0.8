@@ -94,7 +94,11 @@ class OpenAiEscalationAdapter(
     private val webSearch: Boolean = false,
     /** Tages-Cap in Cents (0,50 €/Tag, bindender Entscheid #2). */
     private val dailyCapCents: Double = DEFAULT_DAILY_CAP_CENTS,
-    private val timeoutSeconds: Long = 8,
+    // Raised 8 -> 15 (2026-08-13): measured success latencies were 5.1-8.8s on
+    // 2026-07-21, and a real call still timed out at 8016ms on 2026-08-13 —
+    // the provider's P95 sits above 8s, so 8 was cutting off calls that were
+    // about to succeed, not just genuinely stuck ones.
+    private val timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
     baseUrl: String = "https://api.openai.com",
     /**
      * Obergrenze der Completion-Tokens (inkl. Reasoning bei der gpt-5-Familie).
@@ -513,6 +517,9 @@ class OpenAiEscalationAdapter(
     companion object {
         /** 0,50 €/Tag (bindender Orchestrator-Entscheid #2), in Cents. */
         const val DEFAULT_DAILY_CAP_CENTS: Double = 50.0
+
+        /** Per-call network timeout — see the constructor param comment for why 15, not 8. */
+        const val DEFAULT_TIMEOUT_SECONDS: Long = 15
 
         /** Der wörtliche Ich-weiß-es-nicht-Ausweg des Konservativ-Prompts. */
         const val UNCLEAR_MARKER: String = "UNKLAR"

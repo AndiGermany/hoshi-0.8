@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { API_BASE } from '../api/config';
+import { startVisiblePolling } from './visiblePolling';
 
 /**
  * Ehrlichkeits-Achse:
@@ -39,10 +40,13 @@ export function useHealth(intervalMs = 5000): Health {
     };
 
     void check();
-    const id = window.setInterval(() => void check(), intervalMs);
+    // Gate statt Frequenz: sichtbar taktet es unveraendert, dunkles Display
+    // pausiert, Sichtbarwerden holt sofort frisch nach. `lastChecked` bleibt
+    // dabei ehrlich — pausiert heisst sichtbar aelter, nicht heimlich frisch.
+    const stopPolling = startVisiblePolling(() => void check(), intervalMs);
     return () => {
       aliveRef.current = false;
-      window.clearInterval(id);
+      stopPolling();
     };
   }, [intervalMs]);
 

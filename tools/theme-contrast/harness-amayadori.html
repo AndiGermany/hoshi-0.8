@@ -1,0 +1,74 @@
+<!doctype html>
+<!--
+  Mess-Gerüst des Amayadori-Pods (Theme-Revival 2026-08-18/19).
+
+  Die Lehre vom 18.08. steht in dieser Datei: ein Messfühler, der die Themen-CSS
+  OHNE die Basistoken aus index.css lädt, misst nicht das Produkt, sondern eine
+  Nachbildung — und lügt dann. Darum lädt diese Seite genau die drei Dateien, die
+  im echten Frontend hinter dem Hintergrund stehen, in der echten Reihenfolge:
+    1. ../../frontend/src/index.css           — Basistoken (Yoru-Satz, Motion-Token,
+                                                .app-Geometrie: max-width 920 px)
+    2. ../../frontend/src/styles/themes.css   — Basis-Look + Panel-Styles
+    3. ../../frontend/public/themes/amayadori.css — das zu messende Thema
+  Der relative Pfad zur Szene (url('amayadori-szene.svg')) löst sich dabei korrekt
+  gegen die Themen-CSS auf — genau wie im ausgelieferten Frontend.
+
+  Die Seite ist ABSICHTLICH leer: gemessen wird der Hintergrund-Stapel
+  (Atmosphäre + Zeichnung + Schleier + Regen + Abfluss) an der Stelle, an der
+  später Text steht. Karten sind deckend und würden das Bild nur verstecken. Das
+  .app-Gerüst steht trotzdem im DOM, damit die 920-px-Spalte dieselbe Geometrie
+  hat wie im Produkt.
+
+  Parameter (alle auf <html> gesetzt — dort deklariert amayadori.css seine
+  Regler, und nur von dort erreichen sie :root::after, ein Pseudoelement von
+  <html>; auf body gesetzt blieben sie wirkungslos):
+    ?veil=0.84    Deckkraft des Schleiers, für die Kurve in RESULT.md
+    ?dry=920px    Breite des trockenen Flecks (Gegenprobe zur min()-Rechnung)
+    ?guides=1     zeichnet die Spaltenkante ein (nur zum Hinsehen, nie zum Messen)
+-->
+<html lang="de" data-theme="amayadori">
+  <head>
+    <meta charset="utf-8" />
+    <title>Amayadori — Kontrast-Messgerüst</title>
+    <link rel="stylesheet" href="../../frontend/src/index.css" />
+    <link rel="stylesheet" href="../../frontend/src/styles/themes.css" />
+    <link rel="stylesheet" href="../../frontend/public/themes/amayadori.css" />
+    <style>
+      .app {
+        height: 100%;
+      }
+      html[data-guides='1'] .app {
+        outline: 1px dashed #ff00ff;
+      }
+      /* ?worst=1 — der SCHLIMMSTE reale Frame, nicht der zufällige.
+         Regen und Abfluss atmen zwischen 0,72/0,78 und 1,0. Ein Screenshot bei
+         ~2 s virtueller Zeit erwischt das `from`-Ende, also die DÜNNSTE Wand —
+         gemessen werden muss die dichteste. Genau diesen Zustand zeigt das
+         Produkt ohnehin jedem, der `prefers-reduced-motion` gesetzt hat (s. das
+         Gate in amayadori.css): volle Deckung, keine Bewegung. */
+      html[data-worst='1'] body::before,
+      html[data-worst='1']::after {
+        animation: none !important;
+        opacity: 1 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="app"></div></div>
+    <script>
+      const q = new URLSearchParams(location.search);
+      if (q.get('guides') === '1') {
+        document.documentElement.dataset.guides = '1';
+      }
+      if (q.get('worst') === '1') {
+        document.documentElement.dataset.worst = '1';
+      }
+      for (const key of ['veil', 'dry', 'feather']) {
+        const v = q.get(key);
+        if (v !== null) {
+          document.documentElement.style.setProperty('--amayadori-' + key, v);
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,537 @@
+/* ════════════ NATSU NO HI (夏の日) — der Sommertag, mittags, im Gras ════════════
+   Zwölf Uhr, kein Wölkchen außer dem einen. Man steht am Rand einer Wiese, im
+   Schatten eines großen Baums, in dem die Zikaden so laut sind, dass man sie
+   nach einer Weile nicht mehr hört. Vorn wogt das Gras, hinten flirrt der
+   Horizont, rechts steht ein Wolkenturm (入道雲), und über allem hängt eine
+   kleine, harte Sonne. Es ist zu heiß, um etwas zu tun. Genau das ist das Bild.
+
+   ABGRENZUNG (die Sommerthemen sind Geschwister, keine Zwillinge): Natsumatsuri
+   ist das Fest bei NACHT — Laternen, Zinnober, Gold auf Abendblau. Natsu no Hi
+   ist derselbe Sommer bei TAG, zwölf Stunden vorher: hell statt dunkel, Wiese
+   statt Gasse, ein einziger kühler Akzent statt eines glühenden. Wo dort das
+   Licht aus Laternen kommt, kommt es hier von oben und von überall.
+
+   ── DIE RADIKALE ENTSCHEIDUNG: DIE SZENE BEWEGT SICH IN ZWEI TIEFEN ────────
+   Asagiri formuliert die Hausregel so: „eine Landschaft driftet nicht, das
+   Wetter tut es" — die Zeichnung steht, der Nebel zieht. Für Nebel stimmt das.
+   Für eine Sommerwiese ist es falsch: eine unbewegte Wiese liest als Foto, eine
+   wogende als Tag.
+   Die erste Fassung hat daraus die falsche Konsequenz gezogen und die GANZE
+   Zeichnung als einen Block geschert. Dann bewegt sich der Baumstamm wie das
+   Gras, also darf sich nichts weit bewegen, also sieht man nichts (0,6° über
+   79 s — in der Frame-Serie nicht nachweisbar).
+   Jetzt hängt dieselbe Zeichnung an ZWEI Ebenen, komplementär am Horizont
+   maskiert, und jede schert vom UNTEREN Bildrand aus: hinten ±1,1° über 19 s
+   (Wipfel und Wolkenturm wandern, der Stammfuß nicht — so biegt sich ein
+   Baum), vorn ±3,2° über 13 s (die Grasspitzen legen ~43 px zurück). Der
+   Versatz wächst nach oben, also ist er am Boden null und in der Höhe groß.
+   Gemessen zwischen Sekunde 1 und Sekunde 10: 32 % der Wiesenpixel ändern
+   sich, am unverschleierten Bildrand 45 %, in der Krone 14 %.
+
+   Der zweite radikale Zug ist die Sonne. Asagiris Scheibe ist verschleiert und
+   sanft; diese hier ist klein, hoch und golden — der einzige Punkt im ganzen
+   Produkt, der wirklich blendet. Sie sitzt bei 88 % Breite, also im Seitenraum
+   neben der Lesespalte, und weicht auf schmalen Fenstern ehrlich zurück wie
+   jedes andere Motiv. Sie stellt nichts dar: eine Sonne ist eine Sonne.
+
+   Und ein dritter, leiser: dieses Theme ist WARM, wo die hellen Geschwister
+   kühl sind. Die Seele des alten Natsu no Hi war warmes Washi (#f4f1df) mit
+   Ramune-Blau (#126f83) — beides ist erhalten, nur weitergedacht. Der Akzent
+   liegt heute bei #0a5f72, also dasselbe Ramune, nur so weit gedunkelt, dass
+   es auch auf der grünen Füllfläche trägt.
+
+   ── KONTRASTE (WCAG 2.1, sRGB, selbst gemessen — nicht geschätzt) ───────────
+   Gemessen mit tools/theme-contrast-natsunohi/measure.py: headless Chrome
+   rendert die Farbe, das Harness liest den echten Pixel zurück. Angegeben ist
+   jeweils der SCHLECHTESTE der fünf realen Untergründe (--bg-base /
+   --bg-surface / --bg-elevated / --bg-subtle / --bg-user):
+     text-1 11,79:1 · text-2 8,97:1 · text-3 7,61:1 · text-4 6,35:1
+     accent 5,67:1 · success 5,00:1 · warn 5,11:1 · error 5,18:1
+   Der schlechteste Grund ist durchweg --bg-subtle: die grüne Füllfläche ist in
+   diesem Theme der Prüfstein, nicht die Papierfläche.
+   Zusätzlich geprüft, weil helle Themen genau hier kippen:
+     • Farbe auf ihrer EIGENEN *-soft-Fläche (16 % über --bg-surface, so bauen
+       die Pills/Badges in index.css): accent 5,43 · success 4,80 · warn 4,91 ·
+       error 4,91 — alle ≥ 4,5.
+     • --accent-ink auf --accent (Text im gefüllten CTA): 6,94:1.
+   Alle Werte liegen INNERHALB sRGB: kein Kanal wird beim Rendern auf 0 oder 255
+   geklippt (im Harness mitgeprüft). Zwei Token mussten dafür nachgeben und das
+   ist hier notiert, damit niemand sie „zurückverbessert": --accent lag bei
+   L 0,435 / C 0,086 auf #005c70, also mit einem Rotkanal von exakt 0 — das ist
+   eine stille Gamut-Abbildung, kein Ton. --bg-elevated lag bei C 0,012 auf
+   R 254. Beide sind jetzt eine Spur zurückgenommen und bleiben dieselbe Farbe.
+
+   ── DER SCHLEIER (der eigentliche Vertrag) ──────────────────────────────────
+   Über der Lesespalte liegt ein Schleier mit 0,78 Deckung. Diese Zahl ist
+   ERMESSEN, nicht gewählt: tools/theme-contrast-natsunohi/veil_ladder.py
+   rendert die leere Seite bei vier Fensterbreiten, liest jeden Pixel innerhalb
+   der 920-px-Spalte zurück und rechnet den schlechtesten gegen --text-4.
+     0,72 → 4,25 · 0,74 → 4,48 · 0,76 → 4,62 · 0,78 → 4,81 · 0,80 → 5,04
+   Alles unter 0,76 reißt. Gewählt ist 0,78 und nicht 0,76: die zwei
+   Prozentpunkte kosten am Bild nichts Sichtbares und kaufen 0,31 statt 0,12
+   Reserve über der Grenze — schon das Dithering der Verläufe bewegt den Wert
+   um Hundertstel.
+   Der BINDENDE PIXEL ist die Unterseite der Baumkrone an der linken
+   Spaltenkante (viewBox ≈ 290/500; das Skript nennt seine Bildschirmkoordinate
+   mit). Wer den Baum kleiner oder heller zeichnet, darf den Schleier dünner
+   machen — und wer .app verbreitert, muss neu messen.
+   Mit allen Ebenen und bei vollem Ausschlag beider Scherungen (±1,1° / ±3,2°,
+   je beide Richtungen, drei Fensterbreiten) bleibt der schlechteste Wert
+   4,81:1 für --text-4 und 8,94:1 für --text-1.
+   Im Seitenraum läuft die Zeichnung mit voller Kraft; dort steht nie eine
+   Glyphe, .app ist 920 px breit und zentriert.
+
+   WAS DER SCHLEIER NICHT IST: eine Entsättigung des Bildes. Er staucht den
+   KONTRAST der Zeichnung auf 22 %, er nimmt ihr keine Farbe. Ein Bild, das
+   unter ihm verschwindet, ist zu flach gezeichnet — nicht zu stark
+   verschleiert. Der ganze Werte-Vertrag der Zeichnung hängt daran und steht im
+   Kopf von tools/theme-natsunohi-szene/build_szene.py.
+
+   ── EIGENSTÄNDIG LADBAR ────────────────────────────────────────────────────
+   Dieser Block setzt JEDEN Token, den die Szenen-Themen setzen, plus die
+   body-Hintergrund-Regel — die Datei funktioniert also auch dann, wenn sie zur
+   Laufzeit nachgeladen wird und nicht neben themes.css im Bundle steht.
+   Nachgewiesen, nicht behauptet: alle Token wurden ohne index.css gerendert und
+   zurückgelesen; keiner fällt auf seinen Fallback.
+   ZWEI SELEKTOREN je Token-Block (`:root[data-theme='natsunohi']` UND
+   `[data-theme='natsunohi']`), exakt wie die übrigen Themen: der zweite trägt
+   die Token auch an ein verschachteltes Element, das `data-theme` selbst setzt
+   — genau das macht die echte Farbvorschau im Theme-Picker (.settings__swatch).
+   Auch das ist gemessen: beide Wege liefern identische Farben.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='natsunohi'],
+[data-theme='natsunohi'] {
+  /* ── Der Mittagshimmel als Flächen-Stapel (erste Schicht = oberste) ─────────
+     1. DIE SONNE — hoch, klein, hart. Kein verschleierter Teller wie in
+        Asagiri: um zwölf steht sie fast im Zenit, ist winzig und tut weh.
+        Sie ist GOLDEN, nicht weiß — das ist keine Stilfrage, sondern der
+        erste Befund aus dem eigenen Render: eine weiße Sonne auf warmem Washi
+        ist schlicht unsichtbar, sie braucht einen Farbring, um zu leuchten.
+        Position 90 % / 7 %: im Seitenraum neben der Lesespalte (bei 79 % lag
+        sie unter dem Schleier und war weg). Landschaft, keine Anzeige.
+     2. HITZE-BLEICHE — das Band um den Horizont, in dem die Farbe stirbt. Bei
+        großer Hitze verliert die Ferne zuerst die Sättigung, dann die Kante.
+     3. WIESEN-RÜCKWURF — Grün von UNTEN. Eine Wiese im Mittag wirft so viel
+        Licht zurück, dass die Luft darüber grün wird; das ist der Grund, warum
+        --bg-subtle und die Du-Blase in diesem Theme grün sind statt neutral.
+     4. ZENIT — die einzige Kühle im ganzen Bild, ein schmaler blauer Deckel
+        ganz oben. Er DARF dunkel sein: er liegt außerhalb der Lesespalte
+        vollflächig frei, innerhalb unter dem gemessenen Schleier. */
+  --theme-atmosphere:
+    radial-gradient(
+      circle 11vmin at 88% 8%,
+      oklch(1 0.045 100 / 0.98),
+      oklch(0.955 0.155 96 / 0.6) 21%,
+      oklch(0.9 0.16 92 / 0.16) 48%,
+      transparent 74%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 44%,
+      oklch(0.99 0.055 94 / 0.14) 55%,
+      oklch(0.975 0.055 98 / 0.05) 62%,
+      transparent 70%
+    ),
+    radial-gradient(ellipse 130% 44% at 50% 110%, oklch(0.8 0.145 133 / 0.55), transparent 68%),
+    linear-gradient(
+      180deg,
+      oklch(0.715 0.135 236) 0%,
+      oklch(0.79 0.118 231) 17%,
+      oklch(0.875 0.078 223) 37%,
+      oklch(0.95 0.04 205 / 0.55) 51%,
+      transparent 62%
+    ),
+    var(--bg-base);
+
+  /* ── Flächen: Washi in der Sonne ───────────────────────────────────────────
+     Dieselbe umgekehrte Treppe wie Asagiri (gehoben = HELLER), aber warm statt
+     kühl: die Seele des alten Themes war warmes Papier (#f4f1df), und das
+     bleibt. Neu ist, dass die Füllfläche nicht neutral abkippt, sondern ins
+     GRÜNE — sie ist das Licht, das die Wiese zurückwirft (s. Atmosphäre 3).
+     --bg-subtle ist damit zugleich der harte Kontrast-Prüfstein. */
+  --bg-base: oklch(0.945 0.034 96); /* sonnengebleichtes Washi */
+  --bg-surface: oklch(0.985 0.017 96); /* Papier im Schatten der Karte */
+  --bg-elevated: oklch(0.99 0.008 96);
+  --bg-subtle: oklch(0.915 0.03 130); /* Hover-/Füllfläche = Wiesenlicht */
+  --bg-hairline: oklch(0.815 0.03 122); /* trennt, ohne zu zeichnen */
+  --bg-hairline-dashed: oklch(0.755 0.028 118); /* für „ehrlich leer" */
+
+  /* ── Schrift: der Schatten, nicht die Tinte ────────────────────────────────
+     Aus der Seele übernommen (#183344): ein tiefes, blaustichiges Indigo. Das
+     ist kein Grafiker-Blau, sondern Physik — der Schatten eines wolkenlosen
+     Mittags ist blau, weil ihn nur der Himmel beleuchtet. Reines Schwarz gäbe
+     es in diesem Bild nirgends. */
+  --text-1: oklch(0.268 0.05 238);
+  --text-2: oklch(0.345 0.05 234);
+  --text-3: oklch(0.385 0.048 231);
+  --text-4: oklch(0.425 0.047 229);
+  /* Die Leiter liegt tiefer als in der ersten Fassung (dort 0,285…0,495), und
+     das ist eine BILD-Entscheidung, keine Kontrast-Kosmetik. Rechnung: der
+     Schleier ueber der Lesespalte muss so dicht sein, dass die leiseste
+     Schrift auf dem dunkelsten Bildpunkt darunter noch 4,5:1 hat. Je tiefer
+     --text-4 liegt, desto duenner darf der Schleier sein — und je duenner der
+     Schleier, desto mehr Zeichnung ueberlebt ihn. 0,055 Helligkeit weniger bei
+     der leisesten Schrift kaufen 8 Prozentpunkte Schleier, also zwei Drittel
+     mehr sichtbares Bild. Auf einem so hellen Grund kostet das nichts: --text-4
+     bleibt eine ruhige Nebenschrift, sie wird nur ein wenig sicherer. */
+
+  /* ── Akzent: Ramune (ラムネ) ───────────────────────────────────────────────
+     Das kühle Blau der Murmel-Limonade — die Seele des alten Themes (#126f83)
+     und die einzige Farbe, die an einem solchen Tag Erleichterung verspricht.
+     Sie trägt Stimme, CTA, Auswahl, Fokus; sonst nichts. Bewusst KÜHL, während
+     alles andere im Bild warm ist: was man anklicken kann, ist in diesem Theme
+     immer das Kalte. --accent-ink ist das Washi, das im gefüllten Knopf darauf
+     sitzt. */
+  --accent: oklch(0.45 0.078 218);
+  --accent-soft: oklch(0.455 0.082 218 / 0.16);
+  --accent-faint: oklch(0.455 0.082 218 / 0.08);
+  --accent-glow: oklch(0.455 0.082 218 / 0.28);
+  --accent-ink: oklch(0.984 0.016 96);
+
+  /* ── Status: tief und trocken ──────────────────────────────────────────────
+     Auf hellem Grund braucht Semantik TIEFE statt Leuchtkraft (Asagiris Lehre).
+     Alle vier liegen bei L≈0,49–0,51 und bleiben auch auf ihrer eigenen
+     *-soft-Fläche über 4,5:1. --error ist das Zinnober der Furin/Uchiwa aus der
+     Seele (#df7862), ins Lesbare gedunkelt. */
+  --success: oklch(0.475 0.11 148); /* #276c36 */
+  --success-soft: oklch(0.475 0.11 148 / 0.16);
+  --warn: oklch(0.485 0.098 68); /* #835313 */
+  --warn-soft: oklch(0.485 0.098 68 / 0.16);
+  --error: oklch(0.495 0.145 27); /* #a43731 — Zinnober der Furin, gedunkelt */
+  --error-soft: oklch(0.495 0.145 27 / 0.16);
+
+  /* Die Du-Blase sitzt IM GRAS: leicht grün statt neutral (die Seele hatte
+     #e2ece4 an genau dieser Stelle). Kein Akzent-Fill (Projekt-Konvention seit
+     Yoru) — das Blau bleibt der Interaktion vorbehalten. */
+  --bg-user: oklch(0.925 0.028 145);
+
+  color-scheme: light;
+}
+
+/* Eigenständigkeit: die Atmosphäre auf den body legen. Deckungsgleich mit der
+   generischen Regel in styles/themes.css — steht hier, damit die Datei allein
+   nachgeladen vollständig ist. */
+:root[data-theme='natsunohi'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ════════════ DIE BÜHNE: VIER EBENEN ═══════════════════════════════════════
+   Die erste Fassung hatte EINE Szenen-Ebene mit EINEM Schleier darauf, und das
+   war der Konstruktionsfehler hinter Andis Urteil: wenn Zeichnung und Schleier
+   auf demselben Element liegen, muss die Zeichnung so hell sein, dass sie den
+   Schleier verträgt — und dann ist sie milchig. Und wenn sich die ganze
+   Zeichnung als ein Block bewegt, bewegt sich der Baumstamm mit dem Gras, also
+   darf sich nichts weit bewegen, also sieht man nichts.
+
+   Die zweite Fassung trennt beides. Von hinten nach vorn:
+
+     z -4  body::after     SZENE HINTEN  — Himmelskörper, Hügel, Baum, ferne
+                           Wiese. Schert sanft (±1,1°, 19 s) vom UNTEREN
+                           Bildrand aus: der Wipfel wandert ~15 px, der
+                           Stammfuß gar nicht. So biegt sich ein Baum.
+     z -3  :root::before   SZENE VORN    — hohe Halme, nahe Sonnenblumen.
+                           DIESELBE SVG-Datei, komplementär maskiert, aber
+                           dreimal so stark geschert (±3,2°, 13 s). Das ist
+                           der Herzschlag: an den Grasspitzen sind das ~38 px
+                           Weg zwischen zwei Frames der Regie-Serie.
+     z -2  :root::after    DER SCHLEIER  — allein, statisch, exakt am Viewport
+                           ausgerichtet. Er trägt die Lesbarkeit; er ist NICHT
+                           dafür da, das Bild zu entsättigen.
+     z -1  body::before    DIE LUFT      — Flirren über dem Horizont,
+                           Zikadenlicht, und die quellende Kante des
+                           Wolkenturms. Nur aufhellend, also kontrastneutral.
+
+   WARUM DIE TEILUNG FUNKTIONIERT: beide Szenen-Ebenen laden dieselbe URL
+   (ein Request, ein Dekodiervorgang) und bekommen komplementäre
+   `mask-image`-Verläufe am Horizont (Viewport 65,5 % … 68 %). In diesem
+   schmalen Band liegt beides teilweise übereinander; da dort nur Grastextur steht
+   und der Versatz der beiden Scherungen dort erst ~11 px beträgt, liest das
+   als Dunst, nicht als Doppelbild. Der Generator hält deshalb jedes
+   ERKENNBARE Objekt (Sonnenblumenkopf, Stamm) aus diesem Band heraus — das
+   ist im Kopf von tools/theme-natsunohi-szene/build_szene.py als
+   ZWEI-EBENEN-VERTRAG festgeschrieben.
+
+   REGISTER: beide Ebenen brauchen dieselbe `cover`-Rechnung, sonst laufen die
+   Bilder auseinander. Deshalb haben BEIDE `inset: 0 -64px` — auch die
+   unbewegte. Die Überbreite ist für die Scherung da (sie darf an den Rändern
+   keinen Spalt aufreißen); dass die hintere sie nicht braucht, ist egal, dass
+   sie identisch rechnen, ist es nicht.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── z -4: DIE SZENE HINTEN ─────────────────────────────────────────────────
+   Maß-Vertrag: `cover` + `center bottom`, viewBox 1600×1000. Bei 1366×1024
+   ist die Skala 1,024 (höhen-getrieben), sichtbar ist viewBox-x 133…1467.
+   Oberhalb des Horizonts ist die Zeichnung transparent — dort steht
+   --theme-atmosphere. Beschnitten wird also nur Himmel, den niemand gemalt
+   hat.
+
+   Die Scherung sitzt auf `transform-origin: 50% 100%`: der Versatz wächst
+   nach OBEN. Das ist die Physik eines verwurzelten Baums, und zugleich der
+   Grund, warum die fernen Hügel (dicht über dem Ursprung) fast stillstehen,
+   während die Krone und der Wolkenturm sichtbar wandern. */
+:root[data-theme='natsunohi'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0 -64px;
+  z-index: -4;
+  pointer-events: none;
+  background-image: url('natsunohi-szene.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 65.5%, transparent 68%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 65.5%, transparent 68%);
+  transform-origin: 50% 100%;
+  transform: skewX(-1.1deg);
+  animation: natsunohi-wipfel 19s ease-in-out infinite alternate;
+}
+@keyframes natsunohi-wipfel {
+  from {
+    transform: skewX(-1.1deg);
+  }
+  to {
+    transform: skewX(1.1deg);
+  }
+}
+
+/* ── z -3: DIE SZENE VORN — DER HERZSCHLAG (草いきれ) ────────────────────────
+   Dieselbe Datei, die untere Hälfte, dreimal so stark bewegt.
+
+   Die Zahl ist gerechnet, nicht gefühlt: bei 1024 px Fensterhöhe steht die
+   Grasnarbe ~389 px über dem Ursprung, also legt sie bei ±3,2° rund 43 px
+   zurück, die vordersten Halmspitzen bei y≈900 (viewBox) etwa 25 px. Die
+   Regie verlangt, dass man die Bewegung in Frames bei 1/4/7/10 s mit bloßem
+   Auge sieht; bei 13 s Halbperiode (ease-in-out, alternate) liegen zwischen
+   Sekunde 1 und Sekunde 10 rund 87 % des vollen Wegs. Das sieht man.
+
+   13 s und 19 s sind teilerfremd, ebenso zu den 23/31/97 s der Luft: die fünf
+   Uhren dieses Themes fallen nie in den Takt.
+
+   Warum die Bewegung hier oben und nicht im SVG: ein als background-image
+   geladenes SVG ist ein eigenes Dokument, und `prefers-reduced-motion` des
+   Einbetters kommt dort nicht zuverlässig an (im Haus dokumentiert im Kopf
+   von natsumatsuri-hanabi.svg). Hier greift der globale Brems-Schalter aus
+   index.css garantiert — und das Gate am Ende dieses Blocks noch einmal
+   ausdrücklich. Die SVG-Datei enthält keinen einzigen Animations-Knoten. */
+:root[data-theme='natsunohi']::before {
+  content: '';
+  position: fixed;
+  inset: 0 -64px;
+  z-index: -3;
+  pointer-events: none;
+  background-image: url('natsunohi-szene.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 65.5%, #000 68%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 65.5%, #000 68%, #000 100%);
+  transform-origin: 50% 100%;
+  transform: skewX(3.2deg);
+  animation: natsunohi-wogen 13s ease-in-out infinite alternate;
+}
+@keyframes natsunohi-wogen {
+  from {
+    transform: skewX(3.2deg);
+  }
+  to {
+    transform: skewX(-3.2deg);
+  }
+}
+
+/* ── z -2: DER SCHLEIER (der eigentliche Vertrag) ───────────────────────────
+   Er deckt die 920-px-Lesespalte und federt 130 px nach AUSSEN aus, nie nach
+   innen — nach innen gefedert bliebe die Spaltenkante ungeschützt. Der Saum
+   ist bewusst kurz: bei 1366 px Fenster stehen der Zeichnung neben der Spalte
+   nur 223 px je Seite zur Verfügung, ein breiterer Saum fräße davon fast
+   alles und es bliebe nirgends eine unverschleierte Zone. 944 px
+   breit statt 920: `50% - 472px` gibt der Spalte 12 px Luft je Seite, damit
+   die beiden Scherungen darunter nichts an der Kante freilegen (sie bewegen
+   die Zeichnung, nicht den Schleier — der steht).
+
+   Unter ~1064 px Fensterbreite fällt der calc auf 0, der Schleier deckt
+   alles, und die Zeichnung wird zum Gespenst statt zu verschwinden; der
+   Textvertrag bleibt unverändert.
+
+   SEINE FARBE IST LICHT, NICHT MILCH — das ist der letzte und wichtigste
+   Befund dieser Runde. Die erste Fassung legte fast weißes --bg-surface über
+   ein grünes Bild; Weiß über Grün ergibt Grau, und Grau ist genau das Wort
+   „ausgewaschen". Ukiyos Schleier funktioniert, weil sein Creme zur warmen
+   Tonlage seiner Welle PASST. Also bekommt dieser hier die Farbe dessen, was
+   unter ihm liegt: oben, über dem Himmel, warmes Sonnenlicht (C 0,032); zum
+   Horizont hin kippt er ins Grüne; über der Wiese ist er Wiesenlicht
+   (C 0,066) — das Licht, das eine Sommerwiese im Mittag nach oben wirft.
+   Dieselbe Deckung, derselbe gemessene Kontrast, aber das Bild bleibt in
+   seiner Farbe stehen, statt in Grau zu kippen.
+
+   Technisch stehen deshalb zwei Achsen auf diesem Element: der senkrechte
+   FARBVERLAUF ist das background-image, die waagerechte DECKUNG ist die
+   Maske. Ein einziger Verlauf könnte beides nicht.
+
+   Die Karten liegen mit L 0,985 heller und neutraler als er und heben sich
+   dadurch vom Grund ab, ohne eine Kante zu brauchen.
+
+   SEIN ALPHA ist ermessen, nicht gewählt — Messreihe im Kopf dieser Datei.
+   Der bindende Pixel ist die Baumkrone an der linken Spaltenkante: das
+   dunkelste Grün des Bildes trifft dort auf die leiseste Schrift. */
+:root[data-theme='natsunohi']::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  --veil: max(0px, 50% - 472px);
+  /* Die FARBE steht senkrecht, die DECKUNG waagerecht. Zwei Achsen, zwei
+     Mittel: der Verlauf malt, die Maske dosiert. */
+  background-image: linear-gradient(
+    180deg,
+    oklch(0.985 0.032 96 / 0.78) 0%,
+    oklch(0.985 0.032 96 / 0.78) 36%,
+    oklch(0.978 0.05 108 / 0.78) 56%,
+    oklch(0.966 0.066 122 / 0.78) 76%,
+    oklch(0.966 0.066 122 / 0.78) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--veil) - 130px),
+    #000 var(--veil),
+    #000 calc(100% - var(--veil)),
+    transparent calc(100% - var(--veil) + 130px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--veil) - 130px),
+    #000 var(--veil),
+    #000 calc(100% - var(--veil)),
+    transparent calc(100% - var(--veil) + 130px),
+    transparent 100%
+  );
+}
+
+/* ── z -1: DIE LUFT ─────────────────────────────────────────────────────────
+   Drei Phänomene auf einer Ebene, weil sie eine Eigenschaft teilen: sie sind
+   alle nahezu weiß auf hellem Grund und können den Kontrast gegen die dunkle
+   Schrift deshalb nur VERBESSERN, nie verschlechtern. Der im Kopf
+   dokumentierte Boden ist das Bild OHNE diese Ebene — kein Animationsframe
+   kann darunter geraten.
+
+   1. FLIRREN (陽炎): drei sehr breite, sehr flache Bänder im Horizontstreifen,
+      die vertikal gedehnt werden. Was man an einem solchen Tag wirklich
+      sieht, ist nicht die Hitze, sondern dass der Horizont wackelt.
+   2. ZIKADENLICHT (蝉時雨): zwei große, extrem weiche warme Lichtseen, die
+      an- und abschwellen — das Auf und Ab des Chors, der das einzige am
+      japanischen Sommertag ist, was man nicht sehen kann. ES STELLT NICHTS
+      DAR: zwei Seen sind zwei Seen, keine Sitzungen, keine Pegel.
+   3. DIE QUELLENDE WOLKENKANTE: drei weiche weiße Ballen genau dort, wo im
+      SVG der Wolkenturm steht (viewBox-x ≈ 1330 → Viewport ≈ 87 %). Der Turm
+      selbst ist gezeichnet und steht still; diese drei Ballen ziehen mit 23 s
+      über ihn hinweg und verändern dabei seine Silhouette. So zieht eine
+      Wolke, ohne dass der Baum daneben mitzieht — das ist der Grund, warum
+      sie hier oben wohnen und nicht im SVG.
+
+   `inset: -12% -18%` gibt der Drift Raum: die Ebene ist größer als das
+   Fenster, also kann keine Kante hereinwandern. */
+:root[data-theme='natsunohi'] body::before {
+  content: '';
+  position: fixed;
+  inset: -12% -18%;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 20% 11% at 87% 30%, oklch(1 0.012 100 / 0.62), transparent 68%),
+    radial-gradient(ellipse 14% 8% at 79% 36%, oklch(1 0.014 100 / 0.5), transparent 70%),
+    radial-gradient(ellipse 11% 6.5% at 94% 24%, oklch(1 0.01 100 / 0.44), transparent 72%),
+    radial-gradient(ellipse 50% 1.4% at 30% 60%, oklch(1 0.03 95 / 0.12), transparent 80%),
+    radial-gradient(ellipse 44% 1.1% at 66% 63.5%, oklch(1 0.025 95 / 0.1), transparent 80%),
+    radial-gradient(ellipse 58% 1.7% at 48% 65%, oklch(1 0.035 95 / 0.08), transparent 82%),
+    radial-gradient(ellipse 28% 20% at 12% 42%, oklch(1 0.05 96 / 0.06), transparent 76%),
+    radial-gradient(ellipse 32% 14% at 56% 88%, oklch(1 0.04 100 / 0.05), transparent 78%);
+  /* Der gezeichnete Grundzustand steht AUF dem Element, nicht nur im
+     `from`-Keyframe: bei abgeschalteter Animation gilt sonst `transform: none`
+     und die Ebene stünde in einer Lage, die so nie gemessen wurde. */
+  transform: translate3d(-1.1%, 0.4%, 0) scaleY(1);
+  animation:
+    natsunohi-quellen 23s ease-in-out infinite alternate,
+    natsunohi-glast 97s ease-in-out infinite alternate;
+}
+/* Das Quellen der Wolke UND das Kochen der Luft in einer Bewegung: 2,2 %
+   nach rechts und 5 % vertikale Dehnung. `from` ist der ungedehnte,
+   gezeichnete Zustand — abgeschaltet steht exakt das gemessene Bild. */
+@keyframes natsunohi-quellen {
+  from {
+    transform: translate3d(-1.1%, 0.4%, 0) scaleY(1);
+  }
+  to {
+    transform: translate3d(1.1%, -0.4%, 0) scaleY(1.05);
+  }
+}
+/* `from` = volle Deckung, aus demselben Grund. */
+@keyframes natsunohi-glast {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.7;
+  }
+}
+
+/* Eigenes reduced-motion-Gate für alle vier Ebenen. Die globale Regel in
+   index.css stellt die Bewegung ohnehin still, aber diese Datei muss auch
+   allein nachgeladen korrekt sein. Sichtbar BLEIBT alles (es ist Fläche,
+   keine Information); still wird nur die Bewegung, und zwar auf dem
+   `from`-Frame jeder Animation — also genau im gemessenen Bild. Das Gate
+   steht NACH den Regeln, nicht davor: gleiche Spezifität, hier entscheidet
+   allein die Reihenfolge. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='natsunohi'] body::before,
+  :root[data-theme='natsunohi'] body::after,
+  :root[data-theme='natsunohi']::before {
+    animation: none;
+  }
+}
+
+/* Die Kopfzeile ist Washi im Gegenlicht: fast weiß, leicht durchscheinend, mit
+   einer grünen Wiesenkante statt eines Schattens (dasselbe Mittel wie Asagiri
+   und das alte Natsu no Hi, die ihre Nav ebenfalls nur tönen). */
+:root[data-theme='natsunohi'] .nav {
+  background: oklch(0.99 0.016 96 / 0.86);
+  box-shadow: 0 1px 0 oklch(0.815 0.03 122 / 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Der Sprachstern ist die Ramune-Murmel in der Flasche: Mintlicht oben, das
+   kühle Blau in der Mitte, unten der Zinnoberrand des Furin. Das ist die
+   Farbfolge des alten Themes (#e9f7ee → #65bed0 → accent → #df7862), nur in
+   OKLCH nachgezogen — die Seele bleibt wörtlich erhalten. Linear, nicht radial:
+   Andis Flach-Korrektur vom 26.07. gilt weiter. */
+:root[data-theme='natsunohi'] .vc-orb__core {
+  background: linear-gradient(
+    145deg,
+    oklch(0.965 0.04 152),
+    oklch(0.78 0.105 214) 44%,
+    var(--accent) 72%,
+    oklch(0.665 0.155 34)
+  );
+}
+
+/* Der Bloom kippt von Ramune (innen) in Mittagsgold (außen) — kühles Licht, das
+   sich in sehr heißer Luft verliert. */
+:root[data-theme='natsunohi'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    oklch(0.9 0.085 96 / 0.2) 44%,
+    transparent 74%
+  );
+}
+
+/* Die Pegel-Ringe als Wasserringe: blasses Ramune statt Akzent-Vollton, damit
+   die Stimme im hellen Bild nicht zum Ausrufezeichen wird. */
+:root[data-theme='natsunohi'] .vc-orb__ring {
+  border-color: oklch(0.72 0.06 210 / 0.5);
+  box-shadow: 0 0 0 5px oklch(0.78 0.05 202 / 0.13);
+}

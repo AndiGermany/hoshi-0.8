@@ -32,10 +32,11 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * Kern-Garantien:
  *  1. Ein expliziter Raum schreibt → merkt die Area; ein folgender roomless Befehl
- *     desselben Sprechers fällt darauf zurück (überschreibt die Classifier-Default-Area).
- *  2. Anderer Sprecher / keine Historie ⇒ KEIN Fallback ⇒ Brain (kein Raten).
+ *     desselben Sprechers fällt darauf zurück (ohne Satelliten-Raum, s. F2-Kette).
+ *  2. Anderer Sprecher / keine Historie ⇒ KEIN Fallback ⇒ Raum-Rückfrage (kein Raten, F1-4).
  *  3. Genannter Raum gewinnt IMMER über die gemerkte Area.
- *  4. speakerId-los ⇒ byte-identisch (Classifier-Default-Area, kein Store, kein Brain).
+ *  4. speakerId-los + kontextlos ⇒ Raum-Rückfrage (F2/S2: der „wohnzimmer"-Hardcode
+ *     ist ersatzlos gefallen — s. TurnOrchestratorOriginAreaTest für die volle Kette).
  */
 class TurnOrchestratorAnaphoraTest {
 
@@ -157,9 +158,12 @@ class TurnOrchestratorAnaphoraTest {
         assertTrue(events.last() is ChatEvent.Done)
     }
 
-    // ── (2) Anderer Sprecher OHNE Historie ⇒ KEIN Fallback ⇒ Brain ────────────
+    // ── (2) Anderer Sprecher OHNE Historie ⇒ KEIN Fallback ⇒ Raum-Rückfrage ───
+    // (F1-4, 2026-08-13: this case used to fall through to the brain — prose
+    //  about switching, worst case a fake completion claim. Now it asks and
+    //  parks; see TurnOrchestratorAreaClarifyPendingTest for the full cycle.)
     @Test
-    fun `anderer Sprecher ohne Historie faellt durch zum Brain`() {
+    fun `anderer Sprecher ohne Historie bekommt die Raum-Rueckfrage statt Brain`() {
         val brain = CountingBrain()
         val tool = RecordingTool()
         val store = InMemoryLastAreaStore()
@@ -169,17 +173,19 @@ class TurnOrchestratorAnaphoraTest {
         run(o, "mach das Licht in der Küche an", alice)
         tool.calls.clear()
 
-        // … bob hat KEINE Historie ⇒ roomless wird NICHT geraten ⇒ Brain.
+        // … bob hat KEINE Historie ⇒ roomless wird NICHT geraten ⇒ Rückfrage.
         val events = run(o, "schalt das Licht aus", bob)
 
         assertTrue(tool.calls.isEmpty(), "bob ohne Historie ⇒ keine Tat (kein Raten über Sprecher)")
-        assertEquals(1, brain.callCount.get(), "roomless ohne Historie ⇒ genau 1 Brain-Call")
+        assertEquals(0, brain.callCount.get(), "roomless ohne Historie ⇒ Rückfrage, kein Brain-Call")
+        val text = events.filterIsInstance<ChatEvent.TextDelta>().joinToString("") { it.text }
+        assertTrue(text.contains("Raum"), "Raum-Rückfrage erwartet, war: $text")
         assertTrue(events.last() is ChatEvent.Done)
     }
 
-    // ── (2b) Bekannter Sprecher, aber gar keine Historie ⇒ Brain (kein Guess) ──
+    // ── (2b) Bekannter Sprecher, gar keine Historie ⇒ Rückfrage (kein Guess) ──
     @Test
-    fun `roomless ohne jede Historie geht zum Brain statt zu raten`() {
+    fun `roomless ohne jede Historie fragt nach dem Raum statt zu raten`() {
         val brain = CountingBrain()
         val tool = RecordingTool()
         val o = orchestrator(brain, tool, InMemoryLastAreaStore())
@@ -187,7 +193,9 @@ class TurnOrchestratorAnaphoraTest {
         val events = run(o, "schalt das Licht aus", alice)
 
         assertTrue(tool.calls.isEmpty(), "keine Historie ⇒ keine Tat")
-        assertEquals(1, brain.callCount.get(), "keine Historie ⇒ Brain übernimmt")
+        assertEquals(0, brain.callCount.get(), "keine Historie ⇒ Rückfrage, kein Brain")
+        val text = events.filterIsInstance<ChatEvent.TextDelta>().joinToString("") { it.text }
+        assertTrue(text.contains("Raum"), "Raum-Rückfrage erwartet, war: $text")
         assertTrue(events.last() is ChatEvent.Done)
     }
 
@@ -209,21 +217,23 @@ class TurnOrchestratorAnaphoraTest {
         assertEquals(0, brain.callCount.get())
     }
 
-    // ── (4) speakerId-los ⇒ byte-identisch (Default-Area, kein Store, kein Brain) ──
+    // ── (4) speakerId-los + kontextlos ⇒ Rückfrage statt geratenem Raum (F2/S2) ──
+    // Genau der Ballsaal-Fall vom 14.08.: ohne Sprecher gibt es kein Gedächtnis,
+    // ohne Satellit keinen Raum — früher überlebte hier der Classifier-Hardcode
+    // „wohnzimmer" und schaltete ein FREMDES Zimmer.
     @Test
-    fun `speakerId-loser Turn bleibt byte-identisch mit Default-Area`() {
+    fun `speakerId-loser kontextloser Turn fragt nach dem Raum statt zu raten`() {
         val brain = CountingBrain()
         val tool = RecordingTool()
         val store = InMemoryLastAreaStore()
         val o = orchestrator(brain, tool, store)
 
-        // KEIN speakerContext ⇒ keine Anaphern-Logik ⇒ Classifier-Default wohnzimmer.
         val events = run(o, "schalt das Licht aus", null)
 
-        val last = tool.calls.last()
-        assertEquals("turn_off", last.service)
-        assertEquals("wohnzimmer", last.data["area_id"], "ohne Sprecher ⇒ Default-Area (unverändert)")
-        assertEquals(0, brain.callCount.get(), "eindeutiger Befehl ⇒ Tool-Turn, kein Brain")
+        assertTrue(tool.calls.isEmpty(), "kein Sprecher, kein Raum ⇒ KEINE Tat (kein Wohnzimmer-Raten)")
+        assertEquals(0, brain.callCount.get(), "Rückfrage ist brain-frei")
+        val text = events.filterIsInstance<ChatEvent.TextDelta>().joinToString("") { it.text }
+        assertTrue(text.contains("Raum"), "Raum-Rückfrage erwartet, war: $text")
         // Der Store wurde NICHT befüllt (anonymer/abwesender Sprecher).
         assertNull(store.lastArea("unknown"))
         assertTrue(events.last() is ChatEvent.Done)

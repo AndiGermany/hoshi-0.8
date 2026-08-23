@@ -1,10 +1,13 @@
 import type { FiredKind } from '../hooks/useFiredItems';
 import type { ScheduledKind } from '../hooks/useScheduledItems';
-import type { Persona, Theme, ThemeGroupId } from '../hooks/useSettings';
+import type { Persona, ThemeGroupId, VisibleTheme } from '../hooks/useSettings';
 import type { Language } from '../api/types';
 import type { PrivacyTarget } from '../api/privacy';
 import type { SettingsCategoryId } from '../components/SettingsPanel';
 import type { EscalationModeWire } from '../api/extendedThink';
+import type { VacuumStatusKind } from '../components/homeTiles';
+import type { HomeTileSize } from '../components/homeWidgets';
+import type { MoonPhaseName } from '../components/moonPhase';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  UI-Sprache (Andi-Auftrag 21.07: „Ich muss die Sprache der UI auch in den
@@ -338,6 +341,40 @@ export interface SpeakerStrings {
   deleteRecordingLastHint: string;
   /** Fehlzeile, wenn das Einzel-Löschen einer Aufnahme fehlschlägt. */
   deleteRecordingFailed: string;
+
+  // ── Anlern-Overlay (design DESIGN-widgets-settings-2026-08-15 §3.3) ─────────
+  // Der Assistent ist aus dem 340-px-Drawer in die geteilte Overlay-Schale
+  // gezogen, EIN Schritt pro Bild. Neu sind darum: der Weiter-Knopf von Bild ①,
+  // die zwei Befunde der Client-Mindestprüfung, die Abbruch-Nachfrage und die
+  // Beschriftungen der Aufnahmen-Seite.
+
+  /** Knopf auf Bild ① (Name) — führt zu Bild ② (Sprechen). */
+  nameNext: string;
+  /** aria-label des Schließen-Kreuzes im Overlay-Kopf. */
+  closeAria: string;
+  /**
+   * Client-Mindestprüfung vor dem Upload: die Aufnahme war zu kurz (oder es
+   * wurde zu wenig darin gesprochen). Erspart das 422 NACH dem Hochladen.
+   */
+  checkTooShort: string;
+  /** Client-Mindestprüfung: der Pegel blieb (fast) am Boden — Mikro stumm/zu weit weg. */
+  checkTooQuiet: string;
+  /** Überschrift der Abbruch-Nachfrage (Escape/Backdrop/Abbrechen mitten in der Aufnahme). */
+  cancelConfirmTitle: string;
+  /** Was ein Abbruch in einer FRISCHEN Sitzung kostet: das unfertige Profil wird verworfen. */
+  cancelConfirmFresh: string;
+  /** Was ein Abbruch in einer ANGEHÄNGTEN Sitzung kostet: nichts — nur diese Sitzung bleibt offen. */
+  cancelConfirmAppend: string;
+  /** Bestätigt den Abbruch (läuft durch die Rollback-Semantik). */
+  cancelConfirmYes: string;
+  /** Verwirft die Nachfrage und macht weiter. */
+  cancelConfirmNo: string;
+  /** Überschrift der Aufnahmen-Seite des Overlays. */
+  recordingsTitle: string;
+  /** Knopf einer Profil-Zeile, solange die Aufnahmen-Zahl noch nicht geladen ist (nie geraten). */
+  recordingsOpen: string;
+  /** aria-label dieses Knopfs, z. B. „Aufnahmen von Andi ansehen". */
+  recordingsOpenAria: (name: string) => string;
 }
 
 /** Alle sichtbaren Texte des Nachtmodus (Shape von NIGHT_MODE_TEXTS). */
@@ -415,6 +452,19 @@ export interface ThemeEntryStrings {
 }
 
 /**
+ * Das versteckte Thema Nagori (名残): wie ein normaler Themen-Eintrag, plus sein
+ * Beiwort (die anderen holen es aus `themeGlosses` — Nagori steht dort nicht,
+ * weil dieser Katalog exakt die sichtbare Liste beschreibt) und die eine Zeile,
+ * die den Fund einordnet.
+ */
+export interface NagoriStrings extends ThemeEntryStrings {
+  /** Die Übersetzung des Namens („was zurückbleibt"). */
+  gloss: string;
+  /** Einordnung unter der Karte: „名残 — ein Vorbote von 0.9". */
+  note: string;
+}
+
+/**
  * Eine Gruppe im Farbthema-Picker (Andi 25.07 „übersichtlicher"): Überschrift +
  * EINE ruhige Zeile, die sagt, was diese Gruppe von den anderen unterscheidet.
  */
@@ -439,15 +489,46 @@ export interface PersonaEntryStrings {
  * Oberfläche.
  */
 export interface SettingsPanelStrings {
-  /** Die sieben Reiter-Labels (Reihenfolge/Ids liegen im Panel, nicht hier). */
+  /**
+   * Die sieben Kategorie-Namen (Reihenfolge/Ids liegen im Panel, nicht hier).
+   * Sie stehen auf den Übersichtskarten UND als Überschrift ihres Panels — die
+   * Chip-Reiterleiste, die sie bis 15.08 trug, ist gestrichen.
+   */
   categories: Record<SettingsCategoryId, string>;
-  /** aria-label der Reiter-Leiste (`role="tablist"`). */
+  /**
+   * aria-label der Kategorie-Fläche. Trug bis 15.08 die Reiter-Leiste
+   * (`role="tablist"`); seither die Übersichts-Karten (`role="group"`) — die
+   * Leiste ist weg, der Satz „das sind die Einstellungs-Kategorien" bleibt.
+   */
   categoryNavAria: string;
   themeLabel: string;
   /** aria-label der Farbthema-Radiogroup. */
   themeGroupAria: string;
-  themes: Record<Theme, ThemeEntryStrings>;
-  /** Überschrift + Einordnungs-Zeile je Gruppe des Pickers (Reihenfolge liegt in THEME_GROUPS). */
+  /**
+   * Kicker der „Aktuell"-Zeile ganz oben im Picker (Andi-Auftrag 07.08:
+   * „übersichtlicher" — Aktiv-zuerst statt Kachel-Wand). Steht über Swatch +
+   * Name + Gruppen-Beiwort des GERADE gewählten Themas, s. {@link
+   * ../components/SettingsPanel}.ThemeSection.
+   */
+  themeActiveLabel: string;
+  /**
+   * Die ehrliche Zeile, solange `public/themes/manifest.json` noch unterwegs ist
+   * (seit dem .old-Umzug 2026-08-08 werden die Themen dynamisch nachgeladen).
+   * Lieber „lädt …" als eine erfundene oder halbe Liste.
+   */
+  themeLoading: string;
+  /**
+   * Der Charakter-Satz je Thema. Deckt genau die Themen der 0.8-Linie ab
+   * ({@link VisibleTheme}); NAME und BEIWORT eines Themas kommen seit dem
+   * .old-Umzug dagegen aus `public/themes/manifest.json` (mehrsprachig dort),
+   * weil sie mit der Themen-Datei ausgeliefert werden müssen.
+   */
+  themes: Record<VisibleTheme, ThemeEntryStrings>;
+  /**
+   * Überschrift + Einordnungs-Zeile je Gruppe des Pickers. Die GRUPPEN-Titel
+   * bleiben bewusst i18n (sie müssen beim Sprachwechsel mitgehen); welche
+   * Gruppen es gibt und in welcher Reihenfolge, sagt das Manifest.
+   */
   themeGroups: Record<ThemeGroupId, ThemeGroupStrings>;
   /**
    * Das Beiwort je Thema — die Übersetzung des japanischen Namens („Nagareboshi
@@ -455,7 +536,15 @@ export interface SettingsPanelStrings {
    * `THEMES` (useSettings) spiegelt diesen Katalog-Eintrag 1:1, und dessen Form
    * ist von Bestandstests gepinnt.
    */
-  themeGlosses: Record<Theme, string>;
+  themeGlosses: Record<VisibleTheme, string>;
+  /**
+   * Das versteckte zehnte Thema — Nagori (名残), der Codename der kommenden 0.9.
+   * Bewusst NEBEN {@link SettingsPanelStrings.themes}: es ist kein Teil der
+   * Liste, sondern ein Fund (3× auf die Versions-Zeile, s. TopNav). Der
+   * Eigenname bleibt in jeder Sprache „Nagori"; übersetzt werden Beiwort,
+   * Charakter-Zeile und die Einordnung darunter.
+   */
+  nagori: NagoriStrings;
   /** Wie das Beiwort an den Namen tritt (Trennzeichen inklusive Sprach-Typografie). */
   themeGlossSuffix: (gloss: string) => string;
   /** Die Sora-Zeile: „folgt dem Tag · jetzt Kasumi" (was die Regel GERADE zeigt). */
@@ -468,6 +557,25 @@ export interface SettingsPanelStrings {
   themePinnedNote: (themeName: string) => string;
   /** aria-label einer Theme-Karte: Gruppe + Name, z. B. „Tageszeiten: Asa". */
   themeOptionAria: (groupTitle: string, themeName: string) => string;
+
+  // ── Design-Galerie (design DESIGN-widgets-settings-2026-08-15 §3.4) ─────────
+  // Die 15 Karten hinter vier `<details>` sind aus dem 340-px-Drawer in ein
+  // 960-px-Overlay gezogen; im Panel bleiben die Aktiv-Zeile und EIN Knopf.
+
+  /** Der eine Knopf im Panel, der die Galerie öffnet. */
+  themeGalleryOpen: string;
+  /** Titel/aria-label des Galerie-Overlays. */
+  themeGalleryTitle: string;
+  /** aria-label des Schließen-Kreuzes der Galerie. */
+  themeGalleryCloseAria: string;
+  /**
+   * Der ausdrückliche FERTIG-Weg aus der Galerie (Andi-Auftrag 19.08.: eine
+   * Auswahl schließt die Galerie bewusst NICHT — man soll vergleichen können —
+   * also braucht es einen benannten Ausgang neben Kreuz und Escape).
+   */
+  themeGalleryDone: string;
+  /** alt-Text der echten Szenen-Vorschau eines Szenen-Themas. */
+  themeSceneAlt: (themeName: string) => string;
   languageLabel: string;
   /** Anzeigenamen der drei Chat-/STT-Sprachwahlen (auto/de/en). */
   languages: Record<Language, string>;
@@ -483,6 +591,76 @@ export interface SettingsPanelStrings {
   escalationHint: (seconds: number) => string;
   /** Überschrift der Skills-Gruppe (der Eigenname „Skills" bleibt überall gleich). */
   skillsTitle: string;
+  /**
+   * Die Zuhause-Widgets-Gruppe (Andi-Auftrag 2026-08-11, erweitert W2
+   * 18.08.: acht Schalter, zwei Ränge) — s. `HomeTilesSection` in
+   * `SettingsPanel.tsx`. Sauger/Klima rendern weiter NUR, wenn ihre
+   * Datenquelle real ist (vacuum gefunden / ≥1 Raum mit climate); die
+   * übrigen sechs sind quellenlos immer da.
+   */
+  homeTilesTitle: string;
+  homeTilesHint: string;
+  /** Kicker über der Krone-Gruppe (Uhr/Wecker — fester Kopf, nicht verschiebbar). */
+  homeTilesCrownGroupLabel: string;
+  homeTilesUhrLabel: string;
+  homeTilesUhrHint: string;
+  homeTilesWeckerLabel: string;
+  homeTilesWeckerHint: string;
+  /** Kicker über der Bühne-Gruppe (die frei anordenbaren Kacheln). */
+  homeTilesStageGroupLabel: string;
+  homeTilesWetterLabel: string;
+  homeTilesWetterHint: string;
+  homeTilesLaeuftLabel: string;
+  homeTilesLaeuftHint: string;
+  homeTilesEinkaufLabel: string;
+  homeTilesEinkaufHint: string;
+  homeTilesVacuumLabel: string;
+  homeTilesVacuumHint: string;
+  homeTilesClimateLabel: string;
+  homeTilesClimateHint: string;
+  /**
+   * Der dritte Schalter der Gruppe: das Nachrichten-Fenster (Code-Name
+   * `currentAffairs`/„Lagebild"). Er hat KEIN Quellen-Gate (s.
+   * `HomeTilesSection`) und steht per Default auf AN.
+   */
+  homeTilesCurrentAffairsLabel: string;
+  /**
+   * Ehrlicher Beschreibungstext: was der Schalter tut (Anzeige auf dem
+   * Zuhause-Reiter + der 10-Minuten-Poll dahinter) UND was er NICHT tut — er
+   * schaltet weder das Server-Feature noch den Sprach-Weg ab; Hoshi bleibt
+   * fragbar, auch wenn das Fenster aus ist.
+   */
+  homeTilesCurrentAffairsHint: string;
+  /**
+   * Server-Settings-Naht unter dem Lagebild-Anzeige-Schalter (s.
+   * `NewsSourcesSection`): welche Quellen (Tagesschau/heise/Golem) der
+   * SERVER überhaupt vorhält, unabhängig von der lokalen Anzeige-Wahl.
+   */
+  homeTilesNewsSourcesLabel: string;
+  homeTilesNewsSourcesHint: string;
+  homeTilesNewsSourcesLoading: string;
+  homeTilesNewsSourcesLoadError: string;
+  homeTilesNewsSourcesFailed: string;
+  /** 422 vom PUT — sollte über die UI (Checkboxen aus `verfuegbar`) praktisch nie auftreten. */
+  homeTilesNewsSourcesUnknown: string;
+  /**
+   * Die Anordnung der Bühne (W3, DESIGN §4.3). Die Zusage ist bewusst eng
+   * formuliert (Bus 20260818-to-codex-raster-entscheid §2, nach Codex'
+   * Gegenprüfung §2): gespeichert wird eine REIHENFOLGE für einen Packer —
+   * nicht die freie Zellplatzierung, die „Tetris" verspräche.
+   */
+  homeTilesLayoutHint: string;
+  /** „Layout zurücksetzen" — scharf erst beim zweiten Klick (Idiom der Privatsphäre-Knöpfe). */
+  /**
+   * „Widgets anordnen" (W4) — schließt den Drawer und öffnet den Edit-Modus
+   * auf der Übersicht. Der EINZIGE Weg dorthin, der keinen Zeiger braucht.
+   */
+  homeTilesLayoutArrange: string;
+  homeTilesLayoutReset: string;
+  /** Beschriftung des scharfen Knopfes: „Wirklich? Klick nochmal". */
+  homeTilesLayoutResetArmed: string;
+  /** Bestätigung danach — sagt ausdrücklich, dass die SCHALTER unberührt sind (§4.3). */
+  homeTilesLayoutResetDone: string;
   privacyTitle: string;
   privacyIntro: string;
   privacyLoading: string;
@@ -511,6 +689,19 @@ export interface SettingsPanelStrings {
   privacyDiaryDetail: (days: number) => string;
   /** Erfolgs-Notiz nach dem Löschen („Gelöscht: 3 Einträge."). */
   privacyDeleted: (deleted: number, target: PrivacyTarget) => string;
+
+  // ── Category overview — the drawer's entry level (design 2026-08-15 §3.1) ──
+  /**
+   * ONE half-sentence per category, shown under name + glyph on the overview
+   * card. Names what is inside, never what it does to you — the card is a
+   * signpost, not a manual. The category NAMES themselves stay in
+   * {@link categories}; the order stays with `SETTINGS_CATEGORY_IDS`.
+   */
+  categoryBlurbs: Record<SettingsCategoryId, string>;
+  /** Visible label of the way back out of a category ("‹ Einstellungen"). */
+  overviewBack: string;
+  /** `aria-label` of that back button — says where it leads, not just "back". */
+  overviewBackAria: string;
 }
 
 /**
@@ -717,6 +908,13 @@ export interface RoomsStrings {
   assigning: string;
   chooseRoom: string;
   deviceCount: (count: number) => string;
+  /**
+   * Raum-Karten-Pille bei aktivem Filter: sichtbare Geräte „von" der vollen
+   * Raum-Anzahl (Andi-Auftrag 2026-08-11, Konzept §2 „GRID STATT LISTE").
+   * Ohne aktiven Filter bleibt {@link deviceCount} stehen (kein redundantes
+   * „12 von 12", s. `RoomCard` in `views/RaeumeView.tsx`).
+   */
+  deviceCountOfTotal: (visible: number, total: number) => string;
   roomEmpty: string;
   allAssigned: string;
   unassignedEditable: string;
@@ -757,9 +955,30 @@ export interface RoomsStrings {
   inboxConfirm: string;
   inboxHintEditable: string;
   inboxHintReadOnly: string;
+  /**
+   * Kopfzeile des gefalteten „ohne Raum-Bezug"-Fachs der Inbox
+   * (`roomsRelevance.ts`, Andi 2026-08-11): System/Diagnose/Mobiles sind
+   * keine offene Aufgabe — ein Handy hat keinen Raum, die Sonne auch nicht.
+   * Zuweisbar bleiben sie im aufgeklappten Fach trotzdem.
+   */
+  inboxRestSummary: (count: number) => string;
   /** Raum-Karte: ab `ROOM_COLLAPSE_AT` Zeilen bleibt der Rest eingeklappt. */
   roomShowMore: (hiddenCount: number) => string;
   roomShowLess: string;
+  /**
+   * Kopfzeile des zugeklappten „Stille Räume"-Fachs (Andi-Auftrag
+   * 2026-08-11, Konzept §4): Räume ohne Geräte-Aktivität (0/1 Gerät),
+   * ehrlich benannt statt versteckt.
+   */
+  silentRooms: (count: number) => string;
+  /**
+   * Kurzer, ehrlicher Hinweis über dem unfiltrierten Raum-Raster: die
+   * Sortierung folgt der Geräteanzahl, NICHT der echten Gesprächs-Nutzung —
+   * dafür fehlt (Stand heute) eine Datenspur (Konzept-Pfad 1(b), s.
+   * `components/roomsSort.ts`-KDoc). Nur sichtbar ohne aktiven Filter
+   * (Muster {@link sortRoomsByUsage}-Aufrufstelle in `views/RaeumeView.tsx`).
+   */
+  sortHint: string;
 }
 
 /**
@@ -825,6 +1044,65 @@ export interface TopNavStrings {
  * Der Katalog-Key bleibt hier stehen (kein Grund, denselben Text an zwei
  * Stellen zu pflegen); nur die VERWENDUNG wanderte.
  */
+/**
+ * Der Sonnenverlauf der L-Uhr ({@link ../components/SunArc}, Andi 21.08.).
+ * **Nur Vorlese- und Hover-Texte**: im Bild selbst steht kein Wort — die zwei
+ * Uhrzeiten unter den Bogenfüßen kommen aus `dueClock(…, locale)`. Übersetzt
+ * wird also genau das, was ein Screenreader sagt (Muster
+ * {@link IdleFaceStrings.wetter.hourly}).
+ */
+export interface SunArcStrings {
+  /** aria-Kopf: „Sonnenverlauf, Aufgang 06:22, Untergang 20:48, die Sonne steht am Himmel". */
+  aria: (rise: string, set: string, phase: string) => string;
+  /** Lage-Halbsatz bei Tag — steht im aria-Text und als Tooltip am Sonnenpunkt. */
+  dayPhase: string;
+  /**
+   * **`nightPhase` ist am 23.08. weggefallen**, zusammen mit dem Bild, das ihn
+   * gebraucht hat: nachts steht hier keine gedimmte Sonne unter einem Horizont
+   * mehr, sondern der Mond — und der spricht in {@link MoonStrings} für sich.
+   * Ein Katalog-Schlüssel ohne Leser ist eine Übersetzung, die niemand prüft.
+   */
+  /**
+   * Die Mondphase, die nachts an die Stelle des Bogens tritt (Andi 23.08.:
+   * „Bei dem goßen sonnenstand möchte ich in der nacht die mondphase angezeigt
+   * haben"). Anders als beim Sonnenbogen steht hier **ein Wort im Bild** —
+   * der Phasenname unter der Scheibe —, es ist also mehr als Vorlese-Text.
+   */
+  moon: MoonStrings;
+}
+
+/** Die Namen der acht Mondphasen plus der Vorlese-Satz ({@link ../components/moonPhase}). */
+export interface MoonStrings {
+  /** aria-Kopf: „Mondphase, zunehmender Mond, 62 % beleuchtet, Sonnenaufgang 06:22". */
+  aria: (phase: string, percent: string, rise: string) => string;
+  /**
+   * Der Name je Phase — **vollständig**, `Record` über die Union: eine neue
+   * Phase im Modell bricht hier den Typcheck, statt still auf `undefined` zu
+   * fallen.
+   */
+  phases: Record<MoonPhaseName, string>;
+}
+
+/**
+ * Die Mehrtage-Zeile der XL-Wetterkachel ({@link ../components/weatherOutlook}).
+ * Der Lagen-Text je Tag kommt **fertig übersetzt vom Backend** (WMO-Text in der
+ * Anzeigesprache) und steht deshalb nicht hier; das Wochentags-Kürzel kommt aus
+ * ICU (`toLocaleDateString`). Übrig bleiben die zwei Satz-Bausteine, die das FE
+ * selbst formuliert.
+ */
+export interface WeatherOutlookStrings {
+  /** aria-Label der ganzen Zeile: „Ausblick, 7 Tage". */
+  aria: (days: number) => string;
+  /** Nativer Tooltip einer Spalte: „Freitag, 12–22°, leichter Regen". */
+  title: (day: string, span: string, cond: string) => string;
+  /**
+   * Anhang an den Tooltip, NUR wenn das Wire eine Regenwahrscheinlichkeit
+   * liefert — fehlt sie, bleibt der Satz weg statt „0 %" zu behaupten
+   * (BE-Vertrag: `precipProbability` null = keine Angabe).
+   */
+  rainChance: (percent: number) => string;
+}
+
 export interface IdleFaceStrings {
   sectionAria: string;
   greeting: (dayPart: DayPart) => string;
@@ -844,7 +1122,112 @@ export interface IdleFaceStrings {
     noteEmpty: string;
     noteWithData: string;
   };
+  /**
+   * The widget stage ("Bühne") — its pages, `components/HomeStage.tsx`
+   * ("Komposition v2", 15.08.). The two page strings exist ONLY for screen
+   * readers: the dots carry no visible text, and they only ever exist from
+   * page two on, so on a single-page stage neither string is rendered at all.
+   *
+   * The size picker (W3, DESIGN-widget-raster-2026-08-18 §4.2) adds four
+   * more. Its buttons READ "S/M/L/XL" — short enough for a 44 px target and
+   * the same four letters in every language — but that is not an accessible
+   * name (Codex-Gegenprüfung §5), so each button carries the long name from
+   * {@link sizeNames} as its `aria-label`.
+   *
+   * **W6 (Andi 20.08.: „Die Größenauswahl soll ein + und − sein"):** aus vier
+   * Stufen-Knöpfen sind ZWEI Richtungs-Knöpfe geworden ({@link sizeLarger}/
+   * {@link sizeSmaller}). {@link sizeNames} bleibt — es benennt jetzt die
+   * AKTUELLE Stufe zwischen den beiden Knöpfen und trägt weiter
+   * {@link sizerEffective}.
+   */
+  stage: {
+    /** Group label of the page dots. */
+    pagesAria: string;
+    /** Label of one dot: „Seite 2 von 3". */
+    page: (index: number, total: number) => string;
+    /** Group label of the size picker, with the widget's own name: „Größe für Wetter". */
+    sizerAria: (widget: string) => string;
+    /**
+     * The long name of each step. Until W6 it was the accessible name of each
+     * step button; since the picker is `−`/`+` it names the CURRENT step —
+     * screen readers get the word, the eye gets the letter.
+     */
+    sizeNames: Record<HomeTileSize, string>;
+    /** `aria-label` des `+`-Knopfes: „Größer". */
+    sizeLarger: string;
+    /** `aria-label` des `−`-Knopfes: „Kleiner". */
+    sizeSmaller: string;
+    /**
+     * Honest note when the chosen step cannot be shown at this width/height —
+     * the stored size stays, the DISPLAY gives way (§0.4/§2.3). Without it a
+     * degraded tile looks like a bug.
+     */
+    sizerEffective: (name: string) => string;
+    /**
+     * **Der Edit-Modus** (W4, DESIGN §4.2 + Codex-Gegenprüfung §5 „i18n"):
+     * Leiste, Fach „Verfügbar", Griffecke und die `aria-live`-Ansagen des
+     * Tastatur-Verschiebens. Alles hier ist SICHTBARER oder VORGELESENER
+     * Text — Widget-Namen kommen NICHT von hier, sondern aus den bestehenden
+     * Kachel-Strings (`idleFace.wetter.name` usw.), damit derselbe Name nicht
+     * zweimal übersetzt wird und beim ersten Wording-Wechsel auseinanderdriftet.
+     */
+    edit: {
+      /**
+       * Zugänglicher Name der (unsichtbaren) Edit-Gruppe — dasselbe Wort wie
+       * der Knopf in den Einstellungen, mit dem man hier hineinkommt.
+       *
+       * `done`/`reset`/`resetArmed`/`resetDone` standen bis zum 23.08.
+       * daneben: die Knöpfe der Edit-Leiste. Die Leiste ist gefallen (Andi:
+       * „nimm die UI oben, wenn man etwas bearbeitet raus"), „Fertig" hat mit
+       * ihr keinen Ort mehr (drei Ausgänge braucht keinen Knopf), und
+       * „Zurücksetzen" wohnt bei den Widget-Schaltern in den Einstellungen —
+       * mit EIGENEN Strings (`settings.homeTilesLayoutReset*`). Denselben Satz
+       * zweimal übersetzt zu halten wäre der sichere Weg zu zwei Wortlauten.
+       */
+      title: string;
+      /** Zugänglicher Name einer Kachel im Edit: „Wetter — Platz 2 von 7". */
+      tileAria: (widget: string, index: number, total: number) => string;
+      /** `aria-roledescription` der Kachel: „verschiebbares Widget". */
+      tileRole: string;
+      /**
+       * Die Tastatur-Belegung. **Unsichtbar** — sr-only, sonst nirgends. Sie
+       * war bis W6 sichtbar und hat der Bühne dabei Kachelzeilen weggenommen;
+       * am 22.08. fiel jeder Text aus der Leiste (Andi: „Entferne bitte die
+       * hinweise"), am 23.08. die Leiste selbst. Der Satz bleibt: er ist der
+       * einzige Ort, an dem Pfeiltasten und Bild ↑/↓ überhaupt angeboten
+       * werden, und er kostet null Pixel.
+       */
+      keyHint: string;
+      /** `aria-live`-Bestätigung nach einem Zug (Codex §5: „Bestätigung der neuen Position"). */
+      moved: (widget: string, index: number, total: number, page: number, pages: number) => string;
+    };
+  };
   /** Die „Läuft"-Karte (ex-„Geplant"): echte Timer/Wecker/Erinnerungen mit Label + Countdown. */
+  /**
+   * Die Uhr — seit W4 (Andi 19.08.) ein **Bühnen-Widget** statt der festen
+   * Krone. Sie trägt keinen sichtbaren Titel (eine Zeile „Uhr" über einer
+   * 124-px-Uhr wäre Beschriftung des Offensichtlichen); der Name lebt im
+   * `aria-label` und im Edit-Modus.
+   */
+  uhr: {
+    name: string;
+    /**
+     * Der Sonnenverlauf der **L**-Stufe (Andi 21.08.: „wenn man die Größe
+     * ändert, dass man den Sonnenverlauf anzeigt"). Er erscheint nur, wenn das
+     * Wire `sunriseEpochMs`/`sunsetEpochMs` trägt — s. {@link SunArcStrings}.
+     */
+    sun: SunArcStrings;
+  };
+  /**
+   * Der Wecker — seit W6 (Andi 20.08.) ebenfalls ein **Bühnen-Widget**; er war
+   * der letzte Bewohner der Krone. Wie die Uhr trägt er keinen sichtbaren
+   * Titel: „Wecker" steht bereits im Satz selbst („Wecker 07:00 · noch 22 h"),
+   * eine Überschrift darüber sagte dasselbe zweimal. Der Name lebt im
+   * `aria-label` der Kachel und im Edit-Modus (Fach, Ansage beim Verschieben).
+   */
+  wecker: {
+    name: string;
+  };
   laeuft: {
     name: string;
   };
@@ -853,6 +1236,74 @@ export interface IdleFaceStrings {
     name: string;
     /** „+3 weitere" hinter den ersten sichtbaren Einträgen. */
     more: (count: number) => string;
+  };
+  /**
+   * Visible strings of the "Lagebild" window (order F5, wave 1 — see
+   * `components/CurrentAffairsTile.tsx`). USER-FACING the feature is called
+   * "Nachrichten"/"News" (correction 2026-08-15); "Lagebild"/`currentAffairs`
+   * survives only as the internal code name, here and in the settings switch.
+   * The relative ages of headlines and of
+   * the "Stand" line reuse {@link IdleFaceStrings.homeTiles}`.age` instead of a
+   * second set of time words. Feed data itself (source name, headline, snippet)
+   * is NEVER translated — it arrives as-is from the backend.
+   */
+  currentAffairs: {
+    name: string;
+    /** Meta line under a headline: „<Quelle> · vor 2 Std." — source comes raw. */
+    meta: (source: string, relative: string) => string;
+    /**
+     * „Stand 08:45" — built from `lastSuccessfulRefreshAt`, NEVER from
+     * `observedAt` (which would be fresh on every poll and lie about age).
+     */
+    stand: (clock: string) => string;
+    /** Discreet amber age hint appended to the Stand line while freshness = STALE. */
+    staleHint: (relative: string) => string;
+    /** Expand action of the collapsed window: „+3 weitere" — counts only what the expansion really reveals. */
+    more: (count: number) => string;
+    /** Same action while expanded (collapses back to three cards). */
+    less: string;
+    /**
+     * Honest footer of the EXPANDED list: everything beyond
+     * `CURRENT_AFFAIRS_EXPANDED_COUNT` is counted out loud instead of silently
+     * dropped („+14 weitere, hier nicht gezeigt"). The rest arrives with the
+     * planned overlay — this window stays inside the viewport.
+     */
+    restNotShown: (count: number) => string;
+    /** Explicit source action on an expanded card. */
+    openSource: string;
+    /** aria-label of a headline link — it opens the article in a new tab. */
+    openAria: (title: string) => string;
+    /* Die Vollbild-Ansicht (Andi 23.08.: „ich habe keine möglichkeit diese
+       anzuzeigen oder die nachrichten zu filtern") trägt KEINEN eigenen Titel-
+       Schlüssel: sie heißt wie das Widget (`name`). Ein zweites Wort für
+       dieselbe Sache wäre eine Fundstelle, die beim nächsten Umbenennen
+       zurückbleibt. */
+    /** Der Chip, der die Quellen-Auswahl aufhebt. */
+    allSources: string;
+    /** `aria-label` der Chip-Gruppe — sie ist ein Filter, kein Menü. */
+    sourceFilterAria: string;
+    /**
+     * „12 von 20 Meldungen" — die ehrliche Bilanz über der Liste. Sie ersetzt
+     * `restNotShown` NICHT, sie beantwortet es: dort steht, wieviel fehlt, hier,
+     * wieviel da ist. Bei ungefiltert gleicher Zahl sagen beide Argumente
+     * dasselbe, und der Text darf das zusammenziehen.
+     */
+    countInfo: (shown: number, total: number) => string;
+  };
+  /**
+   * **Maximieren** (Andi 23.08.) — die zwei Wörter, die an JEDER Kachel mit
+   * Vollbild-Ansicht gleich lauten. Bewusst EIN Block statt je Widget zwei
+   * Schlüssel: „Maximieren" heißt beim Wetter nichts anderes als bei den
+   * Nachrichten, und zwei Fundstellen liefen beim nächsten Feinschliff
+   * auseinander.
+   */
+  maximieren: {
+    /** Sichtbarer Name der Tat (nur als `aria-label`/`title` — der Knopf ist ein Icon). */
+    open: string;
+    /** `aria-label` des Knopfs auf einer bestimmten Kachel: „Wetter maximieren". */
+    openAria: (name: string) => string;
+    /** Der Ausgang aus der Vollbild-Ansicht. */
+    close: string;
   };
   wetter: {
     name: string;
@@ -872,6 +1323,55 @@ export interface IdleFaceStrings {
     sunUntil: (clock: string) => string;
     /** „hell ab 05:32" — vor dem heutigen Sonnenaufgang. */
     sunFrom: (clock: string) => string;
+    /**
+     * **Die Abschnitte der Vollbild-Ansicht** (Andi 23.08.: „alle informationen
+     * vernünftig angezeigt"). Auf der Kachel trägt jede Zeile ihre Aussage
+     * selbst („morgen 13–19°, Regenschauer"); im Vollbild stehen dieselben
+     * Werte in einer Tabelle, und eine Tabelle braucht Spaltennamen. Das sind
+     * sie — Etiketten, keine Sätze.
+     */
+    sections: {
+      now: string;
+      /** Etikett der Tagesspanne („18–29°"). */
+      span: string;
+      /** Etikett des Niederschlags. */
+      precip: string;
+      /** Etikett der Morgen-Werte. */
+      tomorrow: string;
+      hourly: string;
+      /** Überschrift der Mehrtage-Zeile. */
+      days: string;
+      sun: string;
+      sunrise: string;
+      sunset: string;
+      /** Etikett der Tageslänge — GERECHNET aus Auf- und Untergang, kein Wire-Feld. */
+      daylight: string;
+      /** „14 h 26 min" in der Zeitsprache dieser Sprache. */
+      daylightValue: (span: { h: number; min: number }) => string;
+    };
+    /**
+     * Der Stunden-Verlauf der XL-Stufe ({@link ../components/WeatherHourly}, W5,
+     * DESIGN-widget-raster-2026-08-18 §3.1). **Nur Vorlese-Texte**: im Bild
+     * selbst steht kein einziges Wort — die Temperatur-Marken sind Zahlen
+     * (`23°`), die Stundenachse kommt aus `toLocaleTimeString(t.locale)`.
+     * Übersetzt wird also genau das, was ein Screenreader sagt.
+     */
+    hourly: {
+      /** aria-Kopf: „Stunden-Verlauf, nächste 12 Stunden, 15° bis 23°". */
+      aria: (hours: number, min: string, max: string) => string;
+      /** aria-Anhang, wenn irgendeine Stunde Regen führt: „Regen bis 80 %". */
+      ariaRain: (percent: number) => string;
+      /** aria-Anhang, wenn KEINE Stunde Regen führt — ehrlich statt weggelassen. */
+      ariaDry: string;
+      /** Tooltip eines Balkens: „80 % Regen". */
+      barTitle: (percent: number) => string;
+    };
+    /**
+     * Die **Mehrtage-Zeile** unter dem Stunden-Verlauf (XL, Andi 21.08.) — sie
+     * liest das seit 21.08. additive Wire-Feld `outlook`. Fehlt es (Alt-Backend),
+     * erscheint die Zeile nicht; s. {@link WeatherOutlookStrings}.
+     */
+    outlook: WeatherOutlookStrings;
   };
   status: {
     online: string;
@@ -879,6 +1379,189 @@ export interface IdleFaceStrings {
     checking: string;
     voiceCloud: string;
     voiceLocal: string;
+  };
+  /**
+   * Die Zuhause-Kacheln (Sauger/Klima) — Andi-Auftrag 2026-08-11 „Kacheln,
+   * die man sich verdient": je Kachel nur sichtbar, wenn Andi sie im
+   * SettingsPanel aktiviert hat UND ihre Quelle real ist (s.
+   * `components/homeTiles.ts`). Sichtbarkeit/Reihenfolge selbst lebt in
+   * `HomeTileCards.tsx`, hier nur der Text.
+   */
+  homeTiles: {
+    /**
+     * Gemeinsame relative-Zeit-Stufen der Last-known-good-Zeilen (Andi-
+     * Auftrag 2026-08-13, „Sauger-Sichtbarkeits-Lücke") — VON BEIDEN Kacheln
+     * genutzt, s. `components/homeTiles.ts#relativeAgeStage`/`formatRelativeAge`.
+     */
+    age: {
+      /** < 1 Minute her. */
+      justNow: string;
+      minutesAgo: (n: number) => string;
+      hoursAgo: (n: number) => string;
+      daysAgo: (n: number) => string;
+    };
+    /**
+     * „Nicht erreichbar — zuletzt gesehen <relative Zeit>" (Scheibe S2
+     * „Ehrliche Anwesenheit", DESIGN-widgets-settings-2026-08-15 §2.4). VON
+     * BEIDEN Kacheln genutzt: der Rückfall einer Quelle, die dieser Browser
+     * schon einmal lebendig gesehen hat (s.
+     * `hooks/useSettings.ts#useHomeTileLastSeen`) — im 18px-Ton der Kachel,
+     * NIE amber. Nie gesehene Quellen bleiben bei {@link vacuum.unreachable}
+     * bzw. {@link climate.unreachable}.
+     *
+     * `relative` kommt bewusst aus {@link age} — das Haus hat genau EINEN Satz
+     * Zeitwörter, ein zweiter würde „vor 3 Std." und „seit 3 h" nebeneinander
+     * stellen.
+     */
+    unavailableSince: (relative: string) => string;
+    vacuum: {
+      name: string;
+      /** Zustands-Mapping (`components/homeTiles.ts#VacuumStatusKind`) — EIN warmer Satz je HA-Aktivität. */
+      status: Record<VacuumStatusKind, string>;
+      /**
+       * Hybrid-Rettung (Andi-Auftrag 2026-08-13, Sauger-Metrik-Familie): die
+       * `vacuum.*`-Entity selbst schweigt (unavailable/unknown), aber
+       * `reinigen`/`ladestatus` (binary_sensor) liefern trotzdem — EIGENE,
+       * ehrlich gekennzeichnete Texte (`components/homeTiles.ts#vacuumFamilyStatus`),
+       * NIE als „echter" vacuum-State ausgegeben.
+       */
+      hybridStatus: { cleaning: string; charging: string };
+      /** „<Status-Satz> · in <Raum>" — der Raumname ist NUTZERDATEN, kommt roh, NIE übersetzt. */
+      withRoom: (statusText: string, room: string) => string;
+      /**
+       * „<Status-Satz> · Akku 100 %" (Andi 21.08., wörtlich: „Bereit in der
+       * Ladestation · Akku 100 %"). Der Akkustand hing bis dahin als eigener
+       * 13-px-Absatz unter dem Zustandssatz; Andis Bild ist EIN Satz. Ab M —
+       * auf S bleibt der Zustandssatz allein (§3.2 „Ein Wert, ein Zustand").
+       */
+      withBattery: (statusText: string, percent: number) => string;
+      /**
+       * „Fortschritt 42 %" — NUR während `reinigen`=on
+       * (`components/homeTiles.ts#vacuumFamilyProgress`). Das Wort davor kam am
+       * 22.08. dazu: seit der Akkustand in den Zustandssatz gewandert ist,
+       * stünde eine nackte Prozentzahl direkt unter „… · Akku 63 %" und wäre
+       * nicht mehr zuzuordnen.
+       */
+      progress: (percent: number) => string;
+      /** Akku-Zeile, bevorzugt `sensor.<stem>_batterie`, Fallback `attrs.battery_level`: „Akku 42 %". */
+      battery: (percent: number) => string;
+      /** Roher Fehlwert von `staubsauger_fehler`, NUR wenn er als echter Fehler zählt (`components/homeTiles.ts#vacuumFamilyErrorDetails`). */
+      vacuumErrorDetail: (value: string) => string;
+      /** Roher Fehlwert von `dock_dock_fehler`, dieselbe Regel. */
+      dockErrorDetail: (value: string) => string;
+      /** `state` fehlt/unavailable/unknown/unbekannt UND die Familie rettet nichts ⇒ diese stille Zeile, NIE Amber. */
+      unreachable: string;
+      /**
+       * „Zuletzt gesehen <relative Zeit>: <Statussatz>" — NUR wenn live
+       * unbrauchbar UND `lastKnown` existiert (Andi-Auftrag 2026-08-13,
+       * `components/homeTiles.ts#vacuumLastKnownStatus`). NIE Amber, auch
+       * wenn der gemerkte Zustand `error` war — ein ALTER Fehler ist kein
+       * AKTUELLER Alarm.
+       */
+      lastKnownLine: (relative: string, statusText: string) => string;
+      /**
+       * **Die leise Fußnote des Cache-Carry** („Stand 14:20", Andi 21.08.:
+       * „das ist Lärm, meistens ist er einfach im Energiesparmodus"). Erscheint
+       * NUR, wenn der BE `fromCacheSinceMs` mitschickt — dann kommen die
+       * gezeigten Werte aus dem Gedächtnis statt live, und das wird gesagt,
+       * aber im 13-px-Ton einer Fußnote statt als Abwesenheits-Meldung.
+       * Der Zeitpunkt ist die ÄLTESTE gecachte Sichtung der Familie
+       * (`components/homeTiles.ts#vacuumFamilyCacheSince`).
+       */
+      cacheSince: (clock: string) => string;
+      /** „zuletzt fertig 14:20" — `lastCleanEnd` am selben Kalendertag (`components/homeTiles.ts#vacuumLastClean`). */
+      lastCleanToday: (clock: string) => string;
+      /** „zuletzt fertig vor 2 Tg." — derselbe Lauf, aber an einem früheren Tag: dann trägt die Zeile das Alter statt einer Uhrzeit ohne Datum. */
+      lastCleanAgo: (relative: string) => string;
+      /** „Dauer 1 h 40 min" — NUR wenn auch `lastCleanStart` da ist und plausibel zum Ende passt. */
+      lastCleanDuration: (span: string) => string;
+      /** Zeitspannen-Wörter für {@link lastCleanDuration} — eigene Bausteine, weil `age` relative VERGANGENHEIT beschreibt („vor 2 Std."), das hier aber eine DAUER ist. */
+      duration: {
+        hoursMinutes: (hours: number, minutes: number) => string;
+        minutes: (minutes: number) => string;
+      };
+      /**
+       * **Die zwei Tat-Knöpfe** (Andi 21.08.: „Können wir den Sauger starten
+       * und nach Hause fahren lassen?"), `POST /api/v1/home/vacuum/{action}`.
+       * Welcher Knopf wann erscheint, entscheidet
+       * `components/homeTiles.ts#vacuumActionAvailability` — hier steht nur der
+       * Text.
+       */
+      actions: {
+        start: string;
+        returnToBase: string;
+        /** Während der Request läuft. */
+        sending: string;
+        /**
+         * 200. Sagt AUSDRÜCKLICH nur, dass Home Assistant den Auftrag
+         * angenommen hat — nicht, dass der Sauger fährt (der Antwort-Body
+         * trägt bewusst kein Zustandsfeld). Die Kachel-Wahrheit kommt weiter
+         * aus dem Polling.
+         */
+        accepted: string;
+        /** Letzter Notnagel, wenn ein Fehler ohne lesbare Meldung ankommt — die Server-Meldung hat immer Vorrang. */
+        failed: string;
+        /** Die Anfrage kam nie an (Netz weg/Abbruch): wir wissen NICHT, ob HA sie bekam, und sagen genau das. */
+        networkError: string;
+      };
+      /**
+       * Wartungsblock (seit 22.08. auf L/XL aufgeklappt statt `<details>`,
+       * §3.2): Bürsten-/Filter-/Sensoren-Restzeit + Mopp-/Wasserkasten-
+       * Anbringung + Mopp-Trocknung — jede Zeile NUR bei brauchbarem Wert.
+       *
+       * **Restzeit lesbar seit 22.08.** (Andi, wörtlich: „Hauptbürste: 634362 s
+       * … nicht in Sekunden ^^" — `ORDER-sauger-wartung-lesbar-2026-08-22.md`):
+       * `mainBrush`/`sideBrush`/`filter`/`sensor` bekommen jetzt einen bereits
+       * fertig formatierten Restzeit-Satz („noch ~7 Tage"/„überfällig seit
+       * ~12 h", s. `components/homeTiles.ts#formatMaintenanceDuration`) statt
+       * der rohen HA-Zahl+Einheit — NUR wenn die Einheit eine der vier
+       * bekannten HA-`UnitOfTime`-Kürzel ist (`s`/`min`/`h`/`d`); sonst bleibt
+       * der alte Wert+Einheit-Text der ehrliche Rückfall (Einheit NIE geraten).
+       */
+      maintenance: {
+        /** Überschrift des Blocks (früher der `<summary>`-Text des Folds). */
+        summary: string;
+        /** „Hauptbürste: <Wert>" — Wert ist der fertige Restzeit-Satz (s. oben) oder, unkonvertiert, „<Zahl> <Einheit>"/„<Zahl>". */
+        mainBrush: (value: string) => string;
+        sideBrush: (value: string) => string;
+        filter: (value: string) => string;
+        sensor: (value: string) => string;
+        moppAttached: string;
+        moppNotAttached: string;
+        waterboxAttached: string;
+        waterboxNotAttached: string;
+        /** `dock_mopp_trocknung` = on. NUR diese Hälfte hat einen Text: „trocknet nicht" ist der Normalzustand und damit keine Nachricht. */
+        moppDrying: string;
+        /**
+         * Restzeit-Sätze (`components/homeTiles.ts#formatMaintenanceDuration`),
+         * je Bucket EIN Text — `remaining` für Restzeit ≥ 0, `overdue` für
+         * negative Werte. `remaining.dueNow` ist der eine Grenzfall ohne Zahl
+         * (exakt 0 s: weder Rest noch Verzug).
+         */
+        remaining: { dueNow: string; minutes: (n: number) => string; hours: (n: number) => string; days: (n: number) => string };
+        overdue: { minutes: (n: number) => string; hours: (n: number) => string; days: (n: number) => string };
+      };
+    };
+    climate: {
+      name: string;
+      /** „<Raum> 21,5° → 22°" — der Raumname ist NUTZERDATEN, kommt roh als Parameter. */
+      roomLine: (room: string, current: string, target: string) => string;
+      /** `hvac_action === 'heating'`. */
+      heating: string;
+      /** Ein einzelner Raum ohne lesbaren State — der Rest der Kachel bleibt stehen, NUR wenn auch KEIN `lastKnown` existiert (s. {@link lastKnownRoomLine}). */
+      roomUnreachable: (room: string) => string;
+      /**
+       * „<Raum> <alte Ist-Temp> → <alte Soll-Temp> · zuletzt <relative Zeit>"
+       * — Fallback EINER Raum-Zeile, wenn ihr Klima-Gerät live unbrauchbar
+       * ist, aber `lastKnown` existiert (Andi-Auftrag 2026-08-13). Ersetzt
+       * NUR diese eine Zeile, der Rest der Kachel bleibt unberührt.
+       */
+      lastKnownRoomLine: (room: string, current: string, target: string, relative: string) => string;
+      /** „+3 weitere Räume" hinter den ersten {@link CLIMATE_TILE_VISIBLE} Zeilen. */
+      restSummary: (count: number) => string;
+      /** Die ganze Kachel ohne Registry-Daten (Fetch läuft/Naht aus/nicht erreichbar) ODER kein Raum mit climate. */
+      unreachable: string;
+    };
   };
 }
 

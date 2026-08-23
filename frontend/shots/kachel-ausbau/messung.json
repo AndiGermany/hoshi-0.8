@@ -1,0 +1,62 @@
+[
+  {
+    "shot": "uhr-L-tag",
+    "appeared": true,
+    "tile": {
+      "w": 583,
+      "h": 621
+    },
+    "art": {
+      "w": 553,
+      "h": 138
+    },
+    "phase": "day",
+    "days": 0,
+    "file": "/Users/andi/IdeaProjects/Hoshi_0.8/.claude/worktrees/kachel-ausbau/frontend/shots/kachel-ausbau/uhr-L-tag-1366x1024.png"
+  },
+  {
+    "shot": "wetter-XL",
+    "appeared": true,
+    "tile": {
+      "w": 880,
+      "h": 621
+    },
+    "art": {
+      "w": 850,
+      "h": 109
+    },
+    "phase": null,
+    "days": 7,
+    "file": "/Users/andi/IdeaProjects/Hoshi_0.8/.claude/worktrees/kachel-ausbau/frontend/shots/kachel-ausbau/wetter-XL-1366x1024.png"
+  },
+  {
+    "shot": "buehne-normal",
+    "appeared": true,
+    "tile": {
+      "w": 583,
+      "h": 305
+    },
+    "art": {
+      "w": 553,
+      "h": 138
+    },
+    "phase": "day",
+    "days": 0,
+    "file": "/Users/andi/IdeaProjects/Hoshi_0.8/.claude/worktrees/kachel-ausbau/frontend/shots/kachel-ausbau/buehne-normal-1366x1024.png"
+  },
+  {
+    "shot": "uhr-L-nacht",
+    "appeared": true,
+    "tile": {
+      "w": 583,
+      "h": 621
+    },
+    "art": {
+      "w": 553,
+      "h": 138
+    },
+    "phase": "night",
+    "days": 0,
+    "file": "/Users/andi/IdeaProjects/Hoshi_0.8/.claude/worktrees/kachel-ausbau/frontend/shots/kachel-ausbau/uhr-L-nacht-1366x1024.png"
+  }
+]

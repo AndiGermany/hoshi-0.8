@@ -1,0 +1,1182 @@
+{
+ "1366x1024/normal": {
+  "viewport": {
+   "w": 1366,
+   "h": 1024
+  },
+  "docScrollH": 1024,
+  "boxes": {
+   ".idle": {
+    "top": 95,
+    "bottom": 786,
+    "h": 692,
+    "w": 880
+   },
+   ".idle__head": {
+    "top": 115,
+    "bottom": 137,
+    "h": 23,
+    "w": 880
+   },
+   ".idle__alarm": {
+    "top": 157,
+    "bottom": 192,
+    "h": 35,
+    "w": 880
+   },
+   ".idle__stage": {
+    "top": 212,
+    "bottom": 782,
+    "h": 570,
+    "w": 880
+   },
+   ".idle__tiles": {
+    "top": 212,
+    "bottom": 782,
+    "h": 570,
+    "w": 880
+   },
+   ".idle__page": {
+    "top": 212,
+    "bottom": 762,
+    "h": 550,
+    "w": 880
+   },
+   ".voiceorb": {
+    "top": 786,
+    "bottom": 967,
+    "h": 180,
+    "w": 880
+   },
+   ".voiceorb__tap": {
+    "top": 800,
+    "bottom": 932,
+    "h": 132,
+    "w": 132
+   },
+   ".voiceorb__hint": {
+    "top": 942,
+    "bottom": 963,
+    "h": 20,
+    "w": 137
+   },
+   ".homefoot": {
+    "top": 977,
+    "bottom": 1012,
+    "h": 36,
+    "w": 888
+   },
+   ".idle__editbar": null,
+   ".idle__tray": null
+  },
+  "gaps": {
+   "Bühne→Orb": 18,
+   "Orb→Hinweis": 10,
+   "Hinweis→Fußleiste": 14,
+   "Fußleiste→Fensterboden": 12,
+   "Kopf→Bühne": 75
+  },
+  "footWidthPct": 65,
+  "editBarH": null,
+  "editHelp": null,
+  "tiles": [
+   {
+    "id": "uhr",
+    "w": 583,
+    "h": 550,
+    "contentH": 520,
+    "fill": 90
+   },
+   {
+    "id": "wetter",
+    "w": 583,
+    "h": 550,
+    "contentH": 170,
+    "fill": 29
+   },
+   {
+    "id": "laeuft",
+    "w": 583,
+    "h": 363,
+    "contentH": 100,
+    "fill": 26
+   },
+   {
+    "id": "einkauf",
+    "w": 583,
+    "h": 175,
+    "contentH": 100,
+    "fill": 54
+   },
+   {
+    "id": "vacuum",
+    "w": 583,
+    "h": 550,
+    "contentH": 79,
+    "fill": 14
+   },
+   {
+    "id": "climate",
+    "w": 583,
+    "h": 363,
+    "contentH": 50,
+    "fill": 13
+   }
+  ],
+  "stageTileH": 425,
+  "editing": "false",
+  "sizerButtons": []
+ },
+ "1366x1024/edit": {
+  "longPressOn": "uhr",
+  "viewport": {
+   "w": 1366,
+   "h": 1024
+  },
+  "docScrollH": 1024,
+  "boxes": {
+   ".idle": {
+    "top": 95,
+    "bottom": 786,
+    "h": 692,
+    "w": 880
+   },
+   ".idle__head": {
+    "top": 115,
+    "bottom": 137,
+    "h": 23,
+    "w": 880
+   },
+   ".idle__alarm": {
+    "top": 157,
+    "bottom": 192,
+    "h": 35,
+    "w": 880
+   },
+   ".idle__stage": {
+    "top": 212,
+    "bottom": 782,
+    "h": 570,
+    "w": 880
+   },
+   ".idle__tiles": {
+    "top": 284,
+    "bottom": 716,
+    "h": 432,
+    "w": 880
+   },
+   ".idle__page": {
+    "top": 284,
+    "bottom": 696,
+    "h": 412,
+    "w": 880
+   },
+   ".voiceorb": {
+    "top": 786,
+    "bottom": 967,
+    "h": 180,
+    "w": 880
+   },
+   ".voiceorb__tap": {
+    "top": 800,
+    "bottom": 932,
+    "h": 132,
+    "w": 132
+   },
+   ".voiceorb__hint": {
+    "top": 942,
+    "bottom": 963,
+    "h": 20,
+    "w": 137
+   },
+   ".homefoot": {
+    "top": 977,
+    "bottom": 1012,
+    "h": 36,
+    "w": 888
+   },
+   ".idle__editbar": {
+    "top": 212,
+    "bottom": 274,
+    "h": 62,
+    "w": 880
+   },
+   ".idle__tray": {
+    "top": 726,
+    "bottom": 782,
+    "h": 56,
+    "w": 880
+   }
+  },
+  "gaps": {
+   "Bühne→Orb": 84,
+   "Orb→Hinweis": 10,
+   "Hinweis→Fußleiste": 14,
+   "Fußleiste→Fensterboden": 12,
+   "Kopf→Bühne": 75
+  },
+  "footWidthPct": 65,
+  "editBarH": 62,
+  "editHelp": {
+   "jetzt": 62,
+   "mitAlterHilfe": 62,
+   "kostetPx": 0,
+   "textblockJetzt": 20,
+   "textblockAlt": 40,
+   "belegungZeilenAlt": 1,
+   "zusageZeilenAlt": 1,
+   "knoepfe": [
+    44,
+    44
+   ],
+   "polster": "8px/8px",
+   "rahmen": "1px",
+   "boxSizing": "border-box",
+   "zusageGekuerzt": false,
+   "belegungSichtbarDanach": false
+  },
+  "tiles": [
+   {
+    "id": "uhr",
+    "w": 586,
+    "h": 417,
+    "contentH": 386,
+    "fill": 88
+   },
+   {
+    "id": "wetter",
+    "w": 585,
+    "h": 416,
+    "contentH": 173,
+    "fill": 39
+   },
+   {
+    "id": "laeuft",
+    "w": 584,
+    "h": 415,
+    "contentH": 102,
+    "fill": 23
+   },
+   {
+    "id": "einkauf",
+    "w": 583,
+    "h": 413,
+    "contentH": 100,
+    "fill": 23
+   },
+   {
+    "id": "vacuum",
+    "w": 583,
+    "h": 413,
+    "contentH": 80,
+    "fill": 18
+   },
+   {
+    "id": "climate",
+    "w": 585,
+    "h": 415,
+    "contentH": 53,
+    "fill": 12
+   }
+  ],
+  "stageTileH": 415,
+  "editing": "true",
+  "sizerButtons": [
+   {
+    "label": "Kleiner",
+    "disabled": false,
+    "dir": "down"
+   },
+   {
+    "label": "Größer",
+    "disabled": true,
+    "dir": "up"
+   }
+  ]
+ },
+ "834x1112/normal": {
+  "viewport": {
+   "w": 834,
+   "h": 1112
+  },
+  "docScrollH": 1112,
+  "boxes": {
+   ".idle": {
+    "top": 95,
+    "bottom": 874,
+    "h": 780,
+    "w": 794
+   },
+   ".idle__head": {
+    "top": 115,
+    "bottom": 137,
+    "h": 23,
+    "w": 794
+   },
+   ".idle__alarm": {
+    "top": 157,
+    "bottom": 192,
+    "h": 35,
+    "w": 794
+   },
+   ".idle__stage": {
+    "top": 212,
+    "bottom": 870,
+    "h": 658,
+    "w": 794
+   },
+   ".idle__tiles": {
+    "top": 212,
+    "bottom": 870,
+    "h": 658,
+    "w": 794
+   },
+   ".idle__page": {
+    "top": 212,
+    "bottom": 850,
+    "h": 638,
+    "w": 794
+   },
+   ".voiceorb": {
+    "top": 874,
+    "bottom": 1055,
+    "h": 180,
+    "w": 794
+   },
+   ".voiceorb__tap": {
+    "top": 888,
+    "bottom": 1020,
+    "h": 132,
+    "w": 132
+   },
+   ".voiceorb__hint": {
+    "top": 1030,
+    "bottom": 1051,
+    "h": 20,
+    "w": 137
+   },
+   ".homefoot": {
+    "top": 1065,
+    "bottom": 1100,
+    "h": 36,
+    "w": 802
+   },
+   ".idle__editbar": null,
+   ".idle__tray": null
+  },
+  "gaps": {
+   "Bühne→Orb": 18,
+   "Orb→Hinweis": 10,
+   "Hinweis→Fußleiste": 14,
+   "Fußleiste→Fensterboden": 12,
+   "Kopf→Bühne": 75
+  },
+  "footWidthPct": 96,
+  "editBarH": null,
+  "editHelp": null,
+  "tiles": [
+   {
+    "id": "uhr",
+    "w": 525,
+    "h": 313,
+    "contentH": 283,
+    "fill": 85
+   },
+   {
+    "id": "wetter",
+    "w": 525,
+    "h": 313,
+    "contentH": 170,
+    "fill": 51
+   },
+   {
+    "id": "laeuft",
+    "w": 525,
+    "h": 422,
+    "contentH": 100,
+    "fill": 22
+   },
+   {
+    "id": "einkauf",
+    "w": 525,
+    "h": 205,
+    "contentH": 100,
+    "fill": 46
+   },
+   {
+    "id": "vacuum",
+    "w": 525,
+    "h": 313,
+    "contentH": 79,
+    "fill": 24
+   },
+   {
+    "id": "climate",
+    "w": 525,
+    "h": 313,
+    "contentH": 50,
+    "fill": 15
+   }
+  ],
+  "stageTileH": 313,
+  "editing": "false",
+  "sizerButtons": []
+ },
+ "834x1112/edit": {
+  "longPressOn": "uhr",
+  "viewport": {
+   "w": 834,
+   "h": 1112
+  },
+  "docScrollH": 1112,
+  "boxes": {
+   ".idle": {
+    "top": 95,
+    "bottom": 874,
+    "h": 780,
+    "w": 794
+   },
+   ".idle__head": {
+    "top": 115,
+    "bottom": 137,
+    "h": 23,
+    "w": 794
+   },
+   ".idle__alarm": {
+    "top": 157,
+    "bottom": 192,
+    "h": 35,
+    "w": 794
+   },
+   ".idle__stage": {
+    "top": 212,
+    "bottom": 870,
+    "h": 658,
+    "w": 794
+   },
+   ".idle__tiles": {
+    "top": 284,
+    "bottom": 804,
+    "h": 520,
+    "w": 794
+   },
+   ".idle__page": {
+    "top": 284,
+    "bottom": 784,
+    "h": 500,
+    "w": 794
+   },
+   ".voiceorb": {
+    "top": 874,
+    "bottom": 1055,
+    "h": 180,
+    "w": 794
+   },
+   ".voiceorb__tap": {
+    "top": 888,
+    "bottom": 1020,
+    "h": 132,
+    "w": 132
+   },
+   ".voiceorb__hint": {
+    "top": 1030,
+    "bottom": 1051,
+    "h": 20,
+    "w": 137
+   },
+   ".homefoot": {
+    "top": 1065,
+    "bottom": 1100,
+    "h": 36,
+    "w": 802
+   },
+   ".idle__editbar": {
+    "top": 212,
+    "bottom": 274,
+    "h": 62,
+    "w": 794
+   },
+   ".idle__tray": {
+    "top": 814,
+    "bottom": 870,
+    "h": 56,
+    "w": 794
+   }
+  },
+  "gaps": {
+   "Bühne→Orb": 84,
+   "Orb→Hinweis": 10,
+   "Hinweis→Fußleiste": 14,
+   "Fußleiste→Fensterboden": 12,
+   "Kopf→Bühne": 75
+  },
+  "footWidthPct": 96,
+  "editBarH": 62,
+  "editHelp": {
+   "jetzt": 62,
+   "mitAlterHilfe": 44,
+   "kostetPx": -18,
+   "textblockJetzt": 20,
+   "textblockAlt": 40,
+   "belegungZeilenAlt": 1,
+   "zusageZeilenAlt": 1,
+   "knoepfe": [
+    44,
+    44
+   ],
+   "polster": "8px/8px",
+   "rahmen": "1px",
+   "boxSizing": "border-box",
+   "zusageGekuerzt": false,
+   "belegungSichtbarDanach": false
+  },
+  "tiles": [
+   {
+    "id": "uhr",
+    "w": 529,
+    "h": 504,
+    "contentH": 474,
+    "fill": 89
+   },
+   {
+    "id": "wetter",
+    "w": 528,
+    "h": 503,
+    "contentH": 173,
+    "fill": 32
+   },
+   {
+    "id": "laeuft",
+    "w": 526,
+    "h": 331,
+    "contentH": 101,
+    "fill": 29
+   },
+   {
+    "id": "einkauf",
+    "w": 525,
+    "h": 159,
+    "contentH": 100,
+    "fill": 59
+   },
+   {
+    "id": "vacuum",
+    "w": 527,
+    "h": 502,
+    "contentH": 81,
+    "fill": 15
+   },
+   {
+    "id": "climate",
+    "w": 527,
+    "h": 332,
+    "contentH": 53,
+    "fill": 15
+   }
+  ],
+  "stageTileH": 389,
+  "editing": "true",
+  "sizerButtons": [
+   {
+    "label": "Kleiner",
+    "disabled": false,
+    "dir": "down"
+   },
+   {
+    "label": "Größer",
+    "disabled": true,
+    "dir": "up"
+   }
+  ]
+ },
+ "700x900/normal": {
+  "viewport": {
+   "w": 700,
+   "h": 900
+  },
+  "docScrollH": 900,
+  "boxes": {
+   ".idle": {
+    "top": 95,
+    "bottom": 662,
+    "h": 568,
+    "w": 660
+   },
+   ".idle__head": {
+    "top": 115,
+    "bottom": 137,
+    "h": 23,
+    "w": 660
+   },
+   ".idle__alarm": {
+    "top": 157,
+    "bottom": 192,
+    "h": 35,
+    "w": 660
+   },
+   ".idle__stage": {
+    "top": 212,
+    "bottom": 658,
+    "h": 446,
+    "w": 660
+   },
+   ".idle__tiles": {
+    "top": 212,
+    "bottom": 658,
+    "h": 446,
+    "w": 660
+   },
+   ".idle__page": {
+    "top": 212,
+    "bottom": 638,
+    "h": 426,
+    "w": 660
+   },
+   ".voiceorb": {
+    "top": 662,
+    "bottom": 843,
+    "h": 180,
+    "w": 660
+   },
+   ".voiceorb__tap": {
+    "top": 676,
+    "bottom": 808,
+    "h": 132,
+    "w": 132
+   },
+   ".voiceorb__hint": {
+    "top": 818,
+    "bottom": 839,
+    "h": 20,
+    "w": 137
+   },
+   ".homefoot": {
+    "top": 853,
+    "bottom": 888,
+    "h": 36,
+    "w": 672
+   },
+   ".idle__editbar": null,
+   ".idle__tray": null
+  },
+  "gaps": {
+   "Bühne→Orb": 18,
+   "Orb→Hinweis": 10,
+   "Hinweis→Fußleiste": 14,
+   "Fußleiste→Fensterboden": 12,
+   "Kopf→Bühne": 75
+  },
+  "footWidthPct": 96,
+  "editBarH": null,
+  "editHelp": null,
+  "tiles": [
+   {
+    "id": "uhr",
+    "w": 660,
+    "h": 426,
+    "contentH": 396,
+    "fill": 89
+   },
+   {
+    "id": "wetter",
+    "w": 660,
+    "h": 426,
+    "contentH": 165,
+    "fill": 37
+   },
+   {
+    "id": "laeuft",
+    "w": 660,
+    "h": 280,
+    "contentH": 100,
+    "fill": 34
+   },
+   {
+    "id": "einkauf",
+    "w": 660,
+    "h": 134,
+    "contentH": 100,
+    "fill": 71
+   },
+   {
+    "id": "vacuum",
+    "w": 660,
+    "h": 426,
+    "contentH": 79,
+    "fill": 18
+   },
+   {
+    "id": "climate",
+    "w": 660,
+    "h": 280,
+    "contentH": 50,
+    "fill": 17
+   }
+  ],
+  "stageTileH": 329,
+  "editing": "false",
+  "sizerButtons": []
+ },
+ "700x900/edit": {
+  "longPressOn": "uhr",
+  "viewport": {
+   "w": 700,
+   "h": 900
+  },
+  "docScrollH": 900,
+  "boxes": {
+   ".idle": {
+    "top": 95,
+    "bottom": 662,
+    "h": 568,
+    "w": 660
+   },
+   ".idle__head": {
+    "top": 115,
+    "bottom": 137,
+    "h": 23,
+    "w": 719
+   },
+   ".idle__alarm": {
+    "top": 157,
+    "bottom": 192,
+    "h": 35,
+    "w": 719
+   },
+   ".idle__stage": {
+    "top": 212,
+    "bottom": 658,
+    "h": 446,
+    "w": 719
+   },
+   ".idle__tiles": {
+    "top": 284,
+    "bottom": 592,
+    "h": 308,
+    "w": 719
+   },
+   ".idle__page": {
+    "top": 284,
+    "bottom": 572,
+    "h": 288,
+    "w": 719
+   },
+   ".voiceorb": {
+    "top": 662,
+    "bottom": 843,
+    "h": 180,
+    "w": 660
+   },
+   ".voiceorb__tap": {
+    "top": 676,
+    "bottom": 808,
+    "h": 132,
+    "w": 132
+   },
+   ".voiceorb__hint": {
+    "top": 818,
+    "bottom": 839,
+    "h": 20,
+    "w": 137
+   },
+   ".homefoot": {
+    "top": 853,
+    "bottom": 888,
+    "h": 36,
+    "w": 672
+   },
+   ".idle__editbar": {
+    "top": 212,
+    "bottom": 274,
+    "h": 62,
+    "w": 719
+   },
+   ".idle__tray": {
+    "top": 602,
+    "bottom": 658,
+    "h": 56,
+    "w": 719
+   }
+  },
+  "gaps": {
+   "Bühne→Orb": 84,
+   "Orb→Hinweis": 10,
+   "Hinweis→Fußleiste": 14,
+   "Fußleiste→Fensterboden": 12,
+   "Kopf→Bühne": 75
+  },
+  "footWidthPct": 96,
+  "editBarH": 62,
+  "editHelp": {
+   "jetzt": 62,
+   "mitAlterHilfe": 64,
+   "kostetPx": 2,
+   "textblockJetzt": 20,
+   "textblockAlt": 77,
+   "belegungZeilenAlt": 2,
+   "zusageZeilenAlt": 2,
+   "knoepfe": [
+    44,
+    44
+   ],
+   "polster": "8px/8px",
+   "rahmen": "1px",
+   "boxSizing": "border-box",
+   "zusageGekuerzt": false,
+   "belegungSichtbarDanach": false
+  },
+  "tiles": [
+   {
+    "id": "uhr",
+    "w": 721,
+    "h": 294,
+    "contentH": 263,
+    "fill": 86
+   },
+   {
+    "id": "wetter",
+    "w": 720,
+    "h": 293,
+    "contentH": 170,
+    "fill": 55
+   },
+   {
+    "id": "laeuft",
+    "w": 720,
+    "h": 291,
+    "contentH": 102,
+    "fill": 34
+   },
+   {
+    "id": "einkauf",
+    "w": 719,
+    "h": 289,
+    "contentH": 101,
+    "fill": 33
+   },
+   {
+    "id": "vacuum",
+    "w": 719,
+    "h": 290,
+    "contentH": 81,
+    "fill": 27
+   },
+   {
+    "id": "climate",
+    "w": 720,
+    "h": 292,
+    "contentH": 53,
+    "fill": 17
+   }
+  ],
+  "stageTileH": 292,
+  "editing": "true",
+  "sizerButtons": [
+   {
+    "label": "Kleiner",
+    "disabled": false,
+    "dir": "down"
+   },
+   {
+    "label": "Größer",
+    "disabled": true,
+    "dir": "up"
+   }
+  ]
+ },
+ "560x900/normal": {
+  "viewport": {
+   "w": 560,
+   "h": 900
+  },
+  "docScrollH": 900,
+  "boxes": {
+   ".idle": {
+    "top": 127,
+    "bottom": 662,
+    "h": 535,
+    "w": 520
+   },
+   ".idle__head": {
+    "top": 147,
+    "bottom": 170,
+    "h": 23,
+    "w": 520
+   },
+   ".idle__alarm": {
+    "top": 190,
+    "bottom": 225,
+    "h": 35,
+    "w": 520
+   },
+   ".idle__stage": {
+    "top": 245,
+    "bottom": 658,
+    "h": 414,
+    "w": 520
+   },
+   ".idle__tiles": {
+    "top": 245,
+    "bottom": 658,
+    "h": 414,
+    "w": 520
+   },
+   ".idle__page": {
+    "top": 245,
+    "bottom": 638,
+    "h": 394,
+    "w": 520
+   },
+   ".voiceorb": {
+    "top": 662,
+    "bottom": 843,
+    "h": 180,
+    "w": 520
+   },
+   ".voiceorb__tap": {
+    "top": 676,
+    "bottom": 808,
+    "h": 132,
+    "w": 132
+   },
+   ".voiceorb__hint": {
+    "top": 818,
+    "bottom": 839,
+    "h": 20,
+    "w": 137
+   },
+   ".homefoot": {
+    "top": 853,
+    "bottom": 888,
+    "h": 36,
+    "w": 538
+   },
+   ".idle__editbar": null,
+   ".idle__tray": null
+  },
+  "gaps": {
+   "Bühne→Orb": 18,
+   "Orb→Hinweis": 10,
+   "Hinweis→Fußleiste": 14,
+   "Fußleiste→Fensterboden": 12,
+   "Kopf→Bühne": 75
+  },
+  "footWidthPct": 96,
+  "editBarH": null,
+  "editHelp": null,
+  "tiles": [
+   {
+    "id": "uhr",
+    "w": 520,
+    "h": 394,
+    "contentH": 364,
+    "fill": 87
+   },
+   {
+    "id": "wetter",
+    "w": 520,
+    "h": 394,
+    "contentH": 159,
+    "fill": 38
+   },
+   {
+    "id": "laeuft",
+    "w": 520,
+    "h": 394,
+    "contentH": 100,
+    "fill": 24
+   },
+   {
+    "id": "einkauf",
+    "w": 520,
+    "h": 394,
+    "contentH": 100,
+    "fill": 24
+   },
+   {
+    "id": "vacuum",
+    "w": 520,
+    "h": 394,
+    "contentH": 79,
+    "fill": 19
+   },
+   {
+    "id": "climate",
+    "w": 520,
+    "h": 394,
+    "contentH": 50,
+    "fill": 12
+   }
+  ],
+  "stageTileH": 394,
+  "editing": "false",
+  "sizerButtons": []
+ },
+ "560x900/edit": {
+  "longPressOn": "uhr",
+  "viewport": {
+   "w": 560,
+   "h": 900
+  },
+  "docScrollH": 900,
+  "boxes": {
+   ".idle": {
+    "top": 127,
+    "bottom": 662,
+    "h": 535,
+    "w": 520
+   },
+   ".idle__head": {
+    "top": 147,
+    "bottom": 170,
+    "h": 23,
+    "w": 719
+   },
+   ".idle__alarm": {
+    "top": 190,
+    "bottom": 225,
+    "h": 35,
+    "w": 719
+   },
+   ".idle__stage": {
+    "top": 245,
+    "bottom": 658,
+    "h": 414,
+    "w": 719
+   },
+   ".idle__tiles": {
+    "top": 317,
+    "bottom": 592,
+    "h": 276,
+    "w": 719
+   },
+   ".idle__page": {
+    "top": 317,
+    "bottom": 572,
+    "h": 256,
+    "w": 719
+   },
+   ".voiceorb": {
+    "top": 662,
+    "bottom": 843,
+    "h": 180,
+    "w": 520
+   },
+   ".voiceorb__tap": {
+    "top": 676,
+    "bottom": 808,
+    "h": 132,
+    "w": 132
+   },
+   ".voiceorb__hint": {
+    "top": 818,
+    "bottom": 839,
+    "h": 20,
+    "w": 137
+   },
+   ".homefoot": {
+    "top": 853,
+    "bottom": 888,
+    "h": 36,
+    "w": 538
+   },
+   ".idle__editbar": {
+    "top": 245,
+    "bottom": 307,
+    "h": 62,
+    "w": 719
+   },
+   ".idle__tray": {
+    "top": 602,
+    "bottom": 658,
+    "h": 56,
+    "w": 719
+   }
+  },
+  "gaps": {
+   "Bühne→Orb": 84,
+   "Orb→Hinweis": 10,
+   "Hinweis→Fußleiste": 14,
+   "Fußleiste→Fensterboden": 12,
+   "Kopf→Bühne": 75
+  },
+  "footWidthPct": 96,
+  "editBarH": 62,
+  "editHelp": {
+   "jetzt": 62,
+   "mitAlterHilfe": 61,
+   "kostetPx": -1,
+   "textblockJetzt": 20,
+   "textblockAlt": 95,
+   "belegungZeilenAlt": 3,
+   "zusageZeilenAlt": 2,
+   "knoepfe": [
+    44,
+    44
+   ],
+   "polster": "8px/8px",
+   "rahmen": "1px",
+   "boxSizing": "border-box",
+   "zusageGekuerzt": false,
+   "belegungSichtbarDanach": false
+  },
+  "tiles": [
+   {
+    "id": "uhr",
+    "w": 721,
+    "h": 261,
+    "contentH": 231,
+    "fill": 85
+   },
+   {
+    "id": "wetter",
+    "w": 720,
+    "h": 260,
+    "contentH": 107,
+    "fill": 39
+   },
+   {
+    "id": "laeuft",
+    "w": 720,
+    "h": 258,
+    "contentH": 102,
+    "fill": 38
+   },
+   {
+    "id": "einkauf",
+    "w": 719,
+    "h": 256,
+    "contentH": 100,
+    "fill": 37
+   },
+   {
+    "id": "vacuum",
+    "w": 719,
+    "h": 257,
+    "contentH": 81,
+    "fill": 30
+   },
+   {
+    "id": "climate",
+    "w": 720,
+    "h": 259,
+    "contentH": 53,
+    "fill": 20
+   }
+  ],
+  "stageTileH": 259,
+  "editing": "true",
+  "sizerButtons": [
+   {
+    "label": "Kleiner",
+    "disabled": false,
+    "dir": "down"
+   },
+   {
+    "label": "Größer",
+    "disabled": true,
+    "dir": "up"
+   }
+  ]
+ }
+}

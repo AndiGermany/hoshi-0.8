@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>tagesschau.de - Die Nachrichten der ARD</title>
+    <item>
+      <title>Erste Meldung – aktualisiert</title>
+      <link>https://www.tagesschau.de/inland/erste-meldung-100.html?foo=bar</link>
+      <guid isPermaLink="false">tagesschau-erste-100</guid>
+      <description>Neuer Anriss.</description>
+      <pubDate>Sat, 15 Aug 2026 07:30:00 +0200</pubDate>
+    </item>
+    <item>
+      <title>Zweite Meldung</title>
+      <link>https://www.tagesschau.de/ausland/zweite-meldung-100.html</link>
+      <guid isPermaLink="false">tagesschau-zweite-100</guid>
+      <description>Zweiter Anriss ohne Volltext.</description>
+      <pubDate>Sat, 15 Aug 2026 08:00:00 +0200</pubDate>
+    </item>
+    <item>
+      <title>Dritte Meldung</title>
+      <link>https://www.tagesschau.de/wirtschaft/dritte-meldung-100.html</link>
+      <guid isPermaLink="false">tagesschau-dritte-100</guid>
+      <description>Dritter Anriss.</description>
+      <pubDate>Sat, 15 Aug 2026 09:00:00 +0200</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,27 +1,44 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, useState } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { renderToStaticMarkup } from 'react-dom/server';
 import {
   LOOKUP_MODEL_TEXTS,
   SETTINGS_CATEGORIES,
-  SettingsCategoryNav,
+  SETTINGS_PANEL_CATEGORY_IDS,
   SettingsPanel,
+  settingsCategoryHeadingId,
   type SettingsCategoryId,
 } from '../components/SettingsPanel';
+import { de } from '../i18n/de';
 import type { EscalationModeWire } from '../api/extendedThink';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Kategorie-Navigation (Andi 15.07: „hier müssen wir zu weit scrollen, daher
-//  organisiere das bitte übersichtlich neu"). Deckt zwei Ebenen ab:
-//   1. SettingsCategoryNav isoliert (Render-Vertrag, Klick, Pfeiltasten) — kein
-//      Live-Backend nötig, weil die Sub-Sektionen hier gar nicht mitmounten.
-//   2. Der volle SettingsPanel-Mount: alle Kategorie-Panels bleiben IMMER
-//      gemountet (nur `hidden` schaltet), der Wechsel zeigt/versteckt die
-//      richtigen Panels. `fetch` wird global weggeblockt (Netz-Stub) — die
-//      Kind-Sektionen (Skills/Speaker/Privacy/Weather/NightMode) fangen das
-//      längst ehrlich ab (eigene Tests decken ihre Fehlerpfade schon ab).
+//  organisiere das bitte übersichtlich neu").
+//
+//  ── UMBAU 15.08 (Andi live am iPad, nach dem Original-Auftrag) ───────────────
+//  Diese Datei prüfte bis dahin die Chip-Reiterleiste `SettingsCategoryNav`
+//  (Render-Vertrag, Klick, Pfeiltasten/roving tabindex). Die Leiste ist ersatzlos
+//  gestrichen: die Übersicht aus sieben Karten (§3.1) ist der Einstieg, und
+//  INNERHALB einer Kategorie führt genau ein Weg zurück. Ein Test einer
+//  gestrichenen Komponente wäre nicht „grün zu halten", sondern zu ersetzen —
+//  darum prüft die Datei jetzt dieselbe Frage an der neuen Naht:
+//   1. Kategorie-Wechsel läuft über die ÜBERSICHTSKARTE (nicht mehr über einen
+//      Reiter) und zeigt/versteckt weiterhin genau ein Panel.
+//   2. Die ARIA-Naht ist nicht tot: `region` + eigene Überschrift statt
+//      `tabpanel` + `aria-labelledby` auf eine verschwundene Reiter-Id.
+//  ── NACHTRAG 21.08 (Andi: „Dort ist immer noch die Zwischenseite") ──────────
+//  „Darstellung" ist keine Kategorie mehr, sondern eine AUSLÖSER-Karte: sie hebt
+//  die Galerie und lässt die Schale auf der Übersicht stehen. Alle Schleifen über
+//  „jede Kategorie hat ein Panel" laufen darum jetzt über
+//  {@link SETTINGS_PANEL_CATEGORY_IDS} (die sechs mit Panel) statt über
+//  SETTINGS_CATEGORIES (die sieben Karten) — und wo eine Kategorie nur als
+//  „irgendwo herkommen" gebraucht wurde, steht eine mit Panel.
+//  Unverändert bleibt: alle Kategorie-Panels sind IMMER gemountet (nur `hidden`
+//  schaltet). `fetch` wird global weggeblockt (Netz-Stub) — die Kind-Sektionen
+//  (Skills/Speaker/Privacy/Weather/NightMode) fangen das längst ehrlich ab
+//  (eigene Tests decken ihre Fehlerpfade schon ab).
 // ─────────────────────────────────────────────────────────────────────────────
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -46,119 +63,24 @@ function memoryStorage(): Storage {
 
 describe('SETTINGS_CATEGORIES — die sieben IA-Kategorien', () => {
   it('genau 7 Kategorien, eindeutige ids, in der dokumentierten Reihenfolge', () => {
-    // Neuordnung 26.07 (Andi-Auftrag: „die komplette Online-Nachschau-Funktion
-    // soll über die Einstellungen in einer geeigneten Gruppierung einstellbar
-    // sein — überdenke die Anordnung"): 'online-nachschlagen' ist neu (bündelt
-    // die Extended-Think-Stufen + das Nachschlag-Modell); 'faehigkeiten' ist
-    // aufgelöst (Skills + Wecker-Eskalation ziehen in 'zuhause-integrationen',
-    // vorher 'standort-integrationen'); 'persoenlichkeit' und 'modell-leistung'
-    // sind getauscht, damit die drei Online-/Technik-Reiter zusammenstehen.
+    // Neuordnung 07.08 (Andi-Auftrag: „ordne die Kategorien in den Settings
+    // geordnet an") — Nutzungs-Rhythmus statt Online-Grad als Ordnungsprinzip:
+    // Alltägliches vorn (Darstellung · Sprache & Stimme · Persönlichkeit ·
+    // Zuhause & Integrationen — Reiter, die man beiläufig oder gelegentlich
+    // öffnet), Set-once/Technik hinten (Online & Nachschlagen · Gedächtnis &
+    // Privatsphäre · Modell & Leistung — selten angefasst, ganz hinten die
+    // reine Technik-Einstellung). Reine Umsortierung: keine Kategorie wurde
+    // umbenannt oder zusammengelegt (s. SettingsPanel.tsx, SETTINGS_CATEGORY_IDS).
     expect(SETTINGS_CATEGORIES.map((c) => c.id)).toEqual([
       'darstellung',
       'sprache-stimme',
-      'online-nachschlagen',
-      'modell-leistung',
       'persoenlichkeit',
-      'gedaechtnis-privatsphaere',
       'zuhause-integrationen',
+      'online-nachschlagen',
+      'gedaechtnis-privatsphaere',
+      'modell-leistung',
     ]);
     expect(new Set(SETTINGS_CATEGORIES.map((c) => c.id)).size).toBe(SETTINGS_CATEGORIES.length);
-  });
-});
-
-describe('SettingsCategoryNav — Render-Vertrag (WAI-ARIA-Tabs)', () => {
-  it('role="tablist" + ein role="tab" je Kategorie, aktiver trägt aria-selected + tabIndex 0', () => {
-    const html = renderToStaticMarkup(
-      <SettingsCategoryNav active="online-nachschlagen" onSelect={() => {}} />,
-    );
-    expect(html).toContain('role="tablist"');
-    expect((html.match(/role="tab"/g) ?? []).length).toBe(SETTINGS_CATEGORIES.length);
-    expect(html).toContain('aria-label="Einstellungs-Kategorien"');
-    // der aktive Reiter (Online & Nachschlagen): selected + im Tab-Fokus erreichbar (tabindex 0).
-    expect(html).toMatch(
-      /id="settings-tab-online-nachschlagen"[^>]*aria-selected="true"[^>]*tabindex="0"/,
-    );
-    // alle Labels stehen drin (& kommt HTML-escaped aus renderToStaticMarkup).
-    for (const c of SETTINGS_CATEGORIES) expect(html).toContain(c.label.replace('&', '&amp;'));
-  });
-
-  it('inaktive Reiter: aria-selected=false + tabindex -1 (roving tabindex)', () => {
-    const html = renderToStaticMarkup(
-      <SettingsCategoryNav active="darstellung" onSelect={() => {}} />,
-    );
-    expect(html).toMatch(
-      /id="settings-tab-online-nachschlagen"[^>]*aria-selected="false"[^>]*tabindex="-1"/,
-    );
-  });
-});
-
-describe('SettingsCategoryNav — Klick + Pfeiltasten (jsdom)', () => {
-  let container: HTMLDivElement;
-  let root: Root | null = null;
-
-  beforeEach(() => {
-    container = document.createElement('div');
-    document.body.appendChild(container);
-  });
-  afterEach(async () => {
-    if (root) {
-      const r = root;
-      await act(async () => r.unmount());
-      root = null;
-    }
-    container.remove();
-  });
-
-  function Host() {
-    const [active, setActive] = useState<SettingsCategoryId>('darstellung');
-    return <SettingsCategoryNav active={active} onSelect={setActive} />;
-  }
-
-  it('Klick auf einen Reiter ruft onSelect mit dessen id auf', async () => {
-    const onSelect = vi.fn();
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(<SettingsCategoryNav active="darstellung" onSelect={onSelect} />);
-    });
-    const tab = container.querySelector('#settings-tab-persoenlichkeit') as HTMLButtonElement;
-    await act(async () => {
-      tab.click();
-    });
-    expect(onSelect).toHaveBeenCalledWith('persoenlichkeit');
-  });
-
-  it('ArrowRight/ArrowLeft wandern durchs Set (mit Wrap-Around) und nehmen den Fokus mit', async () => {
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(<Host />);
-    });
-
-    const tablist = container.querySelector('[role="tablist"]') as HTMLDivElement;
-    const first = container.querySelector('#settings-tab-darstellung') as HTMLButtonElement;
-    first.focus();
-    expect(document.activeElement).toBe(first);
-
-    await act(async () => {
-      tablist.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
-      );
-    });
-    const second = container.querySelector('#settings-tab-sprache-stimme') as HTMLButtonElement;
-    expect(second.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(second);
-
-    // ArrowLeft von der ersten Kategorie wrapt zur letzten.
-    await act(async () => {
-      first.focus();
-    });
-    // active ist inzwischen 'sprache-stimme' — ArrowLeft geht zurück zu 'darstellung'.
-    await act(async () => {
-      tablist.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }),
-      );
-    });
-    const back = container.querySelector('#settings-tab-darstellung') as HTMLButtonElement;
-    expect(back.getAttribute('aria-selected')).toBe('true');
   });
 });
 
@@ -206,20 +128,85 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
 
   const panel = (id: SettingsCategoryId) =>
     container.querySelector(`#settings-panel-${id}`) as HTMLElement;
-  const tab = (id: SettingsCategoryId) =>
-    container.querySelector(`#settings-tab-${id}`) as HTMLButtonElement;
+  // Seit der Schalen-Scheibe (15.08 §3.1) ist die Kategorie-ÜBERSICHT die
+  // Einstiegs-Ebene — und seit demselben Tag der EINZIGE Weg hinein: die
+  // Chip-Reiterleiste ist gestrichen (s. Datei-Kopf). Ein Wechsel ist darum
+  // „zurück auf die Übersicht, dann die andere Karte".
+  const card = (id: SettingsCategoryId) =>
+    container.querySelector(`#settings-card-${id}`) as HTMLButtonElement;
+  const back = () => container.querySelector('.settings__back') as HTMLButtonElement;
+  const enterCategory = async (id: SettingsCategoryId): Promise<void> => {
+    if (back()) {
+      await act(async () => {
+        back().click();
+      });
+    }
+    await act(async () => {
+      card(id).click();
+    });
+  };
 
-  it('initial: nur „Darstellung" ist sichtbar, alle anderen fünf Panels tragen hidden', async () => {
+  it('Einstieg: die Übersicht steht da, KEIN Kategorie-Panel ist sichtbar', async () => {
     root = createRoot(container);
     await act(async () => {
       root!.render(<SettingsPanel {...baseProps} />);
     });
     await flush();
 
-    expect(panel('darstellung').hidden).toBe(false);
-    for (const c of SETTINGS_CATEGORIES) {
-      if (c.id === 'darstellung') continue;
-      expect(panel(c.id).hidden, c.id).toBe(true);
+    // Die sieben Karten in Andis Ordnung (SETTINGS_CATEGORY_IDS, 07.08).
+    const cards = Array.from(container.querySelectorAll('.settings__catcard'));
+    expect(cards).toHaveLength(SETTINGS_CATEGORIES.length);
+    // Auf der Übersicht gibt es keine Reiter — und kein Panel ist offen.
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+    for (const id of SETTINGS_PANEL_CATEGORY_IDS) expect(panel(id).hidden, id).toBe(true);
+    // …aber alles bleibt gemountet (Hooks/Fetches laufen weiter).
+    expect(container.querySelector('label[for="settings-voice"]')).not.toBeNull();
+  });
+
+  // ── Andi 21.08.: „Dort ist immer noch die Zwischenseite." ──────────────────
+  //    Ein Klick auf „Darstellung" ist der ganze Weg zur Galerie. Die Schale
+  //    darf dabei NICHT in eine Kategorie laufen — sonst läge unter dem
+  //    Vollbild-Overlay wieder eine Seite, die „Fertig" freilegt.
+  it('die Karte „Darstellung" betritt KEINE Kategorie — sie hat gar kein Panel mehr', async () => {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<SettingsPanel {...baseProps} />);
+    });
+    await flush();
+
+    // Die Karte steht weiter an ihrem Platz (Andis Rhythmus vom 07.08.) …
+    expect(card('darstellung')).not.toBeNull();
+    // … aber es gibt kein Panel dahinter, das man betreten könnte.
+    expect(container.querySelector('#settings-panel-darstellung')).toBeNull();
+    expect(SETTINGS_PANEL_CATEGORY_IDS).not.toContain('darstellung');
+
+    await act(async () => {
+      card('darstellung').click();
+    });
+    await flush();
+
+    // Die Schale steht weiter auf der Übersicht: die sieben Karten sind da,
+    // der „‹ Einstellungen"-Rückweg (den es nur INNERHALB einer Kategorie gibt)
+    // ist es nicht. Genau daran hängt, wohin „Fertig" zurückführt.
+    expect(container.querySelectorAll('.settings__catcard')).toHaveLength(
+      SETTINGS_CATEGORIES.length,
+    );
+    expect(back()).toBeNull();
+    for (const id of SETTINGS_PANEL_CATEGORY_IDS) expect(panel(id).hidden, id).toBe(true);
+  });
+
+  it('nach dem Tipp auf „Sprache & Stimme": nur dieses Panel ist sichtbar, alle anderen tragen hidden', async () => {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<SettingsPanel {...baseProps} />);
+    });
+    await flush();
+    await enterCategory('sprache-stimme');
+
+    expect(panel('sprache-stimme').hidden).toBe(false);
+    for (const id of SETTINGS_PANEL_CATEGORY_IDS) {
+      if (id === 'sprache-stimme') continue;
+      expect(panel(id).hidden, id).toBe(true);
     }
     // Alle Panels bleiben trotzdem gemountet: die Stimme-Gruppe steht im DOM,
     // auch während seine Kategorie gerade nicht aktiv ist (das `<select>` selbst
@@ -227,21 +214,17 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
     expect(container.querySelector('label[for="settings-voice"]')).not.toBeNull();
   });
 
-  it('Klick auf „Online & Nachschlagen" blendet Eskalations-Stufen/Lookup-Modell ein, Darstellung aus', async () => {
+  it('Wechsel auf „Online & Nachschlagen" blendet Eskalations-Stufen/Lookup-Modell ein, Darstellung aus', async () => {
     root = createRoot(container);
     await act(async () => {
       root!.render(<SettingsPanel {...baseProps} />);
     });
     await flush();
-
-    await act(async () => {
-      tab('online-nachschlagen').click();
-    });
+    await enterCategory('persoenlichkeit');
+    await enterCategory('online-nachschlagen');
 
     expect(panel('online-nachschlagen').hidden).toBe(false);
-    expect(panel('darstellung').hidden).toBe(true);
-    expect(tab('online-nachschlagen').getAttribute('aria-selected')).toBe('true');
-    expect(tab('darstellung').getAttribute('aria-selected')).toBe('false');
+    expect(panel('persoenlichkeit').hidden).toBe(true);
     // Inhalt der Kategorie ist da: die vier Eskalations-Stufen (Andi-Auftrag
     // 26.07 — vorher hatte diese Einstellung KEIN UI-Element) direkt über dem
     // Nachschlag-Modell (zog aus der ehemaligen Fähigkeiten-Kategorie hierher).
@@ -249,16 +232,14 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
     expect(panel('online-nachschlagen').textContent).toContain('Online-Nachschlag');
   });
 
-  it('Klick auf „Gedächtnis & Privatsphäre" zeigt Sprecher + Privatsphäre zusammen', async () => {
+  it('Wechsel auf „Gedächtnis & Privatsphäre" zeigt Sprecher + Privatsphäre zusammen', async () => {
     root = createRoot(container);
     await act(async () => {
       root!.render(<SettingsPanel {...baseProps} />);
     });
     await flush();
-
-    await act(async () => {
-      tab('gedaechtnis-privatsphaere').click();
-    });
+    await enterCategory('persoenlichkeit');
+    await enterCategory('gedaechtnis-privatsphaere');
 
     const p = panel('gedaechtnis-privatsphaere');
     expect(p.hidden).toBe(false);
@@ -266,16 +247,14 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
     expect(p.textContent).toContain('Privatsphäre');
   });
 
-  it('Klick auf „Zuhause & Integrationen" zeigt Wetter-Ort + Skills + Wecker-Eskalation + Nachtmodus zusammen', async () => {
+  it('Wechsel auf „Zuhause & Integrationen" zeigt Wetter-Ort + Skills + Wecker-Eskalation + Nachtmodus zusammen', async () => {
     root = createRoot(container);
     await act(async () => {
       root!.render(<SettingsPanel {...baseProps} />);
     });
     await flush();
-
-    await act(async () => {
-      tab('zuhause-integrationen').click();
-    });
+    await enterCategory('persoenlichkeit');
+    await enterCategory('zuhause-integrationen');
 
     // Umbenannt + erweitert 26.07: die ehemalige Fähigkeiten-Kategorie ist
     // aufgelöst, Skills-Toggles + Wecker-Eskalation stehen jetzt hier neben
@@ -288,19 +267,45 @@ describe('SettingsPanel — Kategorie-Wechsel zeigt/versteckt die richtigen Pane
     expect(p.textContent).toContain('Nachtmodus');
   });
 
-  it('nur EIN Panel ist je Klick sichtbar (die anderen fünf bleiben hidden)', async () => {
+  it('nur EIN Panel ist je Wechsel sichtbar (die anderen sechs bleiben hidden)', async () => {
     root = createRoot(container);
     await act(async () => {
       root!.render(<SettingsPanel {...baseProps} />);
     });
     await flush();
+    await enterCategory('persoenlichkeit');
+    await enterCategory('sprache-stimme');
 
+    const visible = SETTINGS_PANEL_CATEGORY_IDS.filter((id) => !panel(id).hidden);
+    expect(visible).toEqual(['sprache-stimme']);
+  });
+
+  // ── Was von der Reiter-Leiste übrig bleiben MUSS: die Beschriftung ──────────
+  //    Ein Panel ohne Tablist darf kein `tabpanel` sein, und `aria-labelledby`
+  //    darf nicht auf eine Id zeigen, die mit der Leiste verschwunden ist. Beides
+  //    wäre stilles, kaputtes ARIA — deshalb steht es hier als Vertrag.
+
+  it('jedes Panel ist eine `region`, benannt von seiner eigenen Überschrift (kein totes ARIA)', async () => {
+    root = createRoot(container);
     await act(async () => {
-      tab('sprache-stimme').click();
+      root!.render(<SettingsPanel {...baseProps} />);
     });
+    await flush();
+    await enterCategory('persoenlichkeit');
 
-    const visible = SETTINGS_CATEGORIES.filter((c) => !panel(c.id).hidden);
-    expect(visible.map((c) => c.id)).toEqual(['sprache-stimme']);
+    for (const id of SETTINGS_PANEL_CATEGORY_IDS) {
+      const p = panel(id);
+      expect(p.getAttribute('role'), id).toBe('region');
+      expect(p.getAttribute('aria-labelledby'), id).toBe(settingsCategoryHeadingId(id));
+      const heading = container.querySelector(`#${settingsCategoryHeadingId(id)}`);
+      expect(heading, id).not.toBeNull();
+      expect(heading!.textContent, id).toBe(de.settings.categories[id]);
+    }
+    // Und wirklich nichts von der alten Leiste ist noch im Bild.
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
+    expect(container.querySelectorAll('[role="tabpanel"]')).toHaveLength(0);
+    expect(container.querySelector('[id^="settings-tab-"]')).toBeNull();
   });
 });
 
@@ -391,9 +396,11 @@ describe('Online & Nachschlagen — Nachschlag-Modell-Kaskade', () => {
       root!.render(<SettingsPanel {...baseProps} />);
     });
     await flush();
-    const tab = container.querySelector('#settings-tab-online-nachschlagen') as HTMLButtonElement;
+    // Übersicht → Kategorie (Schalen-Scheibe 15.08 §3.1): die Karte ist der
+    // Einstieg, die Chip-Reiterleiste lebt erst innerhalb der Kategorie.
+    const card = container.querySelector('#settings-card-online-nachschlagen') as HTMLButtonElement;
     await act(async () => {
-      tab.click();
+      card.click();
     });
     await flush();
     return container.querySelector('#settings-panel-online-nachschlagen') as HTMLElement;

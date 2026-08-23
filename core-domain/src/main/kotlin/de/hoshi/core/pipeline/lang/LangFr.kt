@@ -81,6 +81,8 @@ object LangFr {
             "Hm, mon ouvrage de référence n'est pas joignable pour l'instant. Je ne veux pas deviner — redemande-moi dans un moment et je regarde comme il faut.",
             "Là, je bloque — ma réserve de savoir ne répond pas. Laisse-moi un moment, et je pourrai te le dire honnêtement.",
         ),
+        executionClaimAskBack =
+            "Je n'ai pas bien compris ça comme une commande à exécuter — tu me le redis?",
         factCoverageOfflineDisclaimer = "Honnêtement, je n'ai pas de source pour ça — mais d'après ce que je sais: ",
         localLookupFoundPrefix = "J'ai regardé dans ce que j'ai ici — ",
         // ── Andi-Auftrag 2026-07-26 „les phrases de recherche en ligne sont
@@ -121,6 +123,9 @@ object LangFr {
         dailyNoteUpdated = "Mis à jour: un $SCORE_PLACEHOLDER pour aujourd'hui. Merci à toi!",
         workshopNoteRecorded = "Noté pour l'atelier. Merci à toi!",
         probeReceipt = "Je t'entends cinq sur cinq — oreilles, fil et voix, tout est en place.",
+        currentAffairsBriefingPrefix = "Mis à jour à $TIME_PLACEHOLDER: ",
+        currentAffairsBriefingStalePrefix = "Mis à jour à $TIME_PLACEHOLDER, plus ancien que d'habitude: ",
+        currentAffairsNone = "Je n'ai aucune information pour toi en ce moment.",
         intentPatterns = IntentPatternNotes(
             lookupVerbs = listOf(
                 "cherche", "regarde", "vérifie", "consulte", "cherche-moi", "recherche",
@@ -325,6 +330,17 @@ object LangFr {
         temperatureInArea = "Dans {room}, il fait {value} degrés en ce moment.",
         temperatureHouseAverage = "Dans la maison, il fait {value} degrés en moyenne en ce moment.",
         temperatureUnavailable = "Je n'accède pas à la température en ce moment — réessaie dans un instant.",
+        freshnessJustNow = "à l'instant",
+        freshnessMinutesAgo = "il y a $MINUTES_PLACEHOLDER minutes",
+        freshnessOverAnHourAgo = "il y a plus d'une heure",
+        temperatureInAreaStale = "Dans {room}, il faisait {value} degrés $FRESHNESS_PLACEHOLDER.",
+        temperatureHouseAverageStale = "Dans la maison, il faisait {value} degrés en moyenne $FRESHNESS_PLACEHOLDER.",
+        // Additiv am Zeilenende (LL-additive-Regel), s. HaExecutorPack.roomFallbackName:
+        // der ehrliche Ersatz, wenn KEIN echter HA-Anzeigename auffindbar ist —
+        // nie ein kapitalisierter Slug („Kuche"), lieber vage als verstümmelt.
+        // Passt zu „dans {room}"/„de {room}" — „La lumière dans la pièce
+        // demandée est éteinte."
+        roomFallbackName = "la pièce demandée",
         decimalSeparator = ",",
     )
 

@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  Mess-Gerüst des Aoi-Pods (Theme-Revival 2026-08-18/19).
+
+  Es gab im Repo KEIN Kontrast-Harness (geprüft) — dieses hier ist das minimale.
+  Der Punkt der Übung ist die Lehre vom 18.08.: ein Messfühler, der die Themen-CSS
+  nicht mitsamt der index.css-Basistoken lädt, MISST NICHT DAS PRODUKT, sondern
+  eine Nachbildung — und lügt dann.
+
+  Darum lädt diese Seite genau die drei Dateien, die im echten Frontend hinter dem
+  Hintergrund stehen, in der echten Reihenfolge:
+    1. ../../frontend/src/index.css          — Basistoken (Yoru-Satz, Motion-Token,
+                                               .app-Geometrie: max-width 920px)
+    2. ../../frontend/src/styles/themes.css   — Basis-Look + Panel-Styles
+    3. ../../frontend/public/themes/aoi.css   — das zu messende Thema
+  Der relative Pfad zur Szene (url('aoi-szene.svg')) löst sich dabei korrekt gegen
+  die Themen-CSS auf — genau wie im ausgelieferten Frontend.
+
+  Die Seite ist ABSICHTLICH leer: gemessen wird der Hintergrund-Stapel
+  (Atmosphäre + Zeichnung + Licht + Schleier) an der Stelle, an der später Text
+  steht. Karten sind deckend und würden das Bild nur verstecken. Das .app-Gerüst
+  steht trotzdem im DOM, damit die 920-px-Spalte dieselbe Geometrie hat wie im
+  Produkt.
+-->
+<html lang="de" data-theme="aoi">
+  <head>
+    <meta charset="utf-8" />
+    <title>Aoi — Kontrast-Messgerüst</title>
+    <link rel="stylesheet" href="../../frontend/src/index.css" />
+    <link rel="stylesheet" href="../../frontend/src/styles/themes.css" />
+    <link rel="stylesheet" href="../../frontend/public/themes/aoi.css" />
+    <style>
+      /* Nur fürs Messen: die Spalte sichtbar markieren, wenn ?guides=1 gesetzt
+         ist. Ohne den Parameter bleibt die Seite völlig leer. */
+      .app {
+        height: 100%;
+      }
+      html[data-guides='1'] .app {
+        outline: 1px dashed #ff00ff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app"></div>
+    <script>
+      const q = new URLSearchParams(location.search);
+      if (q.get('guides') === '1') {
+        document.documentElement.dataset.guides = '1';
+      }
+      // ?veil=0.72 belegt die Kurve im Datei-Kopf ("warum 0.88 und nicht
+      // weniger"). Der Wert MUSS auf <html> gesetzt werden, denn dort deklariert
+      // aoi.css ihn und nur von dort erreicht er :root::after (ein
+      // Pseudoelement von <html>). Auf body gesetzt bliebe er wirkungslos —
+      // genau der Fehler, den dieses Harness am 19.08. aufgedeckt hat.
+      const veil = q.get('veil');
+      if (veil !== null) {
+        document.documentElement.style.setProperty('--aoi-veil', veil);
+      }
+    </script>
+  </body>
+</html>

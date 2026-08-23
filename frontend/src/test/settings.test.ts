@@ -15,6 +15,14 @@ import {
 } from '../hooks/useSettings';
 import { SettingsPanel } from '../components/SettingsPanel';
 import { streamChat } from '../api/chat';
+import { parseThemeManifest, primeThemeManifest } from '../styles/themeCatalog';
+import { readFileSync } from 'node:fs';
+
+// Seit dem .old-Umzug (2026-08-08) prüft der Theme-Riegel in `loadSettings`
+// gegen `public/themes/manifest.json` statt gegen eine Union im Code. Die ECHTE
+// ausgelieferte Datei wird darum einmal eingesetzt — sonst könnte der Riegel
+// mangels Manifest gar nicht greifen (Kaltstart-Verhalten, s. isKnownTheme).
+primeThemeManifest(parseThemeManifest(JSON.parse(readFileSync('public/themes/manifest.json', 'utf8'))));
 
 /** In-Memory-Storage, der die DOM-`Storage`-Form erfüllt (node hat kein localStorage). */
 function memoryStorage(): Storage {

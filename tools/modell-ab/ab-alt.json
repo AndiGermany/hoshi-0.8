@@ -1,0 +1,15 @@
+{
+  "_kommentar": "measure-brain-ab.py-Config fuer die ALT-Seite (Pin deb1db71) — laeuft gegen das LAUFENDE Prod-Brain auf :8041, VOR dem Andi-Fenster. Gegenstueck: ab-neu.json (identisch bis auf die beiden URLs). Wer hier zusaetzlich an den Armen dreht, misst Sampling statt Revision. WICHTIG: prompt_files sind relativ — aus dem Repo-Root aufrufen.",
+  "base_url": "http://127.0.0.1:8041/v1/chat",
+  "health_url": "http://127.0.0.1:8041/health",
+  "temperature": 0.0,
+  "max_tokens": 220,
+  "prompt_files": [
+    "training/lora-v0/eval/prompts.jsonl",
+    "training/lora-v0/eval/prompts-v2.jsonl"
+  ],
+  "baseline_arm": "default",
+  "arms": [
+    {"name": "default", "fields": {}}
+  ]
+}

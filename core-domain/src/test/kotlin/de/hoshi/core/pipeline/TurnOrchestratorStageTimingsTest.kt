@@ -32,7 +32,11 @@ class TurnOrchestratorStageTimingsTest {
         override fun invoke(): Long = queue.removeFirstOrNull()?.also { last = it } ?: last
     }
 
-    private class FakeBrainPort(private val deltas: List<String>) : BrainPort {
+    private class FakeBrainPort(
+        private val deltas: List<String>,
+        /** Non-null ⇒ the stream fails instead of emitting (adapter error path). */
+        private val error: Throwable? = null,
+    ) : BrainPort {
         override fun streamChat(
             prompt: String,
             systemPrompt: String,
@@ -43,7 +47,8 @@ class TurnOrchestratorStageTimingsTest {
             tools: List<Map<String, Any?>>,
             toolGrammar: Boolean,
             onPrefill: (Long) -> Unit,
-        ): Flux<LlmDelta> = Flux.fromIterable(deltas.map { LlmDelta(it) })
+        ): Flux<LlmDelta> =
+            error?.let { Flux.error(it) } ?: Flux.fromIterable(deltas.map { LlmDelta(it) })
     }
 
     /** Realer Orchestrator (FACT_SHORT/LOCAL) mit Fake-Brain + zwei Fake-Uhren. */
@@ -51,6 +56,7 @@ class TurnOrchestratorStageTimingsTest {
         brainDeltas: List<String>,
         orchestratorNano: () -> Long,
         assemblerNano: () -> Long,
+        brainError: Throwable? = null,
     ): TurnOrchestrator {
         val persona = PersonaService()
         return TurnOrchestrator(
@@ -79,7 +85,7 @@ class TurnOrchestratorStageTimingsTest {
             ),
             persona = persona,
             formatter = ResponseFormatter(),
-            brain = FakeBrainPort(brainDeltas),
+            brain = FakeBrainPort(brainDeltas, brainError),
             nanoTime = orchestratorNano,
         )
     }
@@ -129,5 +135,49 @@ class TurnOrchestratorStageTimingsTest {
             .collectList().block(Duration.ofSeconds(5))!!
 
         assertNull(done(events).stageTimings, "kein Brain, kein Grounding ⇒ kein Timings-Objekt")
+    }
+
+    /**
+     * Brain-Timeout: bis 14.08. sah ein 30-s-Wedge im Diary exakt aus wie „Turn
+     * ohne Brain" (brainTtftMs=null in BEIDEN Fällen) — acht reale Stalls blieben
+     * sieben Wochen unsichtbar (MESSUNG-latenz-diary-2026-08-13, KORREKTUR).
+     * Der Adapter verpackt die `Flux.timeout`-[TimeoutException] in seinen eigenen
+     * „nicht erreichbar"-Fehler, darum die Ursachen-Kette im Test.
+     */
+    @Test
+    fun `brain-timeout traegt sich explizit ins Done - brainTtft bleibt ehrlich null`() {
+        val events = orchestrator(
+            brainDeltas = emptyList(),
+            orchestratorNano = FakeNano(1_000_000_000L),
+            assemblerNano = FakeNano(0L, 42_000_000L),
+            brainError = RuntimeException(
+                "MLX-Brain (/v1/chat) nicht erreichbar",
+                java.util.concurrent.TimeoutException("Did not observe any item within 20000ms"),
+            ),
+        ).handle(ChatRequest(text = "Wie hoch ist der Eiffelturm?"))
+            .collectList().block(Duration.ofSeconds(5))!!
+
+        val timings = done(events).stageTimings!!
+        assertEquals(true, timings.brainTimeout, "der Timeout MUSS am Done stehen — sonst ist der Wedge unsichtbar")
+        assertNull(timings.brainTtftMs, "nie eine Delta gesehen ⇒ null — der Timeout erklärt jetzt WARUM")
+        assertEquals(42L, timings.groundingMs, "die Grounding-Messung bleibt unberührt")
+        // Never-Silent unberührt: der Turn endet weiterhin in der warmen Fehler-Phrase.
+        assertEquals(
+            TurnOrchestrator.ERROR_FALLBACK_DE,
+            events.filterIsInstance<ChatEvent.TextDelta>().joinToString("") { it.text },
+        )
+    }
+
+    @Test
+    fun `nicht-timeout-fehler faerbt das feld NICHT - kein erfundener timeout`() {
+        val events = orchestrator(
+            brainDeltas = emptyList(),
+            orchestratorNano = FakeNano(1_000_000_000L),
+            assemblerNano = FakeNano(0L, 42_000_000L),
+            brainError = IllegalStateException("Sidecar 500"),
+        ).handle(ChatRequest(text = "Wie hoch ist der Eiffelturm?"))
+            .collectList().block(Duration.ofSeconds(5))!!
+
+        assertNull(done(events).stageTimings!!.brainTimeout, "kein Timeout ⇒ Feld fehlt (Done byte-identisch)")
     }
 }

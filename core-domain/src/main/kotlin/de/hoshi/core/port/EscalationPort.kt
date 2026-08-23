@@ -19,8 +19,6 @@ import reactor.core.publisher.Mono
  * höchstens die unzureichenden Grounding-Schnipsel — NIE Memory, NIE Namen aus
  * dem Kontext, NIE History, NIE der `finalPrompt` (der trägt Persona+Memory!).
  *
- * Historie: ersetzt die ältere, nie konsumierte CloudEscalationPort-Seam-Skizze (entfernt 2026-07).
- *
  * Bewusst ein `fun interface` (genau EINE Methode), damit Tests einen
  * Lambda-Fake injizieren können — wie [TtsPort]/[ToolPort].
  */
@@ -54,29 +52,15 @@ fun interface EscalationPort {
 sealed interface EscalationResult {
 
     /**
-     * Die externe Instanz hat belegbar geantwortet.
+     * A completed lookup response.
      *
-     * @param text die Antwort — wird VERBATIM gesprochen/angezeigt (nie durch
-     *        den Brain umformuliert — WikiNumber-Lehre: Umformulierung ist ein
-     *        Konfabulations-Einfallstor). Masken-Token sind bereits zurückgesetzt.
-     *        Trägt SEIT dem Quellen-Struktur-Auftrag (2026-07-21, Andi-Befund
-     *        „Quelle: Quellen: https://…?utm_source=openai" im Sprach-Output)
-     *        NIE mehr eine angehängte Quellen-/URL-Zeile — die Attribution
-     *        reist getrennt über [source]/[sources].
-     * @param source Quellen-Angabe aus der Antwort (bzw. Modell-Attribution,
-     *        wenn die Antwort keine trug) — EIN lesbarer String fürs Diary/
-     *        die 30-Tage-Notiz, NIE an den Aufrufer-Text angehängt.
-     * @param costCents echte Kosten dieses Calls in ca.-Cents (Nano-Calls sind
-     *        Bruchteile von Cents ⇒ Double; 0.0 bei einem lokalen Adapter).
-     * @param sources **strukturierte ECHTE Quellen** (additiv, Default leer —
-     *        Quellen-Struktur-Auftrag 2026-07-21): nur bei belegbaren
-     *        `url_citation`-Treffern des Web-Search-Pfads gefüllt (s.
-     *        [de.hoshi.adapters.escalation.OpenAiEscalationAdapter]), URLs
-     *        bereits von Tracking-Query-Parametern (`utm_source` u.ä.)
-     *        bereinigt. Leer = KEINE verifizierbare Quelle (reiner
-     *        Modellwissen-Fallback wie [source]s „ohne Quellenangabe"/eine
-     *        bloße Selbstauskunft) — der Aufrufer zeigt dann ehrlich KEIN
-     *        Quellen-Icon (Vera-Regel: kein Beleg, kein Beleg-Icon).
+     * @property text restored, display-ready answer, kept verbatim. It never
+     *   contains an appended source line. LL-2026-07-21-wikinumber-umformulierung.
+     * @property source readable but unverified attribution for diary/notes;
+     *   never append it to [text].
+     * @property costCents actual approximate-cent cost; local adapters use 0.0.
+     * @property sources verified structured citations only. ADR-003-quellen-struktur-der-eskalations-antwort:
+     *   empty means no evidence icon; URLs are already stripped of tracking parameters.
      */
     data class Answer(
         val text: String,
@@ -170,15 +154,9 @@ fun interface EscalationDiagnosticsPort {
 }
 
 /**
- * **Eine strukturierte Quellen-Referenz** (additiv, Quellen-Struktur-Auftrag
- * 2026-07-21) — universell wie [EscalationPort] selbst (keine Cloud-/OpenAI-
- * Typen): ein späterer lokaler Adapter füllt [EscalationResult.Answer.sources]
- * genauso.
+ * Provider-neutral citation. ADR-003-quellen-struktur-der-eskalations-antwort.
  *
- * @param title optionale Kurz-Attribution (z.B. Seitentitel) — oft nicht
- *        vorhanden, dann zeigt der Aufrufer den Host aus [url].
- * @param url die Quellen-URL, bereits von Tracking-Query-Parametern
- *        (`utm_source`/`utm_medium`/… u.ä.) bereinigt — s.
- *        [de.hoshi.adapters.escalation.OpenAiEscalationAdapter] fürs Strip.
+ * @property title optional short attribution; callers may fall back to the URL host.
+ * @property url citation URL already stripped of tracking query parameters.
  */
 data class EscalationSourceRef(val title: String? = null, val url: String)

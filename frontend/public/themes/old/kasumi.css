@@ -1,0 +1,51 @@
+/* Hoshi 0.8 — Theme-Datei „kasumi" (dynamisch nachgeladen).
+   ────────────────────────────────────────────────────────────────────────────
+   1:1 aus src/styles/themes.css herausgelöst (Umzug 2026-08-08: Themen liegen
+   nicht mehr im CSS-Bundle, sondern werden über public/themes/manifest.json +
+   styles/themeLoader.ts zur Laufzeit nachgeladen). Der Inhalt ist unverändert —
+   nur der Wohnort hat gewechselt.
+
+   Selbsttragend: der Block setzt jeden Token, den er auch vorher gesetzt hat,
+   und braucht keinen Import. BEIDE Selektoren bleiben Pflicht
+   (`:root[data-theme='kasumi']` UND `[data-theme='kasumi']`): der zweite trägt die
+   Token auch an ein verschachteltes Element, das `data-theme` selbst setzt.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ════════════════ KASUMI (霞) — Nebel-Jade-Nacht (kühl) ════════════════ */
+:root[data-theme='kasumi'],
+[data-theme='kasumi'] {
+  --theme-atmosphere:
+    radial-gradient(ellipse at 85% -10%, oklch(0.63 0.09 190 / 0.1), transparent 38%),
+    radial-gradient(ellipse at 4% 112%, oklch(0.8 0.13 45 / 0.055), transparent 40%),
+    var(--bg-base);
+
+  --bg-base: oklch(0.135 0.04 190); /* tiefster Nebel-Jade */
+  --bg-surface: oklch(0.17 0.042 191);
+  --bg-elevated: oklch(0.205 0.043 192);
+  --bg-subtle: oklch(0.215 0.044 192);
+  --bg-hairline: oklch(0.3 0.038 193);
+
+  --text-1: oklch(0.95 0.014 196);
+  --text-2: oklch(0.825 0.02 195);
+  --text-3: oklch(0.67 0.024 194);
+  --text-4: oklch(0.52 0.026 193);
+
+  /* Gold bleibt der Stimme/CTA-Akzent (die Hoshi-Laterne), wie in 0.5 über alle
+     Themen hinweg — nur das kühle Jade-Feld ringsum wechselt. */
+  --accent: oklch(0.8 0.13 45);
+  --accent-soft: oklch(0.8 0.13 45 / 0.2);
+  --accent-faint: oklch(0.8 0.13 45 / 0.1);
+  --accent-glow: oklch(0.8 0.13 45 / 0.4);
+  --accent-ink: oklch(0.135 0.04 190);
+
+  --success: oklch(0.72 0.15 150);
+  --success-soft: oklch(0.72 0.15 150 / 0.16);
+  --warn: oklch(0.82 0.13 38); /* Rosegold-Rest-Licht statt Amber */
+  --warn-soft: oklch(0.82 0.13 38 / 0.16);
+  --error: oklch(0.65 0.2 25);
+  --error-soft: oklch(0.65 0.2 25 / 0.16);
+
+  --bg-user: oklch(0.235 0.045 192);
+
+  color-scheme: dark;
+}

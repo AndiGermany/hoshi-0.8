@@ -87,9 +87,18 @@ class HaAreaCatalogAdapterTest {
         override fun instant(): Instant = now
     }
 
+    /**
+     * Seit dem Stabilitäts-Fix (2026-08-20) läuft der Refresh ASYNCHRON auf einem
+     * Executor — wer hier HTTP-Calls ZÄHLT, würde sonst gegen ein Thread-Rennen
+     * assertieren. Dieser Executor führt den Refresh inline aus und macht die
+     * Zählung wieder deterministisch; das ausgelagerte Verhalten selbst beweist
+     * [HaAreaCatalogAdapterStaleWhileRevalidateTest].
+     */
+    private val inlineRefresh = java.util.concurrent.Executor { it.run() }
+
     // ── (a) parst + POST/Bearer/Body korrekt ─────────────────────────────────
     @Test
-    fun `parst area_id Name Paare und faellt bei leerem Namen auf den Slug zurueck`() = withHa { url, _, last ->
+    fun `parst area_id Name Paare und faellt bei leerem Namen auf das kuratierte Label zurueck`() = withHa { url, _, last ->
         val adapter = HaAreaCatalogAdapter(baseUrl = url, token = "secret-token")
         val areas = adapter.areas()
 
@@ -97,8 +106,11 @@ class HaAreaCatalogAdapterTest {
         val byId = areas.associateBy { it.areaId }
         assertEquals("Wohnzimmer", byId.getValue("wohnzimmer").label)
         assertEquals("Küche", byId.getValue("kuche").label)
-        // leerer Name ("flur::") -> Slug selbst als Label (nie ein leeres Label).
-        assertEquals("flur", byId.getValue("flur").label)
+        // Leerer Name ("flur::") -> NIE der rohe Slug: `label` wird GESPROCHEN
+        // (Rückfrage + HaToolPort-Quittung), und ein Slug ist ein Schlüssel, kein
+        // Name — „kuche" käme sonst als „Kuche" aus dem Lautsprecher (Andi
+        // 2026-08-22). Kuratierter ToolAreas-Anker, wie AreaCatalogPort.STATIC.
+        assertEquals("Flur", byId.getValue("flur").label)
 
         val meta = last.get()!!
         assertEquals("POST", meta.method)
@@ -128,7 +140,7 @@ class HaAreaCatalogAdapterTest {
     @Test
     fun `laedt nach TTL-Ablauf neu (zweiter HTTP-Call)`() = withHa { url, calls, _ ->
         val clock = MutableClock(startEpochSeconds = 1_000)
-        val adapter = HaAreaCatalogAdapter(baseUrl = url, token = "secret-token", ttl = Duration.ofMinutes(15), clock = clock)
+        val adapter = HaAreaCatalogAdapter(baseUrl = url, token = "secret-token", ttl = Duration.ofMinutes(15), clock = clock, refreshExecutor = inlineRefresh)
         adapter.areas()
         assertEquals(1, calls.get())
 
@@ -201,6 +213,7 @@ class HaAreaCatalogAdapterTest {
                 token = "secret-token",
                 ttl = Duration.ofMinutes(15),
                 clock = clock,
+                refreshExecutor = inlineRefresh,
             )
             val first = adapter.areas()
             assertEquals(3, first.size)

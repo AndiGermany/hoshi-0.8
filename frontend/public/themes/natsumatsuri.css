@@ -1,0 +1,358 @@
+/* Hoshi 0.8 — NATSUMATSURI (夏祭り), das Sommerfest in der blauen Abendstunde.
+   ════════════════════════════════════════════════════════════════════════════
+   BILD (zweite Fassung, 21.08. — „Hanabi-Taikai", 花火大会): die eine Nacht im
+   Jahr, in der der Himmel blüht. Man steht am Fluss, zwischen anderen Menschen,
+   und über einem gehen sieben große Feuerwerksblüten in vier Farben auf —
+   versetzt, nie alle zugleich. Unten, DEZENT, das Fest: ein schmales warmes
+   Band aus Yatai-Ständen, Laternenketten (提灯) und einem Torii, davor die
+   ruhige Köpfe-Linie der Zuschauer, und im Wasser bricht sich alles ein zweites
+   Mal. Das Feuerwerk ist die Poesie, das Fest ist die Kulisse.
+
+   ANDIS VERDIKT ÜBER DIE ERSTE FASSUNG: „Das ist leider echt nicht soo gut
+   geworden. […] Inspiriert soll es aber von einem Feuerwerk sein, was dezent
+   ein Festival zeigt." Die erste Fassung hatte das Verhältnis genau falsch
+   herum: das Feuerwerk war eine 3,9-KB-Strichzeichnung klein oben rechts, das
+   Fest waren zehn Laternenpunkte am oberen Rand, und die Mitte war leer. Jetzt
+   trägt die Zeichnung `natsumatsuri-hanabi.svg` das ganze Bild.
+
+   Das ist bewusst KEIN weiteres stilles Dunkelthema — hier darf Farbe knallen.
+   Sie knallt nur an den richtigen Stellen. Und es grenzt sich ausdrücklich vom
+   Nachbarn ab: Nagareboshi ist die stille Sternnacht, dies ist das Fest.
+
+   ── DIE ROT-REGEL (Andis Vorgabe: Deko-Rot ≠ Fehler-Rot) ────────────────────
+   Ein Festthema mit Laternenrot und ein Interface mit Fehlerrot können sich
+   beißen. Hier ist die Trennung ausdrücklich gebaut, auf VIER Achsen zugleich —
+   jede einzelne würde wackeln, alle vier zusammen tragen:
+
+   1. ROLLE. Rot ist in diesem Theme KEIN Semantik-Token. Der interaktive Akzent
+      (Stimme, CTA, Auswahl, Fokus) ist das Laternen-GOLD — dieselbe Rolle, die
+      Gold in Yoru/Kasumi/Nagareboshi/Nagori seit 0.5 trägt. Wer Rot sieht,
+      sieht also nie „das kannst du anklicken" und nie „das ist der Akzent".
+   2. TEMPERATUR. Das Fest-Rot ist WARM (Zinnober/朱, H≈38, orangeseitig,
+      #de4d18). `--error` ist KALT (Beni/紅, H≈8, pinkseitig, #fe6c8f). 30° Hue-
+      Abstand in OKLCH und, wichtiger, gegenläufige Temperatur: nebeneinander
+      liest das eine als Feuer, das andere als Alarm. Auf dem blauen Grund
+      driftet die `--error-soft`-Füllung zusätzlich ins Pflaumige (#3d2b47),
+      während jede Deko-Fläche ins Ziegelbraune läuft (#341e28…#7c3221).
+   3. ORT. Fest-Rot erscheint AUSSCHLIESSLICH hinter dem Inhalt (`--theme-
+      atmosphere` und die Szene: Laternen, Noren, Feuerwerk), im Sprachstern und
+      in der Du-Blase — nie in einer Statuszeile, nie als Rahmen, nie als Badge.
+      Statusrot erscheint ausschließlich vorn, scharfkantig, neben Text. Und die
+      Szene liegt zusätzlich UNTER dem Schleier: in der Lesespalte, wo Statusrot
+      wohnt, steht von ihr ohnehin nur ein Sechstel.
+   4. KANTE + SÄTTIGUNG. Deko ist immer weich und gedeckt (max. ~0,42 Alpha,
+      keine harte Kontur). `--error` ist voll gesättigt (C 0,18) und hat immer
+      eine Kante. „Diffus warm" vs. „scharf pink" bleibt auch bei Rotgrün-
+      Sehschwäche über die Helligkeit unterscheidbar.
+   Als Nebeneffekt musste auch `--warn` weg vom Akzent (die `.settings__badge--
+   egress`-Regel sagt ausdrücklich „amber, KEIN Gold"): Gold H 92, Warn H 58,
+   Deko-Rot H 38, Error H 8 — eine saubere, absteigende Wärme-Treppe.
+
+   DIE ZWEITE FASSUNG ERWEITERT DIE REGEL AUF DIE KALTEN TÖNE. Ein Hanabi-Taikai
+   ist bunt — das ist keine Freiheit, die sich das Thema nimmt, sondern das
+   Motiv selbst. Neben Gold (H 92) und Deko-Zinnober (H 34) brennen darum zwei
+   kalte Feuerwerksfarben: Iris H 280 und Cyan H 198. Beide sind mit genau
+   derselben Frage gewählt wie seinerzeit das Deko-Rot — kann man das mit einer
+   Statusfarbe verwechseln? Iris kommt in KEINER vor; Cyan liegt 46° von
+   `--success` (H 152, klar grün) entfernt und ist zudem nie flächig, sondern
+   immer als Funkenkranz gezeichnet. Grün und Pink, die beiden Hues, an denen
+   sich Deko und Semantik wirklich beißen könnten, bleiben im Bild unbesetzt.
+
+   ── KONTRAST (WCAG 2.1, in sRGB nachgerechnet, nicht geschätzt) ─────────────
+   Auf --bg-surface: text-1 15,3:1 · text-2 11,4:1 · text-3 8,0:1 · text-4 7,3:1
+   · accent 11,0:1 · success 8,8:1 · warn 8,1:1 · error 6,3:1.
+   Schlechtester Wert der GESAMTEN Matrix (alle vier Textstufen × base/surface/
+   elevated/subtle/user, plus alle Statusfarben): 5,06:1 (error auf --bg-subtle)
+   — also AA auf jeder Stufe, auf jedem Grund, auch für die leiseste Schrift.
+   --accent-ink auf --accent: 11,9:1 · error auf --error-soft: 4,76:1.
+   Alle Werte liegen INNERHALB sRGB (jeder Kanal geprüft, kein Clipping, also
+   keine stille Gamut-Abbildung auf Nicht-P3-Displays).
+
+   DIESE ZAHLEN SIND NICHT DER BEWEIS, SONDERN DIE HALBE MIETE. Token gegen
+   Token zu rechnen sagt nichts über ein Thema, das ein BILD hinter dem Text
+   hat — dort zählt der schlechteste PIXEL. Den misst das Harness am echten
+   Render, in dem hellstmöglichen Zustand des Feuerwerks (alle sieben Blüten
+   gleichzeitig voll, s. natsumatsuri.scenarios.mjs), über drei Fensterbreiten:
+     node tools/theme-contrast/measure.mjs tools/theme-contrast/natsumatsuri.scenarios.mjs
+   Ergebnis dieser Fassung: text-1 ≥ 9,80:1, text-4 ≥ 4,68:1 — überall ≥ 4,5:1.
+   Der schlechteste Wert steht erwartungsgemäß im `finale`; die vier Zeitproben
+   liegen mit 4,83–5,28:1 darüber, weil dort nie alle Blüten zugleich brennen.
+
+   ── SELEKTOREN ─────────────────────────────────────────────────────────────
+   Wie alle Themen zwei Selektoren: `:root[data-theme='natsumatsuri']` (0,2,0 —
+   schlägt das :root aus index.css unabhängig von der Ladereihenfolge) UND
+   `[data-theme='natsumatsuri']` (0,1,0 — damit die Vorschaukachel im Theme-
+   Picker, die `data-theme` selbst setzt, echte Farben statt geerbter zeigt).
+   Die Datei ist eigenständig: sie bringt ihre body-Hintergrundregel selbst mit
+   und ist damit dynamisch nachladbar, ohne auf styles/themes.css angewiesen zu
+   sein. Fällt themes.css doch mit dazu, ist die Regel deckungsgleich.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='natsumatsuri'],
+[data-theme='natsumatsuri'] {
+  /* ── Die Gasse ────────────────────────────────────────────────────────────
+     Vier Schichten über dem Abendblau, von vorn nach hinten:
+       1) Laternenrot als Wisch oben links (die Kette zieht aus dem Bild),
+       2) Laternengold oben rechts (der nächste Stand),
+       3) die Glut der Gasse von UNTEN — Rot + Gold, dort wo die Stände stehen
+          und das Licht von den Menschen zurückgeworfen wird,
+       4) ein dunkler Himmelsdeckel ganz oben (die Nacht steht schon).
+     Die Alphas sind nicht nach Gefühl gesetzt, sondern gegen die Textstufen
+     gerechnet (s. Kopf): auch dort, wo sich zwei Schichten überlagern, bleibt
+     text-4 ≥ 4,58:1.
+
+     SEIT DER ZWEITEN FASSUNG (Szene v2, 21.08.) ist das der RÜCKFALL, nicht
+     mehr das Bild: darüber liegt `natsumatsuri-hanabi.svg` mit `cover` und
+     deckt die Fläche vollständig ab. Die Verläufe bleiben trotzdem stehen, und
+     zwar mit Absicht — lädt die Zeichnung nicht (langsame Platte, kaputter
+     Cache, ein Nutzer, der Bilder blockiert), steht immer noch eine Festgasse
+     in der blauen Stunde da und kein leeres Rechteck. Ein Rückfall, den nie
+     jemand sieht, kostet nichts; einer, den es nicht gibt, kostet das Thema. */
+  --theme-atmosphere:
+    radial-gradient(ellipse 62% 44% at 6% -8%, oklch(0.615 0.19 38 / 0.15), transparent 64%),
+    radial-gradient(ellipse 56% 40% at 96% -6%, oklch(0.8 0.155 82 / 0.11), transparent 62%),
+    radial-gradient(ellipse 92% 32% at 50% 112%, oklch(0.7 0.18 36 / 0.11), transparent 66%),
+    radial-gradient(ellipse 66% 22% at 50% 116%, oklch(0.8 0.155 82 / 0.085), transparent 60%),
+    linear-gradient(180deg, oklch(0.1 0.055 268 / 0.55), transparent 32%), var(--bg-base);
+
+  /* ── Flächen: die blaue Stunde ────────────────────────────────────────────
+     Tiefes Abendblau, spürbar bunter als die stillen Dunkelthemen (C 0,06 statt
+     0,008 wie Nagareboshi) — der Himmel soll BLAU sein, nicht bloß dunkel. Die
+     Stufen steigen ruhig, damit Karten sich abheben, ohne dass Kanten entstehen. */
+  --bg-base: oklch(0.185 0.06 263); /* #05112d — Himmel über der Gasse */
+  --bg-surface: oklch(0.225 0.055 261); /* #0c1b35 */
+  --bg-elevated: oklch(0.27 0.05 259); /* #17273f */
+  --bg-subtle: oklch(0.3 0.045 258); /* #1f2e44 — Hover-/Füllfläche */
+  --bg-hairline: oklch(0.385 0.04 256); /* #364559 */
+  --bg-hairline-dashed: oklch(0.45 0.034 254); /* #485768 — „ehrlich leer"-Kacheln */
+
+  /* ── Schrift: warmes Papier, kein Weiß ───────────────────────────────────
+     Leicht warmer Elfenbein-Ton (H≈85) statt Neutralgrau — das ist das Licht
+     der Laternen auf dem Papier, nicht die Farbe eines Monitors. */
+  --text-1: oklch(0.96 0.022 88); /* #f8f1e2 — 15,3:1 auf surface */
+  --text-2: oklch(0.865 0.022 86); /* #d9d2c3 — 11,4:1 */
+  --text-3: oklch(0.76 0.023 84); /* #b8b0a1 —  8,0:1 */
+  /* --text-4 IST DER EINE TOKEN, DEN DIE ZWEITE FASSUNG ANGEFASST HAT (L 0,675
+     → 0,735), und das war keine Geschmacksfrage, sondern die Rechnung: die
+     leiseste Schrift steht in diesem Thema jetzt über einem BILD, und der
+     hellste Bildpunkt (der Kern einer Feuerwerksblüte) entscheidet, wie dicht
+     der Schleier über der Lesespalte sein muss. Bei L 0,675 hätte er auf 0,86
+     gemusst und das Feuerwerk wäre hinter der Spalte ein Gespenst gewesen; bei
+     L 0,735 genügen 0,80. Der Gegenwert ist also sichtbares Bild — und
+     nebenbei wird die ganze Matrix robuster: der schlechteste Wert des Themas
+     steigt von 4,64:1 auf 5,06:1, weil text-4 vorher die enge Stelle WAR. */
+  --text-4: oklch(0.735 0.025 82); /* #b1a898 —  7,3:1 (5,82:1 auf --bg-subtle) */
+
+  /* ── Akzent = das LICHT IN DER LATERNE, nicht ihr Papier ─────────────────
+     Gold H 92, satt und hell (#f7ca1d): der Punkt, an dem Farbe in diesem Theme
+     wirklich knallt und trotzdem eine Bedeutung behält — Stimme, CTA, Auswahl,
+     Fokusring. Bewusst gelblicher als das Yoru-Gold (H 45), damit es von --warn
+     (H 58) sauber getrennt bleibt und nicht ins Orange kippt. */
+  --accent: oklch(0.855 0.17 92);
+  --accent-soft: oklch(0.855 0.17 92 / 0.2);
+  --accent-faint: oklch(0.855 0.17 92 / 0.1);
+  --accent-glow: oklch(0.855 0.17 92 / 0.4);
+  --accent-ink: oklch(0.185 0.06 263); /* das Abendblau auf dem Gold — 12,0:1 */
+
+  /* ── Status: laut genug, um zu unterbrechen; fremd genug, um nicht Deko zu sein ──
+     success/warn/error sind die EINZIGEN Buntfarben außerhalb von Gold, die
+     vorn im Inhalt erscheinen dürfen. Sie sind kräftig (das Theme ist kräftig),
+     stehen aber allesamt auf Hues, die im Fest-Bild NICHT vorkommen:
+     Grün 152 gibt es an einer Festgasse nicht, Amber 58 nur als --warn, und das
+     Beni-Rosa 8 ist kalt, wo alles andere warm ist. Die *-soft-Füllungen sind
+     so gewählt, dass die Vollfarbe darauf noch AA-lesbar bleibt (error auf
+     error-soft: 4,75:1). */
+  --success: oklch(0.77 0.15 152); /* #5fcf83 — 8,8:1 */
+  --success-soft: oklch(0.77 0.15 152 / 0.16);
+  --warn: oklch(0.775 0.145 58); /* #fa9c4e — 8,1:1, klar Orange statt Gold */
+  --warn-soft: oklch(0.775 0.145 58 / 0.16);
+  --error: oklch(0.72 0.18 8); /* #fe6c8f — 6,4:1, kaltes Beni gegen warmes Fest */
+  --error-soft: oklch(0.72 0.18 8 / 0.2);
+
+  /* ── Die Du-Blase: laternenbeschienenes Papier ───────────────────────────
+     Der radikalste Zug im eigentlichen Chat. Statt der üblichen leicht
+     gehobenen Neutralfläche steht die eigene Nachricht auf tiefem, warmem
+     Zinnoberbraun (#3c1a15): das Fest liegt auf JEDER Zeile, die man schreibt,
+     nicht nur am Bildrand. Bewusst dunkel (L 0,265) und gedeckt (C 0,055) —
+     kräftig genug, um warm zu lesen, weit genug weg von der scharfen, hellen
+     Fehlerfarbe (L 0,72 / C 0,18), um nie als Alarm durchzugehen.
+     text-1 darauf: 13,9:1 · text-4 darauf: 5,3:1. */
+  --bg-user: oklch(0.265 0.055 30);
+
+  color-scheme: dark;
+}
+
+/* Eigenständigkeit: die Atmosphäre auf den body legen. Identisch zur globalen
+   Regel in styles/themes.css (`:root[data-theme] body`) — steht hier, damit die
+   Datei allein nachgeladen funktioniert; liegt themes.css mit vor, ist es
+   dieselbe Deklaration und nichts ändert sich. */
+:root[data-theme='natsumatsuri'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── Der Draht: die Kopfzeile hängt in der Kette ─────────────────────────────
+   Kein Muster, nur ein Ton: die Nav bekommt einen eigenen Blauverlauf und
+   darunter eine 1px-Goldlippe — der gespannte Draht, an dem draußen die
+   Laternen hängen (dasselbe Mittel wie Nagori/Yoake, box-shadow statt Border:
+   kein Reflow). */
+:root[data-theme='natsumatsuri'] .nav {
+  background: linear-gradient(180deg, oklch(0.235 0.055 261), oklch(0.2 0.06 262));
+  box-shadow: 0 1px 0 oklch(0.855 0.17 92 / 0.14);
+}
+
+/* ── Der Sprachstern ist eine Laterne ───────────────────────────────────────
+   Hier — und nur hier — darf das Fest-Rot nach VORN, weil der Orb keine
+   Statusfarbe trägt: seine Zustände (idle/thinking/listening/speaking) liest man
+   an Bewegung und Größe, die Farbe bleibt über alle Zustände konstant. Der
+   Verlauf ist LINEAR, nicht radial: eine flache, zweifarbige Scheibe (Gold oben,
+   Zinnober unten) statt einer beleuchteten Kugel — Andis Flach-Korrektur vom
+   26.07 („ich möchte es flach, ruhig") bleibt gültig, das Muster ist das von
+   Yoake/Natsu no Hi. */
+:root[data-theme='natsumatsuri'] .vc-orb__core {
+  background: linear-gradient(150deg, oklch(0.95 0.06 92), var(--accent) 44%, oklch(0.66 0.185 38));
+}
+
+/* Der Bloom kippt von Gold (innen) in Laternenrot (außen) — Papierlicht, das in
+   der warmen Abendluft steht. Deckung und Skalierung bleiben die des Basis-Orbs,
+   die Pegel-Reaktivität also unverändert. */
+:root[data-theme='natsumatsuri'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    oklch(0.62 0.19 38 / 0.22) 46%,
+    transparent 74%
+  );
+}
+
+
+/* ── DIE SZENE: das ganze Bild (body::before) ─────────────────────────────────
+   Maß-Vertrag: `cover` + `center bottom`. Die viewBox ist 1600×1000 (1,6:1);
+   `cover` beschneidet bei schmalen Fenstern seitlich, bei breiten oben. Die
+   Sichere Zone der Zeichnung ist darum x 140–1460 und y ≥ 110 — dort steht
+   alles, was das Bild ausmacht (alle sieben Blüten-Mittelpunkte eingeschlossen);
+   außerhalb liegt nur Fortsetzung. Geprüft für 4:3 bis 16:9.
+
+   Der Horizont sitzt bei 62 % Höhe, die Uferlinie bei 75 %, das Fest dazwischen
+   — bei `center bottom` bleiben diese Linien bei jeder Fensterhöhe an derselben
+   Stelle des Fensters, und die Menschen am unteren Bildrand sind IMMER zu sehen.
+
+   WAS DIESE EBENE ERSETZT: bis zur ersten Fassung standen hier zwei
+   Deko-Ebenen — zehn Laternen als CSS-Verläufe (`body::before`) und ein kleines
+   Strichfeuerwerk im rechten Randraum (`body::after`), beide über eine
+   `--measure`-Maske aus der Lesespalte ausgeschnitten. Beides ist in die
+   Zeichnung gewandert, und zwar nicht aus Ordnungsliebe: eine Maske, die das
+   Motiv aus der Spaltenmitte HERAUSSCHNEIDET, erzeugt genau das Bild, das die
+   Regie v2 verboten hat — Motive am Rand, Loch in der Mitte. Die Szene läuft
+   jetzt durch, und die Lesbarkeit trägt der Schleier darunter.
+
+   Keine Animation auf dieser Ebene, und das ist eine Entscheidung: ein Fest
+   bewegt sich nicht als Ganzes. Was sich bewegt, sind die Blüten, die Laternen
+   und die Spiegelungen — jedes für sich, IM Bild, mit eigener Uhr. */
+:root[data-theme='natsumatsuri'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: url('natsumatsuri-hanabi.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+}
+
+/* ── DER SCHLEIER: der Kontrast-Vertrag als Fläche (body::after) ──────────────
+   Er ist die VORDERSTE Deko-Schicht (z-index -1) und liegt damit über der
+   Szene. Das ist der ganze Trick: was auch immer die Zeichnung an Helligkeit
+   erzeugt — der Schleier zieht es in der Lesespalte zum Grundton zurück. Eine
+   achte Blüte, ein hellerer Kern, ein zusätzlicher Verlauf: der Vertrag hält,
+   weil er zuletzt malt.
+
+   SUBTRAKTIV, nicht additiv: er deckt mit --bg-base selbst ab. Auf hellem Grund
+   deckt man mit Weiß und der Kontrast zu dunkler Schrift kann nur besser
+   werden; auf dunklem Grund gilt das Gegenteil, und ein weißer Schleier wäre
+   hier genau der Fehler.
+
+   0,80 — UND WIE DIESE ZAHL ZUSTANDE KAM. Sie ist nicht Geschmack, sie ist das
+   Ergebnis einer Optimierung mit drei Stellschrauben, und der erste Versuch war
+   falsch. Der schlechteste Fall ist immer derselbe: --text-4 über dem hellsten
+   Bildpunkt, und der hellste Bildpunkt ist der Kern einer Feuerwerksblüte.
+   Zuerst stand der Kern auf L 0,97 und text-4 auf L 0,675 — dafür brauchte es
+   Schleier 0,86, und das GEMESSENE Bild war ein Gespenst hinter Nebel (selbst
+   angesehen, genau dafür ist die Sichtungspflicht da). Drei Wege führten
+   hinaus, und nur alle drei zusammen taugen:
+     · Schleier hoch  → schützt Text, tötet das Bild
+     · Kern dunkler   → bringt nichts unter L 0,93 (dann bindet `cyan.hi`)
+     · text-4 heller  → kostet einen Token, schenkt Bild UND Robustheit
+   Gewählt: Kern L 0,93 · text-4 L 0,735 · Schleier 0,80. Gemessen 4,68:1 statt
+   4,43:1 (also bestanden statt durchgefallen) — und in der Lesespalte stehen
+   20 % des Bildes statt 14 %, ein Fünftel mehr Feuerwerk, das hinter dem
+   Gespräch durchläuft.
+
+   Zum Vergleich: Nagareboshi kommt mit 0,78 aus, weil sein hellster Bildpunkt
+   ein Stern auf fast schwarzem Grund ist. Ein helles Bild kostet mehr Schleier
+   — es bleibt trotzdem mehr zu sehen, weil 20 % von 240/255 heller sind als
+   22 % von 60/255.
+
+   Er bedeckt die volle 920-px-Spalte und franst nach AUSSEN aus, nie nach
+   innen. Unter ~1040 px Fensterbreite fällt die calc-Kette auf 0 zusammen, der
+   Schleier deckt alles, und die Zeichnung wird zum Gespenst statt zu
+   verschwinden.
+
+   DIE KANTE BRAUCHT MEHR ALS EINE RAMPE (Rezept F): mit einem einzigen
+   linearen Übergang hat die Deckkraft an beiden Enden einen Knick, und das Auge
+   liest Knicke in Helligkeitsverläufen als LINIE — bei 1920 px stünde eine
+   senkrechte Naht im Nachthimmel. Fünf Stopps über 330 px, und die Kurve fällt
+   zuerst schnell und läuft dann lange flach aus (0,66 · 0,40 · 0,19 · 0,07 —
+   dieselbe Form wie bei Nagareboshi, auf das höhere Plateau skaliert): schon
+   120 px neben der Spalte steht das Feuerwerk zu zwei Dritteln da. */
+:root[data-theme='natsumatsuri'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  --veil: max(0px, 50% - 460px);
+  background-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--veil) - 330px),
+    oklch(0.185 0.06 263 / 0.06) calc(var(--veil) - 260px),
+    oklch(0.185 0.06 263 / 0.17) calc(var(--veil) - 190px),
+    oklch(0.185 0.06 263 / 0.37) calc(var(--veil) - 120px),
+    oklch(0.185 0.06 263 / 0.62) calc(var(--veil) - 55px),
+    oklch(0.185 0.06 263 / 0.8) var(--veil),
+    oklch(0.185 0.06 263 / 0.8) calc(100% - var(--veil)),
+    oklch(0.185 0.06 263 / 0.62) calc(100% - var(--veil) + 55px),
+    oklch(0.185 0.06 263 / 0.37) calc(100% - var(--veil) + 120px),
+    oklch(0.185 0.06 263 / 0.17) calc(100% - var(--veil) + 190px),
+    oklch(0.185 0.06 263 / 0.06) calc(100% - var(--veil) + 260px),
+    transparent calc(100% - var(--veil) + 330px),
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* Eigenes reduced-motion-Gate. Die globale Regel in index.css stellt die Ebenen
+   ohnehin still, aber diese Datei wird zur Laufzeit nachgeladen und muss auch
+   ALLEIN korrekt sein.
+
+   Hier schaltet es nichts ab, was es gäbe — beide Ebenen tragen heute keine
+   CSS-Animation. Es steht trotzdem da, aus demselben Grund wie bei Nagareboshi:
+   es ist die Stelle, an der ein späterer Griff („lass das Fest doch ganz leicht
+   atmen") zuerst ansetzen würde, und der projektweite Riegel in
+   src/test/sceneanimation.test.ts verlangt von einer bewegten Szene genau
+   diesen Namen im Gate. Eine Regel, die nichts abschaltet, kostet nichts und
+   hält das Versprechen auch für den nächsten Griff.
+
+   Die Uhren IM BILD stellt die Zeichnung selbst still: sie trägt dieselbe
+   Medienabfrage in ihrem eigenen <style>. Und weil dort jeder Keyframe bei
+   opacity:1 beginnt und nur nach unten läuft, ist der stillgestellte Zustand
+   der HELLSTE — alle sieben Blüten stehen dann gleichzeitig in voller Pracht.
+   Das Gate LÖSCHT nichts, es hält das Finale an. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='natsumatsuri'] body::before,
+  :root[data-theme='natsumatsuri'] body::after {
+    animation: none;
+  }
+}

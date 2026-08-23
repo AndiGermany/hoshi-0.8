@@ -83,6 +83,8 @@ object LangDe {
             "Hm, mein Nachschlagewerk ist im Moment nicht erreichbar. Ich will dir nichts raten — frag mich gleich nochmal, dann schau ich richtig nach.",
             "Da häng ich grad — mein Wissensspeicher antwortet nicht. Gib mir einen Moment, dann kann ich's dir ehrlich sagen.",
         ),
+        executionClaimAskBack =
+            "Das habe ich nicht sicher als Schaltbefehl verstanden — magst du es nochmal sagen?",
         factCoverageOfflineDisclaimer = "Ehrlich, dafür hab ich keinen Beleg — aber aus meinem eigenen Wissen: ",
         localLookupFoundPrefix = "Hab kurz bei mir nachgeschaut — ",
         // ── Andi-Auftrag 2026-07-26 „die Sprüche für Hoshi schaut online nach
@@ -122,6 +124,9 @@ object LangDe {
         dailyNoteUpdated = "Aktualisiert: heute eine $SCORE_PLACEHOLDER. Danke dir!",
         workshopNoteRecorded = "Notiert für die Werkstatt. Danke dir!",
         probeReceipt = "Ich hör dich klar und deutlich — Ohren, Draht und Stimme stehen.",
+        currentAffairsBriefingPrefix = "Stand $TIME_PLACEHOLDER: ",
+        currentAffairsBriefingStalePrefix = "Stand $TIME_PLACEHOLDER, älter als üblich: ",
+        currentAffairsNone = "Gerade liegen mir keine Meldungen vor.",
         intentPatterns = IntentPatternNotes(
             lookupVerbs = listOf(
                 "schau", "guck", "sieh", "schlag", "schläg", "nachschau",
@@ -337,6 +342,17 @@ object LangDe {
         temperatureHouseAverage = "Im Haus sind es gerade durchschnittlich {value} Grad.",
         temperatureUnavailable = "Ich komm gerade nicht an die Temperatur ran — versuch's gleich nochmal.",
         decimalSeparator = ",",
+        freshnessJustNow = "gerade eben",
+        freshnessMinutesAgo = "vor $MINUTES_PLACEHOLDER Minuten",
+        freshnessOverAnHourAgo = "vor über einer Stunde",
+        temperatureInAreaStale = "Im {room} waren es $FRESHNESS_PLACEHOLDER {value} Grad.",
+        temperatureHouseAverageStale = "Im Haus waren es $FRESHNESS_PLACEHOLDER durchschnittlich {value} Grad.",
+        // Additiv am Zeilenende (LL-additive-Regel), s. HaExecutorPack.roomFallbackName:
+        // der ehrliche Ersatz, wenn KEIN echter HA-Anzeigename auffindbar ist —
+        // nie ein kapitalisierter Slug („Kuche"), lieber vage als verstümmelt.
+        // Andis Wort (2026-08-22). Passt als Dativ-Nomen in JEDEN „im {room}"-Satz
+        // dieses Packs — „Licht im gewünschten Raum ist aus."
+        roomFallbackName = "gewünschten Raum",
     )
 
     /**

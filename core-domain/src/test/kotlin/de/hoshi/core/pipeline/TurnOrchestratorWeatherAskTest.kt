@@ -312,15 +312,16 @@ class TurnOrchestratorWeatherAskTest {
         )
         // Beide Pendings direkt am Store gesetzt (der Orchestrator selbst erzeugt den
         // Zustand nie — die Wand wird trotzdem bewiesen: Ketten sauber getrennt).
-        lookupStore.offer(PendingLookupPort.LOCAL_KEY, PendingLookup("Wie hoch ist der Eiffelturm?", Language.DE))
-        locStore.offer(PendingLookupPort.LOCAL_KEY, PendingLocationQuestion(weatherQuestion, Language.DE))
+        val key = ConversationKeys.local(ConversationKeys.Channel.CHAT)
+        lookupStore.offer(key, PendingLookup("Wie hoch ist der Eiffelturm?", Language.DE))
+        locStore.offer(key, PendingLocationQuestion(weatherQuestion, Language.DE))
 
         turn(o, "Duisburg")
         assertTrue(ask.resolveCalls.isEmpty(), "NIE eine Orts-Einlösung, solange ein Extended-Think-Angebot offen war")
         assertTrue(cloud.queries.isEmpty(), "»Duisburg« ist keine Affirmation — keine Eskalation")
         assertEquals(listOf("Duisburg"), brain.prompts, "der Turn läuft normal")
-        assertNull(lookupStore.consume(PendingLookupPort.LOCAL_KEY), "das Extended-Think-Angebot ist geräumt (one-shot)")
-        assertNull(locStore.consume(PendingLookupPort.LOCAL_KEY), "die Orts-Nachfrage ist geräumt (kein Alt-Köder)")
+        assertNull(lookupStore.consume(key), "das Extended-Think-Angebot ist geräumt (one-shot)")
+        assertNull(locStore.consume(key), "die Orts-Nachfrage ist geräumt (kein Alt-Köder)")
     }
 
     @Test
@@ -339,13 +340,14 @@ class TurnOrchestratorWeatherAskTest {
             mode = { EscalationMode.ERST_FRAGEN },
             grounding = groundingFor(ask),
         )
-        lookupStore.offer(PendingLookupPort.LOCAL_KEY, PendingLookup("Wie hoch ist der Eiffelturm?", Language.DE))
-        locStore.offer(PendingLookupPort.LOCAL_KEY, PendingLocationQuestion(weatherQuestion, Language.DE))
+        val key = ConversationKeys.local(ConversationKeys.Channel.CHAT)
+        lookupStore.offer(key, PendingLookup("Wie hoch ist der Eiffelturm?", Language.DE))
+        locStore.offer(key, PendingLocationQuestion(weatherQuestion, Language.DE))
 
         turn(o, "ja")
         assertEquals(listOf("Wie hoch ist der Eiffelturm?"), cloud.queries, "»ja« löst die Extended-Think-Kette ein")
         assertTrue(ask.resolveCalls.isEmpty(), "die Orts-Kette bleibt unberührt")
-        assertNull(locStore.consume(PendingLookupPort.LOCAL_KEY), "auch die Orts-Nachfrage ist geräumt — kein Alt-Köder")
+        assertNull(locStore.consume(key), "auch die Orts-Nachfrage ist geräumt — kein Alt-Köder")
     }
 
     // ── (7) TTL: eine Nachfrage von vorhin fängt keinen Orts-Namen von jetzt ─────

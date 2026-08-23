@@ -1,71 +1,59 @@
-/* Hoshi 0.8 — Farbthemen + Einstellungs-Panel-Styles.
+/* Hoshi 0.8 — Basis-Token + Einstellungs-Panel-Styles.
    ────────────────────────────────────────────────────────────────────────────
-   THEMEN-MECHANIK: ein `data-theme`-Attribut am <html> (gesetzt von App via
-   useSettings). Die Themen überschreiben NUR die Token, die das 0.8-index.css
-   tatsächlich verwendet. Die OKLCH-Werte sind sinngemäß aus den 0.5-Themen
-   (smarthome-assistant-ui/src/styles/tokens.css) übernommen.
+   DIE THEMEN WOHNEN NICHT MEHR HIER (Andi-Auftrag 2026-08-08: „Ich möchte, dass
+   du die Designs in ein .old verschiebst. Das soll dynamisch nachladbar sein —
+   nicht in der CSS liegen, sondern dynamisch geladen werden."). Jedes Thema ist
+   jetzt EINE eigenständige Datei unter `public/themes/`:
 
-   Neun wählbare Themen:
-     • Aoi (青)    — Morgenblau auf Tinte, der DEFAULT seit Andis Design-Adopt
-                     (Cowork-Spec 2026-07-02 §1: „übernehmen wir die Farbe und
-                     das Design"). Ein gespeichertes Theme gewinnt weiterhin —
-                     Aoi ist nur der neue Fallback (useSettings).
-     • Yoru (夜)   — warm-goldenes Laternenlicht, der bisherige Default. Braucht
-                     KEINEN Override-Block: ohne [data-theme]-Treffer greift das
-                     :root aus index.css → Yoru bleibt byte-identisch wählbar.
-     • Asa (朝)    — heller Washi-Tag, Zinnober-Akzent (Shu 朱).
-     • Kasumi (霞) — kühle Nebel-Jade-Nacht; Gold bleibt der Stimme/CTA-Akzent.
-     • Nagareboshi (流れ星) — stille Neumond-Nacht, dunkler Samt mit warmem
-                     Unterton; der 0.x-Codename als Thema. Gold bleibt der
-                     Stimme/CTA-Akzent, hier matt gedimmt.
-     • Yoake (夜明け) — der Augenblick vor Sonnenaufgang: Indigo wird am Horizont
-                     korallenwarm. Eigenständiges manuelles Thema, nicht Teil
-                     der Sora-Rotation.
-     • Natsu no Hi (夏の日) — ein heller Sommertag: warmes Washi, Ramune-Blau
-                     und ein kleiner Zinnoberpunkt. Eigenständiges manuelles
-                     Thema, nicht Teil der Sora-Rotation.
-     • Amayadori (雨宿り) — Regentag, geborgen im Trockenen: warmes Zedernholz
-                     unterm Vordach, Kaki-Persimone-Akzent, kaltes Regenblau
-                     NUR am Rand. Eigenständiges manuelles Thema, nicht Teil
-                     der Sora-Rotation.
-     • Sora — zeitgesteuerte Auswahl aus Asa, Aoi, Kasumi und Yoru.
+     public/themes/manifest.json   — die Wahrheit: welche Themen es gibt, wie sie
+                                     heißen (mehrsprachig), zu welcher Gruppe sie
+                                     gehören, welche drei Farben ihre Vorschau
+                                     zeigt und welche Datei sie lädt.
+     public/themes/<szene>.css     — die neuen Szenen-Themen (Asagiri, Komorebi,
+                                     Momiji, Natsumatsuri).
+     public/themes/nagori.css      — der versteckte Vorbote der 0.9.
+     public/themes/old/<id>.css    — die Klassiker-/Stimmungs-Themen der
+                                     0.8-Linie, 1:1 aus dieser Datei umgezogen.
 
-   Spezifität: `:root[data-theme='…']` = (0,2,0) schlägt index.css `:root` = (0,1,0)
-   unabhängig von der Import-Reihenfolge — daher robust, egal wo themes.css lädt.
+   Geladen wird zur Laufzeit über `styles/themeLoader.ts` (ein <link> je Thema,
+   einmal geladen bleibt es im DOM) — der Katalog dazu in `styles/themeCatalog.ts`.
+   Das ist die Naht, die auch in 1.0 bleibt: ein neues Thema ist eine Datei plus
+   ein Manifest-Eintrag, kein Eingriff ins Bundle und kein Deploy des Frontends.
 
-   ZWEITER SELEKTOR `[data-theme='…']` (ohne :root) je Token-Block: damit trägt
-   AUCH ein verschachteltes Element die Token seines Themas, wenn es `data-theme`
-   selbst setzt — genau das macht die echte Farbvorschau im Theme-Picker
-   (.settings__swatch, s. unten): sie zeigt `--bg-surface`/`--accent`/`--text-1`
-   des jeweiligen Themas statt einer zweiten, driftenden Farbliste. Am <html>
-   ändert der Zusatz nichts (dort gewinnt weiterhin der :root-Selektor mit (0,2,0)).
-   WER EIN NEUES THEMA ANLEGT, schreibt beide Selektoren — dann erscheint es ohne
-   weiteres Zutun mit den richtigen Farben im Picker (Test: themegroups.test.tsx).
-   reduced-motion: die globale Regel in index.css stellt alle Transitions hier mit
-   ruhig, es ist kein eigenes Gate nötig.
+   ── WAS HIER BLEIBT ─────────────────────────────────────────────────────────
+   1. Die BASIS-TOKEN: der Default-Look, solange KEIN Thema geladen ist. Das ist
+      Aoi (青) — der Default seit Andis Design-Adopt (Cowork-Spec 2026-07-02 §1)
+      —, damit die App ohne Netz-Roundtrip sofort richtig aussieht und niemals
+      eine weiße Seite zeigt.
+   2. Die Komponenten-/Panel-Styles (Zahnrad, Drawer, Theme-Picker …).
+
+   SPEZIFITÄT (die eine Stelle, an der diese Datei genau sein muss):
+   `:root:not([data-theme])` ist (0,2,0) — `:not()` erbt die Spezifität seines
+   Arguments `[data-theme]` (0,1,0). Damit schlägt der Basis-Block das `:root`
+   aus index.css (0,1,0) UNABHÄNGIG von der Bündel-Reihenfolge (main.tsx
+   importiert App — und damit diese Datei — VOR index.css). Und er kollidiert
+   nicht mit den nachgeladenen Themen: sobald `data-theme` am <html> steht,
+   greift `:not([data-theme])` gar nicht mehr, und `:root[data-theme='…']`
+   (ebenfalls (0,2,0), aber im später eingehängten <link>) trägt allein.
+   `[data-theme='yoru']` in index.css bleibt dadurch unberührt — Yoru ist
+   weiterhin der Basis-Satz, kein zweiter, driftender Farbsatz.
+
+   FOUC: `data-theme` wird bewusst ERST nach dem `load`-Event des <link> gesetzt
+   (App.tsx). Bis dahin steht der Basis-Look; ein fehlgeschlagener Ladevorgang
+   lässt ihn einfach stehen, statt halb gestylt zu rendern (themeLoader.ts).
+   reduced-motion: die globale Regel in index.css stellt alle Transitions hier
+   mit ruhig, es ist kein eigenes Gate nötig.
    ──────────────────────────────────────────────────────────────────────────── */
 
-/* Yoru nutzt weiterhin exakt die Basistoken aus index.css. Nur die neue,
-   zurückhaltende Laternen-Atmosphäre liegt als Theme-Token hier. */
-:root[data-theme='yoru'],
-[data-theme='yoru'] {
-  --theme-atmosphere:
-    radial-gradient(ellipse at 82% 108%, oklch(0.8 0.13 45 / 0.075), transparent 38%),
-    radial-gradient(ellipse at 12% -12%, oklch(0.36 0.025 67 / 0.12), transparent 40%),
-    var(--bg-base);
-}
-
-/* ════════════════ AOI (青) — Morgenblau auf Tinte (Default) ════════════════
-   Farbwerte EXAKT aus der Cowork-Spec §1 (2026-07-02, von Andi abgenommen):
-   bg #0C1017 · surface #141A26 · surface-dim #11161F · border #1F2938 ·
-   border-dashed #2A3548 · text #E8EEF7 · muted #8C97AB · hint #5D6980 ·
-   accent #5EA0F2 · ok #77C99A · warn #E3B36A.
-   Ehrliches Mapping auf die 0.8-Token (Spec kennt 3 Textstufen + kein
-   elevated/error): --text-2 und --bg-elevated/--bg-subtle sind dokumentierte
-   Zwischenstufen in derselben Blaufamilie, --error ist ein ruhiges Korall-Rot
-   im Aoi-Ton. Alles andere ist 1:1 Spec. */
-:root[data-theme='aoi'],
-[data-theme='aoi'] {
+/* ════════════════ BASIS-TOKEN — Aoi (青), der Default ohne geladenes Thema ════
+   Farbwerte EXAKT aus der Cowork-Spec §1 (2026-07-02, von Andi abgenommen);
+   identisch mit `public/themes/old/aoi.css`, das dieselben Werte trägt, sobald
+   `data-theme='aoi'` gesetzt ist. Warum beides: dieser Block darf keine Datei
+   abwarten (sonst flackert der Start), jener trägt die Vorschau-Kachel im Picker
+   (`[data-theme='aoi']` an einem verschachtelten Element) und den geladenen
+   Zustand. Beide Stellen sind im Test aneinander gepinnt (themegroups.test.tsx),
+   damit sie nicht auseinanderlaufen. */
+:root:not([data-theme]) {
   --theme-atmosphere:
     radial-gradient(ellipse at 86% -10%, rgb(94 160 242 / 0.1), transparent 38%),
     radial-gradient(ellipse at 5% 112%, rgb(47 91 145 / 0.075), transparent 42%),
@@ -76,17 +64,13 @@
   --bg-elevated: #1a2333; /* abgeleitet: eine Stufe über surface (Spec hat kein elevated) */
   --bg-subtle: #222c3f; /* abgeleitet: Hover-/Füll-Fläche */
   --bg-hairline: #1f2938; /* Spec: border */
-  /* Spec: border-dashed — für die kommenden gestrichelten „ehrlich leer"-Kacheln
-     (spätere Scheibe); hier schon als Token verankert. */
-  --bg-hairline-dashed: #2a3548;
+  --bg-hairline-dashed: #2a3548; /* Spec: border-dashed */
 
   --text-1: #e8eef7; /* Spec: text */
   --text-2: #b9c3d4; /* abgeleitet: Zwischenstufe text ↔ muted (0.8 hat 4 Textstufen) */
   --text-3: #8c97ab; /* Spec: muted */
   --text-4: #5d6980; /* Spec: hint */
 
-  /* Akzent = Morgenblau (Spec). Soft/faint/glow als Alpha-Stufen wie in den
-     anderen Themen; accent-ink = die Tinte (bg) auf dem Blau. */
   --accent: #5ea0f2;
   --accent-soft: rgb(94 160 242 / 0.2);
   --accent-faint: rgb(94 160 242 / 0.1);
@@ -105,404 +89,100 @@
   color-scheme: dark;
 }
 
-/* ════════════════ YOAKE (夜明け) — Indigo wird zu Koralle ════════════════
-   Kein „Dark Theme mit anderer Accent-Farbe", sondern ein eingefrorener
-   Übergang: oben bleibt die kühle Nacht, unten kündigt sich warmes Morgenlicht
-   an. Der Korall-Akzent trägt Stimme und Aktionen; Lavendel hält sekundäre Texte
-   im Nachthimmel. Die Fläche bleibt ruhig genug für lange Dialoge. */
-:root[data-theme='yoake'],
-[data-theme='yoake'] {
-  --theme-atmosphere:
-    radial-gradient(ellipse at 78% 108%, rgb(255 148 125 / 0.15), transparent 42%),
-    radial-gradient(ellipse at 12% -8%, rgb(139 111 210 / 0.11), transparent 38%),
-    var(--bg-base);
-
-  --bg-base: #100d1d;
-  --bg-surface: #191427;
-  --bg-elevated: #241b34;
-  --bg-subtle: #302440;
-  --bg-hairline: #453452;
-  --bg-hairline-dashed: #594269;
-
-  --text-1: #fbf3ec;
-  --text-2: #dbcbd5;
-  --text-3: #aa94aa;
-  --text-4: #8d7a95; /* 4,57:1 auf surface — leise, aber auch klein noch AA-lesbar */
-
-  --accent: #ff947d;
-  --accent-soft: rgb(255 148 125 / 0.22);
-  --accent-faint: rgb(255 148 125 / 0.11);
-  --accent-glow: rgb(255 148 125 / 0.42);
-  --accent-ink: #25101a;
-
-  --success: #7fd0ad;
-  --success-soft: rgb(127 208 173 / 0.16);
-  --warn: #ffc47b;
-  --warn-soft: rgb(255 196 123 / 0.17);
-  --error: #ff7685;
-  --error-soft: rgb(255 118 133 / 0.16);
-
-  --bg-user: #2a2038;
-
-  color-scheme: dark;
-}
-
-:root[data-theme='yoake'] .nav {
-  background: linear-gradient(90deg, rgb(25 20 39 / 0.98), rgb(36 27 52 / 0.94));
-  box-shadow: 0 1px 0 rgb(255 148 125 / 0.06);
-}
-
-/* Der Sprachstern ist der erste Lichtpunkt: Koralle im Kern, ein Rest
-   Lavendel an der Nachtseite. Form und Bewegung bleiben unverändert. */
-:root[data-theme='yoake'] .vc-orb__core {
-  background: linear-gradient(145deg, #ffd0bd, var(--accent) 58%, #ad8de2);
-}
-
-:root[data-theme='yoake'] .vc-orb__bloom {
-  background: radial-gradient(
-    circle at 56% 60%,
-    var(--accent-glow) 0%,
-    rgb(173 141 226 / 0.16) 38%,
-    transparent 72%
-  );
-}
-
-/* ════════════════ ASA (朝) — Zen-Washi-Tag (hell) ════════════════ */
-:root[data-theme='asa'],
-[data-theme='asa'] {
-  --theme-atmosphere:
-    radial-gradient(ellipse at 86% -10%, oklch(0.84 0.09 65 / 0.14), transparent 40%),
-    radial-gradient(ellipse at 4% 110%, oklch(0.76 0.055 220 / 0.1), transparent 43%),
-    var(--bg-base);
-
-  --bg-base: oklch(0.95 0.018 83); /* warmes Washi-Creme */
-  --bg-surface: oklch(0.975 0.014 83);
-  --bg-elevated: oklch(0.99 0.008 84);
-  --bg-subtle: oklch(0.92 0.018 82);
-  --bg-hairline: oklch(0.8 0.014 80);
-
-  --text-1: oklch(0.21 0.015 55); /* Sumi-Tinte */
-  --text-2: oklch(0.34 0.016 58);
-  --text-3: oklch(0.44 0.018 62);
-  --text-4: oklch(0.52 0.018 66);
-
-  /* Akzent = Shu (朱) Zinnober — dunkel genug für AA auf hellem Washi; das
-     Laternen-Gold (L0.80) wäre auf Creme unsichtbar. accent-ink = nahezu weiß. */
-  --accent: oklch(0.52 0.17 42);
-  --accent-soft: oklch(0.52 0.17 42 / 0.16);
-  --accent-faint: oklch(0.52 0.17 42 / 0.08);
-  --accent-glow: oklch(0.52 0.17 42 / 0.28);
-  --accent-ink: oklch(0.99 0.006 85);
-
-  --success: oklch(0.52 0.15 150);
-  --success-soft: oklch(0.52 0.15 150 / 0.16);
-  --warn: oklch(0.62 0.17 75);
-  --warn-soft: oklch(0.62 0.17 75 / 0.16);
-  --error: oklch(0.53 0.2 28);
-  --error-soft: oklch(0.53 0.2 28 / 0.16);
-
-  --bg-user: oklch(0.9 0.02 82); /* leicht getönte Du-Blase auf hellem Grund */
-
-  color-scheme: light;
-}
-
-/* ════════════════ NATSU NO HI (夏の日) — Licht, Wasser, warmes Washi ════════════════
-   Kein Strand- oder Neon-Theme: das Bild ist ein stiller japanischer Sommertag.
-   Warmes Papier fängt das Sonnenlicht, Ramune-Blau kühlt die Interaktion, ein
-   kleiner Zinnober-Anteil erinnert an Furin-/Uchiwa-Farbe. Der Verlauf bleibt
-   auf der Seitenfläche; Inhalte stehen weiterhin auf ruhigen, hellen Karten. */
-:root[data-theme='natsunohi'],
-[data-theme='natsunohi'] {
-  --theme-atmosphere:
-    radial-gradient(ellipse at 88% -8%, rgb(244 185 91 / 0.2), transparent 38%),
-    radial-gradient(ellipse at -4% 22%, rgb(93 190 210 / 0.17), transparent 43%),
-    radial-gradient(ellipse at 74% 112%, rgb(126 196 164 / 0.12), transparent 40%),
-    var(--bg-base);
-
-  --bg-base: #f4f1df;
-  --bg-surface: #fffdf3;
-  --bg-elevated: #fffef9;
-  --bg-subtle: #e8eee2;
-  --bg-hairline: #c9d3c7;
-  --bg-hairline-dashed: #b8c6bd;
-
-  --text-1: #183344;
-  --text-2: #344f5d;
-  --text-3: #566d75;
-  --text-4: #5f7076; /* 4,55:1 selbst auf der dunkleren Washi-Grundfläche */
-
-  --accent: #126f83;
-  --accent-soft: rgb(18 111 131 / 0.18);
-  --accent-faint: rgb(18 111 131 / 0.085);
-  --accent-glow: rgb(62 170 191 / 0.3);
-  --accent-ink: #fffef9;
-
-  --success: #367653;
-  --success-soft: rgb(54 118 83 / 0.14);
-  --warn: #966015;
-  --warn-soft: rgb(150 96 21 / 0.14);
-  --error: #b3483e;
-  --error-soft: rgb(179 72 62 / 0.14);
-
-  --bg-user: #e2ece4;
-
-  color-scheme: light;
-}
-
-:root[data-theme='natsunohi'] .nav {
-  background: rgb(255 253 243 / 0.9);
-  box-shadow: 0 1px 0 rgb(18 111 131 / 0.06);
-  backdrop-filter: blur(12px);
-}
-
-/* Wie Sonnenlicht auf einer Ramune-Flasche: kühl im Kern, warm nur am Rand. */
-:root[data-theme='natsunohi'] .vc-orb__core {
-  background: linear-gradient(145deg, #e9f7ee, #65bed0 46%, var(--accent) 74%, #df7862);
-}
-
-:root[data-theme='natsunohi'] .vc-orb__bloom {
-  background: radial-gradient(
-    circle at 52% 58%,
-    var(--accent-glow) 0%,
-    rgb(244 185 91 / 0.13) 44%,
-    transparent 72%
-  );
-}
-
-/* ════════════════ KASUMI (霞) — Nebel-Jade-Nacht (kühl) ════════════════ */
-:root[data-theme='kasumi'],
-[data-theme='kasumi'] {
-  --theme-atmosphere:
-    radial-gradient(ellipse at 85% -10%, oklch(0.63 0.09 190 / 0.1), transparent 38%),
-    radial-gradient(ellipse at 4% 112%, oklch(0.8 0.13 45 / 0.055), transparent 40%),
-    var(--bg-base);
-
-  --bg-base: oklch(0.135 0.04 190); /* tiefster Nebel-Jade */
-  --bg-surface: oklch(0.17 0.042 191);
-  --bg-elevated: oklch(0.205 0.043 192);
-  --bg-subtle: oklch(0.215 0.044 192);
-  --bg-hairline: oklch(0.3 0.038 193);
-
-  --text-1: oklch(0.95 0.014 196);
-  --text-2: oklch(0.825 0.02 195);
-  --text-3: oklch(0.67 0.024 194);
-  --text-4: oklch(0.52 0.026 193);
-
-  /* Gold bleibt der Stimme/CTA-Akzent (die Hoshi-Laterne), wie in 0.5 über alle
-     Themen hinweg — nur das kühle Jade-Feld ringsum wechselt. */
-  --accent: oklch(0.8 0.13 45);
-  --accent-soft: oklch(0.8 0.13 45 / 0.2);
-  --accent-faint: oklch(0.8 0.13 45 / 0.1);
-  --accent-glow: oklch(0.8 0.13 45 / 0.4);
-  --accent-ink: oklch(0.135 0.04 190);
-
-  --success: oklch(0.72 0.15 150);
-  --success-soft: oklch(0.72 0.15 150 / 0.16);
-  --warn: oklch(0.82 0.13 38); /* Rosegold-Rest-Licht statt Amber */
-  --warn-soft: oklch(0.82 0.13 38 / 0.16);
-  --error: oklch(0.65 0.2 25);
-  --error-soft: oklch(0.65 0.2 25 / 0.16);
-
-  --bg-user: oklch(0.235 0.045 192);
-
-  color-scheme: dark;
-}
-
-/* ════════════════ NAGAREBOSHI (流れ星) — stille Neumond-Nacht, dunkler Samt ════════════════
-   Der Projektname als Thema: jede 0.x-Instanz ist eine Sternschnuppe, Hoshi der
-   Stern, der bleibt. Leitbild: eine stille, weiche Nacht — nichts glimmert,
-   nichts sticht. Fast-neutrale, WARME Dunkeltöne (hauchzarter Pflaumen-Unterton
-   H≈330 bei C≈0.008 — kein Indigo-/Kaltstich mehr), enge Flächen-Stufen (sanfte
-   Tiefe statt Sprünge), Hairlines kaum sichtbar, Text warmes Elfenbein statt
-   grellem Weiß. Gold bleibt die Stimme, hier bewusst matt gedimmt. KEINE eigenen
-   Animationen — das Thema ist Farbe; die Stille (das Dunkel) trägt. */
-:root[data-theme='nagareboshi'],
-[data-theme='nagareboshi'] {
-  --theme-atmosphere:
-    radial-gradient(ellipse at 82% -12%, oklch(0.48 0.055 330 / 0.085), transparent 38%),
-    radial-gradient(ellipse at 10% 112%, oklch(0.68 0.075 52 / 0.045), transparent 36%),
-    var(--bg-base);
-
-  --bg-base: oklch(0.105 0.008 330); /* dunkler Samt mit warmem Unterton */
-  --bg-surface: oklch(0.13 0.008 330);
-  --bg-elevated: oklch(0.16 0.009 331);
-  --bg-subtle: oklch(0.205 0.009 331);
-  --bg-hairline: oklch(0.25 0.008 332); /* trennt kaum sichtbar, zeichnet nicht */
-
-  --text-1: oklch(0.9 0.012 78); /* warmes Elfenbein, nicht grell-weiß */
-  --text-2: oklch(0.77 0.013 76);
-  --text-3: oklch(0.62 0.014 74);
-  --text-4: oklch(0.49 0.014 72);
-
-  /* Gold bleibt die Stimme/CTA, aber matt: Leuchtkraft + Chroma runter, der
-     Glow fast aus — es steht ruhig dabei statt zu strahlen. */
-  --accent: oklch(0.76 0.1 50);
-  --accent-soft: oklch(0.76 0.1 50 / 0.16);
-  --accent-faint: oklch(0.76 0.1 50 / 0.08);
-  --accent-glow: oklch(0.76 0.1 50 / 0.22);
-  --accent-ink: oklch(0.105 0.008 330);
-
-  /* Status leise: Chroma weit runter — informiert, alarmiert nicht. */
-  --success: oklch(0.66 0.09 150);
-  --success-soft: oklch(0.66 0.09 150 / 0.12);
-  --warn: oklch(0.74 0.08 70);
-  --warn-soft: oklch(0.74 0.08 70 / 0.12);
-  --error: oklch(0.6 0.12 26);
-  --error-soft: oklch(0.6 0.12 26 / 0.12);
-
-  --bg-user: oklch(0.17 0.009 331); /* sanft gehobene Du-Blase, Samt statt Kante */
-
-  color-scheme: dark;
-}
-
-/* ════════════════ AMAYADORI (雨宿り) — Regentag, geborgen im Trockenen ════════════════
-   „Draußen fällt es weiter; hier drinnen ist es trocken und jemand hat Licht
-   gelassen." Nasses Zedernholz unterm Vordach: ein warmer Innenraum (Kaki-
-   Persimone als Akzent) — geborgen, nicht melancholisch. Die Temperaturspaltung
-   TRÄGT die Stimmung: kaltes Regenblau (#6e8296, sehr niedrige Alpha) bleibt
-   strikt in den Seitenrändern (--theme-atmosphere unten), das warme Innen liest
-   sich erst DADURCH als Schutz. Zwei Signaturen ergänzen den Token-Block: die
-   Traufe (ein Nieselschleier, der exakt an der Lesespalte endet — body::before
-   weiter unten) und der Pfützen-Orb (die bestehenden Sprech-Ringe lesen sich
-   als Regenringe auf Wasser — .vc-orb__* weiter unten). */
-:root[data-theme='amayadori'],
-[data-theme='amayadori'] {
-  --theme-atmosphere:
-    radial-gradient(ellipse at 0% 42%, rgb(110 130 150 / 0.09), transparent 46%),
-    radial-gradient(ellipse at 100% 62%, rgb(110 130 150 / 0.07), transparent 46%),
-    var(--bg-base);
-
-  --bg-base: #100e0c;
-  --bg-surface: #1a1613;
-  --bg-elevated: #221d18;
-  --bg-subtle: #2c2620;
-  --bg-hairline: #3a322a;
-  --bg-hairline-dashed: #4a4038;
-
-  --text-1: #f2e9dc;
-  --text-2: #d3c6b4;
-  --text-3: #a2947f;
-  --text-4: #90836c;
-
-  /* Kaki-Persimone — das Herdfeuer, das man drinnen gelassen hat. */
-  --accent: #ee9b6e;
-  --accent-soft: rgb(238 155 110 / 0.2);
-  --accent-faint: rgb(238 155 110 / 0.1);
-  --accent-glow: rgb(238 155 110 / 0.4);
-  --accent-ink: #100e0c;
-
-  --success: #8fbf87;
-  --success-soft: rgb(143 191 135 / 0.16);
-  --warn: #e8c07a;
-  --warn-soft: rgb(232 192 122 / 0.16);
-  --error: #e0736a;
-  --error-soft: rgb(224 115 106 / 0.16);
-
-  --bg-user: #241d18;
-
-  color-scheme: dark;
-}
-
-/* Der Sprachstern bleibt warmes Licht im Kern — die Glut, die man für einen
-   dagelassen hat. */
-:root[data-theme='amayadori'] .vc-orb__core {
-  background: radial-gradient(circle at 42% 38%, #fff3e6, var(--accent) 62%, #b9713f 100%);
-}
-
-/* Der Bloom kippt von warm (innen) zu einem sehr leisen Regenblau-Silber
-   (außen) — Licht, das sich in nasser Luft bricht. */
-:root[data-theme='amayadori'] .vc-orb__bloom {
-  background: radial-gradient(
-    circle at 50% 55%,
-    var(--accent-glow) 0%,
-    rgb(199 210 218 / 0.16) 46%,
-    transparent 74%
-  );
-}
-
-/* Der PFÜTZEN-ORB: dieselben Pegel-Ringe wie überall, nur kühles Regenblau-
-   Silber statt Akzent — sie lesen sich als Ringe, die der Regen auf einer
-   Pfütze schlägt. Der zusätzliche weiche Außen-Schein macht sie konzentrisch
-   statt scharf. KEINE neue Mechanik — nur Farbe/Form auf dem bestehenden Ring. */
-:root[data-theme='amayadori'] .vc-orb__ring {
-  border-color: rgb(199 210 218 / 0.55);
-  box-shadow: 0 0 0 5px rgb(199 210 218 / 0.1);
-}
-
-/* ── Die TRAUFE: ein Nieselschleier NUR im Seitenraum ─────────────────────────
-   Haarfeine, leicht geneigte Streifen (repeating-linear-gradient, ~3,5 % Alpha,
-   93°-Achse ⇒ Bänder ~3° von der Senkrechten geneigt) driften langsam nach
-   unten — aber nur dort, wo kein Inhalt steht. mask-image blendet exakt die
-   Lesespalte (--measure) aus: sie ist wie .chat__log/.compose viewport-
-   zentriert (`.app`/`.chat__log` beide `margin-inline:auto`), darum trifft
-   `calc(50% - var(--measure)/2)` relativ zur Viewport-Mitte hier genau ihre
-   Kante — der Regen hört SICHTBAR an der Spaltenkante auf, das Innere bleibt
-   trocken.
-   Stacking: `position:fixed` + `z-index:-1` hält den Schleier HINTER jedem
-   normalen (nicht-positionierten) Inhalt — negative z-index-Ebenen malen unter
-   die In-Flow-Boxen von `.app` —, aber ÜBER dem body-eigenen Hintergrund
-   (`--theme-atmosphere`, eine reguläre CSS-`background`-Eigenschaft, die als
-   Backdrop der Stacking-Context-Wurzel immer zuunterst liegt). Nur `transform`
-   animiert (Projekt-Konvention, s. index.css „Motion-Token"); die globale
-   reduced-motion-Regel (index.css, `*,*::before,*::after { animation-duration:
-   0.01ms !important; ... }`) friert die Drift praktisch auf den Startzustand
-   ein — die Streifen bleiben stehen, kein eigenes Gate nötig. */
-:root[data-theme='amayadori'] body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image: repeating-linear-gradient(
-    93deg,
-    rgb(199 210 218 / 0.035) 0px,
-    rgb(199 210 218 / 0.035) 1px,
-    transparent 1px,
-    transparent 15px
-  );
-  -webkit-mask-image: linear-gradient(
-    to right,
-    black 0%,
-    black calc(50% - var(--measure) / 2 - 20px),
-    transparent calc(50% - var(--measure) / 2),
-    transparent calc(50% + var(--measure) / 2),
-    black calc(50% + var(--measure) / 2 + 20px),
-    black 100%
-  );
-  mask-image: linear-gradient(
-    to right,
-    black 0%,
-    black calc(50% - var(--measure) / 2 - 20px),
-    transparent calc(50% - var(--measure) / 2),
-    transparent calc(50% + var(--measure) / 2),
-    black calc(50% + var(--measure) / 2 + 20px),
-    black 100%
-  );
-  animation: amayadori-drift 32s linear infinite;
-}
-@keyframes amayadori-drift {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(150px);
-  }
-}
-
-/* Die Lichtlippe: eine 2px warme Kante an der Oberkante der Lesespalte — hier
-   hat jemand das Licht gelassen. box-shadow statt border/Pseudo-Element: kein
-   Reflow, und die Kante bleibt beim Scrollen im Thread an Ort und Stelle (sie
-   gehört der Box, nicht ihrem — scrollenden — Inhalt). */
-:root[data-theme='amayadori'] .chat__log {
-  box-shadow: 0 -2px 0 0 var(--accent-glow);
-}
-
 /* Der Charakter aller manuellen Themes erscheint als leiser Raum um die
    Inhalte. Karten bleiben auf ihren Flächentoken; dadurch verändert der
    Verlauf weder Statusfarben noch Textkontrast. Sora setzt am <html> ohnehin
    das jeweils aufgelöste konkrete Theme. */
 :root[data-theme] body {
   background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* …und im Basis-Zustand (noch kein Thema geladen) genauso: (0,2,1) schlägt das
+   `body { background: var(--bg-base) }` aus index.css unabhängig von der
+   Bündel-Reihenfolge. Ohne diese Zeile stünde der Start ohne Atmosphäre da. */
+:root:not([data-theme]) body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ════════════════ `data-scene-motion="still"` — die Szene hält an ════════════
+   Andi, 23.08.2026: „ich finde das kirschblüten im fluss design unfassbar
+   schön, aber es laggt leider, besonders, wenn ich das design ausgewählt habe
+   und die widgets anpasse".
+
+   Die zweite Hälfte des Satzes ist die wichtige. Beim Anordnen zählt
+   REAKTION, nicht Blütenfall: wer eine Kachel unter dem Finger hat, will
+   sehen, wohin sie geht, und nicht, dass der Wald atmet. Also hält die Szene
+   an, solange man anordnet — für JEDES Thema, nicht nur für das eine, das
+   Andi aufgefallen ist. `HomeStage` setzt das Attribut an <html>, sobald der
+   Edit-Modus steht, und nimmt es beim Verlassen wieder ab.
+
+   ANHALTEN, NICHT AUSSCHALTEN. `animation-play-state: paused` friert jede
+   Uhr genau dort ein, wo sie gerade steht — kein Sprung beim Anhalten, und
+   beim Loslassen läuft sie an derselben Stelle weiter. Das ist das sanfte
+   Wiederanlaufen, und es ist billiger als jede Überblendung: es gibt nichts
+   zu überblenden, weil sich nichts bewegt hat. (`animation: none` wäre der
+   Fehler: es würde jedes Element auf seine Grundstellung zurückwerfen — bei
+   Hanaikada stünden dann vierundvierzig Blüten schlagartig oberhalb des
+   Bildrands, und die Luft wäre leer.)
+
+   WIE WEIT DIE ZUSAGE REICHT — ehrlich, weil die Grenze technisch und nicht
+   nachlässig ist. Zwei Arten von Uhr treiben unsere Szenen:
+
+     1. CSS-Uhren im WIRTSDOKUMENT (Hanaikadas zwei nahe Blüten, Momijis
+        Blatt, driftende Verläufe). Die erreicht diese Regel, und zwar alle
+        auf einmal — sie ist der generische Teil.
+
+     2. Uhren INNERHALB eines `background-image`-SVG. Die erreicht von hier
+        aus NICHTS: das Bild ist ein eigenes Dokument, und `:root` ist nicht
+        sein Wurzelelement. Der einzige Draht dorthin ist die URL — ein
+        Fragment, auf das die Zeichnung selbst mit `:target` reagiert. Das
+        muss also IN der jeweiligen Zeichnung stehen; Hanaikada hat den Haken
+        seit dem 23.08. (`hanaikada-szene.svg#still`, s. `hanaikada.css`),
+        die übrigen Szenen noch nicht.
+
+   Für Themen ohne Haken bleibt es beim Anhalten der Wirts-Uhren; ihre
+   Zeichnung läuft weiter. Das ist kein Versehen, sondern der Stand: der
+   Haken ist eine additive Zeile in der jeweiligen `*-szene.gen.mjs` und
+   kostet nichts, aber er gehört zu der Szene, die ihn trägt — und fremde
+   Szenen anzufassen war für diese Runde ausdrücklich verboten. Was er
+   bringt, ist gemessen (Firefox, 1600×1000, `szene-perf.mjs`):
+   Hanaikada 35,5 fps bei 782 % CPU ⇒ 60 fps bei 13 %.
+
+   `!important` ist hier richtig und nicht bequem: die Themen setzen ihre
+   `animation`-Kurzschreibweise mit gleicher oder höherer Spezifität, und
+   `animation` schreibt `animation-play-state` mit zurück. Ohne `!important`
+   gewänne je nach Reihenfolge das Thema und die Zusage wäre keine. */
+:root[data-scene-motion='still']::before,
+:root[data-scene-motion='still']::after,
+:root[data-scene-motion='still'] body::before,
+:root[data-scene-motion='still'] body::after,
+:root[data-scene-motion='still'] #root::before,
+:root[data-scene-motion='still'] #root::after {
+  animation-play-state: paused !important;
+}
+
+/* ════════════════ Versions-Zeile in der Top-Nav ════════════════
+   Sie ist seit dem Nagori-Vorboten ein echter Button (3× schnell = Fund, s.
+   TopNav) — aussehen darf man das nicht: dieselbe Typo/Farbe wie vorher als
+   <span>, kein Hover-Effekt, `cursor: default` wie beim 星-Easter-Egg. Der
+   Fokusring bleibt, damit Tastatur-Nutzer nicht ins Leere navigieren.
+   `button.nav__ver` (0,1,1) schlägt das `.nav__ver` aus index.css und die
+   Browser-Defaults des Buttons — Reihenfolge der Stylesheets egal. */
+button.nav__ver {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  line-height: inherit;
+  color: var(--text-4);
+  cursor: default;
+  user-select: none;
+}
+button.nav__ver:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 /* ════════════════ Zahnrad in der Top-Nav ════════════════
@@ -545,7 +225,11 @@
   flex: none;
 }
 
-/* ════════════════ Einstellungs-Drawer ════════════════ */
+/* ════════════════ Einstellungs-Drawer ════════════════
+   Z-ORDER CONTRACT (fixed, design 2026-08-15 §3.2): drawer 50 (here) → overlay
+   60 (.overlay/.crew-overlay below) → FiredToast 70 (index.css). The alarm
+   always wins — an overlay may cover the drawer, but nothing may cover the
+   ringing timer. */
 .settings-overlay {
   position: fixed;
   inset: 0;
@@ -574,6 +258,14 @@
   width: min(380px, 92vw);
   height: 100%;
   overflow-y: auto;
+  /* CROSS-SCROLL LATCH (design 2026-08-15 §1.4/1). `overflow-y: auto` alone
+     makes `overflow-x` compute to `auto` per spec — so ONE non-shrinking child
+     gave the whole 340 px panel a horizontal scrollbar and cut off buttons. The
+     cause is gone (the recordings list moved into the overlay, its delete button
+     is an icon with a fixed footprint), and this line makes sure the next one
+     cannot come back the same way. Deliberately `hidden`, not `clip`: the panel
+     is a scroll container in Y, and `hidden` keeps that intact. */
+  overflow-x: hidden;
   padding: 20px;
   background: var(--bg-surface);
   border-left: 1px solid var(--bg-hairline);
@@ -617,44 +309,109 @@
   background: var(--bg-subtle);
 }
 
-/* ── Kategorie-Reiter (Andi 15.07: „übersichtlich neu organisieren" statt einer
-   langen Scroll-Wand) — chips, brechen auf dem schmalen Drawer (min(380px,92vw))
-   in mehrere Zeilen um. Aktiver Reiter wie die anderen Segmented-Controls im
-   Panel (.settings__nightmodebtn): Akzent-Rahmen + Akzent-Fläche + heller Text. */
-.settings__catnav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--bg-hairline);
+/* ── Kategorie-Überschrift (Andi, 15.08 am iPad: „in einer Unterkategorie nur
+   noch der Zurück-Knopf") ─────────────────────────────────────────────────────
+   Die Chip-Reiterleiste (`.settings__catnav`/`.settings__cattab`) ist ersatzlos
+   gestrichen — zusammen mit ihrem CSS, damit keine tote Regel zurückbleibt. Was
+   sie beiläufig mitgeleistet hat („in welcher Kategorie bin ich?"), macht jetzt
+   diese Überschrift; sie ist zugleich die aria-Beschriftung ihres Panels. */
+.settings__cattitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
-.settings__cattab {
-  padding: 7px 12px;
+
+/* ── Category overview: the drawer's entry level (design 2026-08-15 §3.1) ─────
+   Seven EQUALLY SIZED cards instead of dropping the user into one of seven
+   chips. Equal size is the whole point and comes from two lines: `minmax(150px,
+   1fr)` columns make every card the same width (two columns inside the ~340px
+   drawer, four rows — the eighth cell stays empty, no filler entry), and
+   `grid-auto-rows: 1fr` makes every row as tall as the tallest card, so a long
+   half-sentence never produces a taller card than a short one. */
+.settings__catgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 10px;
+}
+.settings__catcard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  /* Floor for the shortest card; `grid-auto-rows: 1fr` lifts them all together. */
+  min-height: 112px;
+  padding: 12px;
   border: 1px solid var(--bg-hairline);
-  border-radius: 999px;
+  border-radius: var(--radius, 12px);
   background: var(--bg-subtle);
   color: var(--text-3);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
+  text-align: left;
   cursor: pointer;
   transition:
     border-color var(--dur-fast, 160ms) var(--ease-standard, ease),
     background-color var(--dur-fast, 160ms) var(--ease-standard, ease),
     color var(--dur-fast, 160ms) var(--ease-standard, ease);
 }
-.settings__cattab:hover {
+.settings__catcard:hover {
+  border-color: var(--accent-soft);
   color: var(--text-1);
 }
-.settings__cattab.is-active {
-  border-color: var(--accent);
-  background: var(--accent-faint);
-  color: var(--text-1);
-}
-.settings__cattab:focus-visible {
+.settings__catcard:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+.settings__catcardglyph {
+  display: inline-flex;
+  font-size: 20px;
+  color: var(--accent);
+}
+.settings__catcardname {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+.settings__catcardblurb {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-4);
+  overflow-wrap: anywhere;
+}
+
+/* Der Rückweg aus einer Kategorie („‹ Einstellungen"). Bewusst leiser als die
+   Reiter-Chips darunter: er ist Weg, nicht Wahl. */
+.settings__back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  margin-bottom: -12px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur-fast, 160ms) var(--ease-standard, ease);
+}
+.settings__back:hover {
+  color: var(--text-1);
+}
+.settings__back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.settings__backchevron {
+  font-size: 15px;
+  line-height: 1;
 }
 
 /* Kategorie-Panel: gleicher Gruppen-Abstand wie zuvor die direkten
@@ -736,19 +493,546 @@
   color: var(--text-4);
 }
 
-/* ── Theme-Auswahl: DREI GRUPPEN statt einer 8er-Liste ──────────────────────
-   (Andi 25.07: „übersichtlicher"). Die Gruppen tragen den Rhythmus, die Karten
-   bleiben die Karten von vorher — ein Aufräumen, kein Redesign. */
-.settings__themegroups {
+/* ── Aktiv-zuerst: die ruhige „Aktuell"-Zeile ganz oben (Andi-Auftrag 07.08:
+   „ich habe echt viele Designs, das muss übersichtlicher werden") — Swatch +
+   Name + Gruppen-Beiwort des AKTIVEN Themas, sichtbar ohne zu scrollen oder
+   eine Gruppe zu öffnen. Rein informativ (kein Radio-Button, die Wahl bleibt
+   unten in der Radiogroup) — dieselbe Swatch-Mechanik wie jede Karte unten,
+   nur eine Ebene höher und dauerhaft sichtbar. */
+.settings__themeactive {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--bg-hairline);
+  border-radius: var(--radius, 12px);
+  background: var(--bg-subtle);
 }
-.settings__themegroup {
+.settings__themeactivekicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+.settings__themeactiverow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Eigene Klasse statt `.settings__swatch` (bewusst!) — sonst zählte die
+   Aktiv-Zeile als zehnte/elfte Karte in jedem Test, der `.settings__swatch`
+   zählt oder per Index adressiert (nagori.test.tsx/themegroups.test.tsx). Die
+   drei inneren Flächen (`.settings__swatchbg/accent/text`) sind dieselben
+   generischen Klassen wie unten — keine zweite Farblogik. */
+.settings__activeswatch {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 14px 8px;
+  align-items: stretch;
+  gap: 4px;
+  width: 44px;
+  height: 32px;
+  padding: 5px;
+  border-radius: 8px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-base);
+}
+.settings__themeactivename {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.settings__themeactivegroup {
+  font-weight: 400;
+  color: var(--text-3);
+}
+/* DER eine Knopf, der die Galerie öffnet — er ersetzt fünfzehn Karten hinter
+   vier Falten (design 2026-08-15 §3.4). */
+.settings__themegallerybtn {
+  align-self: flex-start;
+}
+
+/* ── Design-Galerie (Andi-Auftrag 19.08., ersetzt design 2026-08-15 §3.4) ─────
+   „Ich möchte, dass direkt ein Overlay über die komplette Seite geht, wo die
+   Designs präsentiert werden." Die Galerie ist damit keine Dialog-Karte mehr,
+   sondern eine PRÄSENTATIONS-Fläche: sie nimmt fast die ganze Seite, und die
+   Szenen-SVGs sind der Star (bei 1366 px vier Spalten à ~300 px statt der
+   40-px-Briefmarken von vorher).
+
+   Der Wirt der Galerie: `display: contents` erzeugt KEINE Box (die Galerie
+   positioniert sich selbst `fixed`), fängt aber den Klick ab, damit der
+   Backdrop-Klick nicht auch den Drawer schließt — s. SettingsPanel.tsx. */
+.settings__galleryhost {
+  display: contents;
+}
+
+/* Vollbild statt Zettel. Zwei Klassen (0,2,0) schlagen die generische
+   `.overlay__card`-Geometrie (0,1,0) — bewusst hier und nicht dort: die
+   gemeinsame Schale bleibt für Crew & Co. exakt wie sie war. */
+.overlay__card.themegallery {
+  width: min(1680px, 96vw);
+  height: 94vh;
+  max-height: 94vh;
+  gap: 16px;
+  padding: 20px 24px 24px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MAXIMIEREN — die Vollbild-Ansicht von Nachrichten und Wetter (Andi 23.08.)
+   ═══════════════════════════════════════════════════════════════════════════
+   „füge einen ‚maximieren' hier und beim wetter an, wo man alle auswahlen, alle
+   informationen vernünftig angezeigt bekommt :)"
+
+   Dieselbe Bauart wie die Themen-Galerie zwei Regeln höher, und aus demselben
+   Grund: EIN Modifikator auf der generischen Karte (0,2,0 schlägt 0,1,0),
+   während Grund, Eintritt, Escape und Fokus unverändert aus der gemeinsamen
+   Schale kommen. Etwas schmaler als die Galerie — die zeigt 16 Bilder
+   nebeneinander, hier steht eine LESESPALTE, und 1680 px Zeilenlänge liest
+   niemand. */
+.overlay__card.widgetmax {
+  width: min(1180px, 96vw);
+  height: 94vh;
+  max-height: 94vh;
+  gap: 14px;
+  padding: 20px 24px 24px;
+}
+.widgetmax__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+.widgetmax__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+/* Der Ausgang: dasselbe Kreuz wie bei Crew/Galerie, mit 44-px-Ziel. */
+.widgetmax__close {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--bg-hairline);
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+.widgetmax__close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Die Quellen-Chips: die bestehenden Quellen-Abzeichen als Filter, kein neues
+   Einstellungs-Konzept. `aria-pressed` trägt den Zustand — die Farbe wiederholt
+   ihn nur, sie ist nicht die einzige Auskunft. */
+.widgetmax__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.widgetmax__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-hairline);
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.widgetmax__chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-1);
+}
+.widgetmax__chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.widgetmax__count {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-4);
+  flex: 0 0 auto;
+}
+
+/* Die Liste ist das dehnbare Glied — dieselbe Regel wie auf den Kacheln
+   (index.css, „DIE LISTE IST DAS DEHNBARE GLIED"): Kopf, Chips, Bilanz und die
+   „Stand"-Zeile stehen fest, gescrollt wird der Inhalt dazwischen. */
+.widgetmax__news {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px 24px;
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.widgetmax__newsitem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--bg-hairline);
+}
+.widgetmax__newstitle {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-1);
+  text-decoration: none;
+}
+.widgetmax__newstitle:hover,
+.widgetmax__newstitle:focus-visible {
+  text-decoration: underline;
+}
+.widgetmax__newsmeta {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--text-4);
+}
+/* KEIN `line-clamp`: „vernünftig angezeigt" heißt hier ganz gelesen. Die
+   Kachel klemmt den Teaser, weil sie eine Rasterzelle ist; dieser Kasten
+   nicht. */
+.widgetmax__newssnippet {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.widgetmax__newsattr {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-4);
+}
+.widgetmax__newsopen {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.widgetmax__stand {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+/* ---- Wetter maximiert: vier Abschnitte, vom Feinen zum Groben ------------ */
+.widgetmax__gap {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-3);
+}
+.widgetmax__sec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bg-hairline);
+}
+.widgetmax__sec:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+.widgetmax__sectitle {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+.widgetmax__nowline {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.widgetmax__nowicon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  color: var(--text-3);
+}
+.widgetmax__nowtemp {
+  font-size: clamp(34px, 5vw, 56px);
+  font-weight: 300;
+  line-height: 1;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+.widgetmax__nowcond {
+  font-size: 17px;
+  color: var(--text-2);
+}
+/* Werte-Tabelle: Etikett klein darüber, Wert groß darunter — dieselbe Ordnung
+   wie in den Mehrtage-Spalten, damit die Ansicht EINE Sprache spricht. */
+.widgetmax__facts {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 32px;
+}
+.widgetmax__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.widgetmax__fact dt {
+  font-size: 12px;
+  color: var(--text-4);
+}
+.widgetmax__fact dd {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+/* Die Mehrtage-Zeile erbt die Kachel-Regeln (`.idle__outlook`) und bekommt hier
+   nur mehr Luft — und ihr Lagentext darf ausschreiben: der Kasten ist breit
+   genug für „mäßiger Schneefall", die Kachel-Spalte war es nie. */
+.widgetmax__outlook {
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px 12px;
+  padding-top: 0;
+  border-top: 0;
+}
+/* Zwei Klassen (0,2,0) schlagen `.idle__outlookcond` (0,1,0) — nötig, weil die
+   beiden Regeln in VERSCHIEDENEN Dateien stehen und die Ladereihenfolge sonst
+   entschiede, ob „mäßiger Schneefall" ausgeschrieben wird oder als „mäßiger
+   Schne…" endet. Genau dieser Fall stand im ersten Bild dieser Scheibe. */
+.widgetmax .idle__outlookcond {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  text-align: center;
+}
+.widgetmax__sunnote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.themegallery__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-direction: row-reverse; /* Titel links, Ausgänge rechts — DOM: Kreuz zuerst (Autofokus) */
+  gap: 12px;
+}
+/* Zwei benannte Ausgänge, rechts gebündelt. `row-reverse` auch hier, damit die
+   DOM-Reihenfolge (Kreuz zuerst = Autofokus-Ziel der Schale) optisch als
+   „Fertig ✕" ankommt — Text vor Symbol, wie überall im Drawer. */
+.themegallery__headactions {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 10px;
+}
+.themegallery__done {
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--accent-faint);
+  color: var(--text-1);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.themegallery__done:hover {
+  background: var(--accent-soft);
+}
+.themegallery__done:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.themegallery__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.themegallery__close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  font-size: 14px;
+  cursor: pointer;
+}
+.themegallery__close:hover {
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+}
+.themegallery__close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Das AKTIVE Design, prominent: dieselbe Vorschau-Fläche wie eine Karte (echte
+   Szene oder Swatch), nur größer — „was läuft gerade" muss man nicht suchen. */
+.themegallery__active {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--accent-soft);
+  border-radius: 12px;
+  background: var(--bg-subtle);
+}
+.themegallery__activepreview {
+  flex: none;
+  width: 200px;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-base);
+}
+.themegallery__activemeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.themegallery__activename {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+
+.themegallery__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+.themegallery__group {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
+/* Gleich große Karten, ab 280 px. Auf 1366 (iPad quer) ergibt das vier Spalten
+   à ~300 px, auf 834 (iPad hoch) zwei à ~370 px — die Szene ist damit überall
+   ein BILD und keine Briefmarke. */
+.themegallery__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* ═══ DIE KASKADEN-FALLE (Befund 19.08., headless gemessen) ═══════════════════
+   Diese Kachel-Regeln standen bis heute mit EINER Klasse da (`.themegallery__
+   card`, 0,1,0) — und `.settings__theme` (dieselbe Spezifität, aber WEITER
+   UNTEN in dieser Datei) hat sie deshalb allesamt überstimmt. Die Karten waren
+   nie Kacheln: sie blieben die 40-px-Swatch-ZEILE des Drawers, die Szene wurde
+   in die 40-px-Spalte gequetscht (gemessen: 40×25 px) und die Charakter-Zeile
+   landete darunter in derselben 40-px-Spalte — DAS ist Andis „die Geschichten
+   laufen aus den Boxen".
+
+   Jede Regel hier trägt darum zwei Klassen (0,2,0) und gewinnt die Kaskade
+   unabhängig von der Reihenfolge in der Datei. Wer hier etwas ergänzt: die
+   zweite Klasse ist kein Zierrat. */
+.themegallery__grid .themegallery__card {
+  display: grid;
+  grid-template-columns: 1fr; /* schlägt `.settings__theme`s `40px 1fr` */
+  grid-auto-rows: min-content;
+  gap: 10px;
+  align-items: start;
+  align-content: start;
+  padding: 12px;
+  text-align: left;
+}
+.themegallery__grid .themegallery__swatch,
+.themegallery__grid .themegallery__scene {
+  display: block;
+  /* `.settings__swatch` spannt im Zeilen-Layout über zwei Zeilen (`grid-row:
+     1 / span 2`) — in der Kachel steht die Vorschau schlicht oben. */
+  grid-row: auto;
+  grid-column: 1;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+/* Die Swatch bleibt drei Flächen — im Kartenformat gestapelt statt als Chip. */
+.themegallery__grid .themegallery__swatch {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  gap: 3px;
+  padding: 6px;
+}
+/* Die echte Szene: `cover`, damit der Ausschnitt wie der spätere Hintergrund
+   wirkt. Der Platzhalter (vor dem Sichtbarwerden) bleibt einfach leere Fläche —
+   kein Skelett-Flimmern, das nur Aufmerksamkeit zieht. */
+.themegallery__sceneimg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Die Geschichten BLEIBEN in der Box (Andi 19.08.) ─────────────────────────
+   Zwei Riegel, weil es zwei Wege nach draußen gibt:
+    1. `min-width: 0` + `overflow-wrap: anywhere` — ein Grid-Kind hat von Haus
+       aus `min-width: auto` und schrumpft nicht unter sein längstes WORT.
+       Geprüft gegen die längsten Brocken aller fünf Sprachen (de
+       „Sternschnuppe" 13, fr „sélectionnables" 15, it „l'impostazione" 14).
+    2. Zeilen-Clamp statt Überlauf: der Name/Beiwort darf zwei Zeilen, die
+       Charakter-Zeile drei — was nicht passt, endet in „…" INNERHALB der Karte,
+       nie darüber hinaus. Die längste echte Geschichte ist Amayadoris
+       89-Zeichen-Satz; er passt bei 300 px in drei Zeilen. */
+.themegallery__grid .settings__themename,
+.themegallery__grid .settings__themehint {
+  grid-column: 1;
+  align-self: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+.themegallery__grid .settings__themename {
+  font-size: 15px;
+  line-height: 1.3;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.themegallery__grid .settings__themehint {
+  font-size: 12.5px;
+  line-height: 1.45;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
 .settings__themegrouptitle {
   margin: 0;
   font-size: 12px;
@@ -759,6 +1043,12 @@
 }
 .settings__themegroupnote {
   margin: -2px 0 2px;
+}
+/* Ehrliche Zwischenzeile, solange `public/themes/manifest.json` unterwegs ist
+   (der Picker rendert seit dem .old-Umzug aus dem Manifest). Bewusst genauso
+   leise wie ein Gruppen-Hinweis: es ist ein Zustand, keine Meldung. */
+.settings__themeloading {
+  margin: 2px 0 0;
 }
 /* Der Tagesbogen unter Sora: reine Vorschau, nicht klickbar, leise. */
 .settings__themearc {
@@ -775,16 +1065,24 @@
 .settings__themepinned {
   margin: 0;
 }
+/* Nagoris Zeile unter seiner Karte: „名残 — ein Vorbote von 0.9". Steht nur da,
+   wenn das Thema gefunden ist; der schmale Akzentstrich links macht sie zur
+   Fußnote der Karte darüber, nicht zu einer neuen Gruppe. */
+.settings__nagorinote {
+  margin: 2px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent-soft);
+}
 
 .settings__theme {
   display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: 2px 12px;
+  /* Kompakte Zeile statt großer Kachel (Andi-Auftrag 07.08): Swatch 56→40px,
+     Innenabstand 10px→8px — die Gruppen tragen jetzt schon die Übersicht
+     (Aktiv-Zeile + Einklappen), die einzelne Karte darf schmaler sein. */
+  grid-template-columns: 40px 1fr;
+  gap: 1px 10px;
   align-items: center;
-  /* Innenabstand vereinheitlicht auf 10px 12px (bündig-Sweep, Mehrheitswert
-     unter den „Karte in Karte"-Containern — s. .settings__skill/.settings__
-     privacyrow/.settings__thinkmode). Vorher 10px rundum. */
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--bg-hairline);
   border-radius: var(--radius, 12px);
   background: var(--bg-base);
@@ -807,10 +1105,14 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* ECHTE Farbvorschau statt einer zweiten Farbliste: die Kachel setzt `data-theme`
-   SELBST (SettingsPanel/ThemeSection), greift damit den Token-Block ihres Themas
-   ab (die `[data-theme='…']`-Selektoren ganz oben) und zeigt drei Flächen —
-   Fläche (--bg-surface auf --bg-base), Akzent (--accent), Textton (--text-1).
+/* Farbvorschau, LADE-FREI: die drei Flächen bekommen ihre Farbe seit dem
+   .old-Umzug als Inline-Hex aus `manifest.json` (`swatch: [Fläche, Akzent,
+   Text]`) — die `[data-theme='…']`-Token-Blöcke greifen nämlich nur für Themen,
+   deren Datei GELADEN ist, und der Picker soll nicht erst zehn Stylesheets
+   ziehen, um zehn Kacheln zu zeigen. Die `var(…)`-Werte hier bleiben als
+   Fallback stehen (Kachel ohne Manifest-Swatch) und färben weiterhin den
+   Kachel-Rahmen; die Kachel trägt zusätzlich weiterhin `data-theme`, damit ein
+   geladenes Thema seinen echten Grund zeigt.
    Künftige Themen wachsen automatisch mit: sie brauchen keine Zeile hier. */
 .settings__swatch {
   grid-row: 1 / span 2;
@@ -818,11 +1120,11 @@
   display: grid;
   grid-template-columns: 1fr 14px 8px;
   align-items: stretch;
-  gap: 4px;
-  width: 56px;
-  height: 40px;
-  padding: 5px;
-  border-radius: 8px;
+  gap: 3px;
+  width: 40px;
+  height: 30px;
+  padding: 4px;
+  border-radius: 7px;
   border: 1px solid var(--bg-hairline);
   background: var(--bg-base);
 }
@@ -840,7 +1142,7 @@
 }
 .settings__themename {
   align-self: end;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 /* Beiwort: „Nagareboshi · Sternschnuppe" — schön bleibt schön, aber niemand
@@ -854,7 +1156,7 @@
 }
 .settings__themehint {
   align-self: start;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-3);
 }
 .settings__theme.is-active .settings__themehint {
@@ -1076,6 +1378,25 @@
   }
 }
 
+/* ── Zuhause-Widgets (W2, DESIGN-widget-raster-2026-08-18.md §4.3): abgesetzte
+   Krone-Gruppe (Uhr/Wecker) oben, Bühne darunter — je eine `.settings__skills`-
+   Liste unter einem Kicker. Kicker-Optik geliehen von `.settings__themeactivekicker`
+   (bewusst eigene Klasse, kein Alias — dort steht ein Theme-Name, hier ein
+   Gruppen-Titel). */
+.settings__widgetgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings__widgetkicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+
 /* ── Skills (S2.3): eine Zeile pro Skill, Zwei-Stufen-Toggle ───────────── */
 .settings__skills {
   display: flex;
@@ -1290,9 +1611,14 @@
   color: var(--text-1);
   overflow-wrap: anywhere;
 }
+/* Umbruchschutz (design 2026-08-15 §1.4/2): der Inhalt ist DREITEILIG
+   konkateniert („angelernt 3. Juli 2026 · 3 Sätze · in Arbeit"). Der Name
+   daneben hatte `overflow-wrap` längst, diese Zeile nicht — in einer schmalen
+   Meta-Spalte schob sie darum als Ganzes über den Rand, statt umzubrechen. */
 .settings__speakerdate {
   font-size: 12px;
   color: var(--text-3);
+  overflow-wrap: anywhere;
 }
 /* Primär-Knopf „Meine Stimme anlernen" — Akzent-Kontur, ruhig (kein Gold-Fill). */
 .settings__enrollbtn {
@@ -1335,19 +1661,41 @@
   padding: 6px 10px;
 }
 
-/* Aufklappbare Aufnahmen-Liste je Profil-Zeile (Reparatur-Auftrag 07.08, Muster
-   `.feed__details`: kein eigener JS-Auf/Zu-State, native <details>/<summary>). */
+/* Aufnahmen-Knopf einer Profil-Zeile: der EINGANG zur Diagnose, nicht die Liste
+   selbst (design 2026-08-15 §3.3/3). Er schrumpft mit — anders als der frühere
+   `flex: none`-Textknopf der Liste, der den Querscroll verursacht hat. */
+.settings__recordingsbtn {
+  align-self: center;
+  min-width: 0;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast, 160ms) var(--ease-standard, ease),
+    border-color var(--dur-fast, 160ms) var(--ease-standard, ease);
+}
+.settings__recordingsbtn:hover {
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+}
+.settings__recordingsbtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Aufnahmen-Liste EINES Profils — wohnt jetzt im 960-px-Overlay (§3.3/3). */
 .settings__recordings {
   margin-top: 4px;
 }
-.settings__recordings > summary {
-  list-style: none;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-3);
-}
-.settings__recordings > summary::-webkit-details-marker {
-  display: none;
+.settings__recordingstitle {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
 }
 .settings__recordinglist {
   margin: 6px 0 0;
@@ -1368,28 +1716,168 @@
   background: var(--bg-subtle);
 }
 .settings__recordingmeta {
+  /* Die flexible Spalte: sie DARF schrumpfen (min-width:0) und bricht um —
+     dadurch gewinnt sie die Zeile gegen den fixen Icon-Knopf, statt ihn
+     hinauszuschieben (§1.4/1). */
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 12px;
   color: var(--text-2);
   overflow-wrap: anywhere;
 }
+/* Icon-Löschknopf EINER Aufnahme: fester, kleiner Fußabdruck statt ~118 px Text
+   (design 2026-08-15 §3.3/3). Das Wort lebt in aria-label/title weiter. */
+.settings__recordingdelete {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-base);
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast, 160ms) var(--ease-standard, ease),
+    border-color var(--dur-fast, 160ms) var(--ease-standard, ease);
+}
+.settings__recordingdelete:hover:not(:disabled) {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.settings__recordingdelete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.settings__recordingdelete:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
-/* ── Anlern-Dialog (inline, geführt) ─────────────────────────────────────────── */
+/* ── Anlern-Overlay (design 2026-08-15 §3.3) ──────────────────────────────────
+   Der Assistent ist kein Inline-Block unter der Liste mehr, sondern eine Karte
+   in der geteilten Overlay-Schale (`.overlay__card` trägt Geometrie/Grund; hier
+   steht nur, was DIESE Karte zusätzlich braucht). EIN Schritt pro Bild — darum
+   gibt es keine Satz-<ol> mehr, sondern EINEN großen, mittigen Satz. */
 .settings__enroll {
-  margin-top: 10px;
-  padding: 14px;
-  border: 1px solid var(--accent-soft);
-  border-radius: 12px;
-  background: var(--bg-subtle);
+  gap: 14px;
+}
+.settings__enrollhead {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  flex-direction: row-reverse; /* Titel links, Kreuz rechts — DOM: Kreuz zuerst (Autofokus) */
+  gap: 12px;
 }
 .settings__enrolltitle {
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-1);
 }
+.settings__enrollclose {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--bg-hairline);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  font-size: 14px;
+  cursor: pointer;
+}
+.settings__enrollclose:hover {
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+}
+.settings__enrollclose:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Neun-Punkte-Schiene: EIN Punkt je Aufnahme des GANZEN Profils — „wie weit bin
+   ich wirklich" ohne Rechnen. Der alte Dialog sagte nur „Satz 2 von 3" und
+   verschwieg, dass noch zwei Sitzungen fehlen. */
+.settings__enrollrail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.settings__enrolldots {
+  display: inline-flex;
+  gap: 5px;
+}
+.settings__enrolldot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bg-hairline);
+}
+.settings__enrolldot--done {
+  background: var(--accent);
+}
+.settings__enrolldot--current {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.settings__enrollprogress {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* Bild ②/③: der Satz steht groß und mittig — er ist die einzige Aufgabe. */
+.settings__enrollstage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0 4px;
+  text-align: center;
+}
+.settings__enrollsentence {
+  margin: 0;
+  max-width: 46ch;
+  font-size: clamp(18px, 2.4vw, 24px);
+  line-height: 1.45;
+  color: var(--text-1);
+}
+.settings__enrollwave {
+  width: min(420px, 100%);
+}
+/* Die Welle ist im Anlernen doppelt so hoch wie in der Compose-Bar: hier IST sie
+   die Rückmeldung, nicht eine Randnotiz neben dem Text. */
+.settings__enrollwave .vc-wave {
+  height: 64px;
+}
+.settings__enrollwavehint {
+  margin: 0;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+}
+.settings__enrollrecord {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  padding: 12px 22px;
+}
+
+/* Abbruch-Nachfrage (§3.3/1): ersetzt den Schritt-Inhalt, damit kein
+   Fehlklick daneben eine neue Aufnahme startet. */
+.settings__enrollconfirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  background: var(--warn-soft);
+}
+
 .settings__enrolllabel {
   margin-top: 2px;
 }
@@ -1398,17 +1886,6 @@
 }
 .settings__enrollinvalid {
   color: var(--error);
-}
-.settings__enrollsentences {
-  margin: 4px 0;
-  padding-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.settings__enrollsentence {
-  font-size: 14px;
-  color: var(--text-1);
 }
 .settings__enrollactions {
   display: flex;
@@ -1427,24 +1904,6 @@
 .settings__enrolldone {
   color: var(--success);
   font-weight: 600;
-}
-/* Pulsierender Aufnahme-Punkt (Warn-Ton — sichtbar „läuft"). reduced-motion ruhig (global). */
-.settings__enrolldot {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--error);
-  animation: enroll-pulse 1.2s var(--ease-standard, ease) infinite;
-}
-@keyframes enroll-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
 }
 
 /* ── Nachtmodus (Scheibe 3 von 3): Geräte-Liste + Dial-Kärtchen ──────────────
@@ -1733,11 +2192,22 @@
   cursor: not-allowed;
 }
 
-/* ════════════════ Crew-Overlay (versteckt) — „Stellar Bloom" ════════════════
-   Easter-Egg: kein Dauer-Splash, sondern ein dezentes, schliessbares Reveal der
-   Crew. Spiegelt das settings-overlay-Idiom (opacity/visibility/pointer-events +
-   is-open). Gold bleibt der Stimme/Akzent vorbehalten; die Karte ist warm-neutral.
-   reduced-motion: die globale Regel in index.css stellt die Transitions hier ruhig. */
+/* ════════════════ Overlay shell (generic) + Crew as its first user ══════════
+   The ONE modal frame of the frontend (components/Overlay.tsx, design
+   2026-08-15 §3.2). `.overlay`/`.overlay__card` is the generic pair; the Crew
+   easter egg keeps its historic BEM roots `.crew-overlay`/`.crew` and rides on
+   the SAME declarations — one rule set, two names, so "generalised" and
+   "unchanged pixels" cannot drift apart (latch: test/crew.test.tsx +
+   test/overlay.test.tsx).
+
+   Mirrors the settings-overlay idiom (opacity/visibility/pointer-events +
+   is-open). Gold stays reserved for voice/accent; the card is warm-neutral.
+   reduced-motion: the global rule in index.css calms these transitions.
+
+   Z-ORDER CONTRACT (fixed): drawer 50 (.settings-overlay above) → overlay 60
+   (here) → FiredToast 70 (index.css). The alarm always wins — no overlay may
+   ever cover a ringing timer, so nothing here climbs above 60. */
+.overlay,
 .crew-overlay {
   position: fixed;
   inset: 0;
@@ -1755,19 +2225,22 @@
     opacity var(--dur-base, 240ms) var(--ease-standard, ease),
     visibility var(--dur-base, 240ms) var(--ease-standard, ease);
 }
+.overlay.is-open,
 .crew-overlay.is-open {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
 }
 
+.overlay__card,
 .crew {
   display: flex;
   flex-direction: column;
   gap: 12px;
   /* Breit genug, dass ALLE 22 Köpfe ohne Scrollen sichtbar sind (Mehrspalten-
      Grid in .crew__list) — Scrollen im Overlay war unzuverlässig, Sichtbarkeit
-     schlägt Scroll. Auf schmalen Screens fällt das Grid auf 1 Spalte zurück. */
+     schlägt Scroll. Auf schmalen Screens fällt das Grid auf 1 Spalte zurück.
+     Als generische Karte: die Fläche, die der 340px-Drawer nicht hat. */
   width: min(960px, 94vw);
   max-height: 90vh;
   overflow-y: auto;
@@ -1783,6 +2256,7 @@
     transform var(--dur-base, 240ms) var(--ease-decel, ease),
     opacity var(--dur-base, 240ms) var(--ease-standard, ease);
 }
+.overlay.is-open .overlay__card,
 .crew-overlay.is-open .crew {
   transform: translateY(0) scale(1);
   opacity: 1;

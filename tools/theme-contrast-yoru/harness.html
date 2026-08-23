@@ -1,0 +1,119 @@
+<!doctype html>
+<!--
+  Mess-Gerüst des Yoru-Pods (Theme-Revival 2026-08-18/19).
+
+  Es lädt GENAU den Stapel, den das ausgelieferte Frontend hinter dem Hintergrund
+  hat, in der echten Reihenfolge — die Lehre vom 18.08.: ein Messfühler, der die
+  Themen-CSS ohne die Basistoken aus index.css lädt, misst eine Nachbildung und
+  lügt. Bei Yoru wiegt das doppelt: Yoru IST der Basis-Token-Satz aus index.css,
+  seine Theme-Datei enthält KEINE einzige Farbe der Text-Treppe. Ohne index.css
+  gäbe es hier schlicht nichts zu messen.
+
+    1. ../../frontend/src/index.css         — Basistoken (= Yoru) + .app (920px)
+    2. ../../frontend/src/styles/themes.css  — Basis-Look
+    3. ../../frontend/public/themes/yoru.css — Atmosphäre + Szene + Licht
+
+  Der relative Pfad url('yoru-szene.svg') in der Themen-CSS löst sich dabei
+  korrekt gegen deren eigenen Ort auf, genau wie im Produkt.
+
+  Die Seite ist ABSICHTLICH leer: gemessen wird der Hintergrund-Stapel an der
+  Stelle, an der später Text steht. Karten sind deckend und würden das Bild nur
+  verstecken; das .app-Gerüst steht trotzdem im DOM, damit die 920-px-Spalte
+  dieselbe Geometrie hat wie im Produkt.
+
+  DER FARB-STREIFEN OBEN ist der Grund, warum hier keine eigene OKLCH-Mathematik
+  gegen die eigene OKLCH-Mathematik geprüft wird (Lehre des Aoi-Pods): die vier
+  Stufen der Text-Treppe stehen als deckende Flächen im Bild, Chrome rechnet sie
+  selbst nach sRGB, und das Messskript liest sie als Pixel aus dem PNG. Der
+  Streifen ist 16 px hoch und liegt ganz oben; gescannt wird erst ab y = 24.
+
+  Schalter:
+    ?scene=off   — body::after (die Zeichnung) aus. Die A/B-Gegenprobe: nur
+                   Atmosphäre + Licht. Belegt, ob die Szene die Spalte aufhellt.
+    ?light=off   — beide Licht-Ebenen aus (body::before + :root::after).
+    ?atm=flat    — ersetzt --theme-atmosphere durch flaches --bg-base, also
+                   Yoru OHNE seine Laternen-Pfütze. Beziffert den BODEN: was
+                   text-4 in der Spalte höchstens werden könnte, wenn man die
+                   Wärme opferte. Die Differenz zum ausgelieferten Lauf ist der
+                   ganze Preis der Atmosphäre — die Entscheidung „Wärme behalten"
+                   steht damit auf einer Zahl statt auf Geschmack.
+                   (Inline-Style auf <body>, damit keine Spezifitäts-Frage
+                   entsteht und die Gradienten-Liste nicht ein zweites Mal in
+                   der Welt steht.)
+    ?veil=0.20   — überschreibt --yoru-veil. MUSS auf <html> gesetzt werden:
+                   dort deklariert yoru.css den Regler, und nur von dort
+                   erreicht er :root::after (ein Pseudoelement von <html>).
+                   Auf body gesetzt bliebe er wirkungslos — genau der Fehler,
+                   den der Aoi-Pod am 19.08. aufgedeckt hat.
+-->
+<html lang="de" data-theme="yoru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Yoru — Kontrast-Messgerüst</title>
+    <link rel="stylesheet" href="../../frontend/src/index.css" />
+    <link rel="stylesheet" href="../../frontend/src/styles/themes.css" />
+    <link rel="stylesheet" href="../../frontend/public/themes/yoru.css" />
+    <style>
+      .app {
+        height: 100%;
+      }
+
+      /* Der Farb-Streifen: vier deckende Blöcke, von Chrome aus den Token
+         gerendert. Er liegt ÜBER allem (z-index 10), damit ihn kein
+         Hintergrund-Pseudoelement einfärbt, und ist exakt 16 px hoch. */
+      .probe {
+        position: fixed;
+        inset: 0 0 auto 0;
+        height: 16px;
+        z-index: 10;
+        display: flex;
+      }
+      .probe > i {
+        flex: 1;
+      }
+      .probe > i:nth-child(1) {
+        background: var(--text-1);
+      }
+      .probe > i:nth-child(2) {
+        background: var(--text-2);
+      }
+      .probe > i:nth-child(3) {
+        background: var(--text-3);
+      }
+      .probe > i:nth-child(4) {
+        background: var(--text-4);
+      }
+      .probe > i:nth-child(5) {
+        background: var(--bg-base);
+      }
+      .probe > i:nth-child(6) {
+        background: var(--bg-surface);
+      }
+
+      html[data-scene='off'] body::after {
+        display: none;
+      }
+      html[data-light='off'] body::before,
+      html[data-light='off']:root[data-theme='yoru']::after {
+        display: none;
+      }
+      html[data-guides='1'] .app {
+        outline: 1px dashed #ff00ff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="probe"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="app"></div>
+    <script>
+      const q = new URLSearchParams(location.search);
+      const root = document.documentElement;
+      if (q.get('scene') === 'off') root.dataset.scene = 'off';
+      if (q.get('light') === 'off') root.dataset.light = 'off';
+      if (q.get('guides') === '1') root.dataset.guides = '1';
+      const veil = q.get('veil');
+      if (veil !== null) root.style.setProperty('--yoru-veil', veil);
+      if (q.get('atm') === 'flat') document.body.style.background = 'var(--bg-base)';
+    </script>
+  </body>
+</html>

@@ -106,6 +106,36 @@ sealed class ChatEvent {
          * `TurnTrace.escalationSource` (Turn↔Note-Verknüpfung).
          */
         val escalationSource: String = "",
+        /**
+         * **Angesteuerte HA-Area dieses Turns** (Räume-Nutzungs-Naht, additiv,
+         * Default `null` — Muster [grounded]/[segmentReset], kartiert in Commit
+         * f049965 / `frontend/src/components/roomsSort.ts`-KDoc „Konzept 1a
+         * mangels Datengrundlage NICHT gebaut"): die `area_id`, die der
+         * [de.hoshi.core.tools.ToolCall] dieses Turns bereits in seiner `data`
+         * trägt (SMART_HOME-Lese-/Schreib-Turns mit aufgelöstem Raum-Ziel,
+         * GRANT wie DENY — s. [de.hoshi.core.pipeline.TurnOrchestrator.writeToolTurn]/
+         * [de.hoshi.core.pipeline.TurnOrchestrator.toolReadTurn]/`dispatchAgentic`).
+         * `null` = kein Tool-Turn ODER ein Tool-Turn OHNE aufgelöste Area (Szene/
+         * entity-getargeteter Call/Rückfrage) — nie eine erfundene Area. Füttert
+         * `TurnTrace.targetAreaId` (die neue Räume-Nutzungs-Messung statt der
+         * bisherigen Nicht-Existenz dieser Datengrundlage).
+         */
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val targetAreaId: String? = null,
+
+        /**
+         * **Der ECHTE HA-Anzeigename zu [targetAreaId]** (additiv ANS ZEILENENDE,
+         * Andi 2026-08-22) — `kuche` ⇒ `Küche`. Aufgelöst über
+         * [de.hoshi.core.port.displayNameOrNull]; `null` = keine Area ODER kein
+         * vertrauenswürdiger Name (nie ein kapitalisierter Slug, s. dortige KDoc).
+         *
+         * **Warum BEIDE Felder:** [targetAreaId] bleibt die Matching-Wahrheit (Slug,
+         * stabil über Umbenennungen — darauf zählen `AreaUsageReader` & Co.); dieses
+         * Feld ist der LESBARE Name für Menschen, die ins Diary schauen. Der Slug
+         * wird dadurch nicht ersetzt, nur begleitet.
+         */
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val targetAreaName: String? = null,
     ) : ChatEvent()
 
     data class TextDelta(
@@ -253,6 +283,93 @@ sealed class ChatEvent {
          */
         @get:JsonInclude(JsonInclude.Include.NON_NULL)
         val escalationSources: List<EscalationSourceRef>? = null,
+        /**
+         * **Execution-claim latch fired** ([de.hoshi.core.pipeline.ExecutionClaimGate]):
+         * `true` exactly when this turn ran WITHOUT a tool call, claimed a switching
+         * act anyway, and the answer was replaced by the honest ask-back. Known only
+         * after the last delta, hence here and not at [Start].
+         *
+         * Nullable like [escalationCapExhausted] and for the same reason: a non-null
+         * Boolean would add a wire key to EVERY Done in the program. `null` = latch
+         * did not fire ⇒ key absent ⇒ old clients see a byte-identical Done. Feeds
+         * `TurnTrace.claimGateFired` — without it the latch would be invisible.
+         */
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val claimGateFired: Boolean? = null,
+        /**
+         * Room-clarify cycle marker (F1-4, additive — pattern [claimGateFired]):
+         * "asked" | "resolved" | "expired" | "abandoned" (constants on
+         * [de.hoshi.core.pipeline.PendingAreaClarifyPort]). `null` = no clarify
+         * involvement ⇒ key absent ⇒ old clients see a byte-identical Done.
+         * Feeds `TurnTrace.pendingClarify`.
+         */
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val pendingClarify: String? = null,
+        /**
+         * **The tool executor really ran in this turn** (additive AT STRUCT END —
+         * LL-2026-08-11-additive-line-end, pattern [claimGateFired]): `true` exactly
+         * when [de.hoshi.core.port.ToolPort.execute] was INVOKED for this turn — the
+         * deterministic write path after a kernel GRANT
+         * ([de.hoshi.core.pipeline.TurnOrchestrator.writeToolTurn]), the gate-free
+         * smart-home READ (`toolReadTurn`) and the agentic path after its GRANT
+         * (`dispatchAgentic`). A kernel DENY, a room ask and every brain-only turn
+         * leave it absent — the executor never ran there.
+         *
+         * **Boundary (deliberate):** this records the CALL, not its outcome. A
+         * [de.hoshi.core.tools.ToolResult.Failed] still counts as `true`; whether the
+         * act was VERIFIED is a later, larger slice and must not be read into this field.
+         *
+         * Nullable like [claimGateFired] and for the same reason: a non-null Boolean
+         * would add a wire key to EVERY Done in the program. `null` = no executor ran
+         * ⇒ key absent ⇒ old clients see a byte-identical Done. Feeds
+         * `TurnTrace.toolCallRan` — the evidence half of FALSE_EXECUTION_CLAIM
+         * ("answer claims completion ∧ no tool ran"), which [claimGateFired] alone
+         * cannot carry (it only proves the PREVENTED claim on the tool-free path).
+         */
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val toolCallRan: Boolean? = null,
+        /**
+         * **Dieser Turn endet mit einer OFFENEN Rückfrage** (additiv AT STRUCT END —
+         * LL-2026-08-11-additive-line-end, Muster [toolCallRan]): `true` genau dann,
+         * wenn der Turn eine Frage gestellt hat, deren Antwort der NÄCHSTE Turn
+         * einlösen soll — der Online-Nachschau-Deflect („soll ich kurz nachschauen?"),
+         * die Orts-Rückfrage und die Raum-Rückfrage.
+         *
+         * **Warum das ein WIRE-Feld sein MUSS (Andi-Livetest 2026-08-21):** „Wenn
+         * Hoshi mich fragt, ob sie online schauen soll, soll sie erstmal zuhören, ob
+         * ich okay oder ja sage." Der Satellit weiß heute NICHT, dass eine Frage offen
+         * ist, und fällt nach dem Sprechen zurück ins Wake-Word-Warten — der Nutzer
+         * muss „Hey Hoshi" sagen, um „ja" zu sagen. Mit diesem Feld kann die Firmware
+         * das Mikro OHNE neues Wake-Word wieder öffnen. Es ist damit — anders als alle
+         * bisherigen additiven Done-Felder — **kein reines Diary-/Messfeld, sondern
+         * das erste, das GERÄTE-VERHALTEN steuern soll** (die Firmware-Hälfte baut die
+         * Satelliten-Lane, s. `vault/knowledge/WIRE-PROTOCOL-0.8.md`).
+         *
+         * Nullable wie [toolCallRan] und aus demselben Grund: ein non-null Boolean
+         * würde JEDEM Done im ganzen Programm einen Wire-Key anhängen. `null` = keine
+         * offene Rückfrage ⇒ Key fehlt im JSON ⇒ Alt-Clients sehen ein byte-identisches
+         * Done. Quelle der Wahrheit ist der [de.hoshi.core.pipeline.PendingTurnArbiter]:
+         * gesetzt wird NUR dort, wo wirklich ein Pending-Zustand geschrieben wurde —
+         * nie geraten.
+         */
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val expectsReply: Boolean? = null,
+        /**
+         * **WELCHE Art Rückfrage offen ist** (additiv, immer gemeinsam mit
+         * [expectsReply] gesetzt): `"lookup"` (Online-Nachschau-Consent bzw. die
+         * Themen-Rückfrage), `"location"` (Ort für die Wetterfrage), `"area"`
+         * (Raum-Klärung). Die drei Werte sind 1:1 die Arten des
+         * [de.hoshi.core.pipeline.PendingTurnArbiter] (s. [PendingKind]) — bewusst
+         * KEINE zweite, erfundene Taxonomie: was der Arbiter nicht kennt, kann hier
+         * nicht stehen.
+         *
+         * Die Firmware darf den konkreten Wert IGNORIEREN und allein auf
+         * [expectsReply] reagieren (Mikro auf); er existiert, damit sie später
+         * differenzieren kann (z.B. kürzeres Lausch-Fenster für ein reines
+         * „ja/nein" als für eine Raumnennung). `null` ⇔ [expectsReply] `null`.
+         */
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val pendingKind: String? = null,
     ) : ChatEvent()
 
     /**
@@ -304,6 +421,15 @@ sealed class ChatEvent {
          * (dieselben Gründe wie [sttSurprisal]).
          */
         val sttSurprisalMax: Double? = null,
+        /**
+         * **Brain chat timeout hit** (additive AT LINE END — LL-2026-08-11-additive-line-end).
+         * `true` exactly when the brain stream ended in a timeout; `null` = no
+         * timeout observed ⇒ key absent ⇒ Done byte-identical for every other turn.
+         * Not a latency: it is the reason [brainTtftMs] is null on a wedge turn —
+         * without it a 30s timeout looks like a turn that never asked the brain
+         * (vault/knowledge/MESSUNG-latenz-diary-2026-08-13.md, KORREKTUR).
+         */
+        val brainTimeout: Boolean? = null,
     )
 
     /**
@@ -325,5 +451,22 @@ sealed class ChatEvent {
         const val LLM = "LLM"
         const val SIDECAR = "SIDECAR"
         const val TTS = "TTS"
+    }
+
+    /**
+     * Werte für [Done.pendingKind] — bewusst Strings (WS-JSON-Vertrag mit der
+     * Firmware, Muster [Stage]). Die drei Konstanten sind die 1:1-Entsprechung der
+     * [de.hoshi.core.pipeline.PendingTurnArbiter]-Arten `LOOKUP`/`LOCATION`/`AREA`;
+     * eine vierte Art kann es auf dem Draht erst geben, wenn der Arbiter sie kennt.
+     */
+    object PendingKind {
+        /** Online-Nachschau: Consent („soll ich nachschauen?") ODER Themen-Rückfrage. */
+        const val LOOKUP = "lookup"
+
+        /** Orts-Rückfrage („für welchen Ort?"). */
+        const val LOCATION = "location"
+
+        /** Raum-Klärung („in welchem Raum?"). */
+        const val AREA = "area"
     }
 }

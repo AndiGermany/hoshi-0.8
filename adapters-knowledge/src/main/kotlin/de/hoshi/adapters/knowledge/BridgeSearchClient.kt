@@ -36,7 +36,9 @@ import java.time.Duration
  */
 class BridgeSearchClient(
     baseUrl: String,
-    private val timeout: Duration = Duration.ofSeconds(5),
+    // 2s budget sits over the measured prod path (cold 0.7s, warm 0.06s); probe is
+    // best-effort — timeout yields emptyList, never a broken turn.
+    private val timeout: Duration = Duration.ofSeconds(2),
     private val mapper: ObjectMapper = jacksonObjectMapper(),
     // Sidecar-Token-Wand (opt-in, s. SidecarTokenHeader-KDoc): leer (Default) ⇒ KEIN
     // Header ⇒ byte-identisch zu vor der Wand.

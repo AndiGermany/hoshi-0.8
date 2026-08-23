@@ -177,6 +177,83 @@ data class TurnTrace(
      * unterscheidbar macht. Default `false` ⇒ byte-neutral ohne H3-Fall.
      */
     val escalationCapExhausted: Boolean = false,
+    // ── Räume-Nutzungs-Naht (additiv ANS ZEILENENDE — Muster escalationCapExhausted):
+    // kartiert in Commit f049965 / frontend/src/components/roomsSort.ts-KDoc
+    // ("Konzept 1a mangels Datengrundlage NICHT gebaut"). Quelle:
+    // [de.hoshi.core.dto.ChatEvent.Start.targetAreaId] am Start-Event. ──
+    /**
+     * Die `area_id`, die der [de.hoshi.core.tools.ToolCall] DIESES Turns bereits
+     * kannte (SMART_HOME-Lese-/Schreib-Turn mit aufgelöstem Raum-Ziel, GRANT wie
+     * DENY) — die erste ECHTE Messung „mit welchen Räumen wird gesprochen?"
+     * statt der bisherigen, ehrlich zugegebenen Nicht-Existenz dieser Daten-
+     * grundlage (s. `roomsSort.ts`-KDoc: „weder das Nutzungs-Diary noch irgend-
+     * ein anderer Store trägt eine Raum-Zuordnung … über die Zeit"). `null` =
+     * kein Tool-Turn ODER ein Tool-Turn OHNE aufgelöste Area (Szene/entity-
+     * getargeteter Call/Rückfrage) — nie eine erfundene Area.
+     */
+    val targetAreaId: String? = null,
+    // ── Raumname-Naht (additiv ANS ZEILENENDE — Muster targetAreaId), Andi 2026-08-22.
+    // Quelle: [de.hoshi.core.dto.ChatEvent.Start.targetAreaName]. ──
+    /**
+     * Der ECHTE HA-Anzeigename zu [targetAreaId] (`kuche` ⇒ `Küche`) — der LESBARE
+     * Name neben dem Schlüssel. [targetAreaId] bleibt die Matching-Wahrheit (stabil
+     * über HA-Umbenennungen hinweg, darauf zählen die Räume-Auswertungen); dieses
+     * Feld ersetzt ihn NICHT, es begleitet ihn. `null` = keine Area ODER kein
+     * vertrauenswürdiger Name — nie ein kapitalisierter Slug („Kuche").
+     */
+    val targetAreaName: String? = null,
+    // ── Execution-claim latch (additive AT LINE END — same rule as targetAreaId).
+    // Source: [de.hoshi.core.dto.ChatEvent.Done.claimGateFired]. ──
+    /**
+     * Did [de.hoshi.core.pipeline.ExecutionClaimGate] replace this turn's answer?
+     * `true` = the turn ran without a tool call, claimed a switching act, and was
+     * answered with the honest ask-back instead. The visibility sensor of the
+     * latch: every `true` is one lie that did not reach the speaker — and a hint
+     * that the router missed a command (see
+     * `vault/knowledge/BEFUND-brain-behauptet-vollzug-2026-08-11.md`).
+     * Non-null Boolean here (unlike the nullable wire field): a diary line needs no
+     * tri-state. Default `false` ⇒ old callers and old lines unchanged.
+     */
+    val claimGateFired: Boolean = false,
+    // ── Brain timeout (additive AT LINE END — same rule as claimGateFired).
+    // Source: [de.hoshi.core.dto.ChatEvent.StageTimings.brainTimeout]. ──
+    /**
+     * Did this turn's brain call time out? `true` = the brain was asked and never
+     * answered, so [brainTtftMs] is null for a REASON — the field that makes a
+     * wedge distinguishable from a turn that never used the brain at all.
+     * Non-null Boolean here (unlike the nullable wire field): a diary line needs
+     * no tri-state. Default `false` ⇒ old callers and old lines unchanged.
+     */
+    val brainTimeout: Boolean = false,
+    // ── Room-clarify cycle (additive AT LINE END — same rule as claimGateFired).
+    // Source: [de.hoshi.core.dto.ChatEvent.Done.pendingClarify]. ──
+    /**
+     * Room-clarify cycle marker of this turn: "asked" (question parked a pending),
+     * "resolved" (answer completed the parked call through the gate), "expired"
+     * (TTL passed, silently discarded) or "abandoned" (another utterance cleared
+     * it). `null` = no clarify involvement — absent means not measured.
+     */
+    val pendingClarify: String? = null,
+    // ── Tool executor ran (additive AT LINE END — same rule as claimGateFired).
+    // Source: [de.hoshi.core.dto.ChatEvent.Done.toolCallRan]. ──
+    /**
+     * Did the tool EXECUTOR ([de.hoshi.core.port.ToolPort.execute]) really run in this
+     * turn? `true` = something was actually done or actually read (deterministic write
+     * after a kernel GRANT, smart-home read, agentic write after its GRANT). `false` =
+     * no executor ran: a kernel DENY, a room ask, or a turn without any tool call at all.
+     *
+     * The seam the diary lacked: [targetAreaId]`=null` conflates "no tool" with "tool
+     * without a resolved area", and [claimGateFired] only proves a PREVENTED claim on
+     * the tool-free brain path. This field is the other half of FALSE_EXECUTION_CLAIM
+     * ("the answer claims completion ∧ `toolCallRan == false`").
+     *
+     * **Boundary (deliberate):** it records the CALL, not its outcome — a failed
+     * execution ([de.hoshi.core.tools.ToolResult.Failed]) is still `true`. VERIFIED vs.
+     * FAILED is a later, larger slice; do not read it into this field.
+     * Non-null Boolean here (unlike the nullable wire field): a diary line needs no
+     * tri-state. Default `false` ⇒ old callers and old lines unchanged.
+     */
+    val toolCallRan: Boolean = false,
 )
 
 /**

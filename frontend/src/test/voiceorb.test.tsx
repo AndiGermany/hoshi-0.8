@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { readFileSync } from 'node:fs';
 import type { StreamChatOptions } from '../api/chat';
 import type { StreamVoiceOptions } from '../api/voice';
 
@@ -86,8 +87,14 @@ vi.mock('../audio/earcon', async (importOriginal) => {
 });
 
 import App from '../App';
-import { VoiceOrb } from '../components/VoiceOrb';
-import type { VoiceChatSession } from '../hooks/useVoiceChatSession';
+import {
+  VoiceOrb,
+  cardTtlMs,
+  CARD_TTL_MIN_MS,
+  CARD_TTL_MAX_MS,
+  CARD_MS_PER_CHAR,
+} from '../components/VoiceOrb';
+import type { Turn, VoiceChatSession } from '../hooks/useVoiceChatSession';
 
 // ── jsdom-Mount-Harness (Idiom aus identity.test.tsx) ─────────────────────────
 let container: HTMLDivElement;
@@ -99,7 +106,39 @@ const mount = async (el: React.ReactElement): Promise<void> => {
     root!.render(el);
   });
 };
+/** Neuer Zustand in DENSELBEN Root (kein Remount — sonst stürbe die TTL-Frist). */
+const rerender = async (el: React.ReactElement): Promise<void> => {
+  await act(async () => {
+    root!.render(el);
+  });
+};
 const flush = () => new Promise((r) => setTimeout(r, 0));
+
+/** Prop-getriebene Session-Attrappe — von den Sprechblasen- und reduced-motion-Suiten geteilt. */
+function fakeSession(over: Partial<VoiceChatSession> = {}): VoiceChatSession {
+  return {
+    turns: [],
+    busy: false,
+    activeSpeakerId: 'andi',
+    activeSpeakerName: '',
+    voiceOn: false,
+    speaking: false,
+    micState: 'idle',
+    micStateRef: { current: 'idle' },
+    micError: null,
+    recSecs: 0,
+    stepLabel: null,
+    slow: false,
+    send: async () => {},
+    startRecording: async () => {},
+    stopAndSend: async () => {},
+    cancelRecording: () => {},
+    bargeIn: () => {},
+    toggleVoice: () => {},
+    setLevelSink: () => {},
+    ...over,
+  };
+}
 
 beforeEach(() => {
   voiceOpts = null;
@@ -199,31 +238,6 @@ describe('VoiceOrb — Zustandsmaschine idle → listening → thinking → spea
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('VoiceOrb — reduced-motion-Pfad (Wiederverwendung statt eigenes Motion)', () => {
-  function fakeSession(over: Partial<VoiceChatSession> = {}): VoiceChatSession {
-    return {
-      turns: [],
-      busy: false,
-      activeSpeakerId: 'andi',
-      activeSpeakerName: '',
-      voiceOn: false,
-      speaking: false,
-      micState: 'idle',
-      micStateRef: { current: 'idle' },
-      micError: null,
-      recSecs: 0,
-      stepLabel: null,
-      slow: false,
-      send: async () => {},
-      startRecording: async () => {},
-      stopAndSend: async () => {},
-      cancelRecording: () => {},
-      bargeIn: () => {},
-      toggleVoice: () => {},
-      setLevelSink: () => {},
-      ...over,
-    };
-  }
-
   it('rendert für jeden Zustand exakt die vc-orb__{core,ring,bloom}-Trias, die die reduced-motion-Regel greift', () => {
     for (const micState of ['idle', 'listening', 'transcribing', 'responding'] as const) {
       const html = renderToStaticMarkup(<VoiceOrb session={fakeSession({ micState })} />);
@@ -322,5 +336,203 @@ describe('VoiceOrb — echter TTS-Ausgabepegel (AnalyserNode) treibt --lvl beim 
     // 'speaking' + der Pegel bleibt ehrlich 0 — kein erfundenes Wabern.
     expect(container.querySelector('.voiceorb .vc-orb')?.getAttribute('data-state')).toBe('speaking');
     expect(orbLevel()).toBe(0);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  F) Die Sprechblase hat eine LEBENSDAUER (Andis iPad-Befund 14.08.: „flutet
+//     die Sprechblase … die Sprechblasen sollen irgendwann verschwinden").
+//     Drei Verträge:
+//      F1) Lese-TTL: die Blase blendet nach cardTtlMs von SELBST aus — zeit-,
+//          nicht hover-getrieben (iPad/Touch kennt kein Hover).
+//      F2) Ein neuer Turn ERSETZT die eine Blase und startet die Frist neu —
+//          nie ein Stapel.
+//      F3) Solange der Turn ARBEITET (busy) oder Hoshi noch SPRICHT, läuft
+//          keine Frist — eine lange Antwort wird nie mitten im Satz gekappt.
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('VoiceOrb — die Sprechblase verschwindet von selbst (F1–F3)', () => {
+  /** Ein fertiges Paar (Du/Hoshi) wie es send()/runVoiceTurn hinterlassen. */
+  const pair = (userText: string, answer: string, error = false): Turn[] => [
+    { role: 'user', text: userText },
+    { role: 'assistant', text: answer, meta: 'test', error: error || undefined },
+  ];
+  const card = () => container.querySelector('.voiceorb__card');
+
+  it('cardTtlMs: Lese-Zeit an der Textlänge, hart gedeckelt — Fehler bekommen die Obergrenze', () => {
+    expect(cardTtlMs(0)).toBe(CARD_TTL_MIN_MS); // Untergrenze: auch „Ja." bleibt lesbar
+    expect(cardTtlMs(10_000)).toBe(CARD_TTL_MAX_MS); // Obergrenze: Home ist eine Blick-Fläche
+    const mid = Math.round((CARD_TTL_MIN_MS + CARD_TTL_MAX_MS) / 2 / CARD_MS_PER_CHAR);
+    expect(cardTtlMs(mid)).toBe(mid * CARD_MS_PER_CHAR); // dazwischen: echte Lese-Zeit
+    expect(cardTtlMs(mid)).toBeGreaterThan(cardTtlMs(mid - 50)); // monoton in der Länge
+    expect(cardTtlMs(1, true)).toBe(CARD_TTL_MAX_MS); // Kürze sagt nichts über Gewicht
+  });
+
+  it('F1: die Blase blendet nach ihrer Lese-TTL aus — keine Geste nötig', async () => {
+    vi.useFakeTimers();
+    try {
+      const turns = pair('wie ist das Wetter', 'Heute 18 bis 29 Grad, trocken.');
+      const chars = turns[0].text.length + turns[1].text.length;
+      await mount(<VoiceOrb session={fakeSession({ turns })} />);
+      expect(card()).not.toBeNull();
+
+      await act(async () => {
+        vi.advanceTimersByTime(cardTtlMs(chars) - 1);
+      });
+      expect(card()).not.toBeNull(); // eine Millisekunde vorher steht sie noch
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(card()).toBeNull(); // …und danach ist der Flur wieder ruhig
+      // Der Orb selbst bleibt — nur die Blase geht.
+      expect(container.querySelector('.voiceorb__tap')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('F2: ein neuer Turn ERSETZT die Blase (kein Stapel) und startet die Frist neu', async () => {
+    vi.useFakeTimers();
+    try {
+      const first = pair('erster Satz', 'erste Antwort');
+      await mount(<VoiceOrb session={fakeSession({ turns: first })} />);
+      await act(async () => {
+        vi.advanceTimersByTime(CARD_TTL_MIN_MS - 500); // kurz VOR Ablauf
+      });
+
+      const second = [...first, ...pair('zweiter Satz', 'zweite Antwort')];
+      await rerender(<VoiceOrb session={fakeSession({ turns: second })} />);
+
+      // EINE Blase mit GENAU zwei Zeilen — der alte Turn ist ersetzt, nicht gestapelt.
+      expect(container.querySelectorAll('.voiceorb__card')).toHaveLength(1);
+      expect(container.querySelectorAll('.voiceorb__row')).toHaveLength(2);
+      expect(container.textContent).toContain('zweite Antwort');
+      expect(container.textContent).not.toContain('erste Antwort');
+      expect(container.textContent).not.toContain('erster Satz');
+
+      // Die Frist des ALTEN Turns läuft nicht weiter (sonst wäre die neue Blase
+      // nach 500 ms weg) …
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+      expect(card()).not.toBeNull();
+
+      // …sondern beginnt neu und läuft dann ganz normal ab.
+      await act(async () => {
+        vi.advanceTimersByTime(CARD_TTL_MAX_MS);
+      });
+      expect(card()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('F3: solange der Turn arbeitet oder Hoshi spricht, läuft keine Frist', async () => {
+    vi.useFakeTimers();
+    try {
+      const turns = pair('lange Frage', 'eine sehr lange, laut vorgelesene Antwort');
+      // busy: die Antwort streamt noch.
+      await mount(<VoiceOrb session={fakeSession({ turns, busy: true })} />);
+      await act(async () => {
+        vi.advanceTimersByTime(CARD_TTL_MAX_MS * 3);
+      });
+      expect(card()).not.toBeNull();
+
+      // fertig gestreamt, aber das TTS-Audio läuft noch.
+      await rerender(<VoiceOrb session={fakeSession({ turns, speaking: true })} />);
+      await act(async () => {
+        vi.advanceTimersByTime(CARD_TTL_MAX_MS * 3);
+      });
+      expect(card()).not.toBeNull();
+
+      // Erst als wirklich nichts mehr läuft, startet die Frist — und läuft ab.
+      await rerender(<VoiceOrb session={fakeSession({ turns })} />);
+      await act(async () => {
+        vi.advanceTimersByTime(CARD_TTL_MAX_MS);
+      });
+      expect(card()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  G) Die Sprech-Schicht bewegt KEINEN Pixel Layout (Andi 23.08., wörtlich:
+//     „Das overlay für das eingesprochene und ausgegebene auf dem homescreen
+//     verschiebt wieder die größe von allen widgets.").
+//
+//  Gemessen ist das anderswo — jsdom rechnet kein Layout, und der Beweis sind
+//  Kachel-Rechtecke aus zwei echten Engines (`tools/zuhause-probe/sprechen.mjs`:
+//  Kachel-Kasten 669 → 355 px und Seiten 3 → 6 VOR dem Fix, byte-identisch
+//  DANACH, Chrome wie Firefox). Was hier geriegelt wird, sind die zwei
+//  Zusagen, an denen diese Messung hängt und die ein Feinschliff sonst
+//  versehentlich zurücknimmt:
+//    G1) Blase und Mikro-Fehler liegen IN der Schicht, nie daneben — sonst
+//        stünde wieder etwas im Fluss des Orb-Blocks.
+//    G2) Die Schicht ist außerhalb des Flusses, zeigerdurchlässig und deckend
+//        (sie liegt auf Kacheln), und niemand hat ihr einen `backdrop-filter`
+//        untergeschoben.
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('VoiceOrb — die Sprech-Schicht nimmt der Bühne keinen Platz (G1–G2)', () => {
+  const pair = (userText: string, answer: string): Turn[] => [
+    { role: 'user', text: userText },
+    { role: 'assistant', text: answer, meta: 'test' },
+  ];
+
+  it('G1: Blase UND Mikro-Fehler hängen in `.voiceorb__say`, nicht im Orb-Fluss', async () => {
+    await mount(
+      <VoiceOrb
+        session={fakeSession({ turns: pair('was läuft', 'Nudeln, zehn Minuten.'), micError: 'kein Mikro' })}
+      />,
+    );
+    const schicht = container.querySelector('.voiceorb__say');
+    expect(schicht, 'die Sprech-Schicht fehlt').not.toBeNull();
+    // `closest` statt `contains`: die Frage ist nicht „irgendwo im Baum",
+    // sondern „in DIESER Schicht" — ein Geschwister der Schicht stünde wieder
+    // im Fluss und sähe im DOM fast gleich aus.
+    expect(container.querySelector('.voiceorb__card')?.closest('.voiceorb__say')).toBe(schicht);
+    expect(container.querySelector('.voiceorb__error')?.closest('.voiceorb__say')).toBe(schicht);
+    // Der Orb-Block selbst trägt nur noch Knopf, Beschriftung und die Schicht —
+    // alles andere wäre wieder ein Kind, dessen Höhe die Bühne bezahlt.
+    const kinder = [...(container.querySelector('.voiceorb')?.children ?? [])].map(
+      (el) => el.className.split(/\s+/)[0],
+    );
+    expect(kinder).toEqual(['voiceorb__tap', 'voiceorb__hint', 'voiceorb__say']);
+  });
+
+  it('G1b: die Schicht steht IMMER im DOM — auch ohne Blase und ohne Fehler', async () => {
+    // Eine Schicht, die mit ihrem Inhalt entsteht, kann die `aria-live`-Region
+    // der Blase nicht tragen (dieselbe Screenreader-Falle wie in HomeEditBar) —
+    // und sie wäre bei jedem Erscheinen ein neues Layout-Ereignis.
+    await mount(<VoiceOrb session={fakeSession()} />);
+    expect(container.querySelector('.voiceorb__say')).not.toBeNull();
+    expect(container.querySelector('.voiceorb__card')).toBeNull();
+  });
+
+  it('G2: die Schicht liegt außerhalb des Flusses, lässt Zeiger durch und deckt zu', () => {
+    const css = readFileSync('src/styles/voicebar.css', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rumpf = (sel: string): string => {
+      const re = new RegExp(`(?:^|\\n)[ \\t]*${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'g');
+      const found = [...css.matchAll(re)].map((m) => m[1]);
+      expect(found.length, `Selektor \`${sel}\` fehlt in voicebar.css`).toBeGreaterThan(0);
+      return found.join('\n');
+    };
+    // Der Bezugsrahmen: ohne ihn hinge die Schicht am Fenster statt am Orb.
+    expect(rumpf('.voiceorb')).toMatch(/position:\s*relative/);
+    const schicht = rumpf('.voiceorb__say');
+    expect(schicht).toMatch(/position:\s*absolute/);
+    // Nach OBEN wachsen: unter dem Orb ist kein Platz (er ist am Boden verankert).
+    expect(schicht).toMatch(/bottom:\s*100%/);
+    // Sonst läge ein unsichtbarer Deckel über den unteren Kachelreihen.
+    expect(schicht).toMatch(/pointer-events:\s*none/);
+    expect(rumpf('.voiceorb__say > *')).toMatch(/pointer-events:\s*auto/);
+    // Deckend, weil sie auf Kacheln liegt (die Feinheit riegelt surfacemix.test) …
+    expect(rumpf('.voiceorb__card')).not.toMatch(/--surface-mix/);
+    // … und NIE mit einem Weichzeichner: die Transparenz-Regel des Hauses
+    // verbietet ihn, und Firefox liefert ihn je nach Einstellung gar nicht.
+    expect(css).not.toMatch(/backdrop-filter/);
   });
 });

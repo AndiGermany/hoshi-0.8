@@ -11,9 +11,10 @@
 > dem man vertrauen kann. Läuft auf einem Apple-Silicon-Mac mit 16 GB. Keine
 > Cloud-Pflicht, keine projektseitige Telemetrie — deine Stimme bleibt bei dir.
 
-**Status:** 0.8.3 „Suisei“ (彗星, der Komet) — aktiv in Entwicklung auf dem Weg
-zu 1.0. Den ehrlichen Stand jeder Version, offene Kanten eingeschlossen, hält das
-[`CHANGELOG.md`](CHANGELOG.md) fest.
+**Status:** 0.9.x — aktiv in Entwicklung auf dem Weg zu 1.0. Welche Version dieser
+Baum genau trägt, sagt die `version=`-Zeile in [`gradle.properties`](gradle.properties)
+(und das Banner von `bin/hoshi help`); den ehrlichen Stand jeder Version, offene
+Kanten eingeschlossen, hält das [`CHANGELOG.md`](CHANGELOG.md) fest.
 
 ## Was Hoshi ist
 
@@ -27,12 +28,18 @@ Das Internet ist eine ausdrückliche, einstellbare Ausnahme — nie Voraussetzun
 - Fragen suchen zuerst in einer lokalen Wikipedia. Reicht sie nicht, sagt Hoshi
   das und kann vor einer Onlinesuche um Erlaubnis fragen. Danach bleibt hörbar,
   ob die Antwort aus dem Haus oder aus dem Netz kam.
-- Timer, Wecker, Licht und Farbtemperaturen laufen über deterministische
-  Fastpaths ohne LLM-Denkpause.
-- Die Fluransicht zeigt Uhr, Wetter, echte Countdowns und die Einkaufsliste.
-  Leere Karten verschwinden, statt erfundene Zustände zu zeigen.
-- Oberfläche, Antworten und Kommandos gibt es in fünf Sprachen. Neun Farbwelten
-  reichen von Aoi (青) bis Amayadori (雨宿り).
+- Timer, Wecker, Licht, Farbtemperaturen und jetzt auch der Saugroboter (Start,
+  zurück zur Basis, ehrlicher Status statt geisterhaftem „zuletzt gesehen“)
+  laufen über deterministische Fastpaths ohne LLM-Denkpause.
+- Die Fluransicht zeigt eine Uhr (nachts mit lokal berechneter Mondphase 🌙),
+  Wetter, ein mehrquelliges Nachrichten-Lagebild (mit Quellenangabe, ohne
+  Brain-Aufrufe dahinter), echte Countdowns und die Einkaufsliste. Kacheln
+  liegen auf einem freien Raster, lassen sich per +/− in der Größe ändern und
+  einzeln in den Einstellungen ein- oder ausschalten. Leere Karten
+  verschwinden, statt erfundene Zustände zu zeigen.
+- Oberfläche, Antworten und Kommandos gibt es in fünf Sprachen. Sechzehn
+  lebende Szenen-Themes, gruppiert nach Tageslage, dazu eine
+  Vollbild-Galerie zum Aussuchen statt des alten schmalen Auswahl-Drawers.
 - Das Aktivitätstagebuch speichert Messwerte wie Kategorie und Latenz, niemals
   Gesprächsinhalte.
 
@@ -40,9 +47,14 @@ Das Internet ist eine ausdrückliche, einstellbare Ausnahme — nie Voraussetzun
 
 **Ehrlichkeit ist Architektur.** Unbekanntes wird nicht mit einer plausibel
 klingenden Erfindung gefüllt. Die Oberfläche zeigt „—“ statt ausgedachter Zahlen;
-ein Cache wird als Cache benannt, eine Onlinequelle als Onlinequelle. Der Leitsatz
-des Projekts lautet **grün ≠ lebt**: Ein grüner Test beweist noch kein lebendes
-Feature, deshalb werden wichtige Wege am echten Stack gemessen.
+ein Cache wird als Cache benannt, eine Onlinequelle als Onlinequelle. Ein
+Vollzugs-Wächter (der „Kagami“-Spiegel) verhindert, dass eine Antwort einen
+Schaltvorgang behauptet, der nie stattfand; der erste Live-Replay lief grün
+(13 Fälle, 14 Turns, null falsche Vollzugsbehauptungen, null Beweislücken),
+und der Satellit hat dasselbe am echten Gerät bewiesen — „Küche schaltet
+Küche“, Licht an und wieder aus. Der Leitsatz des Projekts lautet
+**grün ≠ lebt**: Ein grüner Test beweist noch kein lebendes Feature, deshalb
+werden wichtige Wege am echten Stack gemessen.
 
 **Vertrauen liegt im Code.** Schreibende Aktionen laufen durch einen
 default-deny Capability-Kernel. Biometrische Stimmprofile verlassen das Gerät
@@ -64,6 +76,11 @@ bevor ein Mensch sie freigibt.
 - Das große 12B-Brain benötigt den mitgelieferten MLX-Architekturpatch.
 - Hoshi ist bislang auf genau einer Maschine gehärtet. Die Installation auf
   fremden Macs wird gerade zu einem reproduzierbaren Weg ausgebaut.
+- Ein paar Dinge bleiben bewusst auf eine spätere Version verschoben: die
+  amtliche Warnspur (NINA) und Nachrichten-Personalisierung, das
+  Kalender-Widget (wartet auf eine Home-Assistant-Kalender-Integration) und
+  die Satelliten-Seite echter Rückfragen (Server-Teil steht, das Flag bleibt
+  aus, bis die Firmware-Hälfte existiert).
 
 ## Architektur und Einstieg
 

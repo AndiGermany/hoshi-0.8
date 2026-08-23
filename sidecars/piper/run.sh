@@ -25,7 +25,11 @@ export HOSHI_PIPER_HOST="${HOSHI_PIPER_HOST:-0.0.0.0}"
 export HOSHI_PIPER_PORT="${HOSHI_PIPER_PORT:-8045}"
 export HOSHI_PIPER_MODEL_DIR="${HOSHI_PIPER_MODEL_DIR:-$PIPER_DIR/models}"
 export HOSHI_PIPER_DEFAULT_VOICE="${HOSHI_PIPER_DEFAULT_VOICE:-de_DE-thorsten-medium}"
-export HOSHI_PIPER_THREADS="${HOSHI_PIPER_THREADS:-2}"
+# Threads 2→4 seit 22.08.2026 (Andi-GO, Speed-Hebel #3 aus
+# RESEARCH-modell-speed): ONNX-intra_op skaliert die Synthese ~×1,5–2.
+# Parallel-Messung gegen den Brain-Decode lief bei der Aktivierung (Zahlen im
+# Bus/Status 22.08.); Rollback = diese Zeile auf 2.
+export HOSHI_PIPER_THREADS="${HOSHI_PIPER_THREADS:-4}"
 # HOSHI_SIDECAR_TOKEN (optional, Codex-Sicherheits-P0 2026-07-27): server.py
 # liest diese Var SELBST per os.environ.get() (kein run.sh-Durchreichen/Export
 # noetig). Leer/ungesetzt (Default) = heutiges offenes Verhalten, NULL

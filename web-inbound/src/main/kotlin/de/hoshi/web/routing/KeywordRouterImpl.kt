@@ -7,10 +7,10 @@ import de.hoshi.core.pipeline.IntentClassifier
 import de.hoshi.core.pipeline.KeywordRouter
 
 /**
- * **KeywordRouterImpl** — der ECHTE Hop-1-Keyword-Router (M4-Step-2). Ersetzt den
- * [de.hoshi.web.stub.KeywordRouterStubAdapter] (der nur SMART_HOME/SMALLTALK
- * konnte) und ist damit der Hebel, der eine Wissensfrage als Wissens-Kategorie
- * klassifiziert → der [de.hoshi.adapters.knowledge.Fts5GroundingAdapter] greift
+ * **KeywordRouterImpl** — der ECHTE Hop-1-Keyword-Router (M4-Step-2). Ersetzte den
+ * früheren Keyword-Stub (nur SMART_HOME/SMALLTALK — seit 0.9 gelöscht, weil dieser
+ * Router längst produktiv verdrahtet ist) und ist damit der Hebel, der eine
+ * Wissensfrage als Wissens-Kategorie klassifiziert → der [de.hoshi.adapters.knowledge.Fts5GroundingAdapter] greift
  * (groundet bei FACT_SHORT/NEEDS_WEB/AMBIG) → Hoshi antwortet mit echtem Wiki-Wissen.
  *
  * Reine Keyword-Heuristik (0ms, KEIN Ollama/Embedding — die Refiner bleiben in 0.8

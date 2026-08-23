@@ -40,7 +40,7 @@ class ScheduledItemFireServiceTest {
         enabled: Boolean = true,
         clock: Clock = fixedClock,
         pollIntervalMs: Long = 10,
-        onFired: (id: String, label: String?, originSatelliteId: String?) -> Unit = { _, _, _ -> },
+        onFired: (ScheduledItem) -> Unit = {},
     ) = ScheduledItemFireService(
         store = store,
         fired = fired,
@@ -92,7 +92,7 @@ class ScheduledItemFireServiceTest {
     // ── onFired-Hook (PREP-wecker-am-satelliten, Scheibe 2) ──────────────────
 
     @Test
-    fun `onFired-Hook feuert genau einmal je gefeuertem Item mit id, label und originSatelliteId`() {
+    fun `onFired-Hook reicht genau das gefeuerte ScheduledItem einmal weiter`() {
         val store = InMemoryScheduledItemStore()
         val fired = InMemoryFiredItemsStore()
         store.set(
@@ -101,12 +101,24 @@ class ScheduledItemFireServiceTest {
                 label = "Aufstehen", originSatelliteId = "sat-kueche",
             ),
         )
-        val calls = mutableListOf<Triple<String, String?, String?>>()
+        val calls = mutableListOf<ScheduledItem>()
 
-        service(store, fired, onFired = { id, label, originSatelliteId -> calls.add(Triple(id, label, originSatelliteId)) })
+        service(store, fired, onFired = calls::add)
             .pollOnce()
 
-        assertEquals(listOf(Triple("am-satelliten", "Aufstehen", "sat-kueche")), calls, "genau ein Aufruf mit den richtigen Feldern")
+        assertEquals(
+            listOf(
+                ScheduledItem(
+                    id = "am-satelliten",
+                    kind = ScheduledKind.ALARM,
+                    dueAtEpochMs = now,
+                    label = "Aufstehen",
+                    originSatelliteId = "sat-kueche",
+                ),
+            ),
+            calls,
+            "der Hook erhaelt die bestehende Zeit- und Kind-Wahrheit des Items",
+        )
     }
 
     @Test
@@ -116,7 +128,7 @@ class ScheduledItemFireServiceTest {
         store.set(ScheduledItem(id = "chat-timer", kind = ScheduledKind.TIMER, dueAtEpochMs = now))
         val calls = mutableListOf<String?>()
 
-        service(store, fired, onFired = { _, _, originSatelliteId -> calls.add(originSatelliteId) }).pollOnce()
+        service(store, fired, onFired = { calls.add(it.originSatelliteId) }).pollOnce()
 
         assertEquals(listOf<String?>(null), calls, "Hook wird trotzdem gerufen, originSatelliteId ist ehrlich null")
     }

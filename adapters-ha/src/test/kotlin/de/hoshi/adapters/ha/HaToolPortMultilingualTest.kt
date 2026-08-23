@@ -3,6 +3,8 @@ package de.hoshi.adapters.ha
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import de.hoshi.core.dto.Language
+import de.hoshi.core.port.AreaCatalogPort
+import de.hoshi.core.port.AreaInfo
 import de.hoshi.core.pipeline.lang.LangDe
 import de.hoshi.core.pipeline.lang.LanguagePackRegistry
 import de.hoshi.core.tools.ToolCall
@@ -60,23 +62,28 @@ class HaToolPortMultilingualTest {
     }
 
     /** Kleine Poll-Budgets — die Suite darf nicht real sekundenlang schlafen. */
-    private fun haPort(url: String, token: String = "secret-token") = HaToolPort(
+    private fun haPort(
+        url: String,
+        token: String = "secret-token",
+        areaCatalog: AreaCatalogPort = AreaCatalogPort.STATIC,
+    ) = HaToolPort(
         baseUrl = url,
         token = token,
         readbackSettleMs = 300,
         readbackPollIntervalMs = 50,
         climateReadbackSettleMs = 200,
+        areaCatalog = areaCatalog,
     )
 
     private fun lightOn(language: Language) = ToolCall(
         domain = "light", service = "turn_on", entityId = null,
-        data = mapOf("area_id" to "kueche", "brightness_pct" to 40),
+        data = mapOf("area_id" to "kuche", "brightness_pct" to 40),
         language = language,
     )
 
     private fun lightOff(language: Language) = ToolCall(
         domain = "light", service = "turn_off", entityId = null,
-        data = mapOf("area_id" to "kueche"),
+        data = mapOf("area_id" to "kuche"),
         language = language,
     )
 
@@ -111,10 +118,10 @@ class HaToolPortMultilingualTest {
             val port = haPort(url)
             val ohneSprache = ToolCall(
                 domain = "light", service = "turn_on", entityId = null,
-                data = mapOf("area_id" to "kueche", "brightness_pct" to 40),
+                data = mapOf("area_id" to "kuche", "brightness_pct" to 40),
             )
-            assertEquals("Licht im kueche ist an.", phrase(port.execute(ohneSprache)))
-            assertEquals("Licht im kueche ist an.", phrase(port.execute(lightOn(Language.DE))))
+            assertEquals("Licht im Küche ist an.", phrase(port.execute(ohneSprache)))
+            assertEquals("Licht im Küche ist an.", phrase(port.execute(lightOn(Language.DE))))
         }
 
     @Test
@@ -159,7 +166,7 @@ class HaToolPortMultilingualTest {
         val port = haPort(url)
         for (language in Language.entries) {
             val expected = LanguagePackRegistry.forLanguage(language).haExecutor.lightOnArea
-                .replace("{room}", "kueche")
+                .replace("{room}", "Küche")
             assertEquals(expected, phrase(port.execute(lightOn(language))), "$language: eigene Quittung erwartet")
             if (language != Language.DE) {
                 assertNotDe(phrase(port.execute(lightOn(language))), LangDe.HA_EXECUTOR.lightOnArea, language)
@@ -173,7 +180,7 @@ class HaToolPortMultilingualTest {
         val port = haPort(url)
         for (language in Language.entries) {
             val expected = LanguagePackRegistry.forLanguage(language).haExecutor.lightOffArea
-                .replace("{room}", "kueche")
+                .replace("{room}", "Küche")
             assertEquals(expected, phrase(port.execute(lightOff(language))), "$language: eigene Quittung erwartet")
         }
     }
@@ -185,7 +192,7 @@ class HaToolPortMultilingualTest {
             val port = haPort(url)
             for (language in Language.entries) {
                 val pack = LanguagePackRegistry.forLanguage(language).haExecutor
-                val expected = pack.lightNoneWentOn.replace("{room}", "kueche") +
+                val expected = pack.lightNoneWentOn.replace("{room}", "Küche") +
                     pack.offlineHintCount.replace("{count}", "4")
                 val actual = phrase(port.execute(lightOn(language)))
                 assertEquals(expected, actual, "$language: NoEffect-Satz erwartet")
@@ -284,13 +291,21 @@ class HaToolPortMultilingualTest {
     /**
      * **Die eiserne Regel am Executor:** der HA-Area-Name steht in JEDER Sprache
      * wörtlich im Satz. Geprüft mit einem Namen, den keine Übersetzung kennt
-     * (`hobbyraum`) — hätte irgendwo ein übersetzter Raumbegriff Einzug gehalten,
+     * (`Hobbyraum`) — hätte irgendwo ein übersetzter Raumbegriff Einzug gehalten,
      * fiele es hier auf.
+     *
+     * Der Name kommt seit 2026-08-22 aus der Area-Registry (`hobbyraum` ⇒
+     * `Hobbyraum`) statt aus dem rohen Slug: gesprochen wird der ANZEIGENAME.
+     * Die Regel selbst ist dieselbe geblieben — er wird nur eingesetzt, nie
+     * übersetzt.
      */
     @Test
     fun `HA-Raumname bleibt in JEDER Sprache woertlich im Satz`() =
         withHa(templateBodies = listOf("8|2")) { url ->
-            val port = haPort(url)
+            val port = haPort(
+                url,
+                areaCatalog = AreaCatalogPort { listOf(AreaInfo(areaId = "hobbyraum", label = "Hobbyraum")) },
+            )
             for (language in Language.entries) {
                 val call = ToolCall(
                     domain = "light", service = "turn_on", entityId = null,
@@ -298,7 +313,7 @@ class HaToolPortMultilingualTest {
                     language = language,
                 )
                 val actual = phrase(port.execute(call))
-                assertTrue(actual.contains("hobbyraum"), "$language: Raumname muss stehen bleiben: '$actual'")
+                assertTrue(actual.contains("Hobbyraum"), "$language: Raumname muss stehen bleiben: '$actual'")
                 assertFalse(actual.contains("{"), "$language: ungefüllter Platzhalter: '$actual'")
             }
         }
@@ -337,7 +352,7 @@ class HaToolPortMultilingualTest {
 
     private fun assertNotDe(actual: String, deTemplate: String, language: Language) {
         assertFalse(
-            actual == deTemplate.replace("{room}", "kueche"),
+            actual == deTemplate.replace("{room}", "Küche"),
             "$language: darf nicht mehr den deutschen Satz liefern: '$actual'",
         )
     }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SPEAKER_ID } from '../api/config';
 import {
   SPEAKER_NAME_PATTERN,
@@ -13,12 +13,16 @@ import {
   fetchSpeakers,
 } from '../api/speakers';
 import { type EnrollCapture, createBrowserEnrollCapture } from '../audio/enrollCapture';
+import { gammaLevel } from '../audio/motionTokens';
+import { VAD_SPEECH_FLOOR } from '../audio/vad';
 import { de } from '../i18n/de';
 import { useUiStrings } from '../i18n';
 import { getActiveUiLanguage } from '../i18n/activeLanguageStore';
 import { resolveUiStrings } from '../i18n/catalogs';
 import type { SpeakerStrings } from '../i18n/types';
-import { LockGlyph, MicGlyph } from './icons';
+import { BinGlyph, LockGlyph, MicGlyph } from './icons';
+import { Overlay } from './Overlay';
+import { VoiceWaveform, type VoiceWaveformHandle } from './VoiceWaveform';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Erkannte Sprecher (S2a) — ANLERNEN + Verwalten der PERSONEN, die Hoshi
@@ -212,25 +216,38 @@ export interface SpeakerListViewProps {
   /** Öffnet den Anlern-Dialog vorausgefüllt zum Fortsetzen EINES bestehenden Profils. */
   onContinue: (name: string) => void;
   /**
+   * Opens the enrol OVERLAY straight on its recordings page for this profile
+   * (design 2026-08-15 §3.2/§3.3/3). The panel row only carries the entry
+   * point now — the list itself no longer lives in the 340 px drawer.
+   */
+  onRecordings: (name: string) => void;
+  /**
    * Aufnahmen-Diagnose je Profil (Reparatur-Auftrag 07.08) — `null` solange (noch) nicht
-   * geladen; die aufklappbare Liste zeigt in dem Fall die Lade-/Fehlzeile statt Aufnahmen.
+   * geladen. In der Liste liefert sie nur noch die ZAHL auf dem Aufnahmen-Knopf; ohne
+   * geladene Diagnose steht dort ehrlich das zahlfreie Wort (nie eine geratene Zahl).
    */
   diagnostics?: SpeakerDiagnostics | null;
-  diagnosticsError?: string | null;
-  /** Einzel-Löschen EINER Aufnahme (nutzt `DELETE .../samples/{index}`). */
-  onDeleteSample: (name: string, index: number) => void;
-  /** Welche Aufnahme (Profilname + Index) gerade gelöscht wird — sperrt NUR diesen Knopf. */
-  sampleBusy?: { name: string; index: number } | null;
 }
 
 /**
- * Aufklappbare Aufnahmen-Liste EINES Profils (Muster `<details>`/`<summary>` wie
- * `feed__details`/ChatView-Quellen — kein eigener JS-Auf/Zu-State nötig). Datenquelle: die
- * bereits geladene {@link SpeakerDiagnostics} (ein GET für ALLE Profile, s. `SpeakerSection`).
- * Je Aufnahme: Zeitpunkt · Dauer · „passt zu mir"-Text (Rohwert im `title`) · Einzel-Löschen
- * (gesperrt bei der letzten Aufnahme — Reparatur-Auftrag 07.08).
+ * Recordings of ONE profile — timestamp · duration · "fits me" (raw value in
+ * `title`) · single delete (locked on the last one, repair order 07.08). Data
+ * source: the already loaded {@link SpeakerDiagnostics} (one GET for ALL
+ * profiles, see `SpeakerSection`).
+ *
+ * MOVED OUT OF THE DRAWER (design 2026-08-15 §3.3/3, diagnosis §1.4/1): this
+ * list used to sit inside `.settings__speakermeta`, a column that collapses to
+ * ~63 px after avatar + gaps + the non-shrinking action column. Its `flex: none`
+ * TEXT delete button (~118 px) could not shrink, so every one of nine rows
+ * overflowed by ~80–90 px and `.settings` — which only sets `overflow-y` — got a
+ * panel-wide HORIZONTAL scrollbar with cut-off buttons. Two changes fix the
+ * cause, not the symptom: the list lives in the 960 px overlay, and the delete
+ * control is an ICON with a fixed footprint ({@link BinGlyph}) whose word moved
+ * into `aria-label`/`title`.
+ *
+ * Prop-driven (no hook, no network) → testable via `renderToStaticMarkup`.
  */
-function SpeakerRecordings({
+export function SpeakerRecordingsView({
   name,
   diag,
   diagnosticsError,
@@ -250,8 +267,8 @@ function SpeakerRecordings({
   }
   const isLast = diag.sampleOrigins.length <= 1;
   return (
-    <details className="settings__recordings">
-      <summary className="settings__recordingssummary">{t.recordingsToggle(diag.sampleOrigins.length)}</summary>
+    <section className="settings__recordings">
+      <h4 className="settings__recordingstitle">{t.recordingsToggle(diag.sampleOrigins.length)}</h4>
       <ul className="settings__recordinglist">
         {diag.sampleOrigins.map((origin, i) => {
           const fit = fitLabel(t, diag.leaveOneOutSimilarity[i]);
@@ -262,21 +279,24 @@ function SpeakerRecordings({
                 {formatSampleTimestamp(origin.recordedAt)} · {formatSampleDuration(origin.durationSeconds)} ·{' '}
                 <span title={fit.title}>{fit.text}</span>
               </span>
+              {/* Icon-only: fixed footprint, so the flexible meta column always
+                  wins the row (THE cross-scroll fix, §1.4/1). The word lives in
+                  aria-label/title — a screen reader and a hover still read it. */}
               <button
                 type="button"
-                className="settings__deletebtn"
+                className="settings__recordingdelete"
                 disabled={isLast || busyThis}
-                title={isLast ? t.deleteRecordingLastHint : undefined}
+                title={isLast ? t.deleteRecordingLastHint : t.deleteRecording}
                 aria-label={t.deleteRecordingAria(i + 1)}
                 onClick={() => onDeleteSample(name, i)}
               >
-                {busyThis ? t.deleting : t.deleteRecording}
+                {busyThis ? <span className="settings__samplespin" aria-hidden="true" /> : <BinGlyph />}
               </button>
             </li>
           );
         })}
       </ul>
-    </details>
+    </section>
   );
 }
 
@@ -290,10 +310,8 @@ export function SpeakerListView({
   onDelete,
   onEnroll,
   onContinue,
+  onRecordings,
   diagnostics,
-  diagnosticsError,
-  onDeleteSample,
-  sampleBusy,
 }: SpeakerListViewProps) {
   const t = useUiStrings();
   const SPEAKER_TEXTS = t.speaker;
@@ -337,18 +355,27 @@ export function SpeakerListView({
                           : SPEAKER_TEXTS.statusInProgress
                       }`}
                   </span>
-                  {/* Aufklappbare Aufnahmen-Liste (Reparatur-Auftrag 07.08): Datum · Dauer ·
-                      „passt zu mir" · Einzel-Löschen — Datenquelle GET .../diagnostics. */}
-                  <SpeakerRecordings
-                    name={s.name}
-                    diag={diagnostics?.profiles.find((p) => sameSpeakerName(p.name, s.name))}
-                    diagnosticsError={diagnosticsError}
-                    sampleBusy={sampleBusy}
-                    onDeleteSample={onDeleteSample}
-                    t={SPEAKER_TEXTS}
-                  />
                 </div>
                 <div className="settings__speakeractions">
+                  {/* Entry point to the recordings (Datum · Dauer · „passt zu mir" ·
+                      Einzel-Löschen). The LIST itself lives in the overlay now
+                      (§3.3/3) — a 340 px column cannot carry nine of those rows
+                      without the panel-wide cross-scroll (§1.4/1). The count is
+                      only shown once the diagnosis really arrived: no guessed
+                      number, ever. */}
+                  <button
+                    type="button"
+                    className="settings__recordingsbtn"
+                    aria-label={SPEAKER_TEXTS.recordingsOpenAria(s.name)}
+                    onClick={() => onRecordings(s.name)}
+                  >
+                    {(() => {
+                      const diag = diagnostics?.profiles.find((p) => sameSpeakerName(p.name, s.name));
+                      return diag
+                        ? SPEAKER_TEXTS.recordingsToggle(diag.sampleOrigins.length)
+                        : SPEAKER_TEXTS.recordingsOpen;
+                    })()}
+                  </button>
                   {/* „Weiter anlernen" (Andi-Auftrag 07.08): öffnet den Anlern-Dialog
                       vorausgefüllt+gesperrt auf DIESEN Namen — die Startindex-folgt-Namen-Logik
                       (s. `enrollStartIndex`/`samplesForNameIn` oben) setzt automatisch am
@@ -405,7 +432,7 @@ export function SpeakerListView({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Anlern-Dialog: geführter Aufnahme-Flow über DREI unabhängige Sitzungen à drei
+//  Anlern-Overlay: geführter Aufnahme-Flow über DREI unabhängige Sitzungen à drei
 //  Sätze (neun Aufnahmen insgesamt — das Backend-Maximum). Satz 1 (absolut) ersetzt
 //  das Profil (frischer Start einer Sitzung 1), jeder weitere Satz hängt additiv an
 //  — das Backend mittelt (L2-renormalisiert). Eine Sitzung endet IMMER nach drei
@@ -413,9 +440,140 @@ export function SpeakerListView({
 //  Zwischenstand sagt das ehrlich, und ein Abbruch reißt NIE bereits abgeschlossene
 //  Sitzungen mit (s. {@link EnrollDialog.cancel} unten). Aufnahme + Enroll + Rollback
 //  sind injizierbare Props (Default: echter Browser) → im jsdom-Test ohne Mikro fahrbar.
+//
+//  REDESIGN 2026-08-15 (§3.3). It used to be a `<div role="group">` rendered INLINE
+//  below the whole speaker list — no portal, no dialog role, no focus trap, no
+//  Escape of its own. On a 380 px drawer the assistant appeared below the fold, so
+//  the enrol button looked like it did nothing (§1.4/3), and three ~100-character
+//  sentences in an indented `<ol>` filled ~18 text lines before the first button
+//  (§1.4/4). It now sits in the shared {@link Overlay} shell, ONE STEP PER SCREEN:
+//
+//    ① name        field + rule hint. New profile only; „Weiter anlernen" skips it.
+//    ② speak       THE ONE sentence, large and centred, with a REAL level meter
+//                  ({@link VoiceWaveform}) and one big record button. Head: the
+//                  nine-dot rail „Sitzung 1 von 3 · Satz 2 von 3".
+//    ③ sample-done ✓, advances to ② by itself after 1.2 s (used to be a click).
+//    ④ session-done ✓ + the honest „continue on another day" sentence.
+//    ⑤ done/error  server text VERBATIM + „Nochmal".
+//
+//  …plus the recordings page (§3.3/3), reachable from the list without enrolling.
 // ─────────────────────────────────────────────────────────────────────────────
 
-type EnrollStep = 'intro' | 'recording' | 'saving' | 'sample-done' | 'session-done' | 'done' | 'error';
+/**
+ * One screen of the assistant. `name`/`speak` replace the former single `intro`
+ * step (name field AND three sentences AND the record button on one screen);
+ * `recordings` is the diagnosis page that moved out of the drawer.
+ */
+export type EnrollStep =
+  | 'name'
+  | 'speak'
+  | 'recording'
+  | 'saving'
+  | 'sample-done'
+  | 'session-done'
+  | 'done'
+  | 'error'
+  | 'recordings';
+
+/** How long the „✓ gespeichert" screen rests before it advances to ② by itself. */
+export const SAMPLE_DONE_ADVANCE_MS = 1200;
+
+// ── Client-side minimum check (§3.3/2) ───────────────────────────────────────
+//
+// WHY: „too quiet"/„too short" used to come back as an HTTP 422 AFTER the upload
+// (`api/speakers.ts:230-232`) — the recording was already gone and the user had
+// spoken for nothing. These thresholds sit deliberately BELOW anything the
+// backend rejects: this gate is meant to catch the obvious misses (mic muted,
+// button tapped twice, one word instead of a sentence), never to become a second
+// opinion on the server's verdict.
+
+/** Below this a „sentence" cannot have been spoken — the sentences are ~90–100 characters. */
+export const ENROLL_MIN_DURATION_MS = 1500;
+
+/** Below this peak the microphone delivered (near) nothing — twice the VAD's dead-mic floor. */
+export const ENROLL_MIN_PEAK_LEVEL = VAD_SPEECH_FLOOR * 2;
+
+/** How much of the recording must be above {@link ENROLL_MIN_PEAK_LEVEL} to count as speech. */
+export const ENROLL_MIN_VOICED_MS = 700;
+
+/** What the meter measured over ONE recording — see {@link checkEnrollSample}. */
+export interface EnrollSampleStats {
+  /** Wall time between „recording started" and „stop" in ms. */
+  durationMs: number;
+  /** How many level readings arrived. 0 ⇒ there was NO meter at all. */
+  levelReadings: number;
+  /** Loudest raw RMS of this recording (0..1). */
+  peak: number;
+  /** Milliseconds spent above {@link ENROLL_MIN_PEAK_LEVEL}. */
+  voicedMs: number;
+}
+
+/** Why a recording is not worth uploading — mapped to text by the caller. */
+export type EnrollSampleFlaw = 'too-short' | 'too-quiet';
+
+/**
+ * The pre-upload verdict. Pure, string-free and therefore testable without i18n.
+ *
+ * `{ ok: true }` when NOTHING was measured (`levelReadings === 0`): a capture
+ * without a meter — jsdom, a browser without Web Audio, an injected test fake —
+ * gives us no evidence, and Hoshi does not invent evidence. The server's 422
+ * stays the honest backstop for that case.
+ */
+export function checkEnrollSample(
+  stats: EnrollSampleStats,
+): { ok: true } | { ok: false; flaw: EnrollSampleFlaw } {
+  if (stats.levelReadings <= 0) return { ok: true };
+  if (stats.durationMs < ENROLL_MIN_DURATION_MS) return { ok: false, flaw: 'too-short' };
+  if (stats.peak < ENROLL_MIN_PEAK_LEVEL) return { ok: false, flaw: 'too-quiet' };
+  if (stats.voicedMs < ENROLL_MIN_VOICED_MS) return { ok: false, flaw: 'too-short' };
+  return { ok: true };
+}
+
+/**
+ * Does closing NOW have to ask first (§3.3/1)?
+ *
+ * The bug it repairs: Escape (`SettingsPanel.tsx:374`) and the backdrop click
+ * (`:420-422`) closed the WHOLE drawer mid-recording. Only `captureRef.cancel()`
+ * ran (mic released); the rollback semantics of {@link EnrollDialog.cancel}
+ * never did — a freshly started partial profile stayed ORPHANED on the server,
+ * without a word to the user (§1.4/6).
+ *
+ * `recording` and `sample-done` are the two steps the design names. The third
+ * case is the same accident one screen later: after ③ advances by itself we are
+ * back on ② (`speak`, or `name` on a retry) with samples already on the server —
+ * closing there loses exactly as much. Terminal steps (`session-done`, `done`,
+ * `error`, `recordings`) never ask: nothing is in flight there.
+ */
+export function needsCancelConfirm(step: EnrollStep, savedCount: number): boolean {
+  if (step === 'recording' || step === 'sample-done') return true;
+  return savedCount > 0 && (step === 'speak' || step === 'name');
+}
+
+/** State of ONE dot on the nine-dot rail. */
+export type EnrollRailDot = 'done' | 'current' | 'open';
+
+/**
+ * The nine-dot rail: one dot per recording of the WHOLE profile, so „how far am
+ * I really" is answerable at a glance — the old dialog only ever said „Satz 2
+ * von 3" and hid that two sessions were still missing.
+ *
+ * A dot is `done` when its absolute index lies before the sentence being
+ * recorded now. That is honest across sessions without extra bookkeeping: an
+ * appended session starts at 4 because the server counted three saved sentences.
+ */
+export function enrollRailDots(currentIndex: number): EnrollRailDot[] {
+  return Array.from({ length: ENROLL_TOTAL_SAMPLES }, (_, i) => {
+    const index = i + 1;
+    if (index < currentIndex) return 'done';
+    return index === currentIndex ? 'current' : 'open';
+  });
+}
+
+/** Monotone clock for the recording measurement — `performance.now()` where it exists. */
+function nowMs(): number {
+  const perf = globalThis.performance;
+  return typeof perf?.now === 'function' ? perf.now() : Date.now();
+}
 
 export interface EnrollDialogProps {
   onClose: () => void;
@@ -435,6 +593,7 @@ export interface EnrollDialogProps {
    * Profil-Zeile) — anders als das normale Einfrieren erst NACH dem ersten gespeicherten
    * Satz (s. `nameLocked` unten): hier ist [defaultName] bereits ein BESTEHENDES Profil,
    * ein Tippen im Feld dürfte NIE versehentlich auf ein anderes/neues Profil umschalten.
+   * It also SKIPS screen ① — there is nothing left to name (§3.3).
    */
   lockName?: boolean;
   /**
@@ -449,14 +608,38 @@ export interface EnrollDialogProps {
    * gegen die geladene Sprecher-Liste (s. `SpeakerSection`).
    */
   samplesForName?: (name: string) => number;
-  /** Aufnahme-Fabrik (Default: echte Browser-Aufnahme→WAV). Test speist eine Fake ein. */
-  createCapture?: () => EnrollCapture;
+  /**
+   * Aufnahme-Fabrik (Default: echte Browser-Aufnahme→WAV). Test speist eine Fake ein.
+   * The optional `onLevel` argument is how the REAL level reaches the waveform and
+   * the pre-upload check; a fake that ignores it simply never gets a verdict.
+   */
+  createCapture?: (onLevel?: (level: number) => void) => EnrollCapture;
   /** Enroll-Aufruf (Default: {@link enrollSpeaker}). Test spioniert hier. */
   enroll?: (name: string, wav: Blob, sample?: number, signal?: AbortSignal) => Promise<SpeakerSummary>;
   /** Rollback bei Abbruch mit Teil-Profil (Default: {@link deleteSpeaker}). Test spioniert hier. */
   removeProfile?: (name: string, signal?: AbortSignal) => Promise<void>;
   /** Mikro-Kapazitätsprobe (Default: {@link micSupport}). Test erzwingt „kein Mikro". */
   support?: () => { ok: boolean; reason?: string };
+  /**
+   * Open the overlay straight on the recordings page instead of the assistant
+   * (the list entry of a profile, including a FULL one that can no longer be
+   * continued). Default: the assistant.
+   */
+  initialStep?: 'enroll' | 'recordings';
+  /** Recordings of the profile being enrolled/inspected — `undefined` ⇒ honest „lädt…". */
+  diagnostics?: SpeakerProfileDiagnostics;
+  diagnosticsError?: string | null;
+  /** Einzel-Löschen EINER Aufnahme (nutzt `DELETE .../samples/{index}`). */
+  onDeleteSample?: (name: string, index: number) => void;
+  /** Welche Aufnahme (Profilname + Index) gerade gelöscht wird — sperrt NUR diesen Knopf. */
+  sampleBusy?: { name: string; index: number } | null;
+  /**
+   * How long ③ rests before it advances by itself (default
+   * {@link SAMPLE_DONE_ADVANCE_MS}). Injectable for the same reason as
+   * `createCapture`/`enroll`: a nine-sentence test would otherwise spend eleven
+   * real seconds watching a checkmark.
+   */
+  advanceMs?: number;
 }
 
 export function EnrollDialog({
@@ -471,13 +654,27 @@ export function EnrollDialog({
   enroll = enrollSpeaker,
   removeProfile = deleteSpeaker,
   support = micSupport,
+  initialStep = 'enroll',
+  diagnostics,
+  diagnosticsError,
+  onDeleteSample,
+  sampleBusy,
+  advanceMs = SAMPLE_DONE_ADVANCE_MS,
 }: EnrollDialogProps) {
   const t = useUiStrings();
   const SPEAKER_TEXTS = t.speaker;
-  const [step, setStep] = useState<EnrollStep>('intro');
+  // ① is skipped when the name is already settled („Weiter anlernen"); the
+  // recordings entry point opens its own page and never enrols.
+  const [step, setStep] = useState<EnrollStep>(
+    initialStep === 'recordings' ? 'recordings' : lockName ? 'speak' : 'name',
+  );
   const [name, setName] = useState(defaultName);
   const [nameTouched, setNameTouched] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  /** The verdict of the client-side check on the LAST attempt — cleared on the next start. */
+  const [flaw, setFlaw] = useState<EnrollSampleFlaw | null>(null);
+  /** Is the „really cancel?" question on screen (§3.3/1)? */
+  const [askCancel, setAskCancel] = useState(false);
   /** Wie viele Sätze DIESE Sitzung (dieses Dialog-Öffnen) schon gespeichert hat (0..3, lokal). */
   const [savedCount, setSavedCount] = useState(0);
   /**
@@ -492,6 +689,17 @@ export function EnrollDialog({
   const [frozenSampleIndex, setFrozenSampleIndex] = useState(1);
   const captureRef = useRef<EnrollCapture | null>(null);
   const aliveRef = useRef(true);
+  /** The live wave — driven imperatively, one push per level reading (no re-render). */
+  const waveRef = useRef<VoiceWaveformHandle>(null);
+  /** What the meter saw during the running recording — read once by {@link checkEnrollSample}. */
+  const statsRef = useRef<EnrollSampleStats & { lastAt: number; startedAt: number }>({
+    durationMs: 0,
+    levelReadings: 0,
+    peak: 0,
+    voicedMs: 0,
+    lastAt: 0,
+    startedAt: 0,
+  });
 
   const cap = support();
   const trimmedName = name.trim();
@@ -532,19 +740,48 @@ export function EnrollDialog({
     setStep('error');
   };
 
+  /** One level reading: drives the wave AND feeds the pre-upload measurement. */
+  const pushLevel = (raw: number) => {
+    const stats = statsRef.current;
+    const at = nowMs();
+    const dt = stats.levelReadings === 0 ? 0 : Math.max(0, at - stats.lastAt);
+    stats.lastAt = at;
+    stats.levelReadings += 1;
+    if (raw > stats.peak) stats.peak = raw;
+    if (raw >= ENROLL_MIN_PEAK_LEVEL) stats.voicedMs += dt;
+    // The wave wants the perceptual (gamma-mapped) level, the check wants the raw
+    // RMS — same source, two consumers, no second measurement.
+    waveRef.current?.push(gammaLevel(raw));
+  };
+
   const startRecording = async () => {
     setNameTouched(true);
     if (!cap.ok) {
       fail(cap.reason ?? SPEAKER_TEXTS.noMic);
       return;
     }
-    if (!nameValid) return; // Intro-Zustand bleibt; die Inline-Notiz erklärt es.
+    if (!nameValid) {
+      // Back to ①, where the rule hint sits — a locked name cannot be invalid.
+      setStep('name');
+      return;
+    }
     setErrorText(null);
-    const capture = createCapture();
+    setFlaw(null);
+    statsRef.current = {
+      durationMs: 0,
+      levelReadings: 0,
+      peak: 0,
+      voicedMs: 0,
+      lastAt: 0,
+      startedAt: nowMs(),
+    };
+    waveRef.current?.reset();
+    const capture = createCapture(pushLevel);
     captureRef.current = capture;
     try {
       await capture.start();
       if (!aliveRef.current) return;
+      statsRef.current.startedAt = nowMs();
       setStep('recording');
     } catch (err) {
       captureRef.current = null;
@@ -556,10 +793,22 @@ export function EnrollDialog({
   const finishRecording = async () => {
     const capture = captureRef.current;
     if (!capture) return;
+    const stats = statsRef.current;
+    stats.durationMs = nowMs() - stats.startedAt;
     setStep('saving');
     try {
       const wav = await capture.stop();
       captureRef.current = null;
+      // Pre-upload gate (§3.3/2): what the meter saw is enough to say „that was
+      // not a sentence" WITHOUT spending an upload and a 422 on it. Nothing was
+      // measured ⇒ nothing is claimed, see checkEnrollSample.
+      const verdict = checkEnrollSample(stats);
+      if (!verdict.ok) {
+        if (!aliveRef.current) return;
+        setFlaw(verdict.flaw);
+        setStep('speak'); // same sentence, same index — nothing was consumed
+        return;
+      }
       // sample=1 ersetzt (frischer Start), 2..9 hängen an — BE-Contract.
       const summary = await enroll(name.trim(), wav, sampleIndex);
       if (!aliveRef.current) return;
@@ -590,6 +839,16 @@ export function EnrollDialog({
       fail(err instanceof Error && err.message ? err.message : SPEAKER_TEXTS.genericFail);
     }
   };
+
+  // ③ rests, then goes on by itself (§3.3): the old dialog demanded a click here
+  // for nothing — the user has already done the only thing that mattered.
+  useEffect(() => {
+    if (step !== 'sample-done') return;
+    const timer = setTimeout(() => {
+      if (aliveRef.current) setStep('speak');
+    }, advanceMs);
+    return () => clearTimeout(timer);
+  }, [step, advanceMs]);
 
   /**
    * Abbruch — ehrlich, aber unterschiedlich je nachdem, WIE diese Sitzung begonnen hat:
@@ -625,8 +884,33 @@ export function EnrollDialog({
     onClose();
   };
 
+  /**
+   * EVERY way out goes through here (§3.3/1) — Escape and the backdrop click of
+   * the shell as much as the „Abbrechen"/„Schließen" buttons. Where something is
+   * in flight it asks first and only THEN runs {@link cancel}; the old drawer
+   * close bypassed the rollback entirely and left an orphaned partial profile.
+   */
+  const requestClose = () => {
+    if (needsCancelConfirm(step, savedCount)) {
+      setAskCancel(true);
+      return;
+    }
+    void cancel();
+  };
+
+  /**
+   * A STABLE handler for the shell. {@link Overlay}'s focus/Escape effect lists
+   * `onClose` in its deps, so a fresh closure on every render would re-run it —
+   * and pull the focus back onto the close button after every keystroke in the
+   * name field. The ref keeps the identity stable without staling the logic.
+   */
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
+  const stableClose = useCallback(() => requestCloseRef.current(), []);
+
   const backToIntro = () => {
     setErrorText(null);
+    setFlaw(null);
     if (frozenStartIndex === null) {
       // Noch nichts gespeichert — nichts eingefroren. Der Startindex folgt beim erneuten
       // Anzeigen des Intros weiterhin live dem (editierbaren) Namensfeld.
@@ -637,199 +921,288 @@ export function EnrollDialog({
       setFrozenStartIndex(null);
       setFrozenSampleIndex(1);
       setSavedCount(0);
+      if (!lockName) {
+        setStep('name');
+        return;
+      }
     } else {
       // Angehängte Sitzung, bereits eingefroren: NIE auf 1 zurück — sample=1 würde das GANZE
       // Profil ersetzen und frühere Sitzungen löschen. Stattdessen weiter am nächsten offenen
       // Index DIESER Sitzung; savedCount bleibt stehen (Namensfeld bleibt gesperrt).
       setFrozenSampleIndex(frozenStartIndex + savedCount);
     }
-    setStep('intro');
+    // A locked/frozen name has nothing left to edit — go straight back to ②.
+    setStep(nameLocked ? 'speak' : 'name');
   };
 
   /** Der Satz, der zur aktuellen Aufnahme gehört (1-basiert, ABSOLUT über alle neun). */
   const currentSentence = SPEAKER_TEXTS.sentences[Math.min(sampleIndex, ENROLL_TOTAL_SAMPLES) - 1];
-  /** Die drei Sätze DIESER Sitzung (Gruppe 1/2/3 je nach {@link sessionNumber}). */
-  const groupStart = (sessionNumber - 1) * ENROLL_SAMPLE_COUNT;
-  const sessionSentences = SPEAKER_TEXTS.sentences.slice(groupStart, groupStart + ENROLL_SAMPLE_COUNT);
+  /** „Sitzung 1 von 3 · Satz 2 von 3" — the one progress line, composed from the catalogue. */
+  const progressLine = `${SPEAKER_TEXTS.sessionLabel(sessionNumber)} · ${sampleProgress(savedCount + 1)}`;
+  /** Screens that carry the rail + the sentence — ① and the end screens do not. */
+  const onStage = step === 'speak' || step === 'recording' || step === 'saving' || step === 'sample-done';
 
   return (
-    <div className="settings__enroll" role="group" aria-label={SPEAKER_TEXTS.dialogTitle}>
-      <h4 className="settings__enrolltitle">{SPEAKER_TEXTS.dialogTitle}</h4>
+    <Overlay
+      open
+      onClose={stableClose}
+      label={step === 'recordings' ? SPEAKER_TEXTS.recordingsTitle : SPEAKER_TEXTS.dialogTitle}
+      cardClassName="overlay__card settings__enroll"
+    >
+      <header className="settings__enrollhead">
+        {/* First focusable child ⇒ the shell's autofocus lands here (crew idiom). */}
+        <button
+          type="button"
+          className="settings__enrollclose"
+          aria-label={SPEAKER_TEXTS.closeAria}
+          onClick={requestClose}
+        >
+          ✕
+        </button>
+        <h2 className="settings__enrolltitle">
+          {step === 'recordings' ? SPEAKER_TEXTS.recordingsTitle : SPEAKER_TEXTS.dialogTitle}
+        </h2>
+      </header>
 
-      {step === 'intro' && (
-        <>
-          <p className="settings__hint">{SPEAKER_TEXTS.dialogIntro}</p>
-          <p className="settings__hint settings__consent">
-            <LockGlyph /> {SPEAKER_TEXTS.consent}
-          </p>
-          {/* Kreuz-Kontaminations-Vorfall 07.08: zwei Haushaltsmitglieder lernten GLEICHZEITIG im selben
-              Raum an — beide Profile mussten gewiped werden. Ruhiger, fester Hinweis. */}
-          <p className="settings__hint">{SPEAKER_TEXTS.soloEnrollHint}</p>
-
-          <label className="settings__label settings__enrolllabel" htmlFor="enroll-name">
-            {SPEAKER_TEXTS.nameLabel}
-          </label>
-          <input
-            id="enroll-name"
-            className="settings__select settings__enrollname"
-            type="text"
-            value={name}
-            maxLength={64}
-            autoComplete="off"
-            // Gesperrt, sobald DIESE Sitzung schon einen Satz gespeichert hat (Startindex ist
-            // dann eingefroren) — ein Namenswechsel mitten in der Aufnahme darf nicht auf ein
-            // anderes Profil umschalten (s. `frozenStartIndex` oben).
-            disabled={nameLocked}
-            onChange={(e) => {
-              setName(e.target.value);
-              setNameTouched(true);
-            }}
-          />
-          <p className="settings__hint">{SPEAKER_TEXTS.nameHint}</p>
-          {nameTouched && !nameValid && (
-            <p className="settings__hint settings__enrollinvalid" role="alert">
-              {SPEAKER_TEXTS.nameInvalid}
-            </p>
-          )}
-
-          {/* Sitzungs-Fortschritt (Andi-Auftrag 25.07): zusätzlich zu „Satz i von 3" sichtbar. */}
-          <p className="settings__hint settings__enrollsession" role="status">
-            {SPEAKER_TEXTS.sessionLabel(sessionNumber)}
-          </p>
-
-          <ol className="settings__enrollsentences">
-            {sessionSentences.map((line) => (
-              <li className="settings__enrollsentence" key={line}>
-                {SPEAKER_TEXTS.quote(line)}
-              </li>
+      {/* The nine-dot rail: the WHOLE profile at a glance, not just this session. */}
+      {onStage && (
+        <div className="settings__enrollrail">
+          <span className="settings__enrolldots" aria-hidden="true">
+            {enrollRailDots(sampleIndex).map((state, i) => (
+              <span key={i} className={`settings__enrolldot settings__enrolldot--${state}`} />
             ))}
-          </ol>
+          </span>
+          <span className="settings__enrollprogress" role="status">
+            {progressLine}
+          </span>
+        </div>
+      )}
 
+      {/* ── The cancel question (§3.3/1). It REPLACES the step content so that no
+             stray click can restart a recording while it is open. ── */}
+      {askCancel ? (
+        <div className="settings__enrollconfirm" role="alertdialog" aria-label={SPEAKER_TEXTS.cancelConfirmTitle}>
+          <p className="settings__enrollstatus">{SPEAKER_TEXTS.cancelConfirmTitle}</p>
+          <p className="settings__hint">
+            {isFreshStart ? SPEAKER_TEXTS.cancelConfirmFresh : SPEAKER_TEXTS.cancelConfirmAppend}
+          </p>
           <div className="settings__enrollactions">
-            <button
-              type="button"
-              className="settings__enrollbtn"
-              disabled={!cap.ok}
-              onClick={() => void startRecording()}
-            >
-              {sampleProgress(savedCount + 1)} {SPEAKER_TEXTS.recordSample}
+            <button type="button" className="settings__enrollbtn" onClick={() => setAskCancel(false)}>
+              {SPEAKER_TEXTS.cancelConfirmNo}
             </button>
             <button type="button" className="settings__deletebtn" onClick={() => void cancel()}>
-              {SPEAKER_TEXTS.cancel}
+              {SPEAKER_TEXTS.cancelConfirmYes}
             </button>
           </div>
-          {!cap.ok && (
-            <p className="settings__hint settings__enrollinvalid" role="alert">
-              {cap.reason}
+        </div>
+      ) : (
+        <>
+          {/* ── ① Name ── */}
+          {step === 'name' && (
+            <>
+              <p className="settings__hint">{SPEAKER_TEXTS.dialogIntro}</p>
+              <p className="settings__hint settings__consent">
+                <LockGlyph /> {SPEAKER_TEXTS.consent}
+              </p>
+              {/* Kreuz-Kontaminations-Vorfall 07.08: zwei Haushaltsmitglieder lernten GLEICHZEITIG im selben
+                  Raum an — beide Profile mussten gewiped werden. Ruhiger, fester Hinweis. */}
+              <p className="settings__hint">{SPEAKER_TEXTS.soloEnrollHint}</p>
+
+              <label className="settings__label settings__enrolllabel" htmlFor="enroll-name">
+                {SPEAKER_TEXTS.nameLabel}
+              </label>
+              <input
+                id="enroll-name"
+                className="settings__select settings__enrollname"
+                type="text"
+                value={name}
+                maxLength={64}
+                autoComplete="off"
+                // Gesperrt, sobald DIESE Sitzung schon einen Satz gespeichert hat (Startindex ist
+                // dann eingefroren) — ein Namenswechsel mitten in der Aufnahme darf nicht auf ein
+                // anderes Profil umschalten (s. `frozenStartIndex` oben).
+                disabled={nameLocked}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setNameTouched(true);
+                }}
+              />
+              <p className="settings__hint">{SPEAKER_TEXTS.nameHint}</p>
+              {nameTouched && !nameValid && (
+                <p className="settings__hint settings__enrollinvalid" role="alert">
+                  {SPEAKER_TEXTS.nameInvalid}
+                </p>
+              )}
+
+              <div className="settings__enrollactions">
+                <button
+                  type="button"
+                  className="settings__enrollbtn"
+                  disabled={!cap.ok}
+                  onClick={() => {
+                    setNameTouched(true);
+                    if (nameValid) setStep('speak');
+                  }}
+                >
+                  {SPEAKER_TEXTS.nameNext}
+                </button>
+                <button type="button" className="settings__deletebtn" onClick={requestClose}>
+                  {SPEAKER_TEXTS.cancel}
+                </button>
+              </div>
+              {!cap.ok && (
+                <p className="settings__hint settings__enrollinvalid" role="alert">
+                  {cap.reason}
+                </p>
+              )}
+            </>
+          )}
+
+          {/* ── ② Sprechen: THE ONE sentence, large and centred, over a real level meter ── */}
+          {(step === 'speak' || step === 'recording') && (
+            <div className="settings__enrollstage">
+              <p className="settings__enrollsentence">{SPEAKER_TEXTS.quote(currentSentence)}</p>
+
+              {/* „Nichts leuchtet, was nichts misst": the wave exists only while
+                  the channel is really open — its presence IS the „I am listening". */}
+              {step === 'recording' ? (
+                <div className="settings__enrollwave">
+                  <VoiceWaveform ref={waveRef} />
+                </div>
+              ) : (
+                <p className="settings__hint settings__enrollwavehint">{SPEAKER_TEXTS.recordingHint}</p>
+              )}
+
+              {/* The honest verdict of the client-side check — the recording was
+                  NOT uploaded, the same sentence is still up (§3.3/2). */}
+              {flaw && (
+                <p className="settings__hint settings__enrollinvalid" role="alert">
+                  {flaw === 'too-quiet' ? SPEAKER_TEXTS.checkTooQuiet : SPEAKER_TEXTS.checkTooShort}
+                </p>
+              )}
+
+              <div className="settings__enrollactions">
+                {step === 'speak' ? (
+                  <button
+                    type="button"
+                    className="settings__enrollbtn settings__enrollrecord"
+                    disabled={!cap.ok}
+                    onClick={() => void startRecording()}
+                  >
+                    <MicGlyph /> {sampleProgress(savedCount + 1)} {SPEAKER_TEXTS.recordSample}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="settings__enrollbtn settings__enrollrecord"
+                    onClick={() => void finishRecording()}
+                  >
+                    {SPEAKER_TEXTS.finish}
+                  </button>
+                )}
+                <button type="button" className="settings__deletebtn" onClick={requestClose}>
+                  {SPEAKER_TEXTS.cancel}
+                </button>
+              </div>
+              {!cap.ok && (
+                <p className="settings__hint settings__enrollinvalid" role="alert">
+                  {cap.reason}
+                </p>
+              )}
+            </div>
+          )}
+
+          {step === 'saving' && (
+            <p className="settings__enrollstatus" role="status">
+              <span className="settings__samplespin" aria-hidden="true" /> {SPEAKER_TEXTS.saving}
             </p>
           )}
-        </>
-      )}
 
-      {step === 'recording' && (
-        <>
-          <p className="settings__enrollstatus" role="status">
-            <span className="settings__enrolldot" aria-hidden="true" />
-            {SPEAKER_TEXTS.sessionLabel(sessionNumber)} · {sampleProgress(savedCount + 1)} —{' '}
-            {SPEAKER_TEXTS.recordingHint}
-          </p>
-          <p className="settings__enrollsentence">{SPEAKER_TEXTS.quote(currentSentence)}</p>
-          <div className="settings__enrollactions">
-            <button
-              type="button"
-              className="settings__enrollbtn"
-              onClick={() => void finishRecording()}
-            >
-              {SPEAKER_TEXTS.finish}
-            </button>
-            <button type="button" className="settings__deletebtn" onClick={() => void cancel()}>
-              {SPEAKER_TEXTS.cancel}
-            </button>
-          </div>
-        </>
-      )}
-
-      {step === 'saving' && (
-        <p className="settings__enrollstatus" role="status">
-          <span className="settings__samplespin" aria-hidden="true" /> {SPEAKER_TEXTS.saving} (
-          {SPEAKER_TEXTS.sessionLabel(sessionNumber)} · {sampleProgress(savedCount + 1)})
-        </p>
-      )}
-
-      {step === 'sample-done' && (
-        <>
-          <p className="settings__enrollstatus settings__enrolldone" role="status">
-            ✓ {sampleProgress(savedCount)} {SPEAKER_TEXTS.sampleSaved}
-          </p>
-          {/* Ehrlicher Zwischenstand: es gibt noch KEIN fertiges Profil. */}
-          <p className="settings__hint">{SPEAKER_TEXTS.partialHint}</p>
-          <p className="settings__hint">{SPEAKER_TEXTS.nextUp}</p>
-          <p className="settings__enrollsentence">{SPEAKER_TEXTS.quote(currentSentence)}</p>
-          <div className="settings__enrollactions">
-            <button
-              type="button"
-              className="settings__enrollbtn"
-              onClick={() => void startRecording()}
-            >
-              {sampleProgress(savedCount + 1)} {SPEAKER_TEXTS.recordSample}
-            </button>
-            <button type="button" className="settings__deletebtn" onClick={() => void cancel()}>
-              {SPEAKER_TEXTS.cancel}
-            </button>
-          </div>
-        </>
-      )}
-
-      {step === 'session-done' && (
-        <>
-          {/* Sitzung 1 oder 2 fertig — das GANZE Profil ist noch nicht komplett. Ehrlich: die
-              nächste Sitzung soll an einem ANDEREN Tag stattfinden (Kanal/Sitzung statt Stimme
-              war der ursprüngliche Befund, s. Modul-Kommentar oben). */}
-          <p className="settings__enrollstatus settings__enrolldone" role="status">
-            ✓ {SPEAKER_TEXTS.sessionLabel(sessionNumber)}
-          </p>
-          <p className="settings__hint">{SPEAKER_TEXTS.sessionDoneHint(sessionNumber)}</p>
-          <div className="settings__enrollactions">
-            <button type="button" className="settings__enrollbtn" onClick={onClose}>
-              {SPEAKER_TEXTS.close}
-            </button>
-          </div>
-        </>
-      )}
-
-      {step === 'done' && (
-        <>
-          <p className="settings__enrollstatus settings__enrolldone" role="status">
-            ✓ {SPEAKER_TEXTS.done}
-          </p>
-          <div className="settings__enrollactions">
-            <button type="button" className="settings__enrollbtn" onClick={onClose}>
-              {SPEAKER_TEXTS.close}
-            </button>
-          </div>
-        </>
-      )}
-
-      {step === 'error' && (
-        <>
-          <p className="settings__hint settings__enrollinvalid" role="alert">
-            {errorText ?? SPEAKER_TEXTS.genericFail}
-          </p>
-          {savedCount > 0 && (
-            <p className="settings__hint">{SPEAKER_TEXTS.errorPartialHint}</p>
+          {/* ── ③ Gespeichert ✓ — rests 1,2 s and goes on by itself ── */}
+          {step === 'sample-done' && (
+            <div className="settings__enrollstage">
+              <p className="settings__enrollstatus settings__enrolldone" role="status">
+                ✓ {sampleProgress(savedCount)} {SPEAKER_TEXTS.sampleSaved}
+              </p>
+              {/* Ehrlicher Zwischenstand: es gibt noch KEIN fertiges Profil. */}
+              <p className="settings__hint">{SPEAKER_TEXTS.partialHint}</p>
+              <p className="settings__hint">{SPEAKER_TEXTS.nextUp}</p>
+              <p className="settings__enrollsentence">{SPEAKER_TEXTS.quote(currentSentence)}</p>
+            </div>
           )}
-          <div className="settings__enrollactions">
-            <button type="button" className="settings__enrollbtn" onClick={backToIntro}>
-              {SPEAKER_TEXTS.retry}
-            </button>
-            {/* Schließen im Fehlerfall = Abbruch: Teil-Profil wird verworfen (cancel). */}
-            <button type="button" className="settings__deletebtn" onClick={() => void cancel()}>
-              {SPEAKER_TEXTS.close}
-            </button>
-          </div>
+
+          {/* ── ④ Sitzung fertig — the honest „another day" sentence ── */}
+          {step === 'session-done' && (
+            <>
+              {/* Sitzung 1 oder 2 fertig — das GANZE Profil ist noch nicht komplett. Ehrlich: die
+                  nächste Sitzung soll an einem ANDEREN Tag stattfinden (Kanal/Sitzung statt Stimme
+                  war der ursprüngliche Befund, s. Modul-Kommentar oben). */}
+              <p className="settings__enrollstatus settings__enrolldone" role="status">
+                ✓ {SPEAKER_TEXTS.sessionLabel(sessionNumber)}
+              </p>
+              <p className="settings__hint">{SPEAKER_TEXTS.sessionDoneHint(sessionNumber)}</p>
+              <div className="settings__enrollactions">
+                <button type="button" className="settings__enrollbtn" onClick={onClose}>
+                  {SPEAKER_TEXTS.close}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── ⑤ Fertig ── */}
+          {step === 'done' && (
+            <>
+              <p className="settings__enrollstatus settings__enrolldone" role="status">
+                ✓ {SPEAKER_TEXTS.done}
+              </p>
+              <div className="settings__enrollactions">
+                <button type="button" className="settings__enrollbtn" onClick={onClose}>
+                  {SPEAKER_TEXTS.close}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── ⑤ Fehler: the server's own words, never a paraphrase ── */}
+          {step === 'error' && (
+            <>
+              <p className="settings__hint settings__enrollinvalid" role="alert">
+                {errorText ?? SPEAKER_TEXTS.genericFail}
+              </p>
+              {savedCount > 0 && <p className="settings__hint">{SPEAKER_TEXTS.errorPartialHint}</p>}
+              <div className="settings__enrollactions">
+                <button type="button" className="settings__enrollbtn" onClick={backToIntro}>
+                  {SPEAKER_TEXTS.retry}
+                </button>
+                {/* Schließen im Fehlerfall = Abbruch: Teil-Profil wird verworfen (cancel). */}
+                <button type="button" className="settings__deletebtn" onClick={() => void cancel()}>
+                  {SPEAKER_TEXTS.close}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Aufnahmen-Diagnose (§3.3/3): out of the drawer, into the overlay ── */}
+          {step === 'recordings' && (
+            <>
+              <SpeakerRecordingsView
+                name={trimmedName}
+                diag={diagnostics}
+                diagnosticsError={diagnosticsError}
+                sampleBusy={sampleBusy}
+                onDeleteSample={onDeleteSample ?? (() => {})}
+                t={SPEAKER_TEXTS}
+              />
+              <div className="settings__enrollactions">
+                <button type="button" className="settings__enrollbtn" onClick={onClose}>
+                  {SPEAKER_TEXTS.close}
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
-    </div>
+    </Overlay>
   );
 }
 
@@ -848,6 +1221,8 @@ export function SpeakerSection() {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  /** Which page the overlay opens on: the assistant, or the recordings of a profile. */
+  const [dialogMode, setDialogMode] = useState<'enroll' | 'recordings'>('enroll');
   /** Profil, das per „Weiter anlernen" fortgesetzt wird — `null` ⇒ normaler Anlern-Knopf. */
   const [continueName, setContinueName] = useState<string | null>(null);
   /** Aufnahmen-Diagnose je Profil (Reparatur-Auftrag 07.08) — EIN GET fuer ALLE Profile. */
@@ -976,17 +1351,22 @@ export function SpeakerSection() {
         onEnroll={() => {
           setNote(null);
           setContinueName(null);
+          setDialogMode('enroll');
           setDialogOpen(true);
         }}
         onContinue={(name) => {
           setNote(null);
           setContinueName(name);
+          setDialogMode('enroll');
+          setDialogOpen(true);
+        }}
+        onRecordings={(name) => {
+          setNote(null);
+          setContinueName(name);
+          setDialogMode('recordings');
           setDialogOpen(true);
         }}
         diagnostics={diagnostics}
-        diagnosticsError={diagnosticsError}
-        onDeleteSample={handleDeleteSample}
-        sampleBusy={sampleBusy}
       />
       {dialogOpen && (
         <EnrollDialog
@@ -1010,6 +1390,17 @@ export function SpeakerSection() {
           onEnrolled={handleEnrolled}
           onAborted={() => setNote(SPEAKER_TEXTS.abortedNote)}
           onSessionIncomplete={() => setNote(SPEAKER_TEXTS.sessionIncompleteNote)}
+          // The recordings page of the SAME overlay (§3.3/3) — a full profile
+          // (9/9) has its „Weiter anlernen" disabled, so this is the only way in.
+          initialStep={dialogMode}
+          diagnostics={
+            continueName
+              ? diagnostics?.profiles.find((p) => sameSpeakerName(p.name, continueName))
+              : undefined
+          }
+          diagnosticsError={diagnosticsError}
+          onDeleteSample={handleDeleteSample}
+          sampleBusy={sampleBusy}
         />
       )}
     </>

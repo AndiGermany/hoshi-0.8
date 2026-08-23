@@ -1,0 +1,660 @@
+/* ════════════════ ASA (朝) — der Morgen, von drinnen ════════════════
+   Summary (EN): light washi day theme. Asagiri's sibling, seen from the other
+   side of the window: a still room at first light, the drawing in a vector
+   scene (asa-szene.svg), the moving parts pure CSS — the window's shaft and the
+   steam over the cup.
+
+   DIE SZENE. Ein Zimmer kurz nach Sonnenaufgang. Rechts das Fenster; dahinter
+   liegt exakt die Welt, in der ASAGIRI steht — Nebelbänke, eine blasse Sonne,
+   ein Kamm mit Zedern darauf, alles zu Waschungen entsättigt, weil man durch
+   Glas nie so klar sieht wie draußen. Links hängt ein Rollbild mit einem
+   einzigen Siegel in Zinnober. Vorn steht der niedrige Tisch, darauf die
+   Yunomi-Tasse. Auf den Tatami liegt das Fensterkreuz als Lichtfleck.
+
+   Asagiri und Asa sind Geschwister und sollen in der Galerie nebeneinander
+   bestehen: dieselbe Stunde, zwei Seiten derselben Scheibe. Draußen ist die
+   Luft kühl und milchig (H≈240), drinnen ist sie warm und papieren (H≈84).
+   Die Verwandtschaft steht in den Zahlen: Asagiris Akzent ist
+   oklch(0.505 0.135 12), Asas ist oklch(0.5 0.17 42) — praktisch dieselbe
+   Helligkeit, dieselbe Rot-Wurzel, 30° auseinandergedreht: dort ins Rosé des
+   Horizonts, hier ins Zinnober (朱 Shu) des Siegels. Asa ist dabei das
+   sattere von beiden, und auch das ist die Szene: draußen ist Rot Atmosphäre,
+   drinnen ist es Pigment auf Papier.
+
+   ───────────────────────────────────────────────────────────────────────────
+   DIE RADIKALE ENTSCHEIDUNG: DAS BILD HAT EINEN INNENRAUM, KEINE LANDSCHAFT.
+   ───────────────────────────────────────────────────────────────────────────
+   Alle bisherigen Szenen-Themen zeigen Draußen — Feld, Wipfel, Welle, Regen.
+   Asa ist das erste Thema mit vier Wänden. Das ändert die Bild-Mechanik an
+   zwei Stellen grundsätzlich:
+
+   1) LICHT HAT EINE QUELLE, die IM Bild steht. Draußen kommt Helligkeit von
+      überall; drinnen kommt sie aus einem Rechteck an der Wand. Darum ist der
+      Grund nicht gleichmäßig aufgehellt, sondern hat ein Gefälle: hell am
+      Fenster (rechts oben), warm abgesunken in der fensterfernen Ecke (links
+      unten). Und darum wirft das Fenster sein KREUZ auf den Boden — der
+      Lichtfleck ist die einzige Stelle des Bildes, die die Fensterform
+      wiederholt.
+   2) DAS EINZIG LEBENDE IST DER DAMPF. Eine Landschaft hat Wetter, ein Zimmer
+      hat nichts, was sich von selbst bewegt — außer dem, was gerade
+      eingeschenkt wurde. Der Dampf ist deshalb kein Deko-Nebel irgendwo im
+      Bild, sondern hängt AN DER TASSE: er ist über die vier Zeilen unten
+      („DAMPF") rechnerisch an den Tassenrand geheftet und bleibt bei jeder
+      Fenstergröße dort. Ein Dampf, der neben der Tasse schwebt, wäre keine
+      Szene, sondern ein Schleier mit Ausrede.
+
+   Die Arbeitsteilung der Medien ist die Lehre aus Komorebi: Der VEKTOR zeichnet
+   die Dinge (Fenster, Rollbild, Tisch, Tasse) — Verläufe können kein Objekt.
+   Der VERLAUF macht das Licht und den Dampf — ein Vektor kann nichts weich
+   ausatmen. Nichts davon stellt etwas dar: keine Pegel, keine Zustände. Wer
+   dem Dampf zusieht, liest Morgen, nicht Information.
+
+   ───────────────────────────────────────────────────────────────────────────
+   KONTRASTE (WCAG 2.1) — GEMESSEN, NICHT GERECHNET.
+   Die Zahlen unten stammen nicht aus einer oklch-Umrechnung von Hand, sondern
+   aus einem Screenshot: `tools/theme-contrast/measure_asa.py` malt jeden Token
+   als Kachel, liest ihn als Pixel zurück und rechnet erst dann. Wer selbst
+   umrechnet und sich selbst prüft, bestätigt seinen Fehler zweimal.
+
+   WIE TEUER DAS IST, ZEIGT DER AKZENT. In einer früheren Fassung dieser Datei
+   stand als radikaler Befund, der Alt-Akzent oklch(0.52 0.17 42) liege
+   AUSSERHALB von sRGB (»Kante bei C≈0.156«) und werde von jedem Browser still
+   geklippt. Das war falsch, und es war eine Selbst-Rechnung. Nachgemessen mit
+   Chrome (Relativfarben: `oklch(from <farbe> 0.52 c 42)` gegen eine Leiter aus
+   Literalen — deckt sich beides, war die Farbe darstellbar) reicht der Gamut
+   bei L 0.52 / H 42 bis mindestens C 0.226. Was bei C≈0.157 wirklich passiert:
+   der BLAU-Kanal erreicht 0. Das ist nicht die Gamut-Kante, das ist nur die
+   Stelle, ab der kein Blau mehr abzuziehen ist — und wer beides verwechselt,
+   entsättigt eine völlig gesunde Farbe.
+
+   Der Akzent musste trotzdem weichen, nur aus dem anderen Grund: bei L 0.52
+   misst er auf der Du-Blase 4,45:1 und auf seiner eigenen soft-Fläche 4,33:1 —
+   beides unter AA. Er behält deshalb seine volle Alt-Sättigung C 0.170 und gibt
+   nur 0.02 Helligkeit ab (L 0.50, Chrome malt #ad3300). Aus der Seele des
+   Themas wird damit genau so viel geändert, wie die Messung verlangt, und kein
+   Schritt mehr.
+
+   Angegeben ist jeweils der SCHLECHTESTE der fünf realen Untergründe
+   (--bg-elevated / --bg-surface / --bg-base / --bg-subtle / --bg-user), nicht
+   der schmeichelhafteste; er ist bei allen acht --bg-user, die Du-Blase:
+     text-1 12,85:1 · text-2 8,33:1 · text-3 5,73:1 · text-4 4,67:1
+     accent 4,86:1 · success 4,75:1 · warn 4,78:1 · error 5,42:1
+   Zusätzlich geprüft, weil helle Themen genau hier kippen:
+     • Farbe auf ihrer EIGENEN *-soft-Fläche (16 % über --bg-surface, so bauen
+       die Pills/Badges in index.css):
+       accent 4,68 · success 4,68 · warn 4,73 · error 5,13 — alle ≥ 4,5.
+     • --accent-ink auf --accent (Text im gefüllten CTA): 6,30:1.
+   Die Haarlinie liegt bei 1,59:1 gegen --bg-base (gestrichelt 1,93:1). Das ist
+   mit Absicht unter den 3:1 aus WCAG 1.4.11: sie trennt Flächen, sie ist kein
+   Bedienelement und trägt keine Information — ein Bleistiftstrich auf Washi,
+   der die Regel gar nicht erst betritt.
+
+   ───────────────────────────────────────────────────────────────────────────
+   DER SCHLEIER — die gemessene Zusage
+   ───────────────────────────────────────────────────────────────────────────
+   Lesbarkeit ist hier nicht Geometrie, sondern eine Messung: --bg-surface mit
+   0,9 Deckung (--asa-veil) liegt über der vollen 920-px-Spalte und franst
+   110 px NACH AUSSEN aus (--asa-feather), nie nach innen.
+
+   Gemessen am echten headless-Chrome-Render (leere Seite: Atmosphäre + Szene +
+   Schleier + Lichtschacht + Dampf, kompletter CSS-Import inkl. index.css),
+   schlechtester Pixel INNERHALB der Spalte, vier Fenster:
+     1440×900 4,83 · 1280×800 4,83 · 1024×768 4,83 · 1920×1080 4,84
+   „Schlechtester Pixel" heißt dabei: kleinster Kontrast, also Leuchtdichte am
+   nächsten an --text-4 — nicht pauschal „der dunkelste". Die Zeichnung enthält
+   Dinge, die DUNKLER sind als die Schrift (Tenmoku-Tasse #2c2723, Tischkante
+   #4e351f), und für die kippt die Faustregel. Dass hier am Ende doch der
+   dunkelste Pixel der schlechteste ist, ist ein MESSERGEBNIS und keine Annahme:
+   unter 0,9 Schleier kommt nichts aus dem Bild mehr bis auf --text-4 herunter.
+
+   WARUM 0,9 UND NICHT WENIGER — die Kurve (1024×768, das engste Fenster; dort
+   schiebt `cover` den niedrigen Tisch am weitesten in die Spalte):
+     0,00 → 1,00   0,70 → 3,26   0,80 → 4,00   0,86 → 4,47   0,90 → 4,83
+   Die Kante liegt zwischen 0,86 und 0,90: bei 0,86 fällt die Spalte mit 4,47
+   UNTER AA. 0,9 ist also nicht gerundet, sondern der erste Wert mit Luft (0,33
+   über der Linie). Wer den Schleier dünner haben will, muss --text-4 mitheben.
+
+   Im Seitenraum läuft die Zeichnung mit voller Kraft — dort misst dieselbe
+   Probe 1,00:1, und das ist richtig so: es steht nie eine Glyphe dort, .app ist
+   920 px breit und zentriert. Wer .app verbreitert, muss vorher neu messen.
+
+   EIGENSTÄNDIG LADBAR: dieser Block setzt JEDEN Token, den die Szenen-Themen
+   setzen, plus die body-Hintergrund-Regel — die Datei funktioniert also auch
+   dann, wenn sie zur Laufzeit nachgeladen wird und nicht neben index.css im
+   Bundle steht.
+   ZWEI SELEKTOREN je Token-Block (`:root[data-theme='asa']` UND
+   `[data-theme='asa']`): der zweite trägt die Token auch an ein verschachteltes
+   Element, das `data-theme` selbst setzt — genau das macht die echte
+   Farbvorschau im Theme-Picker (.settings__swatch).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='asa'],
+[data-theme='asa'] {
+  /* ── Die Luft im Zimmer (erste Schicht = oberste) ──────────────────────────
+     1. DAS FENSTER als Lichtquelle: ein fast weißer Schwall oben rechts. Auf
+        einem Grund von L 0.951 ist nach oben kaum Platz — helle Themen können
+        Licht nicht durch MEHR Helligkeit erzählen. Die Farbe steckt deshalb
+        nicht im Hellen, sondern im Schatten (Schicht 2+3).
+     2. DIE FENSTERFERNE ECKE: warmes Ocker, abgesunken statt grau. Ein warmer
+        Raum hat warme Schatten; ein neutralgrauer Verlauf würde das Washi
+        sofort nach „Papier mit Schmutz" aussehen lassen.
+     3. Ganz unten links eine Spur Kühle — der Boden liegt am weitesten vom
+        Fenster weg. Sehr leise (0.07), weil diese Ecke bei schmalen Fenstern in
+        die Lesespalte hineinragt.
+     (Keine Kommentare INNERHALB des Werts: eine Custom Property wird als
+     Token-Strom gespeichert und diese Datei dynamisch nachgeladen — der Wert
+     bleibt bewusst ein einziger, glatter Ausdruck.) */
+  --theme-atmosphere:
+    radial-gradient(ellipse 74% 58% at 95% -8%, oklch(0.995 0.005 86 / 0.8), transparent 62%),
+    radial-gradient(ellipse 66% 50% at -6% 102%, oklch(0.86 0.045 74 / 0.34), transparent 68%),
+    radial-gradient(ellipse 44% 32% at -4% 112%, oklch(0.75 0.025 250 / 0.07), transparent 66%),
+    var(--bg-base);
+
+  /* ── Flächen: die umgekehrte Treppe der hellen Themen ──────────────────────
+     Die gehobene Fläche ist HELLER, nicht dunkler. --bg-base ist die Wand,
+     --bg-surface das Blatt Washi darauf, --bg-elevated fast Weiß. --bg-subtle
+     ist die einzige Fläche, die spürbar nach unten geht (Hover/Füllung) — sie
+     bleibt der harte Kontrast-Prüfstein, und an ihr hängen die 4,69:1 von
+     text-4. */
+  --bg-base: oklch(0.951 0.019 84); /* #f5eee1 — warmes Washi-Creme, die Wand */
+  --bg-surface: oklch(0.977 0.014 85); /* #fcf7ed — das Blatt darauf */
+  --bg-elevated: oklch(0.992 0.008 86); /* #fffcf6 */
+  --bg-subtle: oklch(0.918 0.022 82); /* #ebe3d4 — Hover-/Füllfläche */
+  --bg-hairline: oklch(0.805 0.026 78); /* #c9bead — Bleistift, keine Kante */
+  --bg-hairline-dashed: oklch(0.75 0.028 76); /* #b8ac9b, für „ehrlich leer" */
+
+  /* ── Schrift: Sumi auf Washi, kein Schwarz ─────────────────────────────────
+     Reines Schwarz liegt auf warmem Papier wie ein Aufkleber. Die Tinte behält
+     einen warmen Braunstich (H 55→66) und wird nach hinten leiser UND wärmer —
+     genau umgekehrt zu Asagiri, wo sie nach hinten kühler wird. */
+  --text-1: oklch(0.225 0.018 55); /* #231a14 */
+  --text-2: oklch(0.355 0.019 58); /* #443a32 */
+  --text-3: oklch(0.445 0.02 62); /* #5c5249 */
+  --text-4: oklch(0.492 0.021 66); /* #6a5f55 — 4,67:1 im schlechtesten Fall */
+
+  /* ── Akzent: Shu (朱), das Zinnober des Siegels ────────────────────────────
+     Die Farbe des Siegels auf dem Rollbild und des Randes innen in der Tasse —
+     die einzigen zwei Stellen, an denen die Zeichnung sie führt. Auf hellem
+     Washi MUSS ein Rot dunkel werden; das Laternen-Gold (L 0.80) aus Yoru wäre
+     hier unsichtbar.
+     Die Sättigung ist die des Alt-Themas: C 0.170, unverändert übernommen.
+     Geändert ist nur die Helligkeit, L 0.52 → 0.50, und dafür gibt es genau
+     einen Grund (s. Kopf): bei L 0.52 steht der Akzent auf der Du-Blase bei
+     4,45:1 und verfehlt AA. 0.02 Helligkeit kaufen 4,86:1.
+     --accent-glow ist bewusst NICHT der abgedunkelte Akzent, sondern das warme
+     Morgenlicht (L 0.87): Glow ist immer Atmosphäre und trägt nie Text, darum
+     darf er hell sein, während der Akzent lesbar dunkel bleibt (Prinzip von
+     Komorebi/Natsu no Hi). */
+  --accent: oklch(0.5 0.17 42); /* #ad3300 */
+  --accent-soft: oklch(0.5 0.17 42 / 0.16);
+  --accent-faint: oklch(0.5 0.17 42 / 0.08);
+  --accent-glow: oklch(0.87 0.094 68 / 0.4); /* #fec991 — Licht, kein Zinnober */
+  --accent-ink: oklch(0.99 0.008 86); /* #fefcf6 — Papier auf Shu, 6,30:1 */
+
+  /* ── Status: dunkel und entsättigt ─────────────────────────────────────────
+     Auf hellem Grund braucht Semantik TIEFE statt Leuchtkraft. Alle vier liegen
+     bei L≈0.48 und bleiben auch auf ihrer eigenen *-soft-Fläche über 4,5:1.
+     Hue-Abstand zum Akzent (H 42): warn H 72, success H 152, error H 22. */
+  --success: oklch(0.475 0.115 152); /* #166e3a */
+  --success-soft: oklch(0.475 0.115 152 / 0.16);
+  --warn: oklch(0.49 0.1 72); /* #83560d */
+  --warn-soft: oklch(0.49 0.1 72 / 0.16);
+  --error: oklch(0.478 0.175 22); /* #aa1c2c */
+  --error-soft: oklch(0.478 0.175 22 / 0.16);
+
+  /* Du-Blase: dasselbe Papier, eine Spur tiefer und wärmer — ein gefaltetes
+     Blatt, keine zweite Farbe. Kein Akzent-Fill (Projekt-Konvention seit Yoru). */
+  --bg-user: oklch(0.905 0.026 78); /* #e9decd */
+
+  /* ── Die zwei Regler des Schleiers ─────────────────────────────────────────
+     Deckung und Ausfransung stehen HIER und nicht unten im Gradienten, damit
+     sie messbar sind: der Harness überschreibt `--asa-veil` auf <html> und
+     fährt die Kurve ab, die in RESULT.md steht. (Lehre des Aoi-Pods vom 19.08.:
+     ein Regler, der im Pseudoelement selbst deklariert ist, ist von außen
+     unerreichbar — dann misst man immer nur den einen gewählten Wert und kann
+     nicht zeigen, dass er der richtige ist. Beide Werte werden von :root nach
+     unten vererbt und erreichen so auch body::after.) */
+  --asa-veil: 0.9;
+  --asa-feather: 110px;
+
+  color-scheme: light;
+}
+
+/* Der Grund gehört dem body. index.css macht das generisch für jedes
+   [data-theme]; die Regel steht hier noch einmal, damit diese Datei ALLEIN
+   geladen vollständig ist — gleiche Spezifität, gleicher Wert, kein Konflikt. */
+:root[data-theme='asa'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── DIE SZENE: Zimmer, Fenster, Tisch, Tasse (body::after) ───────────────────
+   Schichtfolge von hinten nach vorn: body-Hintergrund (--theme-atmosphere) →
+   body::after (diese Zeichnung + ihr Schleier, z-index -2) → body::before (der
+   Lichtschacht, z-index -1) → :root::after (der Dampf, z-index -1) → Inhalt.
+   Schacht und Dampf liegen also VOR dem Zimmer — Licht und Wasserdampf stehen
+   im Raum, nicht hinter der Wand. Alle drei bleiben hinter jedem In-Flow-Kasten,
+   und beide vorderen Schichten hellen ausschließlich auf.
+
+   Größen-Vertrag: `cover` + `center bottom`. Die viewBox ist 1600×1000 (1,6:1),
+   flacher als übliche Fenster, darum beschneidet cover OBEN — die Bodenlinie bei
+   80 % Höhe, der Tisch und die Tasse stehen fest, verloren geht nur Decke. Die
+   Motive wohnen in den äußeren ~20 % (Rollbild und Tasse x<310, Fenster x>1240
+   in viewBox-Einheiten); dazwischen sind Wand und Boden — genau das, worauf die
+   Textspalte stehen soll.
+
+   Der Schleier ist der Kontrakt (Zahlen im Kopf): volle 920-px-Spalte
+   (`50% - 460px` je Seite), 110 px NACH AUSSEN ausgefranst, nie nach innen —
+   nach innen ausfransen würde die Spaltenkante ungeschützt lassen. Unter
+   ~1040 px fällt das calc auf 0, der Schleier deckt alles, und die Zeichnung
+   wird zum Gespenst statt zu verschwinden; die Textzusage bleibt unverändert.
+
+   Hier bewegt sich mit Absicht nichts: ein Zimmer driftet nicht. Nichts für
+   prefers-reduced-motion zu tun — die beweglichen Teile sind Schacht,
+   Lichtfleck und Dampf, die haben ihr Gate weiter unten. */
+:root[data-theme='asa'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  --veil: max(0px, 50% - 460px);
+  background-image:
+    linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(var(--veil) - var(--asa-feather)),
+      oklch(0.977 0.014 85 / var(--asa-veil)) var(--veil),
+      oklch(0.977 0.014 85 / var(--asa-veil)) calc(100% - var(--veil)),
+      transparent calc(100% - var(--veil) + var(--asa-feather)),
+      transparent 100%
+    ),
+    url('asa-szene.svg');
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center bottom;
+  background-size: auto, cover;
+}
+
+/* ── DER LICHTSCHACHT: was durch das Fenster in den Raum steht ────────────────
+   Was hier steht, ist das Licht IN DER LUFT zwischen Fenster und Boden. Wo es
+   ankommt — das Fensterkreuz auf den Tatami — ist ein eigener Layer, gleich
+   darunter in dieser Datei; die Trennung ist keine Sortierung, sondern die
+   Sache selbst: der Schacht ist weich und ohne Kante, der Fleck hat die harte
+   Form des Fensters. Ein Layer für beides könnte nur eines von beiden.
+
+   Warum nur drei Bänder und nicht Komorebis neun: ein Blätterdach hat hunderte
+   Löcher, ein Fenster hat ein Kreuz. Zwei breite Bahnen (die beiden Scheiben)
+   und eine schmale Sichel am Rahmen — mehr wäre eine Erfindung. Die Lücken
+   dazwischen sind TRANSPARENT, nie dunkel: die Sprosse nimmt Licht weg, sie
+   fügt keinen Schatten hinzu.
+
+   Vertrag:
+   • KEINE Maske über der Lesespalte, mit Absicht: diese Schicht hellt nur auf,
+     und ein hellerer Grund hebt den Kontrast dunkler Schrift, statt ihn zu
+     fressen (dieselbe Rechnung wie in komorebi.css; hier zusätzlich am echten
+     Render nachgemessen). Nie eine Farbe hier hineinschreiben, die dunkler ist
+     als --bg-base — das ist die einzige Regel dieses Layers.
+   • Das Ausfaden LÄNGS des Strahls macht die Element-Maske (210deg = die
+     Strahlrichtung, von rechts oben nach links unten). Licht, das in der
+     fernen Ecke noch voll ankommt, liest sich nicht mehr als Licht.
+   • `inset: -4%` gibt der Drift Anlauf: das Element ist größer als der Viewport,
+     die 22 px Wanderung können also nie eine unbedeckte Kante hereinziehen. */
+:root[data-theme='asa'] body::before {
+  content: '';
+  position: fixed;
+  inset: -4%;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(
+      ellipse 34% 44% at 96% 4%,
+      oklch(0.99 0.011 84 / 0.55),
+      oklch(0.99 0.011 84 / 0.18) 48%,
+      transparent 72%
+    ),
+    linear-gradient(
+      120deg,
+      transparent 0,
+      transparent 13.5%,
+      oklch(0.975 0.024 84 / 0.3) 16%,
+      oklch(0.975 0.024 84 / 0.3) 37%,
+      transparent 39.5%,
+      transparent 43%,
+      oklch(0.975 0.024 84 / 0.26) 45.5%,
+      oklch(0.975 0.024 84 / 0.26) 64%,
+      transparent 66.5%,
+      transparent 72%,
+      oklch(0.975 0.024 84 / 0.15) 73.5%,
+      oklch(0.975 0.024 84 / 0.15) 79%,
+      transparent 81.5%,
+      transparent 100%
+    );
+  -webkit-mask-image: linear-gradient(
+    210deg,
+    #000 0,
+    #000 30%,
+    rgb(0 0 0 / 0.6) 60%,
+    rgb(0 0 0 / 0.18) 86%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    210deg,
+    #000 0,
+    #000 30%,
+    rgb(0 0 0 / 0.6) 60%,
+    rgb(0 0 0 / 0.18) 86%,
+    transparent 100%
+  );
+  transform: translate3d(0, 0, 0);
+  animation:
+    asa-beam-creep 22s ease-in-out infinite alternate,
+    asa-beam-warm 13s ease-in-out infinite;
+}
+
+/* Die Sonne steigt. HIER STAND 190 s ÜBER 22 px, und das war der Fehler, den
+   Andis Verdikt an allen sieben Themes traf: „Es ging auch um die ruhigen
+   BEWEGUNGEN." Eine Bewegung, die man beim Hinsehen nicht sieht, ist als
+   Zusage elegant und als Bild nicht vorhanden — sie kommt in keinem Moment
+   vor, in dem jemand hinschaut. Die Regie v2 hat daraus einen prüfbaren Test
+   gemacht: bei 1/4/7/10 s muss sie mit bloßem Auge erkennbar sein.
+
+   22 s, `alternate`, und die Wanderung in PROZENT statt in Pixeln (3,1 % der
+   Elementbreite, das sind bei 1366 px gut 44 px statt 22): zwischen Sekunde 1
+   und Sekunde 10 liegen damit rund 40 % des Weges. Das sieht man. Es bleibt
+   trotzdem eine Sonne und kein Scheinwerfer, weil der Weg klein ist — nicht,
+   weil die Uhr langsam ist. Der `from`-Frame ist der Wert am Element, ohne
+   Animation steht also exakt das gemessene Bild. */
+@keyframes asa-beam-creep {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-3.1%, 1.6%, 0);
+  }
+}
+
+/* Und der Morgen wird eine Spur milder — eine Wolke zieht vor die Sonne.
+   13 s gegen 22 s: die beiden Uhren teilen keinen gemeinsamen Takt, das Bild
+   wiederholt sich also erst nach Minuten exakt. Kontrast-sicher, weil die
+   Animation nur die AUFHELLUNG zurücknimmt: der Boden ist der Grund ganz ohne
+   Schacht, und der ist ohnehin gemessen. */
+@keyframes asa-beam-warm {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+
+/* ── DER FENSTERKREUZ-FLECK auf den Tatami (:root::before) ───────────────────
+   Der zweite Herzschlag, und der einzige, der in der BILDMITTE stattfindet.
+
+   Warum er nicht in der Zeichnung stecken kann, obwohl er dort hingehört:
+   bei 1366 px liegen nur zwei Streifen von je 110 viewBox-Punkten
+   unverschleiert (die Rechnung steht im Kopf von asa-szene.svg). Alles
+   dazwischen sieht man durch 90 % Milch. Struktur überlebt das — ein
+   Shoji-Gitter, eine Mattenkante. Ein EREIGNIS überlebt es nicht: was zu 10 %
+   ankommt, bewegt sich auch nur zu 10 %. v1 hatte deshalb nicht zu wenig
+   Bewegung in der Mitte, es hatte dort gar keine haben können.
+
+   Also liegt der Fleck über dem Schleier. Diese Ebene hat z-index -1, der
+   Schleier -2: das Licht fällt AUF die Milch. In der Mitte ist es damit in
+   voller Stärke da — genau dort, wo v1 sein Loch hatte. Die Zeichnung malt
+   dieselben vier Lichtvierecke noch einmal unter dem Schleier; das ist keine
+   Dopplung, sondern die leise Fassung für breite Fenster, wo wenig verhüllt
+   ist, während hier oben die laute steht.
+
+   WARUM DAS DIE LESBARKEIT NICHT GEFÄHRDET, und warum das kein Glück ist:
+   der Fleck fügt ausschließlich LICHT hinzu. Er hat keine dunklen Balken; das
+   Fensterkreuz entsteht als LÜCKE zwischen vier Lichtfeldern — als
+   unbeschienener Boden, nicht als Schatten. Auf hellem Grund mit dunkler
+   Schrift hebt zusätzliches Licht den Kontrast. Dieselbe Regel wie beim
+   Schacht: nie eine Farbe hier hineinschreiben, die dunkler ist als
+   --bg-base. Gemessen wird trotzdem (Zahlen im Kopf); die Regel erklärt das
+   Ergebnis, sie ersetzt es nicht.
+
+   VIER FELDER STATT EINER MASKE: um ein Kreuz aus einer Fläche zu schneiden,
+   bräuchte es `mask-composite` — vier Hintergrundlagen an den vier Ecken
+   lassen die Lücke einfach stehen. Dasselbe Bild, ohne eine Eigenschaft zu
+   betreten, deren Präfix-Geschichte man dann pflegen müsste.
+
+   DIE SCHERUNG ist die Perspektive des Bodens: das Fenster steht rechts oben,
+   der Fleck läuft nach links unten weg (−34°, gemessen an den Lichtvierecken
+   im SVG). `blur(7px)` ist die Weichheit einer echten Schlagkante — ein Fleck
+   mit vektorscharfem Rand liest als Aufkleber, nicht als Licht. */
+:root[data-theme='asa']::before {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  left: 34%;
+  width: 56%;
+  bottom: -3%;
+  height: 34%;
+  background-image:
+    linear-gradient(oklch(0.98 0.078 88 / 0.5), oklch(0.98 0.078 88 / 0.5)),
+    linear-gradient(oklch(0.98 0.07 88 / 0.44), oklch(0.98 0.07 88 / 0.44)),
+    linear-gradient(oklch(0.98 0.078 88 / 0.46), oklch(0.98 0.078 88 / 0.46)),
+    linear-gradient(oklch(0.98 0.07 88 / 0.38), oklch(0.98 0.07 88 / 0.38));
+  background-repeat: no-repeat;
+  background-size:
+    40% 31%,
+    46% 31%,
+    40% 55%,
+    46% 55%;
+  background-position:
+    0 0,
+    100% 0,
+    0 100%,
+    100% 100%;
+  -webkit-mask-image: radial-gradient(
+    ellipse 58% 72% at 46% 48%,
+    #000 0,
+    #000 46%,
+    rgb(0 0 0 / 0.5) 76%,
+    transparent 98%
+  );
+  mask-image: radial-gradient(
+    ellipse 58% 72% at 46% 48%,
+    #000 0,
+    #000 46%,
+    rgb(0 0 0 / 0.5) 76%,
+    transparent 98%
+  );
+  filter: blur(4px);
+  transform: skewX(-34deg) translate3d(0, 0, 0);
+  animation:
+    asa-sun-creep 22s ease-in-out infinite alternate,
+    asa-sun-breathe 13s ease-in-out infinite;
+}
+
+/* Der Fleck wandert mit dem Schacht: dieselben 22 s, dieselbe Richtung. Es ist
+   dieselbe Sonne, und zwei Uhren für einen Strahl wären der Fehler, den man in
+   einem fertigen Bild nicht mehr findet, aber sofort spürt. Der Weg ist hier
+   fast doppelt so groß wie beim Schacht (6 % statt 3,1 %), weil der Boden dem
+   Fenster näher liegt als die Luft dazwischen: derselbe Sonnenwinkel bewegt
+   den Fleck weiter als den Schacht.
+   Die Scherung muss in JEDEM Keyframe wiederholt werden — `transform` ist eine
+   Eigenschaft, kein Stapel; wer sie in `to` wegließe, klappte den Fleck
+   mitten in der Bewegung flach. */
+@keyframes asa-sun-creep {
+  from {
+    transform: skewX(-34deg) translate3d(0, 0, 0);
+  }
+  to {
+    transform: skewX(-34deg) translate3d(-6%, 2.4%, 0);
+  }
+}
+
+/* Und derselbe Wolkenzug wie beim Schacht, 13 s. Dass Fleck und Schacht
+   gemeinsam dunkler werden, ist der Punkt: Licht, dessen zwei Hälften
+   unabhängig atmen, sieht aus wie zwei Fehler. */
+@keyframes asa-sun-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+/* ── DER DAMPF über der Tasse (:root::after) ─────────────────────────────────
+   Er wohnt auf `:root::after`, weil body seine beiden Pseudoelemente schon
+   vergeben hat (Szene, Schacht). Der `:root`-gebundene Selektor hält ihn
+   außerdem aus der Vorschau-Kachel des Theme-Pickers heraus, die data-theme auf
+   ein einfaches <div> setzt — eine 40-px-Kachel braucht keinen Dampf.
+
+   ANHEFTUNG AN DIE TASSE — die eine Rechnung, die dieses Thema von einem
+   dekorativen Schleier unterscheidet:
+   Die Szene liegt mit `cover` + `center bottom`, ihr Maßstab ist also
+   s = max(100vw/1600, 100vh/1000). Ein viewBox-Punkt (x, y) landet damit bei
+     Bildschirm-x = 50% + (x - 800) · s      Bildschirm-y = 100% - (1000 - y) · s
+   und weil `max()` in CSS rechnen kann, ist genau das hinschreibbar. Der
+   Tassenrand steht bei viewBox (250, 776):
+     x: 800-250 = 550 links der Mitte → 550/1600 = 34.375vw bzw. 550/1000 = 55vh
+     y: 1000-776 = 224 über der Kante → 224/1600 = 14vw    bzw. 224/1000 = 22.4vh
+   Das Element ist 260×380 viewBox-Einheiten groß (16.25vw/26vh × 23.75vw/38vh)
+   und wird über `margin-left` um seine halbe Breite nach links geschoben, damit
+   `transform` frei für die Animation bleibt. Ergebnis: der Dampf sitzt bei JEDER
+   Fenstergröße auf dem Tassenrand — auch dort, wo `cover` seitlich beschneidet.
+   ACHTUNG: Diese Zahlen gehören zu `cover` + `center bottom` und zur Position
+   der Tasse im SVG. Wer eines von beiden ändert, muss alle vier neu ausrechnen.
+
+   Kontrast: der Dampf ist warmes Weiß und liegt über dem dunkelsten Teil des
+   Bildes (Tisch und Tasse) — er kann den Grund nur aufhellen. Sein linker Rand
+   ragt bei breiten Fenstern ein Stück in die Lesespalte; das ist gerechnet und
+   unschädlich, aus demselben Grund. */
+:root[data-theme='asa']::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  width: max(16.25vw, 26vh);
+  height: max(23.75vw, 38vh);
+  left: calc(50% - max(34.375vw, 55vh));
+  bottom: max(14vw, 22.4vh);
+  margin-left: calc(0px - max(8.125vw, 13vh));
+  /* Drei Schwaden statt eines Nebels, und alle drei kräftiger als in v1
+     (0,5/0,36/0,22 → 0,84/0,64/0,42). Der alte Dampf war auf dem Bild schlicht
+     nicht auffindbar: Er stand über dem dunkelsten Fleck der ganzen Szene
+     (Tenmoku-Tasse, Tischkante) und war trotzdem zu schwach, um sich davon
+     abzuheben. Ein halbdurchsichtiges Weiß über einem hellen Zimmer ist immer
+     an der Grenze zum Nichts — man muss es dorthin heben, wo man es SIEHT, und
+     dann prüfen, ob es zu viel ist. Die Reihenfolge herum ist der Fehler von
+     v1: dezent geplant, nie nachgesehen. */
+  background-image:
+    radial-gradient(ellipse 30% 30% at 46% 86%, oklch(0.995 0.005 86 / 0.84), transparent 70%),
+    radial-gradient(ellipse 25% 27% at 59% 56%, oklch(0.995 0.005 86 / 0.64), transparent 72%),
+    radial-gradient(ellipse 21% 25% at 38% 28%, oklch(0.995 0.005 86 / 0.42), transparent 74%);
+  -webkit-mask-image: linear-gradient(
+    to top,
+    rgb(0 0 0 / 0.85) 0,
+    #000 18%,
+    rgb(0 0 0 / 0.45) 62%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to top,
+    rgb(0 0 0 / 0.85) 0,
+    #000 18%,
+    rgb(0 0 0 / 0.45) 62%,
+    transparent 100%
+  );
+  transform: translate3d(0, 0, 0) scale(1);
+  animation:
+    asa-steam-rise 19s ease-in-out infinite alternate,
+    asa-steam-thin 31s ease-in-out infinite alternate;
+}
+
+/* Aufsteigen und zur Seite ziehen — 19 s, die schnellste Uhr des Themas, weil
+   Dampf das einzig Lebende im Zimmer ist.
+
+   HIER STANDEN 54 s ÜBER 7 %/−6 %, und das war Dampf, den niemand je steigen
+   sah: über eine Minute für eine Bewegung, die kleiner ist als die Tasse. Echter
+   Dampf steigt in Sekunden, nicht in Minuten — die alte Zahl war nicht ruhig,
+   sie war nur langsam, und das ist nicht dasselbe. 19 s über 11 %/−17 % bei
+   1,18-facher Dehnung: zwischen Sekunde 1 und Sekunde 10 geht knapp die halbe
+   Strecke vorbei, und es sieht aus wie das, was es ist. Der Dampf steht in
+   einem der beiden unverschleierten Streifen und wird deshalb, anders als
+   alles in der Mitte, in voller Stärke gesehen.
+   `from` ist der Wert am Element: ohne Animation steht der gemessene Frame. */
+@keyframes asa-steam-rise {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(11%, -17%, 0) scale(1.18);
+  }
+}
+
+/* Die Tasse wird kälter, der Dampf dünner. 31 s gegen 19 s — teilerfremd genug,
+   dass Schwaden und Dichte nie zusammen umkehren. */
+@keyframes asa-steam-thin {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.46;
+  }
+}
+
+/* Eigenes reduced-motion-Gate: index.css bremst global alle Animationen aus,
+   aber diese Datei wird dynamisch geladen und muss auch für sich genommen
+   korrekt sein. Schacht, Lichtfleck und Dampf BLEIBEN sichtbar (alle drei sind
+   Fläche, keine Information) — sie hören nur auf, sich zu bewegen, und zwar auf
+   dem 0-%-/`from`-Frame, also genau im gemessenen Bild.
+
+   Der Lichtfleck steht in dieser Liste an dritter Stelle, seit es ihn gibt.
+   Ein neuer beweglicher Layer, der das Gate nicht mitbekommt, ist der
+   klassische stille Regelbruch dieser Datei-Sorte: alles sieht richtig aus,
+   bis jemand mit Bewegungsempfindlichkeit das Thema wählt. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='asa'] body::before,
+  :root[data-theme='asa']::before,
+  :root[data-theme='asa']::after {
+    animation: none;
+  }
+}
+
+/* Die Kopfzeile ist ein Blatt Washi im Gegenlicht: fast weiß, leicht
+   durchscheinend, mit einer warmen Bleistiftkante statt eines Schattens
+   (Muster wie Asagiri/Komorebi, die ihre Nav ebenfalls nur tönen). */
+:root[data-theme='asa'] .nav {
+  background: oklch(0.99 0.008 85 / 0.84);
+  box-shadow: 0 1px 0 oklch(0.805 0.026 78 / 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Der Sprachstern ist die Morgensonne, wie sie drinnen ankommt: warmweißer Kern,
+   nach außen über Aprikose ins Zinnober. Form und Bewegung bleiben die des
+   Basis-Orbs — das Thema ist Farbe. */
+:root[data-theme='asa'] .vc-orb__core {
+  background: radial-gradient(
+    circle at 42% 36%,
+    oklch(0.99 0.008 88),
+    oklch(0.86 0.093 62) 52%,
+    var(--accent) 100%
+  );
+}
+
+/* Der Bloom ist das Licht im Zimmer, nicht die Farbe des Sterns: innen das warme
+   Morgengold, außen ins Papierne auslaufend. */
+:root[data-theme='asa'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    oklch(0.9 0.03 84 / 0.18) 46%,
+    transparent 76%
+  );
+}
+
+/* Die Pegel-Ringe in warmem Holzton statt in Zinnober, damit die Stimme im
+   hellen Zimmer kein rotes Ausrufezeichen wird. Keine neue Mechanik — nur Farbe
+   auf dem bestehenden Ring. */
+:root[data-theme='asa'] .vc-orb__ring {
+  border-color: oklch(0.7 0.045 70 / 0.55);
+  box-shadow: 0 0 0 5px oklch(0.75 0.04 72 / 0.14);
+}

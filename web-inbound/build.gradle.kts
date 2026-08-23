@@ -26,6 +26,9 @@ dependencies {
     // einen echten WebFilter am gebooteten WebFlux-Context.
     implementation(project(":core-domain"))
     implementation(project(":capability-kernel"))
+    // Lagebild (F5): hardened Tagesschau fetch adapter — wired only behind
+    // HOSHI_NEWS_ADAPTER_ENABLED=true (NewsAdapterConfig), NONE otherwise.
+    implementation(project(":adapters-news"))
     // M2c-Wiring: der echte Brain-Adapter (MlxBrainAdapter, e4b :8041) wird hier
     // im @Configuration zum TurnOrchestrator verdrahtet. slf4j-simple raus —
     // web-inbound bringt sein eigenes Boot-Logging (Doppel-Binding vermeiden).
@@ -99,6 +102,7 @@ dependencies {
         exclude(group = "ch.qos.logback", module = "logback-classic")
     }
     testImplementation("io.projectreactor:reactor-test:3.6.17")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.4.1")
 }
 
 tasks.test {

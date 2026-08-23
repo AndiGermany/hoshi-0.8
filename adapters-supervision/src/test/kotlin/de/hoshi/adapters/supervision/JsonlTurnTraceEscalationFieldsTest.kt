@@ -77,12 +77,17 @@ class JsonlTurnTraceEscalationFieldsTest {
     }
 
     @Test
-    fun `s4-felder haengen additiv am zeilenende - hinter answerEntropy`(@org.junit.jupiter.api.io.TempDir dir: java.nio.file.Path) {
+    fun `s4-felder haengen additiv hinter answerEntropy - alt-feld-reihenfolge byte-stabil`(@org.junit.jupiter.api.io.TempDir dir: java.nio.file.Path) {
         adapter(dir).use { a ->
             val line = a.serialize(sampleTrace())
             val keys = mapper.readTree(line).fieldNames().asSequence().toList()
-            assertEquals(listOf("escalated", "escalationCostCents", "cacheHit"), keys.takeLast(3))
-            assertTrue(keys.indexOf("answerEntropy") < keys.indexOf("escalated"), "davor liegt unverändert answerEntropy (S1)")
+            // Bewusst NICHT mehr "die letzten 3 der ganzen Zeile" (das bricht bei
+            // JEDER weiteren additiven Scheibe ans Zeilenende, z.B. der
+            // Räume-Nutzungs-Naht/targetAreaId, s. JsonlTurnTraceAreaFieldTest) —
+            // der eigentliche Vertrag ist NUR: S4 sitzt byte-stabil DIREKT hinter
+            // answerEntropy, unabhängig davon, was SPÄTER noch angehängt wird.
+            val afterEntropy = keys.dropWhile { it != "answerEntropy" }.drop(1)
+            assertEquals(listOf("escalated", "escalationCostCents", "cacheHit"), afterEntropy.take(3))
         }
     }
 

@@ -183,7 +183,11 @@ describe('SettingsPanel — Deep-Link öffnet die richtige Kategorie + pulst den
     await mount(<SettingsPanel {...baseProps} category="zuhause-integrationen" />);
     await flush();
     expect(panel('zuhause-integrationen').hidden).toBe(false);
-    expect(panel('darstellung').hidden).toBe(true);
+    // Gegenprobe an einer ANDEREN Kategorie. Bis 21.08. stand hier
+    // 'darstellung' — die hat seit dem Auflösen der Zwischenseite gar kein
+    // Panel mehr (die Karte hebt direkt die Galerie), `panel()` gäbe also
+    // `null` und die Zeile prüfte nichts mehr.
+    expect(panel('sprache-stimme').hidden).toBe(true);
     expect(container.querySelector('.is-anchor-highlight')).toBeNull();
   });
 

@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  Mess-Gerüst des Asa-Pods (Theme-Revival 2026-08-18/19).
+
+  Die Lehre vom 18.08. ist der ganze Zweck dieser Datei: ein Messfühler, der die
+  Themen-CSS OHNE die Basistoken aus index.css lädt, misst nicht das Produkt,
+  sondern eine Nachbildung — und lügt dann. Darum lädt diese Seite genau die drei
+  Dateien, die im echten Frontend hinter dem Hintergrund stehen, in der echten
+  Reihenfolge:
+    1. ../../frontend/src/index.css         — Basistoken + .app-Geometrie (920px)
+    2. ../../frontend/src/styles/themes.css — Basis-Look, body-Hintergrundregel
+    3. ../../frontend/public/themes/asa.css — das zu messende Thema
+  Der relative Pfad zur Zeichnung (url('asa-szene.svg')) löst sich dabei gegen die
+  Themen-CSS auf, also genau wie im ausgelieferten Frontend.
+
+  Die Seite ist ABSICHTLICH leer. Gemessen wird der Hintergrund-Stapel
+  (Atmosphäre → Zimmer + Schleier → Lichtschacht → Dampf) an der Stelle, an der
+  später Text steht; eine deckende Karte würde das Bild nur verstecken. Das
+  .app-Gerüst steht trotzdem im DOM, damit die 920-px-Spalte dieselbe Geometrie
+  hat wie im Produkt.
+
+  Zwei Parameter, beide für den Beweis, nicht für die Auslieferung:
+    ?veil=0.72   überschreibt --asa-veil und fährt die Schleier-Kurve ab
+    ?guides=1    zeichnet die Spaltenkante ein (Sichtprüfung von Hand)
+  Beide MÜSSEN auf <html> gesetzt werden: asa.css deklariert die Regler dort,
+  und nur von dort erben sie an body::after und an :root::after.
+-->
+<html lang="de" data-theme="asa">
+  <head>
+    <meta charset="utf-8" />
+    <title>Asa — Kontrast-Messgerüst</title>
+    <link rel="stylesheet" href="../../frontend/src/index.css" />
+    <link rel="stylesheet" href="../../frontend/src/styles/themes.css" />
+    <link rel="stylesheet" href="../../frontend/public/themes/asa.css" />
+    <style>
+      .app {
+        height: 100%;
+      }
+      html[data-guides='1'] .app {
+        outline: 1px dashed #ff00ff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app"></div>
+    <script>
+      const q = new URLSearchParams(location.search);
+      if (q.get('guides') === '1') {
+        document.documentElement.dataset.guides = '1';
+      }
+      const veil = q.get('veil');
+      if (veil !== null) {
+        document.documentElement.style.setProperty('--asa-veil', veil);
+      }
+      const feather = q.get('feather');
+      if (feather !== null) {
+        document.documentElement.style.setProperty('--asa-feather', feather + 'px');
+      }
+    </script>
+  </body>
+</html>

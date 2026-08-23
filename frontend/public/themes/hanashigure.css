@@ -1,0 +1,718 @@
+/* ════════════════ HANASHIGURE (花時雨) — Tempel im Kirschblütenregen ════════════════
+   Hoshi 0.8 · eigenständige Themen-Datei (dynamisch nachladbar, kein Import nötig)
+   ────────────────────────────────────────────────────────────────────────────────────
+   DAS BILD: ein Tempelhof Anfang April, später Vormittag, es regnet fein und
+   ohne Eile. Der Kies ist dunkel gesoffen, die Steinplatten glänzen, das Licht
+   kommt nicht von der Sonne, sondern von einem gleichmäßig hellen, verhangenen
+   Himmel. Rechts oben steht der Kirschbaum als rosa Dunst hinter dem Regen;
+   am linken Bildrand steht das Zinnober des Tempels — durch die Schleier
+   gesehen ist es kein Leuchten mehr, sondern eine gedämpfte, dunkle Wärme.
+   Unten, wo sich der nasse Stein den Himmel zurückholt, liegen einzelne
+   Blütenblätter. Still, klar, frisch: ein Regentag, an dem man gern drinnen
+   sitzt und dem Wasser zuhört.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   WARUM DAS NICHT AMAYADORI IST (雨宿り liegt im selben Wetter)
+   ────────────────────────────────────────────────────────────────────────────────
+   Amayadori ist Abend, ist DUNKEL (--bg-base #100e0c) und erzählt Geborgenheit:
+   man sitzt im Trockenen, draußen fällt es weiter, drinnen brennt Kaki-Orange
+   (#ee9b6e) als Herdfeuer. Seine Traufe hört SICHTBAR an der Lesespaltenkante
+   auf — das ist der Dachrand, unter dem man steht.
+   Hanashigure ist TAG und HELL (--bg-base oklch 0.918, nasser Stein). Man steht
+   selbst im Regen und schaut auf den Tempel. Darum:
+     • Der Regen hört nirgends auf. Er wird über der Lesespalte nur LEISER
+       (Maske auf 35 %, nicht auf 0) — es gibt hier kein Dach.
+     • Das Warme ist nicht drinnen, sondern draußen und weit weg: Zinnober als
+       dunkle Tinte (#963826) statt als helle Glut.
+     • Es gibt eine zweite, zarte Farbschicht, die Amayadori nicht hat und nicht
+       haben kann: Sakura-Rosa (siehe unten).
+   Und es ist auch nicht Asagiri: dessen Nebel ist milchig-weiß (L 0.955) und
+   fasst nach OBEN weg; hier ist der Grund ein spürbar grauer, kühler Stein
+   (L 0.918, C 0.012 auf H 252) und der dunkelste Punkt liegt OBEN im Schleier.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   DIE ZWEI AKZENTSCHICHTEN (die eigentliche Design-Aufgabe)
+   ────────────────────────────────────────────────────────────────────────────────
+   Die Szene hat zwei Farben, aber das Token-System hat nur einen Akzent. Gelöst
+   über die Rollentrennung, die Komorebi vorgemacht hat:
+     1. ZINNOBER IST TINTE. --accent (oklch 0.47 0.13 33, #963826) trägt Stimme,
+        CTA, Auswahl, Fokus — alles, was gelesen und geklickt wird. Auf hellem
+        Grund MUSS ein Akzent dunkel sein; das echte Shu-iro (#eb6238, L≈0.66)
+        wäre als Schriftfarbe unlesbar. Die niedrige Sättigung (C 0.13, während
+        --error auf C 0.17 sitzt) ist nicht Verlegenheit, sondern das Bild: das
+        Zinnober steht hinter Regenschleiern.
+     2. SAKURA IST LICHT. --accent-glow (oklch 0.80 0.10 6, #f5a3b4) ist bewusst
+        NICHT der abgedunkelte Akzent, sondern eine ANDERE Farbe: das Rosa der
+        Blüte. Glow ist immer Atmosphäre und trägt nie Text (index.css:2209,
+        voicebar.css:86/289 — reine box-shadow-Höfe), darum darf er hell und
+        offen bleiben. Dieselbe Schicht erscheint außerdem im Sprachstern-Hof,
+        im Blütendunst der Atmosphäre und, am deutlichsten, in --bg-user: die
+        eigene Nachricht ist das Blütenblatt, das auf dem nassen Stein liegt.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   ZINNOBER vs. FEHLERROT
+   ────────────────────────────────────────────────────────────────────────────────
+   Ein Rot-Akzent neben einem Rot-Signal muss aktiv getrennt werden — hier auf
+   drei Achsen (dieselbe Mechanik wie Momiji, nur in anderem Wetter):
+     1. HUE. Akzent H 33 (Zinnober, orangeseitig) ↔ --error H 8 (Beni-Karmin,
+        pinkseitig, #a41d49): 25°. --warn verlässt das Rotband ganz und geht auf
+        H 80 (dunkles Ocker, #735108) — 47° vom Akzent, 72° vom Fehler.
+        --success bleibt auf H 152 (nasses Moos, #0c6533).
+     2. SÄTTIGUNG IST DER SIGNALKANAL. Alles Dekorative in dieser Datei liegt
+        unter C 0.11; --error ist mit C 0.17 das chromatischste Token überhaupt.
+        Wenn im Layout etwas wirklich kräftig ist, ist es Information.
+     3. TEMPERATUR. Der Akzent ist warm/erdig, --error ist kalt/pink. Auch bei
+        Rotgrünschwäche bleibt der Unterschied über Helligkeit und Sättigung
+        stehen; zusätzlich erscheint Zinnober als DEKO nur weich und flächig
+        (Atmosphäre, Orb), --error immer scharfkantig neben Text.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   KONTRASTE (WCAG 2.1, selbst nachgerechnet: OKLCH → sRGB → Relativluminanz;
+   angegeben ist der SCHLECHTESTE der fünf realen Untergründe)
+   ────────────────────────────────────────────────────────────────────────────────
+                     base  surface elevated  subtle    user   WORST
+       --text-1     12,74   14,80   15,77   11,68   11,52   11,52
+       --text-2      8,87   10,30   10,98    8,13    8,02    8,02
+       --text-3      6,78    7,87    8,39    6,21    6,13    6,13
+       --text-4      5,47    6,35    6,77    5,01    4,94    4,94
+       --accent      5,71    6,63    7,07    5,23    5,16    5,16
+       --success     5,66    6,57    7,00    5,19    5,12    5,12
+       --warn        5,66    6,58    7,01    5,19    5,12    5,12
+       --error       5,79    6,73    7,17    5,31    5,24    5,24
+   Matrix-Minimum 4,94:1 — AA auf jeder Stufe, auf jedem Grund.
+
+   Zusätzlich geprüft, weil helle Themen genau dort kippen:
+     • CHIP (Farbe auf ihrer EIGENEN *-soft-Füllung, also .badge--up/--down,
+       .hero--up/--down, .nav__tab.is-active, .tile--live .tile__pill):
+       über --bg-base 4,71–4,86 · über --bg-surface 5,42–5,60 · über der Nav
+       5,39–5,57 — alle ≥ 4,5. Deshalb liegen die Status-Alphas bei 0,11 und die
+       Akzent-Alpha bei 0,13 statt bei den 0,16–0,20 der dunklen Themen: auf
+       hellem Grund DUNKELT eine kräftigere Tönung die Füllung ab und frisst
+       genau den Kontrast, den die Chip-Schrift braucht.
+     • --text-4 AUF einer solchen Füllung (.hero__time in .hero--up/.hero--down —
+       ein realer Renderpfad, den die Geschwister-Themen bei 4,0–4,4 lassen):
+       4,51–4,69 über --bg-base, 5,19–5,40 über --bg-surface. AA.
+     • --accent-ink auf --accent (gefüllter CTA, Toggle-Knopf): 7,07:1.
+     • ATMOSPHÄRE + REGEN in voller Stärke, an jedem ihrer dunkelsten Punkte
+       (die Lesespalte ist nicht geschützt — .app ist 920 px breit, --measure nur
+       672 px, Text steht auf Einstellungs-/Idle-Seiten also sehr wohl im
+       Seitenraum): schlechtester Wert der ganzen Fläche 4,60:1 für --text-4,
+       10,72:1 für --text-1. Die Zierde ist damit NICHT auf ihre Maske
+       angewiesen — die Maske ist Ruhe, kein Kontrast-Trick.
+     • NICHT-TEXT (WCAG 1.4.11 ≥ 3:1): --bg-hairline ist die einzige Kontur von
+       .settings__select/.settings__text/.settings__toggle und der Nav-Insel,
+       also ein echter Control-Rand: 3,74:1 gegen --bg-surface, 3,22:1 gegen
+       --bg-base, 3,99:1 gegen --bg-elevated. --bg-hairline-dashed ist bewusst
+       NOCH kräftiger (4,51 / 3,88 / 4,81) — eine gestrichelte Linie hat weniger
+       Farbe auf dem Schirm und braucht mehr Kontrast, um gleich stark zu lesen.
+   Nicht AA und bewusst so belassen (kein existierender Renderpfad, s. RESULT):
+     Farbe auf ihrer *-soft-Füllung über --bg-subtle (4,34–4,48) und
+     --bg-hairline gegen --bg-subtle (2,95) — --bg-subtle ist selbst eine
+     Füll-/Hover-Fläche und trägt keine getönten Chips und keine Control-Ränder.
+   sRGB-Gamut: jeder Wert einzeln geprüft (Token wie Verlaufsstopp), kein Kanal
+   wird beim Rendern geklippt — auch auf Nicht-P3-Schirmen stimmt die Rechnung.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   SCENE LAYER (body::after, 2026-08-14) — five-storey pagoda in blossom rain
+   ────────────────────────────────────────────────────────────────────────────────
+   The theme now carries a drawing, not only weather: hanashigure-szene.svg (65 KB,
+   flat vector fills, viewBox 1600x1000) sits full-bleed behind the app — pagoda and
+   temple stone on the left, the cherry canopy and its trunk on the right, a ghost
+   torii and a stone lantern in the courtyard between them.
+
+   GEOMETRY RULE for that file (2026-08-14, rev 2 — the first cut had visible gaps):
+   parts that must read as ONE body have to OVERLAP by >= 3 px. Edge-on-edge renders
+   as a bright seam, not as a joint, because two antialiased borders sit on top of
+   each other. Concretely: every roof reaches up INTO the balcony above it (the
+   wedge between roof curve and balcony is filled, not left as sky), the plinth
+   reaches down into the wet pavement, torii posts and lantern foot stand IN the
+   water band, and every branch tapers to a point inside a blossom mass instead of
+   ending on a straight cut. Half-transparency lives on the <g>, never on the single
+   shape — per-part alpha stacks into visible rectangles wherever parts overlap.
+
+   Readability is NOT bought by cutting the picture at the column edge (that is
+   ukiyo's answer) but by a MEASURED veil: oklch(0.955 0.008 251 / 0.88) covers the
+   full 920 px app column and feathers out over 110 px into the side space. Under
+   that veil the darkest possible ink of the drawing (#2e3948 at alpha 1) composites
+   to #d5dbe0 = 5.01:1 against --text-4, so no future edit of the SVG can break the
+   text contract. Measured on the real headless-Chrome render (empty page, so
+   atmosphere + rain + scene + veil composited, worst pixel inside the column):
+     1440 px 5.12:1 · 1280 px 5.02:1 · 1024 px 4.89:1 for --text-4
+     (--text-1 in the same spots: 11.87 / 11.62 / 11.32)
+   Re-measured after the geometry rev above (same harness, 700 px tall viewport =
+   the worst crop, since `cover` pushes the motifs furthest inward there). The rev
+   moved every number the right way except 1440 px, which lost 0.05 to a single
+   antialiased eave pixel: before it read 5.17 / 4.89 / 4.84.
+   The side space carries decoration only — .app is 920 px wide and centred, so no
+   glyph ever sits outside it; there the drawing runs at full strength (ink down to
+   1.0:1 against --text-4, which is exactly why the veil is not optional).
+   Whoever widens .app past 920 px must re-measure these four numbers first.
+   The drawing itself never moves; the motion of this theme is the rain (below)
+   plus four falling petals in the right margin (last section of this file). The
+   SVG is untouched by all of it — the veil numbers above stay valid.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   ZWEI SELEKTOREN je Token-Block (Projekt-Konvention, s. themes.css):
+   `:root[data-theme='hanashigure']` (0,2,0) gewinnt am <html> gegen die
+   Basis-Token unabhängig von der Ladereihenfolge; der nackte
+   `[data-theme='hanashigure']` (0,1,0) trägt die Token auch an ein
+   verschachteltes Element, das `data-theme` selbst setzt — genau das macht die
+   echte Farbvorschau im Theme-Picker (.settings__swatch).
+   ════════════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='hanashigure'],
+[data-theme='hanashigure'] {
+  /* ── Die Szene als Flächen-Stapel (erste Schicht = oberste) ─────────────────
+     1. REGENSCHLEIER von oben. Der Himmel hängt herunter und ist die dunkelste
+        Stelle des Bildes — anders als bei Asagiri, wo unten die Milch liegt.
+        Läuft bei 56 % ins Nichts aus.
+     2. KIRSCHBAUM oben rechts: rosa Dunst, breit und weich, hinter dem Regen.
+     3. BLÜTENBLÄTTER unten links: dieselbe Farbe eine Spur tiefer, dort wo das
+        Wasser sie an den Rand der Steinplatten geschwemmt hat.
+     4. ZINNOBER links auf halber Höhe: der Tempel steht knapp außerhalb des
+        Bildes (Ellipsen-Mitte bei -8 %), man sieht nur seine Wärme. Alpha 0,11 —
+        das ist der Regenschleier, nicht ein zurückhaltender Designer.
+     5. NASSER STEIN unten: der Boden gibt das Himmelslicht zurück, die einzige
+        Schicht, die AUFHELLT.
+     Alle Alphas sind gegen die Textstufen gerechnet, nicht gefühlt (s. Kopf):
+     auch dort, wo sich zwei Schichten überlagern UND der Regen darüber liegt,
+     bleibt --text-4 ≥ 4,60:1. Kein Kommentar INNERHALB des Werts — eine Custom
+     Property wird als Token-Strom gespeichert und diese Datei wird dynamisch
+     nachgeladen; der Wert bleibt darum ein einziger, glatter Ausdruck. */
+  --theme-atmosphere:
+    linear-gradient(
+      180deg,
+      oklch(0.795 0.02 252 / 0.22),
+      oklch(0.86 0.015 252 / 0.08) 30%,
+      transparent 56%
+    ),
+    radial-gradient(ellipse 56% 42% at 86% 4%, oklch(0.885 0.055 6 / 0.4), transparent 66%),
+    radial-gradient(ellipse 44% 30% at 4% 98%, oklch(0.87 0.06 8 / 0.34), transparent 64%),
+    radial-gradient(ellipse 26% 56% at -8% 54%, oklch(0.6 0.11 33 / 0.11), transparent 60%),
+    linear-gradient(0deg, oklch(0.97 0.006 250 / 0.42), transparent 28%), var(--bg-base);
+
+  /* ── Flächen: nasser Stein und trockenes Papier ────────────────────────────
+     Umgekehrte Treppe zum Dunkel-Kanon — die gehobene Fläche ist HELLER. Der
+     Abstand zwischen --bg-base (Stein, L 0.918) und --bg-surface (Papier,
+     L 0.968) ist bewusst groß: er IST die Erzählung. Der Grund ist regennass,
+     die Karten sind es nicht. --bg-subtle ist die Pfütze in der Fuge und bleibt
+     der harte Kontrast-Prüfstein. Chroma überall ≤ 0.015 auf H 252: das ist
+     Grau, das kühl ist, ohne blau zu sein. */
+  --bg-base: oklch(0.918 0.012 252); /* #dee5ec — nasser Stein im Regenlicht */
+  --bg-surface: oklch(0.968 0.006 250); /* #f1f5f8 — trockenes Papier */
+  --bg-elevated: oklch(0.99 0.004 250); /* #fafcfe */
+  --bg-subtle: oklch(0.89 0.015 252); /* #d4dce5 — Hover-/Füllfläche, Wasser in der Fuge */
+  --bg-hairline: oklch(0.59 0.024 252); /* #737f8c — die Fuge selbst, 3,22:1 gegen base */
+  --bg-hairline-dashed: oklch(0.545 0.026 252); /* #65717f — gestrichelt: „ehrlich leer" */
+
+  /* ── Schrift: Sumi mit Regenblau ───────────────────────────────────────────
+     Reines Schwarz wäre in dieser Luft ein Fremdkörper; die Tinte behält einen
+     kühlen Stich (H 252–258) und wird nach hinten leiser UND blasser. --text-4
+     liegt mit L 0.465 tiefer als in den Geschwister-Themen — das ist der Preis
+     dafür, dass die leiseste Stufe auch AUF einer getönten Status-Füllung noch
+     AA ist (s. Kopf, .hero__time). */
+  --text-1: oklch(0.245 0.024 258); /* #19212c */
+  --text-2: oklch(0.35 0.023 256); /* #333b47 */
+  --text-3: oklch(0.415 0.022 254); /* #444d58 */
+  --text-4: oklch(0.465 0.021 252); /* #515a65 — leiseste Stufe, 4,94:1 im schlechtesten Fall */
+
+  /* ── Akzent: das Zinnober des Tempels, durch Regen gesehen ─────────────────
+     Trägt Stimme, CTA, Auswahl, Fokus — sonst nichts. --accent-glow ist NICHT
+     dieselbe Farbe heller, sondern die zweite Schicht der Szene: Sakura-Rosa
+     (s. Kopf). --accent-ink ist das Papierweiß, das im gefüllten Button darauf
+     sitzt (7,07:1). */
+  --accent: oklch(0.47 0.13 33); /* #963826 */
+  --accent-soft: oklch(0.47 0.13 33 / 0.13);
+  --accent-faint: oklch(0.47 0.13 33 / 0.07);
+  --accent-glow: oklch(0.8 0.1 6 / 0.4); /* #f5a3b4 @40 % — die Blüte, kein Zinnober */
+  --accent-ink: oklch(0.99 0.004 250); /* #fafcfe */
+
+  /* ── Status: dunkel, entsättigt, aus dem Zinnober-Band heraus ──────────────
+     Auf hellem Grund braucht Semantik TIEFE statt Leuchtkraft. Alle drei liegen
+     bei L 0.445–0.474 und bleiben auch auf ihrer eigenen *-soft-Fläche über
+     4,8:1 — sie informieren, sie schreien nicht in eine stille Szene. */
+  --success: oklch(0.445 0.112 152); /* #0c6533 — Moos auf nassem Stein */
+  --success-soft: oklch(0.445 0.112 152 / 0.11);
+  --warn: oklch(0.46 0.092 80); /* #735108 — nasses Zedernholz, RAUS aus dem Rotband */
+  --warn-soft: oklch(0.46 0.092 80 / 0.11);
+  --error: oklch(0.474 0.17 8); /* #a41d49 — Beni-Karmin, kühler+kräftiger als das Zinnober */
+  --error-soft: oklch(0.474 0.17 8 / 0.11);
+
+  /* Du-Blase: das Blütenblatt auf dem Stein. Sie hebt sich vom grauen Grund
+     über den HUE ab (8 statt 252) und nicht nur über die Helligkeit — auf einer
+     hellen Fläche ist das der verlässlichere Weg. Bewusst sehr blass (C 0.032):
+     ein Blatt, kein Alarm. Kein Akzent-Fill (Projekt-Konvention seit Yoru).
+     --text-1 darauf 11,52:1 · --text-4 darauf 4,94:1. */
+  --bg-user: oklch(0.89 0.032 8); /* #efd3d7 */
+
+  color-scheme: light;
+}
+
+/* Der Grund gehört dem body. themes.css hat dieselbe Regel generisch für
+   `:root[data-theme]`; sie steht hier noch einmal, damit die Datei auch ALLEIN
+   geladen vollständig ist — gleiche Spezifität, gleicher Wert, kein Konflikt. */
+:root[data-theme='hanashigure'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── DER REGEN (時雨 — der Schauer, der kommt und geht) ───────────────────────
+   Die Signatur. Zwei übereinanderliegende Regenwände aus haarfeinen, leicht
+   geneigten Strichen: eine dichte vorn (13 px Abstand) und eine lockere
+   dahinter (26 px). Beide auf derselben Achse (97°, also ~7° aus der
+   Senkrechten) — nur so entsteht Tiefe statt Moiré.
+
+   ABGRENZUNG ZU AMAYADORIS TRAUFE, bewusst Stelle für Stelle:
+     • Amayadori hellt auf (Silber auf Schwarz), hier DUNKELN die Striche (kühles
+       Grau auf hellem Stein) — anders geht Regen bei Tag nicht.
+     • Amayadori neigt nach 93°, hier nach 97°: die Striche stehen spiegelbildlich
+       schräg, der Regen kommt von der anderen Seite.
+     • Amayadori hat eine Wand, hier sind es zwei mit verschiedener Dichte.
+     • Amayadori schneidet an der Lesespalte hart auf 0 ab (das ist sein Dach);
+       hier bleibt der Regen mit 35 % stehen — man steht selbst draußen.
+
+   ZWEI ANIMATIONEN, weil es zwei Bewegungen sind:
+     • `hanashigure-fall` 12 s linear — 213 px nach unten. Die Zahl ist nicht
+       gegriffen: bei 97° verschiebt eine Y-Bewegung von d die Musterphase um
+       d·cos(7°)… genauer um d·|cos 97°| = 0,1219·d entlang der Gradientenachse.
+       213 px ≙ genau 2 Perioden der dichten (13 px) und 1 Periode der lockeren
+       Wand (26 px) — die Schleife schließt nahtlos, es gibt keinen Sprung beim
+       Neustart. Sichtbar ist davon eine langsame seitliche Drift (~2 px/s): so
+       sieht Nieselregen aus der Ferne aus, als stehendes Gitter mit Wanderung.
+     • `hanashigure-shower` 26 s ease-in-out alternate — die Deckkraft schwingt
+       zwischen 0,5 und 1. Das IST 時雨: ein Schauer, der zunimmt und nachlässt.
+       Er hört nie ganz auf (Minimum 0,5), sonst wäre es kein Regentag.
+   Beide Eigenschaften sind Compositor-Eigenschaften (transform/opacity), also
+   kein Layout und kein Repaint der Gradienten (Projekt-Konvention, s. index.css
+   „Motion-Token"; Momiji animiert aus demselben Grund `opacity`).
+
+   STAPELUNG — exakt die Naht von Amayadori/Nagori/Komorebi, kein neues
+   Deko-System: `position:fixed; z-index:-1` hält die Ebene HINTER jedem
+   normalen (nicht positionierten) Inhalt, aber ÜBER dem body-Hintergrund
+   (--theme-atmosphere ist eine reguläre `background`-Eigenschaft und liegt als
+   Backdrop der Stacking-Context-Wurzel immer zuunterst). Karten sind deckend —
+   der Regen zieht also HINTER der Lesespalte durch.
+
+   `inset: -224px 0 0` gibt oben Anlauf: die Ebene ist 224 px höher als der
+   Viewport, damit die 213-px-Wanderung nie eine regenfreie Kante am oberen
+   Bildrand freilegt (Amayadoris `inset:0` + translateY(150px) tut genau das).
+
+   MASKE: die Lesespalte (--measure) wird auf 35 % gedämpft statt ausgeblendet,
+   gefedert über 64 px — feine Schrägstriche direkt unter laufendem Text sind
+   unruhig, aber ein Regen, der an einer unsichtbaren Wand aufhört, ist eine
+   Lüge. Der Rest von 35 % ist im Kopf mitgerechnet; die volle Stärke ist es
+   ohnehin (4,60:1 für --text-4 am dunkelsten Punkt), die Maske trägt also
+   Ruhe, keinen Kontrast. Auf schmalen Fenstern kollabieren die Stopps auf den
+   leisen Wert — dort ist kein Seitenraum, und der Regen wird überall gleich
+   leise. Gewolltes Verhalten. `var(--measure, 42rem)` mit Fallback, damit die
+   Maske auch ohne index.css definiert ist. */
+:root[data-theme='hanashigure'] body::before {
+  content: '';
+  position: fixed;
+  inset: -224px 0 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      97deg,
+      oklch(0.6 0.022 252 / 0.03) 0px,
+      oklch(0.6 0.022 252 / 0.03) 1px,
+      transparent 1px,
+      transparent 13px
+    ),
+    repeating-linear-gradient(
+      97deg,
+      oklch(0.52 0.024 250 / 0.02) 0px,
+      oklch(0.52 0.024 250 / 0.02) 1px,
+      transparent 1px,
+      transparent 26px
+    );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(50% - var(--measure, 42rem) / 2 - 64px),
+    rgb(0 0 0 / 0.35) calc(50% - var(--measure, 42rem) / 2 + 8px),
+    rgb(0 0 0 / 0.35) calc(50% + var(--measure, 42rem) / 2 - 8px),
+    #000 calc(50% + var(--measure, 42rem) / 2 + 64px),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(50% - var(--measure, 42rem) / 2 - 64px),
+    rgb(0 0 0 / 0.35) calc(50% - var(--measure, 42rem) / 2 + 8px),
+    rgb(0 0 0 / 0.35) calc(50% + var(--measure, 42rem) / 2 - 8px),
+    #000 calc(50% + var(--measure, 42rem) / 2 + 64px),
+    #000 100%
+  );
+  animation:
+    hanashigure-fall 12s linear infinite,
+    hanashigure-shower 26s var(--ease-standard, ease-in-out) infinite alternate;
+}
+
+@keyframes hanashigure-fall {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 213px, 0);
+  }
+}
+
+@keyframes hanashigure-shower {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Eigenes reduced-motion-Gate: die globale Regel in index.css (animation-duration
+   0.01ms, iteration-count 1) würde den Regen am Startzustand einfrieren — also
+   bei Deckkraft 0,5, einem halben Schauer. Hier explizit abgeschaltet und auf
+   volle Deckkraft gesetzt: es regnet weiter, es bewegt sich nur nichts mehr.
+   Der Regen BLEIBT sichtbar (er ist Fläche, keine Information). Diese Datei muss
+   auch allein geladen korrekt sein. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='hanashigure'] body::before {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ── THE SCENE: pagoda, cherry tree, wet courtyard (body::after) ──────────────
+   Layer order, back to front: body background (--theme-atmosphere) → body::after
+   (this drawing + its veil, z-index -2) → body::before (the rain, z-index -1) →
+   content. The rain therefore falls IN FRONT of the pagoda, which is the whole
+   point of the theme; both pseudo elements stay behind every in-flow element.
+
+   Sizing contract: `cover` + `center bottom`. The viewBox is 1600x1000 (1.6:1),
+   flatter than any real viewport, so cover crops from the TOP and never sideways
+   at usual window ratios — the courtyard floor stays put while the sky is the
+   part that gets cut. The two motifs live in the outer ~20 % of the drawing
+   (pagoda x<310, tree x>1130 in viewBox units); the middle is deliberately empty
+   (余白) because that is where the text column lands.
+
+   The veil is the contrast contract, not a mood: it covers the full app column
+   (920 px, so `50% - 460px` on each side) and feathers 110 px outward INTO the
+   side space — feathering inward would leave the column edge unprotected. On
+   windows narrower than ~1040 px the calc collapses to 0 and the veil covers the
+   whole viewport: the drawing becomes a ghost instead of vanishing, and the text
+   contract holds without a second rule. Numbers in the file header. */
+:root[data-theme='hanashigure'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  --veil: max(0px, 50% - 460px);
+  background-image:
+    linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(var(--veil) - 110px),
+      oklch(0.955 0.008 251 / 0.88) var(--veil),
+      oklch(0.955 0.008 251 / 0.88) calc(100% - var(--veil)),
+      transparent calc(100% - var(--veil) + 110px),
+      transparent 100%
+    ),
+    url('hanashigure-szene.svg');
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center bottom;
+  background-size: auto, cover;
+}
+
+/* Die Kopfzeile ist nasses Glas: die Nav-Insel wird eine Spur kühler und
+   durchlässiger als die Karten darunter und bekommt statt einer harten Kante
+   eine dünne Zinnoberlippe — der lackierte Balken über dem Tor. box-shadow
+   statt border: kein Reflow, und der bestehende Insel-Schatten bleibt erhalten
+   (Muster wie Natsu no Hi / Nagori / Momiji, die ihre Nav ebenfalls nur tönen).
+   Die Umrandung selbst bleibt --bg-hairline aus index.css — die Fuge im Stein. */
+:root[data-theme='hanashigure'] .nav {
+  background: oklch(0.975 0.008 250 / 0.84);
+  box-shadow:
+    0 1px 0 oklch(0.47 0.13 33 / 0.14),
+    0 8px 28px -18px oklch(0.3 0.03 252 / 0.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.05);
+  backdrop-filter: blur(14px) saturate(1.05);
+}
+
+/* ── Der Sprachstern ist ein Blütenblatt auf dem nassen Stein ────────────────
+   Rosa an der Lichtkante, Zinnober im Schatten. Bewusst ein LINEARER Verlauf
+   und kein radialer: die Flach-Korrektur (Andi 26.07: „die meisten Orb-Designs
+   sehen 3D aus, ich möchte es flach, ruhig") gilt — der Orb soll ein Blatt
+   sein, keine beleuchtete Kugel. Form, Größe und Bewegung bleiben unverändert
+   die des Basis-Orbs; das Thema ist Farbe. Der Kern trägt keine Statusfarbe:
+   idle/thinking/listening/speaking liest man an Größe und Deckkraft. */
+:root[data-theme='hanashigure'] .vc-orb__core {
+  background: linear-gradient(155deg, oklch(0.87 0.07 10), var(--accent) 56%, oklch(0.44 0.12 30));
+}
+
+/* Der Hof ist die Blüte, nicht das Zinnober: auf hellem Grund liest sich Licht
+   als zarte, gesättigte Wärme. Flache Fläche wie im Basis-Orb. */
+:root[data-theme='hanashigure'] .vc-orb__bloom {
+  background: var(--accent-glow);
+}
+
+/* Die Pegel-Ringe: rosé-graues Steinsilber statt Akzent, damit die Stimme im
+   hellen Bild nicht zum roten Ausrufezeichen wird. Keine neue Mechanik — nur
+   Farbe auf dem bestehenden Ring. */
+:root[data-theme='hanashigure'] .vc-orb__ring {
+  border-color: oklch(0.64 0.05 10 / 0.55);
+}
+
+/* ── 花時雨 — THE BLOSSOM RAIN ACTUALLY FALLS (2026-08-14) ────────────────────
+   The name promises falling blossom; until now only the water fell. Four petals
+   now come loose from the canopy, one at a time.
+
+   WHY IT IS NOT DRAWN INTO THE SVG: hanashigure-szene.svg is loaded through
+   `background-image` (body::after below). A CSS rule in this file cannot reach
+   inside that document, and animating the picture itself would re-rasterise a
+   full-viewport image every frame — this screen runs 24/7 on an iPad. So each
+   petal is its own ~20 px fixed box carrying an inline silhouette, moved by
+   transform + opacity only: four compositor layers the size of a postage stamp.
+   Exactly the idiom momiji.css already uses for its one falling leaf; the
+   drawing stays byte-identical.
+
+   THE FOUR NODES: body::before and body::after are taken (rain, scene), so the
+   petals hang on the two document pseudo-elements and on #root's — all four are
+   `position: fixed`, so no ancestor lays them out, and neither html nor #root
+   carries a transform/filter/contain that could become their containing block
+   (index.css:69 sets height/margin and nothing else).
+
+   WHERE THEY FALL — the readability contract: the canopy lives at viewBox
+   x 1240..1740 of 1600, i.e. the right edge of the picture. The petals fall in
+   the RIGHT margin, between `50% + 472px` and `50% + 623px` INCLUDING the full
+   sideways drift. The app column is 920 px and centred, so its edge is at
+   `50% + 460px`: no petal ever crosses a glyph, needs no veil and carries no
+   contrast risk. Below 1280 px there is no margin left and they are off (same
+   rule and same reason as momiji's leaf).
+
+   THE RHYTHM — 'a petal every few breaths', not a snowstorm: the four periods
+   (63 / 71 / 89 / 103 s) are mutually near-prime, each petal is airborne for
+   only 26..38 % of its own period, and the four negative delays scatter the
+   starts. That yields one release roughly every 20 s (≈6 breaths at --breath),
+   about one petal on screen on average, two only now and then, and the pattern
+   does not repeat within a working day.
+
+   THE TUMBLE — never a straight line: every petal keeps its own `translate3d()
+   → rotate() → scaleX()` triple through all its keyframes. The x-component
+   swings back and forth while y descends at a near-constant rate, the rotation
+   runs against that swing, and scaleX squeezing to ~0.35 is the petal turning
+   edge-on to the eye. Depth is read from size, colour and speed: the nearest
+   petal is 24 px of deep #dc889a and takes 24 s, the farthest 15 px of pale
+   #efd3d7 and takes 32 s. All four hexes are lifted from the drawing's own
+   palette, so nothing new enters the picture. */
+:root[data-theme='hanashigure']::before,
+:root[data-theme='hanashigure']::after,
+:root[data-theme='hanashigure'] #root::before,
+:root[data-theme='hanashigure'] #root::after {
+  content: '';
+  position: fixed;
+  top: -44px;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+/* 1 — nearest: big, deep, quick (63 s period, 24 s of fall). */
+:root[data-theme='hanashigure']::before {
+  left: calc(50% + 556px);
+  width: 24px;
+  height: 24px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23dc889a' d='M50 96 C34 88 16 72 14 48 C12 28 24 12 38 6 C42 10 46 16 50 20 C54 16 58 10 62 6 C76 12 88 28 86 48 C84 72 66 88 50 96 Z'/%3E%3C/svg%3E");
+  animation-name: hanashigure-petal-a;
+  animation-duration: 63s;
+  animation-delay: -11s;
+}
+
+/* 2 — middle distance, the canopy's own pink (71 s period, 29 s of fall). */
+:root[data-theme='hanashigure']::after {
+  left: calc(50% + 482px);
+  width: 19px;
+  height: 19px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23f5a3b4' d='M50 96 C34 88 16 72 14 48 C12 28 24 12 38 6 C42 10 46 16 50 20 C54 16 58 10 62 6 C76 12 88 28 86 48 C84 72 66 88 50 96 Z'/%3E%3C/svg%3E");
+  animation-name: hanashigure-petal-b;
+  animation-duration: 71s;
+  animation-delay: -47s;
+}
+
+/* 3 — farthest: small, pale, slow (89 s period, 32 s of fall). */
+:root[data-theme='hanashigure'] #root::before {
+  left: calc(50% + 600px);
+  width: 15px;
+  height: 15px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23efd3d7' d='M50 96 C34 88 16 72 14 48 C12 28 24 12 38 6 C42 10 46 16 50 20 C54 16 58 10 62 6 C76 12 88 28 86 48 C84 72 66 88 50 96 Z'/%3E%3C/svg%3E");
+  animation-name: hanashigure-petal-c;
+  animation-duration: 89s;
+  animation-delay: -24s;
+}
+
+/* 4 — the rare one: longest period, faintest, seen through the most rain. */
+:root[data-theme='hanashigure'] #root::after {
+  left: calc(50% + 524px);
+  width: 17px;
+  height: 17px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23f5a3b4' d='M50 96 C34 88 16 72 14 48 C12 28 24 12 38 6 C42 10 46 16 50 20 C54 16 58 10 62 6 C76 12 88 28 86 48 C84 72 66 88 50 96 Z'/%3E%3C/svg%3E");
+  animation-name: hanashigure-petal-d;
+  animation-duration: 103s;
+  animation-delay: -68s;
+}
+
+/* The four falls. Vertical progress is deliberately near-linear inside the
+   airborne window (≈26 vh per equal slice) — a petal has no weight to
+   accelerate. Everything after the last keyframe of the fall is the SAME
+   transform at opacity 0: the box parks below the fold and waits there, so the
+   silence costs nothing and nothing snaps back on screen. */
+@keyframes hanashigure-petal-a {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(-14deg) scaleX(1);
+    opacity: 0;
+  }
+  4% {
+    opacity: 0.72;
+  }
+  10% {
+    transform: translate3d(9px, 26vh, 0) rotate(28deg) scaleX(0.42);
+  }
+  19% {
+    transform: translate3d(-8px, 52vh, 0) rotate(-16deg) scaleX(1);
+  }
+  28% {
+    transform: translate3d(11px, 78vh, 0) rotate(36deg) scaleX(0.5);
+  }
+  34% {
+    opacity: 0.72;
+  }
+  38%,
+  100% {
+    transform: translate3d(2px, 112vh, 0) rotate(4deg) scaleX(0.9);
+    opacity: 0;
+  }
+}
+
+@keyframes hanashigure-petal-b {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(22deg) scaleX(0.8);
+    opacity: 0;
+  }
+  4% {
+    opacity: 0.68;
+  }
+  11% {
+    transform: translate3d(-9px, 27vh, 0) rotate(-24deg) scaleX(1);
+  }
+  21% {
+    transform: translate3d(8px, 54vh, 0) rotate(30deg) scaleX(0.35);
+  }
+  31% {
+    transform: translate3d(-7px, 81vh, 0) rotate(-12deg) scaleX(1);
+  }
+  37% {
+    opacity: 0.68;
+  }
+  41%,
+  100% {
+    transform: translate3d(4px, 113vh, 0) rotate(18deg) scaleX(0.75);
+    opacity: 0;
+  }
+}
+
+@keyframes hanashigure-petal-c {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(6deg) scaleX(1);
+    opacity: 0;
+  }
+  4% {
+    opacity: 0.8;
+  }
+  10% {
+    transform: translate3d(7px, 28vh, 0) rotate(34deg) scaleX(0.55);
+  }
+  19% {
+    transform: translate3d(-6px, 56vh, 0) rotate(-20deg) scaleX(0.95);
+  }
+  27% {
+    transform: translate3d(8px, 84vh, 0) rotate(26deg) scaleX(0.4);
+  }
+  32% {
+    opacity: 0.8;
+  }
+  36%,
+  100% {
+    transform: translate3d(0, 114vh, 0) rotate(10deg) scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes hanashigure-petal-d {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(-30deg) scaleX(0.9);
+    opacity: 0;
+  }
+  3% {
+    opacity: 0.5;
+  }
+  8% {
+    transform: translate3d(-8px, 29vh, 0) rotate(16deg) scaleX(0.45);
+  }
+  15% {
+    transform: translate3d(9px, 57vh, 0) rotate(-22deg) scaleX(1);
+  }
+  22% {
+    transform: translate3d(-5px, 85vh, 0) rotate(32deg) scaleX(0.6);
+  }
+  27% {
+    opacity: 0.5;
+  }
+  30%,
+  100% {
+    transform: translate3d(3px, 115vh, 0) rotate(-6deg) scaleX(0.85);
+    opacity: 0;
+  }
+}
+
+/* No side room left → no petals (they would drift over the app column). Same
+   breakpoint and same reason as momiji's falling leaf. */
+@media (max-width: 1280px) {
+  :root[data-theme='hanashigure']::before,
+  :root[data-theme='hanashigure']::after,
+  :root[data-theme='hanashigure'] #root::before,
+  :root[data-theme='hanashigure'] #root::after {
+    display: none;
+  }
+}
+
+/* Reduced motion: the four petals stop, they do not disappear. Each one is
+   parked at its own height, fully drawn — the blossom rain becomes what it was
+   before, a picture. Own gate because the global rule in index.css would only
+   shorten the duration and freeze them at 0 % (i.e. invisible, above the fold). */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='hanashigure']::before,
+  :root[data-theme='hanashigure']::after,
+  :root[data-theme='hanashigure'] #root::before,
+  :root[data-theme='hanashigure'] #root::after {
+    animation: none;
+  }
+  :root[data-theme='hanashigure']::before {
+    opacity: 0.72;
+    transform: translate3d(6px, 34vh, 0) rotate(22deg) scaleX(0.7);
+  }
+  :root[data-theme='hanashigure']::after {
+    opacity: 0.68;
+    transform: translate3d(-6px, 61vh, 0) rotate(-18deg) scaleX(1);
+  }
+  :root[data-theme='hanashigure'] #root::before {
+    opacity: 0.8;
+    transform: translate3d(4px, 16vh, 0) rotate(30deg) scaleX(0.55);
+  }
+  :root[data-theme='hanashigure'] #root::after {
+    opacity: 0.5;
+    transform: translate3d(-4px, 78vh, 0) rotate(8deg) scaleX(0.9);
+  }
+}

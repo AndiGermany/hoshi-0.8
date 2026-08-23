@@ -1,0 +1,665 @@
+{
+  "fenster": "1366x1024",
+  "berichte": [
+    {
+      "engine": "chrome",
+      "fenster": "1366x1024",
+      "saat": "w7",
+      "rueckbau": false,
+      "schritte": [
+        {
+          "titel": "0 · VORHER (keine Blase)",
+          "kacheln": {
+            "uhr": {
+              "x": 243,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            },
+            "wecker": {
+              "x": 243,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "laeuft": {
+              "x": 243,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "wetter": {
+              "x": 1123,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "einkauf": {
+              "x": 1123,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "news": {
+              "x": 1123,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "vacuum": {
+              "x": 2003,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "climate": {
+              "x": 2003,
+              "y": 488,
+              "w": 583,
+              "h": 319
+            }
+          },
+          "spalten": [
+            285,
+            285,
+            285
+          ],
+          "zeilen": [
+            153,
+            153,
+            153,
+            153
+          ],
+          "seiten": 3,
+          "kasten": {
+            "x": 243,
+            "y": 157,
+            "w": 880,
+            "h": 669
+          },
+          "orb": {
+            "x": 243,
+            "y": 826,
+            "w": 880,
+            "h": 140
+          },
+          "orbhint": {
+            "x": 615,
+            "y": 946,
+            "w": 137,
+            "h": 20
+          },
+          "blase": false,
+          "scrollHeight": 1025,
+          "fenster": {
+            "w": 1366,
+            "h": 1024
+          },
+          "einFenster": false,
+          "ueberstand": [
+            ".themegallery__groups bottom=2232",
+            ".themegallery__group bottom=1600",
+            ".settings__themegrouptitle bottom=1030",
+            ".settings__hint bottom=1054",
+            ".themegallery__grid bottom=1600"
+          ]
+        },
+        {
+          "titel": "1 · Turn starten (Chat-Reiter)",
+          "reiter": "ok"
+        },
+        {
+          "titel": "1b · gesendet, zurück auf Zuhause",
+          "getippt": "ok",
+          "gesendet": "ok",
+          "zurueck": "ok"
+        },
+        {
+          "titel": "2 · WÄHREND (Blase steht)",
+          "blaseGesehen": true,
+          "blaseDurchgehend": true,
+          "blase": true,
+          "schichtPosition": "absolute/none",
+          "blaseBox": {
+            "x": 466,
+            "y": 518,
+            "w": 435,
+            "h": 300
+          },
+          "kacheln": {
+            "uhr": {
+              "x": 243,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            },
+            "wecker": {
+              "x": 243,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "laeuft": {
+              "x": 243,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "wetter": {
+              "x": 1123,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "einkauf": {
+              "x": 1123,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "news": {
+              "x": 1123,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "vacuum": {
+              "x": 2003,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "climate": {
+              "x": 2003,
+              "y": 488,
+              "w": 583,
+              "h": 319
+            }
+          },
+          "spalten": [
+            285,
+            285,
+            285
+          ],
+          "zeilen": [
+            153,
+            153,
+            153,
+            153
+          ],
+          "seiten": 3,
+          "kasten": {
+            "x": 243,
+            "y": 157,
+            "w": 880,
+            "h": 669
+          },
+          "orb": {
+            "x": 243,
+            "y": 826,
+            "w": 880,
+            "h": 140
+          },
+          "versatzGegenVorher": {},
+          "kastenHoeheVorherNachher": "669 → 669",
+          "orbHoeheVorherNachher": "140 → 140",
+          "orbhintVorherNachher": "20 → 20",
+          "scrollHeight": 1024,
+          "einFenster": true,
+          "ueberstand": [
+            ".themegallery__groups bottom=2232",
+            ".themegallery__group bottom=1600",
+            ".settings__themegrouptitle bottom=1030",
+            ".settings__hint bottom=1054",
+            ".themegallery__grid bottom=1600"
+          ],
+          "unterschriftenImTurn": 1,
+          "lesbarkeit": {
+            "zeilen": [
+              {
+                "klasse": "voiceorb__row--user",
+                "text": "rgb(185, 195, 212)",
+                "grund": "rgb(20,26,38)",
+                "kontrast": 9.8,
+                "schrift": "14.5px"
+              },
+              {
+                "klasse": "voiceorb__row--assistant",
+                "text": "rgb(232, 238, 247)",
+                "grund": "rgb(20,26,38)",
+                "kontrast": 14.94,
+                "schrift": "14.5px"
+              }
+            ],
+            "backdropFilter": null,
+            "deckkraft": "rgb(20, 26, 38)"
+          }
+        },
+        {
+          "titel": "3 · NACHHER (Blase abgelaufen)",
+          "blaseWeg": true,
+          "kacheln": {
+            "uhr": {
+              "x": 243,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            },
+            "wecker": {
+              "x": 243,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "laeuft": {
+              "x": 243,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "wetter": {
+              "x": 1123,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "einkauf": {
+              "x": 1123,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "news": {
+              "x": 1123,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "vacuum": {
+              "x": 2003,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "climate": {
+              "x": 2003,
+              "y": 488,
+              "w": 583,
+              "h": 319
+            }
+          },
+          "versatzGegenVorher": {},
+          "scrollHeight": 1024,
+          "einFenster": true
+        },
+        {
+          "titel": "4 · URTEIL",
+          "unterschriftenGesamt": 1,
+          "verlauf": [
+            {
+              "ms": 33,
+              "blase": true,
+              "sig": "wie vorher"
+            }
+          ],
+          "vorherGleichWaehrend": true,
+          "vorherGleichNachher": true,
+          "schicht": "absolute/none",
+          "ok": true
+        }
+      ],
+      "ok": true,
+      "unterschriften": 1,
+      "aa": {
+        "zeilen": [
+          {
+            "klasse": "voiceorb__row--user",
+            "text": "rgb(185, 195, 212)",
+            "grund": "rgb(20,26,38)",
+            "kontrast": 9.8,
+            "schrift": "14.5px"
+          },
+          {
+            "klasse": "voiceorb__row--assistant",
+            "text": "rgb(232, 238, 247)",
+            "grund": "rgb(20,26,38)",
+            "kontrast": 14.94,
+            "schrift": "14.5px"
+          }
+        ],
+        "backdropFilter": null,
+        "deckkraft": "rgb(20, 26, 38)"
+      }
+    },
+    {
+      "engine": "firefox",
+      "fenster": "1366x1024",
+      "saat": "w7",
+      "rueckbau": false,
+      "schritte": [
+        {
+          "titel": "0 · VORHER (keine Blase)",
+          "kacheln": {
+            "uhr": {
+              "x": 243,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            },
+            "wecker": {
+              "x": 243,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "laeuft": {
+              "x": 243,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "wetter": {
+              "x": 1123,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "einkauf": {
+              "x": 1123,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "news": {
+              "x": 1123,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "vacuum": {
+              "x": 2003,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "climate": {
+              "x": 2003,
+              "y": 488,
+              "w": 583,
+              "h": 319
+            }
+          },
+          "spalten": [
+            285,
+            285,
+            285
+          ],
+          "zeilen": [
+            153,
+            153,
+            153,
+            153
+          ],
+          "seiten": 3,
+          "kasten": {
+            "x": 243,
+            "y": 157,
+            "w": 880,
+            "h": 669
+          },
+          "orb": {
+            "x": 243,
+            "y": 826,
+            "w": 880,
+            "h": 140
+          },
+          "orbhint": {
+            "x": 615,
+            "y": 946,
+            "w": 137,
+            "h": 20
+          },
+          "blase": false,
+          "scrollHeight": 1024,
+          "fenster": {
+            "w": 1366,
+            "h": 1024
+          },
+          "einFenster": true,
+          "ueberstand": [
+            ".themegallery__groups bottom=2232",
+            ".themegallery__group bottom=1601",
+            ".settings__themegrouptitle bottom=1030",
+            ".settings__hint bottom=1054",
+            ".themegallery__grid bottom=1601"
+          ]
+        },
+        {
+          "titel": "1 · Turn starten (Chat-Reiter)",
+          "reiter": "ok"
+        },
+        {
+          "titel": "1b · gesendet, zurück auf Zuhause",
+          "getippt": "ok",
+          "gesendet": "ok",
+          "zurueck": "ok"
+        },
+        {
+          "titel": "2 · WÄHREND (Blase steht)",
+          "blaseGesehen": true,
+          "blaseDurchgehend": true,
+          "blase": true,
+          "schichtPosition": "absolute/none",
+          "blaseBox": {
+            "x": 466,
+            "y": 518,
+            "w": 435,
+            "h": 300
+          },
+          "kacheln": {
+            "uhr": {
+              "x": 243,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            },
+            "wecker": {
+              "x": 243,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "laeuft": {
+              "x": 243,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "wetter": {
+              "x": 1123,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "einkauf": {
+              "x": 1123,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "news": {
+              "x": 1123,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "vacuum": {
+              "x": 2003,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "climate": {
+              "x": 2003,
+              "y": 488,
+              "w": 583,
+              "h": 319
+            }
+          },
+          "spalten": [
+            285,
+            285,
+            285
+          ],
+          "zeilen": [
+            153,
+            153,
+            153,
+            153
+          ],
+          "seiten": 3,
+          "kasten": {
+            "x": 243,
+            "y": 157,
+            "w": 880,
+            "h": 669
+          },
+          "orb": {
+            "x": 243,
+            "y": 826,
+            "w": 880,
+            "h": 140
+          },
+          "versatzGegenVorher": {},
+          "kastenHoeheVorherNachher": "669 → 669",
+          "orbHoeheVorherNachher": "140 → 140",
+          "orbhintVorherNachher": "20 → 20",
+          "scrollHeight": 1024,
+          "einFenster": true,
+          "ueberstand": [
+            ".themegallery__groups bottom=2232",
+            ".themegallery__group bottom=1601",
+            ".settings__themegrouptitle bottom=1030",
+            ".settings__hint bottom=1054",
+            ".themegallery__grid bottom=1601"
+          ],
+          "unterschriftenImTurn": 1,
+          "lesbarkeit": {
+            "zeilen": [
+              {
+                "klasse": "voiceorb__row--user",
+                "text": "rgb(185, 195, 212)",
+                "grund": "rgb(20,26,38)",
+                "kontrast": 9.8,
+                "schrift": "14.5px"
+              },
+              {
+                "klasse": "voiceorb__row--assistant",
+                "text": "rgb(232, 238, 247)",
+                "grund": "rgb(20,26,38)",
+                "kontrast": 14.94,
+                "schrift": "14.5px"
+              }
+            ],
+            "backdropFilter": null,
+            "deckkraft": "rgb(20, 26, 38)"
+          }
+        },
+        {
+          "titel": "3 · NACHHER (Blase abgelaufen)",
+          "blaseWeg": true,
+          "kacheln": {
+            "uhr": {
+              "x": 243,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            },
+            "wecker": {
+              "x": 243,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "laeuft": {
+              "x": 243,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "wetter": {
+              "x": 1123,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "einkauf": {
+              "x": 1123,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "news": {
+              "x": 1123,
+              "y": 653,
+              "w": 583,
+              "h": 153
+            },
+            "vacuum": {
+              "x": 2003,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "climate": {
+              "x": 2003,
+              "y": 488,
+              "w": 583,
+              "h": 319
+            }
+          },
+          "versatzGegenVorher": {},
+          "scrollHeight": 1024,
+          "einFenster": true
+        },
+        {
+          "titel": "4 · URTEIL",
+          "unterschriftenGesamt": 1,
+          "verlauf": [
+            {
+              "ms": 13,
+              "blase": true,
+              "sig": "wie vorher"
+            }
+          ],
+          "vorherGleichWaehrend": true,
+          "vorherGleichNachher": true,
+          "schicht": "absolute/none",
+          "ok": true
+        }
+      ],
+      "ok": true,
+      "unterschriften": 1,
+      "aa": {
+        "zeilen": [
+          {
+            "klasse": "voiceorb__row--user",
+            "text": "rgb(185, 195, 212)",
+            "grund": "rgb(20,26,38)",
+            "kontrast": 9.8,
+            "schrift": "14.5px"
+          },
+          {
+            "klasse": "voiceorb__row--assistant",
+            "text": "rgb(232, 238, 247)",
+            "grund": "rgb(20,26,38)",
+            "kontrast": 14.94,
+            "schrift": "14.5px"
+          }
+        ],
+        "backdropFilter": null,
+        "deckkraft": "rgb(20, 26, 38)"
+      }
+    }
+  ]
+}

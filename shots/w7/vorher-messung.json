@@ -1,0 +1,363 @@
+{
+ "1366x1024/normal": {
+  "viewport": {
+   "w": 1366,
+   "h": 1024
+  },
+  "docScrollH": 1027,
+  "editing": "false",
+  "rail": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 621
+  },
+  "tilesBox": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 641
+  },
+  "pageCount": 4,
+  "inFlowChildrenOfStage": [
+   "idle__tiles"
+  ],
+  "editbar": null,
+  "tray": null,
+  "sizer": null,
+  "sizerCell": null,
+  "sizerButtons": [],
+  "grips": 0,
+  "visibleStepLetter": null,
+  "storedLayout": null,
+  "tiles": [
+   {
+    "id": "uhr",
+    "page": 0,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 243,
+     "y": 157,
+     "w": 583,
+     "h": 410
+    }
+   },
+   {
+    "id": "wecker",
+    "page": 0,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 243,
+     "y": 579,
+     "w": 583,
+     "h": 199
+    }
+   },
+   {
+    "id": "wetter",
+    "page": 1,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 1123,
+     "y": 157,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "laeuft",
+    "page": 1,
+    "cell": "1 / span 2 / 3 / span 2",
+    "box": {
+     "x": 1123,
+     "y": 474,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "einkauf",
+    "page": 2,
+    "cell": "1 / span 2 / 1 / span 1",
+    "box": {
+     "x": 2003,
+     "y": 157,
+     "w": 583,
+     "h": 199
+    }
+   },
+   {
+    "id": "vacuum",
+    "page": 2,
+    "cell": "1 / span 2 / 2 / span 2",
+    "box": {
+     "x": 2003,
+     "y": 368,
+     "w": 583,
+     "h": 410
+    }
+   },
+   {
+    "id": "climate",
+    "page": 3,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 2883,
+     "y": 157,
+     "w": 583,
+     "h": 410
+    }
+   }
+  ]
+ },
+ "1366x1024/edit": {
+  "longPressOn": "uhr",
+  "viewport": {
+   "w": 1366,
+   "h": 1024
+  },
+  "docScrollH": 1024,
+  "editing": "true",
+  "rail": {
+   "x": 243,
+   "y": 229,
+   "w": 880,
+   "h": 483
+  },
+  "tilesBox": {
+   "x": 243,
+   "y": 229,
+   "w": 880,
+   "h": 503
+  },
+  "pageCount": 5,
+  "inFlowChildrenOfStage": [
+   "idle__editbar",
+   "idle__tiles",
+   "idle__tray"
+  ],
+  "editbar": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 62
+  },
+  "tray": {
+   "x": 243,
+   "y": 742,
+   "w": 880,
+   "h": 56
+  },
+  "sizer": {
+   "x": 481,
+   "y": 455,
+   "w": 106,
+   "h": 85
+  },
+  "sizerCell": "1 / span 2 / 1 / span 2",
+  "sizerButtons": [
+   {
+    "dir": "down",
+    "label": "Kleiner",
+    "disabled": false,
+    "w": 44,
+    "h": 44,
+    "glyphPx": 24
+   },
+   {
+    "dir": "up",
+    "label": "Größer",
+    "disabled": true,
+    "w": 44,
+    "h": 44,
+    "glyphPx": 24
+   }
+  ],
+  "grips": 8,
+  "visibleStepLetter": {
+   "text": "LGroß",
+   "w": 24,
+   "h": 23
+  },
+  "storedLayout": null,
+  "tiles": [
+   {
+    "id": "uhr",
+    "page": 0,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 242,
+     "y": 228,
+     "w": 584,
+     "h": 321
+    }
+   },
+   {
+    "id": "wecker",
+    "page": 0,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 243,
+     "y": 557,
+     "w": 584,
+     "h": 157
+    }
+   },
+   {
+    "id": "wetter",
+    "page": 1,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 1121,
+     "y": 227,
+     "w": 586,
+     "h": 488
+    }
+   },
+   {
+    "id": "laeuft",
+    "page": 2,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 2002,
+     "y": 227,
+     "w": 585,
+     "h": 323
+    }
+   },
+   {
+    "id": "einkauf",
+    "page": 2,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 2002,
+     "y": 557,
+     "w": 584,
+     "h": 157
+    }
+   },
+   {
+    "id": "vacuum",
+    "page": 3,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 2881,
+     "y": 227,
+     "w": 586,
+     "h": 487
+    }
+   },
+   {
+    "id": "climate",
+    "page": 4,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 3762,
+     "y": 228,
+     "w": 584,
+     "h": 321
+    }
+   }
+  ]
+ },
+ "1366x1024/luecke": {
+  "viewport": {
+   "w": 1366,
+   "h": 1024
+  },
+  "docScrollH": 1024,
+  "editing": "false",
+  "rail": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 621
+  },
+  "tilesBox": {
+   "x": 243,
+   "y": 157,
+   "w": 880,
+   "h": 641
+  },
+  "pageCount": 4,
+  "inFlowChildrenOfStage": [
+   "idle__tiles"
+  ],
+  "editbar": null,
+  "tray": null,
+  "sizer": null,
+  "sizerCell": null,
+  "sizerButtons": [],
+  "grips": 0,
+  "visibleStepLetter": null,
+  "storedLayout": null,
+  "tiles": [
+   {
+    "id": "uhr",
+    "page": 0,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 243,
+     "y": 157,
+     "w": 583,
+     "h": 410
+    }
+   },
+   {
+    "id": "wecker",
+    "page": 0,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 243,
+     "y": 579,
+     "w": 583,
+     "h": 199
+    }
+   },
+   {
+    "id": "wetter",
+    "page": 1,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 1123,
+     "y": 157,
+     "w": 583,
+     "h": 410
+    }
+   },
+   {
+    "id": "einkauf",
+    "page": 1,
+    "cell": "1 / span 2 / 3 / span 1",
+    "box": {
+     "x": 1123,
+     "y": 579,
+     "w": 583,
+     "h": 199
+    }
+   },
+   {
+    "id": "vacuum",
+    "page": 2,
+    "cell": "1 / span 2 / 1 / span 2",
+    "box": {
+     "x": 2003,
+     "y": 157,
+     "w": 583,
+     "h": 305
+    }
+   },
+   {
+    "id": "climate",
+    "page": 2,
+    "cell": "1 / span 2 / 3 / span 2",
+    "box": {
+     "x": 2003,
+     "y": 474,
+     "w": 583,
+     "h": 305
+    }
+   }
+  ]
+ }
+}

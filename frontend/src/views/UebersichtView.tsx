@@ -1,6 +1,8 @@
 import { API_BASE, hasToken } from '../api/config';
 import { useHealth, type HealthState } from '../hooks/useHealth';
 import { IdleFaceLive, diaryTodayStats, todayTileValue } from '../components/IdleFace';
+import { HomeStatusBar } from '../components/HomeStatusBar';
+import { useOpsStatus } from '../hooks/useOpsStatus';
 import { VoiceOrb } from '../components/VoiceOrb';
 import type { VoiceChatSession } from '../hooks/useVoiceChatSession';
 import type { DiaryTurn } from '../hooks/useDiary';
@@ -147,10 +149,19 @@ export function UebersichtViewLive({
   session?: VoiceChatSession;
 } = {}) {
   const { state } = useHealth();
+  // Der EINE Ops-Poller des Zuhause-Reiters (19.08.): er speiste bisher aus
+  // `IdleFaceLive` heraus den Stimme-Chip. Der Chip ist zur Fußleiste geworden,
+  // also wandert der Hook eine Ebene hoch statt dass zwei Stellen denselben
+  // Endpoint pollen — genau die Verdrahtung, die `health` schon immer hatte.
+  const ops = useOpsStatus();
   return (
     <>
-      <IdleFaceLive health={state} />
+      <IdleFaceLive />
       {session && <VoiceOrb session={session} />}
+      {/* Der Boden der Seite: die Fußleiste steht als DRITTES Geschwister und
+          damit unter dem Orb — der bekommt damit endlich etwas, worauf er
+          steht (Andi 19.08.: „Der Orb richtet sich nicht nach unten aus"). */}
+      <HomeStatusBar health={state} voice={ops?.voice ?? null} />
     </>
   );
 }

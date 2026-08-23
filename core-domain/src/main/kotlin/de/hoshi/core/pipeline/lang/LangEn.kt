@@ -78,6 +78,8 @@ object LangEn {
             "Hm, my reference shelf isn't reachable at the moment. I don't want to guess at you — ask me again in a bit and I'll look it up properly.",
             "I'm stuck for a second here — my knowledge store isn't answering. Give me a moment, then I can tell you honestly.",
         ),
+        executionClaimAskBack =
+            "I didn't catch that clearly as a switch command — could you say it again?",
         factCoverageOfflineDisclaimer = "Honestly, I don't have a source for this — but from what I know: ",
         localLookupFoundPrefix = "Had a quick look at what I've got here — ",
         // ── Andi-Auftrag 2026-07-26 „the online-lookup lines are bad" — the EN
@@ -115,6 +117,9 @@ object LangEn {
         dailyNoteUpdated = "Updated: a $SCORE_PLACEHOLDER for today. Thank you!",
         workshopNoteRecorded = "Noted for the workshop. Thank you!",
         probeReceipt = "I hear you loud and clear — ears, wire and voice are all up.",
+        currentAffairsBriefingPrefix = "As of $TIME_PLACEHOLDER: ",
+        currentAffairsBriefingStalePrefix = "As of $TIME_PLACEHOLDER, older than usual: ",
+        currentAffairsNone = "I have no reports for you at the moment.",
         intentPatterns = IntentPatternNotes(
             lookupVerbs = listOf("look", "search", "check", "research"),
             lookupScope = listOf("online", "internet", "net", "web"),
@@ -321,6 +326,16 @@ object LangEn {
         temperatureInArea = "It's {value} degrees in {room} right now.",
         temperatureHouseAverage = "It's {value} degrees on average in the house right now.",
         temperatureUnavailable = "I can't get to the temperature right now — try again in a moment.",
+        freshnessJustNow = "just now",
+        freshnessMinutesAgo = "$MINUTES_PLACEHOLDER minutes ago",
+        freshnessOverAnHourAgo = "over an hour ago",
+        temperatureInAreaStale = "It was {value} degrees in {room} $FRESHNESS_PLACEHOLDER.",
+        temperatureHouseAverageStale = "It was {value} degrees on average in the house $FRESHNESS_PLACEHOLDER.",
+        // Additiv am Zeilenende (LL-additive-Regel), s. HaExecutorPack.roomFallbackName:
+        // der ehrliche Ersatz, wenn KEIN echter HA-Anzeigename auffindbar ist —
+        // nie ein kapitalisierter Slug („Kuche"), lieber vage als verstümmelt.
+        // Fits every „in {room}" sentence — „The light in the requested room is off."
+        roomFallbackName = "the requested room",
         // Englisch spricht den Dezimalpunkt: „twenty-one point five degrees".
         decimalSeparator = ".",
     )

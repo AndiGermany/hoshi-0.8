@@ -77,6 +77,16 @@ internal object TurnDiaryTap {
     const val ABORT_SESSION_GUARD = "SESSION_GUARD"
 
     /**
+     * [TurnTrace.source] einer Tat, die NICHT aus einem Turn kam, sondern aus
+     * einem Knopf in der Zuhause-Ansicht (`POST /api/v1/home/…`). Eigener
+     * Eingangs-Rand neben [SOURCE_CHAT]/[SOURCE_VOICE]/[SOURCE_WS]: ohne ihn
+     * wäre eine geklickte Tat im Diary von einer gesprochenen nicht zu
+     * unterscheiden — und die Frage „hat Hoshi das getan oder Andi?" ist genau
+     * die, die eine Kreuzbeweis-Naht beantworten muss.
+     */
+    const val SOURCE_HOME = "home"
+
+    /**
      * Hüllt [stream] in den Diary-Tap. [fallbackCategory] greift NUR, wenn der
      * Strom kein [ChatEvent.Start] trägt (z.B. der `no_input`-Pfad am Voice-Rand);
      * Default `""` = exakt das bisherige Chat-Verhalten. [errorOverride] (Default
@@ -142,6 +152,21 @@ internal object TurnDiaryTap {
         // H3 (Cap-Erschöpfung EHRLICH von Netzfehler unterscheidbar): einziger
         // Schreiber ist das terminale Done (Muster escalationCostCents).
         val escalationCapExhausted = AtomicBoolean(false)
+        // Räume-Nutzungs-Naht (additiv — Muster escalationCapExhausted): die bereits
+        // vom TurnOrchestrator gekannte area_id eines Tool-Turns reist im Start ein
+        // (s. ChatEvent.Start.targetAreaId-KDoc, kartiert in Commit f049965).
+        val targetAreaId = AtomicReference<String?>(null)
+        // Raumname-Naht (additiv, Muster targetAreaId): der lesbare Name zum Slug.
+        val targetAreaName = AtomicReference<String?>(null)
+        // Execution-claim latch (additive — pattern escalationCapExhausted): only the
+        // terminal Done writes it, and only on a real `true` (the wire field is
+        // nullable, see ChatEvent.Done.claimGateFired).
+        val claimGateFired = AtomicBoolean(false)
+        // Room-clarify cycle (additive — pattern claimGateFired): terminal Done only.
+        val pendingClarify = AtomicReference<String?>(null)
+        // Tool executor ran (additive — pattern claimGateFired): terminal Done only, and
+        // only a real `true` counts (the wire field is nullable, absent = no executor).
+        val toolCallRan = AtomicBoolean(false)
         return stream
             .doOnSubscribe { t0.set(System.nanoTime()) }
             .doOnNext { ev ->
@@ -165,6 +190,10 @@ internal object TurnDiaryTap {
                         // Start hier schon auf null zurückgesetzt wird (die beiden Fälle
                         // sind ohnehin exklusiv, aber diese Reihenfolge ist die robustere).
                         if (ev.escalationSource.isNotEmpty()) escalationSource.set(ev.escalationSource)
+                        // Räume-Nutzungs-Naht (additiv): null bleibt null (kein Tool-Turn /
+                        // keine aufgelöste Area) — nie eine erfundene Area.
+                        targetAreaId.set(ev.targetAreaId)
+                        targetAreaName.set(ev.targetAreaName)
                     }
                     is ChatEvent.TextDelta -> {
                         if (ttftMs.get() < 0) {
@@ -189,6 +218,12 @@ internal object TurnDiaryTap {
                         // ChatEvent.Done.escalationCapExhausted-KDoc) — nur bei einem
                         // echten true überschreiben, der ehrliche Default bleibt false.
                         if (ev.escalationCapExhausted == true) escalationCapExhausted.set(true)
+                        // Execution-claim latch: nullable wire field, only true is a fact.
+                        if (ev.claimGateFired == true) claimGateFired.set(true)
+                        // Room-clarify cycle: nullable wire field, absent = no cycle.
+                        ev.pendingClarify?.let { pendingClarify.set(it) }
+                        // Tool executor: nullable wire field, only true is a fact.
+                        if (ev.toolCallRan == true) toolCallRan.set(true)
                     }
                     else -> {}
                 }
@@ -256,6 +291,20 @@ internal object TurnDiaryTap {
                             escalationQueryHash = escalationQueryHash.get(),
                             escalationSource = escalationSource.get(),
                             escalationCapExhausted = escalationCapExhausted.get(),
+                            // Räume-Nutzungs-Naht (additiv): aus dem Start-Event gelesen.
+                            targetAreaId = targetAreaId.get(),
+                            targetAreaName = targetAreaName.get(),
+                            // Execution-claim latch (additive): read from the Done event.
+                            claimGateFired = claimGateFired.get(),
+                            // Brain timeout (additive): only a real `true` is a fact,
+                            // the wire field is absent otherwise — see
+                            // ChatEvent.StageTimings.brainTimeout.
+                            brainTimeout = stageTimings.get()?.brainTimeout == true,
+                            // Room-clarify cycle (additive): read from the Done event.
+                            pendingClarify = pendingClarify.get(),
+                            // Tool executor ran (additive): read from the Done event —
+                            // the evidence half of FALSE_EXECUTION_CLAIM.
+                            toolCallRan = toolCallRan.get(),
                         ),
                     )
                 }
@@ -297,6 +346,48 @@ internal object TurnDiaryTap {
                     speak = speak,
                     error = reason,
                     source = source,
+                ),
+            )
+        }
+    }
+
+    /**
+     * **Diary-Zeile für eine geklickte Tat** (Zuhause-Ansicht, s. [SOURCE_HOME])
+     * — derselbe direkte, defensive Weg wie [recordAborted]: hier existiert kein
+     * [ChatEvent]-Strom, den [traced] hüllen könnte, weil eine REST-Tat kein
+     * Turn ist.
+     *
+     * **Die Kreuzbeweis-Naht.** [toolCallRan] trägt hier EXAKT dieselbe
+     * Bedeutung wie im Turn-Pfad ([TurnTrace.toolCallRan]): „der Executor lief
+     * WIRKLICH" — `true` genau dann, wenn der HA-Service-Call abgesetzt wurde,
+     * unabhängig von seinem Ausgang (ein gescheiterter Call zählt weiter als
+     * gelaufen; das ist die dokumentierte Feld-Grenze). Ein Abbruch VOR dem Call
+     * (kein Sauger, HA unerreichbar, unbekannte Aktion) schreibt seine Zeile mit
+     * `toolCallRan=false` und dem Grund im `error`-Feld. Damit ist im Diary
+     * unterscheidbar, was versucht, was getan und was abgelehnt wurde — ohne
+     * dass die Antwort an den Browser irgendetwas behaupten müsste.
+     *
+     * Verhalten wie der Tap: [TurnTracePort.NOOP] ⇒ früher Return (null
+     * Overhead), `runCatching` ⇒ ein Diary-Fehler berührt NIE die Tat.
+     * Persona/Sprache bleiben leer: eine geklickte Tat hat keine.
+     */
+    fun recordHomeAction(
+        turnTrace: TurnTracePort,
+        category: String,
+        toolCallRan: Boolean,
+        error: String?,
+        totalMs: Long,
+    ) {
+        if (turnTrace === TurnTracePort.NOOP) return
+        runCatching {
+            turnTrace.record(
+                TurnTrace(
+                    ts = Instant.now(),
+                    category = category,
+                    totalMs = totalMs,
+                    error = error,
+                    source = SOURCE_HOME,
+                    toolCallRan = toolCallRan,
                 ),
             )
         }

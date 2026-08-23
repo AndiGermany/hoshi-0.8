@@ -41,7 +41,7 @@ import reactor.core.publisher.Flux
  */
 @RestController
 class ChatStreamController(
-    private val orchestrator: TurnOrchestrator,
+    orchestrator: TurnOrchestrator,
     private val ttsStage: TtsStage,
     /**
      * Löst die [ChatRequest.languagePolicy] (AUTO/DE/EN) zu genau EINER konkreten
@@ -145,6 +145,8 @@ class ChatStreamController(
      */
     private val brainAutoSwitch: BrainAutoSwitchPort = BrainAutoSwitchPort.NOOP,
 ) {
+    private val inboundTurns = InboundTurnGateway(orchestrator)
+
     /** Baut [SpeakerContext.displayName] best-effort aus dem Enroll-Store nach — s. Ctor-KDoc. */
     private val speakerDisplayNameResolver = SpeakerDisplayNameResolver(
         enabled = speakerDisplayNameResolutionEnabled,
@@ -169,9 +171,16 @@ class ChatStreamController(
             // Text-Chat kennt nie einen displayName (nur die behauptete speakerId) — best-effort
             // aus dem enrollten Profil auflösen (Flag OFF/kein Treffer/schon gesetzt ⇒ unverändert).
             val resolvedSpeaker = speakerDisplayNameResolver.resolve(request.speakerContext)
-            val resolved = request.copy(language = effective, persona = effectivePersona, speakerContext = resolvedSpeaker)
+            val inbound = inboundTurns.chat(
+                request.copy(
+                    language = effective,
+                    persona = effectivePersona,
+                    speakerContext = resolvedSpeaker,
+                ),
+            )
+            val resolved = inbound.request
             // Brain-Turn durchs globale Admission-Gate (OFF ⇒ Passthrough ⇒ byte-neutral).
-            val gated = admissionGate.gate(effective) { orchestrator.handle(resolved) }
+            val gated = admissionGate.gate(effective) { inbound.run() }
             // D7: Slop-Filter VOR Memory-Store + TTS (Slop wird weder gespeichert noch gesprochen).
             val deslopped = slopKill.transform(gated)
             val turn = rememberAfter(resolved, deslopped)

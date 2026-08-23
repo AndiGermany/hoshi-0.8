@@ -33,7 +33,9 @@ import { CHIME_REPEAT_MS, playAlarmChime } from '../audio/chime';
  *    Geste nachgeholt (audio/chime.ts), die Schleife merkt das am nächsten Tick.
  *  - `missed=true` (Server: >5 min Downtime-Nachzügler ODER >30 min
  *    unbestätigt) rendert das FE als ehrliche Verpasst-Meldung („… war um
- *    HH:MM fällig — hab dich nicht erreicht", components/FiredToast).
+ *    HH:MM fällig — hab dich nicht erreicht", components/FiredToast) — und
+ *    bimmelt dabei NICHT ({@link shouldChimeNow}, Andi-Befund 23.08.2026): ein
+ *    abgeschriebenes Klingeln darf nicht Stunden später nachträglich losgehen.
  *  - BEWUSST KEIN visibility-Gate (Live-Befund 2026-07-02): Chromes Window-
  *    Occlusion meldet auch den aktiven Tab als `hidden` — gepollt wird immer.
  *  - Ehrlichkeits-/Lärm-Achse wie useOpsStatus: Fehler still (kein roter
@@ -164,7 +166,19 @@ export function reconcileFired(current: FiredItem[], incoming: FiredItem[]): Fir
 /**
  * Soll DIESES Gerät für dieses gefeuerte Item JETZT bimmeln?
  *
- * Ursprungs-gebundene Regel (der Kern des Ausbaus):
+ * **Verpasst klingelt NIE nach** (Andi-Live-Befund 23.08.2026, „der gelöschte
+ * Wecker ging beim Ausklappen trotzdem"): `missed=true` heißt, der Server hat
+ * dieses Klingeln bereits als „hab dich nicht erreicht" abgeschrieben — entweder
+ * erst nach Downtime gefeuert (>5 min über-fällig) oder seit >30 min unbestätigt.
+ * Der Banner meldet das ehrlich (components/FiredToast, `missedLine`), aber der
+ * TON gehört zum Wecken, nicht zum Bericht: ein Wecker, der morgens um 07:00 ins
+ * dunkle Display lief, darf nicht Stunden später losbimmeln, sobald jemand das
+ * Display wieder aufklappt. Genau das versprechen auch die Backend-KDocs
+ * (`ScheduledItemFireService`/`FiredItemsController`: „…sagt dann ehrlich ‚hab
+ * dich nicht erreicht' statt zu klingeln") — hier wird das Versprechen eingelöst.
+ * Weg ist es damit NICHT: es bleibt sichtbar und quittierbar.
+ *
+ * Ursprungs-gebundene Regel für alles Frische (der Kern des Ausbaus):
  *  - `origin` fehlt (alt-Client) ODER `origin === deviceId` (dies IST das Gerät,
  *    wo der Wecker gestellt wurde) ⇒ **sofort** bimmeln.
  *  - Fremdes Gerät ⇒ erst nach `escalationSeconds` — und zwar gezählt ab dem
@@ -180,6 +194,7 @@ export function shouldChimeNow(
   nowMs: number,
   escalationSeconds: number,
 ): boolean {
+  if (item.missed) return false;
   if (!item.origin || item.origin === deviceId) return true;
   return nowMs - firstSeenMs >= escalationSeconds * 1000;
 }
@@ -288,9 +303,11 @@ export function useFiredItems(intervalMs = 5000, opts: UseFiredItemsOptions = {}
         return;
       }
       // Noch kein Item berechtigt → auf die früheste Fremd-Deadline warten, dann neu bewerten.
+      // Verpasste Items zählen hier nicht mit: sie werden NIE bimmel-berechtigt (s.
+      // shouldChimeNow), ein Timer auf sie wäre ein Wecker-Versprechen ins Leere.
       let nearest = Infinity;
       for (const it of items) {
-        if (it.origin && it.origin !== deviceId) {
+        if (!it.missed && it.origin && it.origin !== deviceId) {
           nearest = Math.min(nearest, (seen.get(it.id) ?? now) + escalationSeconds * 1000);
         }
       }

@@ -9,9 +9,14 @@
 > auf einem frischen Klon `say`, das macOS-Bordmittel: kein Schlüssel, kein
 > Modell-Download, nur einmalig `sidecars/say/bootstrap.sh`.
 >
-> Was extern bleibt und bleiben muss: die **Modelle** (Gemma, Whisper, CAM++) und die
-> **Wikipedia-Datenbank** — Lizenz- und Größengründe, siehe Schritt 3. Dieses Dokument sagt
-> genau, wo die Grenzen verlaufen, statt sie zu verstecken.
+> „Kompletter Voice-Turn" heißt hier: **im Browser auf diesem Mac**, und genau das ist aus
+> diesem Repo beweisbar (`bin/hoshi voice` / `voicein`). Der **Hardware-Satellit** mit
+> Wake-Word im Raum ist ein eigener, optionaler Rand mit eigener Firmware — Abschnitt 9.
+>
+> Was extern bleibt und bleiben muss: die **Modelle** (Gemma, Whisper, CAM++), die
+> **Wikipedia-Datenbank** (Lizenz- und Größengründe, siehe Schritt 3) und dein **Zuhause**
+> selbst — Räume und Geräte gehören Home Assistant, nicht Hoshi (Abschnitt 8). Dieses
+> Dokument sagt genau, wo die Grenzen verlaufen, statt sie zu verstecken.
 
 **Der kürzeste Weg** — was ein frischer Klon wirklich erlebt, wenn alles gut geht:
 
@@ -33,6 +38,12 @@ zeigt den Plan, ohne irgendetwas zu tun.
 
 Alles darunter erklärt dieselben Schritte langsam, inklusive der Stellen, an denen sie
 schiefgehen — und ist zugleich der Handweg, falls du `setup` nicht magst.
+
+**Welche Version habe ich da?** Die eine maschinenlesbare Wahrheit ist die Zeile
+`version=` in [`gradle.properties`](gradle.properties); `bin/hoshi help` zeigt genau
+diese Nummer im Kopf seines Banners, und [`CHANGELOG.md`](CHANGELOG.md) erzählt, was in
+den Releases wirklich passiert ist. Einen `--version`-Schalter gibt es bewusst nicht —
+dieses Dokument behauptet lieber gar keine Zahl als eine handgepflegte, die altert.
 
 ## 0. Für wen das hier ist
 
@@ -86,10 +97,10 @@ Was du brauchst (Details + Lizenzen in `models.json`):
 
 | Modell | Rolle | Woher | Pflicht? |
 |---|---|---|---|
-| `mlx-community/gemma-4-e4b-it-4bit` | Brain (Default seit 0.8.3) | HuggingFace (Gemma-Lizenz — Terms auf HF akzeptieren) | ja |
+| `mlx-community/gemma-4-e4b-it-4bit` | Brain (Default — `models.json` `required=true`) | HuggingFace (Gemma-Lizenz — Terms auf HF akzeptieren) | ja |
 | `mlx-community/gemma-4-e2b-it-4bit` | Brain (Rückweg, retired) | HuggingFace (Gemma-Lizenz) | nein |
 | `mlx-community/whisper-large-v3-turbo` | STT-Modellgewicht | HuggingFace (lazy beim ersten Request, siehe `sidecars/stt`) | ja, für Sprache-als-Eingabe |
-| `Wespeaker/wespeaker-voxceleb-campplus` | Speaker-ID-Gewicht | Direct-Download (Apache-2.0, `sidecars/speaker/bootstrap.sh`) | nur fürs Anlernen — die Erkennung ist aus, siehe §8 |
+| `Wespeaker/wespeaker-voxceleb-campplus` | Speaker-ID-Gewicht | Direct-Download (Apache-2.0, `sidecars/speaker/bootstrap.sh`) | nur fürs Anlernen — die Erkennung ist aus, siehe §11 |
 | `embeddinggemma:300m` | Episodic-Memory-Embedding | Ollama (`ollama pull embeddinggemma:300m`) | ja, für Memory |
 
 Modelle werden **nie** in diesem Repo mitgeliefert (Lizenzgründe + Größe) — Download läuft
@@ -123,7 +134,7 @@ jeweiligen Sidecar-Ordner):
   `GET /health`. Braucht zusätzlich installiertes `ffmpeg` (`brew install ffmpeg`).
 - **Speaker-ID** (`sidecars/speaker`): `POST /embed`, `POST /verify`, `GET /health` —
   512-d CAM++-Embeddings, bewusst ohne torch/funasr (ONNX, ~100-130 MB RSS).
-  *Ehrlich: die Sprecher-**Erkennung** ist im Backend abgeschaltet (siehe Abschnitt 8) —
+  *Ehrlich: die Sprecher-**Erkennung** ist im Backend abgeschaltet (siehe Abschnitt 11) —
   der Sidecar wird gebraucht, seine Antwort aber nicht zur Identifikation benutzt.*
 - **Knowledge-Bridge** (`sidecars/knowledge`): `GET /health`, `GET /search`,
   `GET /article/{id}` sowie der versionierte Pack-Vertrag unter `/v1/health`,
@@ -167,9 +178,11 @@ Backend spricht mit ihnen über dieselben Ports und Verträge, die Kotlin-Adapte
 keinen Unterschied (Konfiguration bei Bedarf über `HOSHI_STT_BASE_URL` /
 `HOSHI_SPEAKER_BASE_URL`).
 
-Der einzige Pfad, der noch auf einen privaten, unveröffentlichten Vorgänger-Checkout
-(`HOSHI_05_ROOT`) zeigt, ist der **abgeschaltete Legacy-Voxtral-Pfad**. Auf einem frischen
-Klon wird ein fehlender Sidecar ehrlich übersprungen — Warnung statt Fake-Start.
+Ehrlich zum Rückweg: `pipeline/stack-lib.sh` kennt für Brain, STT und Knowledge noch einen
+Fallback auf einen privaten, unveröffentlichten Vorgänger-Checkout (`HOSHI_05_ROOT`) — er
+greift nur, wenn das Repo-venv fehlt, und auf einem frischen Klon existiert dieser Pfad
+schlicht nicht: dann wird der Sidecar ehrlich übersprungen (Warnung statt Fake-Start). Der
+**Legacy-Voxtral-Pfad** ist darüber hinaus bewusst ganz abgeschaltet.
 
 ## 6. Backend starten + verifizieren
 
@@ -179,6 +192,7 @@ bin/hoshi turn      # Text-Turn-Beweis: POST /api/v1/chat/stream → SSE-Antwort
 bin/hoshi voice     # Audio-Beweis: der Turn wird wirklich gesprochen (echtes WAV)
 bin/hoshi voicein   # Eingabe-Beweis: WAV → /api/v1/voice → STT → Turn
 bin/hoshi doctor    # ehrlicher, read-only Stack-Status (Brain/Sidecars/RAM — OK/DEGRADED/DOWN)
+bin/hoshi ha check  # nur wenn du Home Assistant anbinden willst: der HA-Rand, read-only (§8)
 ```
 
 Der Unterschied zwischen `run` und `voice` ist Absicht: **`bin/hoshi run` beweist nur
@@ -200,13 +214,102 @@ Cloud-Opt-ins) ist [`tools/systemd/hoshi-0.8-backend.service`](tools/systemd/hos
 für lokale Entwicklung reichen die Defaults. `HOSHI_API_TOKEN` musst du selbst generieren
 (z.B. `openssl rand -hex 32`) und **nie committen**.
 
-## 8. Bekannte Grenzen (Stand 0.8.2)
+## 8. Home Assistant verbinden (optional)
 
-- **Hoshi antwortet in fünf Sprachen, versteht aber noch nicht in fünf.** Übersetzt sind
-  die Antworten (Backend und Oberfläche); die *Erkenner* — was als Befehl durchgeht — sind
-  in großen Teilen weiterhin deutsch. Auf Spanisch gestellt bekommst du spanische
-  Antworten, musst Befehle aber weiter auf Deutsch oder Englisch sagen. Hoshi weist im
-  Sprach-Panel selbst darauf hin; alles außer Deutsch trägt dort ein „Beta".
+Bis hierher hat Hoshi geredet, zugehört und nachgeschlagen — aber nichts im Haus angefasst.
+Dafür braucht er **Home Assistant**. Das ist ein *externer* Rand: HA gehört dir, läuft in
+deinem Netz, und Hoshi bringt es weder mit noch installiert er es.
+
+**Zuerst das Wichtigste: die Decke ist zu.** `HOSHI_HA_ENABLED` ist **`false` per Default**.
+Solange dieses Flag aus ist, baut das Backend gar keinen HA-Adapter, sondern den ehrlichen
+Platzhalter — Hoshi sagt dann, dass er es nicht kann, statt so zu tun. **Adresse und Token
+allein schalten HA nicht ein**; erst der bewusste Flip auf `true` verdrahtet den echten Rand.
+Zweite Decke daneben: ohne `HOSHI_TOOLS_ENABLED=true` klassifiziert der Turn nie einen
+Haus-Befehl, es erreicht also ohnehin kein Aufruf den HA-Port.
+
+**Adresse.** `HOSHI_HA_BASE_URL`, Default `http://homeassistant.local:8123` (der
+mDNS-Standardhost von HA). Wenn deine HA anders heißt oder auf einer festen IP liegt, ist das
+die eine Zeile, die du setzt.
+
+**Token.** Ein *Long-Lived Access Token* aus deinem HA-Profil. Er gehört **nie ins Repo**.
+Die Präzedenz im Code ist genau diese — die erste Quelle, die etwas liefert, gewinnt:
+
+1. Umgebungsvariable **`HOSHI_HA_TOKEN`**
+2. sonst der Schlüssel `"ha"` aus **`~/.hoshi/secrets.json`** (chmod 600)
+
+Fehlt beides bei `HOSHI_HA_ENABLED=true`, bleibt es bewusst beim Platzhalter statt bei einem
+Adapter, der nur scheitern könnte. Beim systemd-Deploy kommt die Env-Zufuhr ausschließlich aus
+`/etc/hoshi-0.8/secrets.env` (root-only) — die kommentierte Referenz aller Zeilen ist
+[`tools/systemd/hoshi-0.8-backend.service`](tools/systemd/hoshi-0.8-backend.service).
+
+**Verifizieren, bevor du irgendetwas anschaltest:**
+
+```bash
+bin/hoshi ha check   # READ-ONLY: erreichbar? Token gültig? Areas lesbar? States frisch?
+```
+
+Der Befehl liest Adresse und Token aus denselben zwei Quellen wie das Backend und macht vier
+Proben gegen deine echte HA — er **schreibt nie** (keine Schaltbefehle, keine Registry-Writes)
+und **gibt den Token nie aus**. Jede Probe steht mit ✓/✗ und einem Satz da; Exit-Code 0 gibt es
+nur, wenn alle vier grün sind. Ein abgelehnter Token wird ausdrücklich von „nicht erreichbar"
+unterschieden — genau diese beiden Fälle verwechselt man sonst jedes Mal.
+
+**Räume.** Der Raumkatalog ist standardmäßig eine statische Liste
+(`HOSHI_AREAS_DYNAMIC_ENABLED=false`). Mit `true` liest Hoshi die **echten HA-Areas** read-only
+über den Template-Endpoint (gecacht, never-throw: fällt HA aus, gilt der letzte gute Stand,
+nie ein leerer Katalog) — dann kennt „schalte das Schlafzimmer ein" alle deine Räume statt nur
+der eingebauten. `bin/hoshi ha check` sagt dir vorher, wie viele Areas dabei herauskämen.
+
+**Wem was gehört.** Räume, Geräte und ihre Zuordnung sind **HA-Zustand**, nicht Hoshi-Zustand.
+Was Hoshi unter `ha/last-known-states.json` ablegt, ist ein **Cache** für ehrliche Antworten,
+wenn HA gerade nicht antwortet — **kein Backup deines Zuhauses**. Wiederherstellen musst du
+Räume immer in HA.
+
+**Was schreibend bleibt.** Echte Haus-Aktionen laufen durch den default-deny CapabilityKernel;
+sie sind kein Installationsbeweis und gehören nicht in einen Setup-Durchlauf. Erst lesen,
+dann — wenn du willst — schalten.
+
+## 9. Sprach-Satellit (optional)
+
+Das hörbare „Hey Hoshi" im Raum kommt **nicht** aus diesem Repo. Die Hardware-Seite ist ein
+eigenes, öffentliches Repo: **[`AndiGermany/hoshi-satellite`](https://github.com/AndiGermany/hoshi-satellite)**
+— eigene ESPHome-Firmware für einen ESP32-S3-Satelliten, LED-Ring als Sprache, Wake-Word
+on-device.
+
+Die ehrlichen Grenzen dieses Randes:
+
+- **Firmware und Wake-Word liegen dort, nicht hier.** Bauen und Flashen ist ein
+  Hardware-Schritt an deinem Gerät — dieses Setup kann ihn weder ausführen noch prüfen.
+- **Der Mac bleibt der Sprach-Host.** Der Satellit nimmt auf und gibt aus; Erkennung, Modell
+  und Stimme laufen weiter auf dem Apple-Silicon-Mac aus Abschnitt 1.
+- **Die Naht ist `/ws/audio`** — authentifiziert. API-Token und TLS-Einstellung müssen auf
+  beiden Seiten übereinstimmen; welcher Wert das ist, steht in keiner Anleitung, sondern nur
+  in deiner Konfiguration.
+- **Reihenfolge der Beweise:** erst der Browser-Voice-Turn (`bin/hoshi voice`) als
+  Software-Beweis, dann der Satellit als eigener Hardware-Beweis. Wer mit der Hardware
+  anfängt, debuggt zwei unbewiesene Dinge gleichzeitig.
+
+## 10. Sichern und Wiederherstellen
+
+Ehrlich und kurz: **es gibt noch kein integriertes Backup/Restore.** Kein `bin/hoshi backup`,
+kein Restore-Pfad, keine gemessene Wiederherstellung. Was es gibt, ist die vorbereitende
+Arbeit daran — welche Stores es überhaupt gibt, wer sie schreibt und welche Grenzen dabei
+gelten, steht in [`docs/tsugi/`](docs/tsugi/README.md).
+
+Bis dahin gilt: **kopiere keine laufenden SQLite-Dateien blind weg.** Ein Dateikopie-„Backup"
+einer offenen Datenbank sieht aus wie eine Sicherung und ist keine. Und was in Home Assistant
+lebt (Räume, Geräte, Zuordnungen), sichert HA — nicht Hoshi.
+
+## 11. Grenzen des aktuellen Repo-Stands
+
+- **Hoshi antwortet in fünf Sprachen, versteht aber noch nicht in allen fünf gleich gut.**
+  Übersetzt sind die Antworten (Backend und Oberfläche). Bei den *Erkennern* — was als Befehl
+  durchgeht — ist das Bild gemischt: der Haus-/Komplexitäts-Klassifizierer trägt eigene
+  Wortlisten für **Deutsch und Englisch**, ES/FR/IT laufen dort bewusst weiter auf dem
+  deutschen Set (`IntentClassifier`); mehrere Fastpaths (Radio, Notizen, schwache Domänen)
+  erkennen dagegen bereits in allen fünf. Auf Spanisch gestellt bekommst du also spanische
+  Antworten, für Haus-Befehle bleibt aber Deutsch oder Englisch der sichere Weg. Hoshi weist
+  im Sprach-Panel selbst darauf hin; alles außer Deutsch trägt dort ein „Beta".
 - **ES/FR/IT sind nicht muttersprachlich gegengelesen.** Es sind echte Übersetzungen, keine
   Platzhalter — aber niemand mit der jeweiligen Muttersprache hat sie geprüft. Für diese
   drei Sprachen gibt es außerdem keine Piper-Stimme; sie werden von `say` gesprochen.
@@ -214,9 +317,11 @@ für lokale Entwicklung reichen die Defaults. `HOSHI_API_TOKEN` musst du selbst 
   tragfähigen Betriebspunkt gefunden (reproduzierte Fehlbindung), deshalb bleibt sie aus.
   Anlernen und Profile funktionieren; erkannt wird niemand. Unbekannte Stimmen werden nie
   automatisch angelernt.
-- **Der sanfte Neustart ist konfiguriert, aber nicht bewiesen.** Laufende Gespräche bekommen
-  beim Herunterfahren bis zu 20 Sekunden (`server.shutdown=graceful`). Plausibel, aber noch
-  nicht gegen ein echtes laufendes Gespräch gemessen.
+- **Dein Zuhause ist ein externer Rand — und ab Werk aus.** `HOSHI_HA_ENABLED` ist `false`;
+  ohne Home Assistant, eigenen Token und bewussten Flip schaltet Hoshi nichts (Abschnitt 8).
+  Ebenso ist der Sprach-Satellit ein separates Repo mit eigener Firmware (Abschnitt 9).
+- **Kein Backup/Restore.** Es gibt keinen eingebauten Weg, Hoshis Zustand zu sichern oder
+  zurückzuspielen (Abschnitt 10).
 - **Die Wikipedia-Datenbank ist nicht Teil dieses Repos.** Der Knowledge-Sidecar liegt hier
   (`sidecars/knowledge`), die DB nicht — ohne sie fallen Grounding-Antworten ehrlich auf
   „ohne Wiki-Grounding" zurück (siehe `pipeline/ground.sh`), der Rest läuft weiter.

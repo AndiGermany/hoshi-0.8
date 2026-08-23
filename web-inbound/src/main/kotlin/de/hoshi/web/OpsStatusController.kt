@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController
  * ```json
  * { "enabled": true, "overall": "OK|DEGRADED|DOWN",
  *   "memory": { "level": "OK|WARN|CRITICAL|UNKNOWN", "source": "brain-health", "detail": "…" },
- *   "sidecars": [ { "name": "brain|whisper-stt|bridge|speaker-id|…", "status": "OK|DEGRADED|DOWN", "detail": "…" } ],
+ *   "sidecars": [ { "name": "brain|whisper-stt|bridge|speaker-id|home-assistant|…", "status": "OK|DEGRADED|DOWN", "detail": "…" } ],
  *   "voice": { "engine": "openai|say|piper|voxtral", "cloud": true },
  *   "allLocal": false,
  *   "ts": 1234567890123 }
@@ -31,6 +31,9 @@ import org.springframework.web.bind.annotation.RestController
  *
  * `allLocal` ist Andis Schloss-Bedingung: `true` nur wenn STT + Brain + die
  * gewählte TTS-Engine ALLE lokal sind, s. [SidecarHealthService.deriveAllLocal].
+ *
+ * The `home-assistant` row (S4) appears ONLY when HA is configured for this install
+ * (`HOSHI_HA_ENABLED` + a token) — an HA-less box simply has no such row.
  */
 @RestController
 class OpsStatusController(

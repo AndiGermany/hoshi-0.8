@@ -1,27 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-// Alias, damit das globale DOM-`KeyboardEvent` (window.addEventListener weiter unten)
-// nicht vom React-Synthetic-Event-Typ verdeckt wird.
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { Language, Skill } from '../api/types';
 import {
   type Persona,
-  type SoraTheme,
   type Theme,
-  type ThemeGroupId,
   DEFAULT_ESCALATION_SECONDS,
   ESCALATION_MAX_SECONDS,
   ESCALATION_MIN_SECONDS,
   LANGUAGES,
   PERSONAS,
-  SORA_ROTATION,
-  THEME_GROUPS,
-  useResolvedTheme,
+  type HomeWidgetId,
+  useHomeTiles,
 } from '../hooks/useSettings';
+import { useHomeRegistry } from '../hooks/useHomeRegistry';
+import { requestHomeEdit, useHomeLayout } from '../hooks/useHomeLayout';
+import { climateRoomRows, findVacuum } from './homeTiles';
+import { ThemeGallery } from './ThemeGallery';
 import { useSkills } from '../hooks/useSkills';
 import { fetchVoiceSample } from '../api/ttsSample';
 import { SpeakerSection } from './SpeakerSection';
 import { NightModeSection } from './NightModeSection';
 import { LanguageSection } from './LanguageSection';
+import { NewsSourcesSection } from './NewsSourcesSection';
 import {
   type PrivacySummary,
   type PrivacyTarget,
@@ -71,7 +71,17 @@ import { fetchBrainAutoSwitch, saveBrainAutoSwitch } from '../api/brainAutoSwitc
 import { de } from '../i18n/de';
 import { useActiveUiLanguage, useUiStrings } from '../i18n';
 import type { BrainModelStrings, FutureSkillId, SettingsPanelStrings } from '../i18n/types';
-import { CloudGlyph, LockGlyph, PlayGlyph, WarnGlyph } from './icons';
+import {
+  ChipGlyph,
+  CloudGlyph,
+  HomeGlyph,
+  LockGlyph,
+  MicGlyph,
+  PaletteGlyph,
+  PersonGlyph,
+  PlayGlyph,
+  WarnGlyph,
+} from './icons';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Kategorie-Navigation (Andi 15.07: „hier müssen wir zu weit scrollen, daher
@@ -109,35 +119,100 @@ export type SettingsCategoryId =
   | 'zuhause-integrationen';
 
 /**
- * Die Reiter in ihrer dokumentierten REIHENFOLGE — Online-Grad als Ordnungs-
- * Prinzip in der Mitte (Darstellung/Sprache zuerst, dann Online & Nachschlagen,
- * Modell & Leistung, Persönlichkeit, dann die beiden Datenschutz-/Heim-
- * Kategorien). 'online-nachschlagen' ist neu (Andi-Auftrag 26.07); die alte
- * Reihenfolge hatte 'persoenlichkeit' vor 'modell-leistung' — bewusst getauscht,
- * damit die drei Online-/Technik-Kategorien (Sprache & Stimme · Online &
- * Nachschlagen · Modell & Leistung) zusammenstehen.
+ * Die Reiter in ihrer dokumentierten REIHENFOLGE — NEU sortiert nach
+ * NUTZUNGS-RHYTHMUS (Andi-Auftrag 07.08: „ordne die Kategorien geordnet an"):
+ * Alltägliches vorn, Set-once/Technik hinten. Darstellung/Sprache & Stimme
+ * öffnet man oft beiläufig; Persönlichkeit und Zuhause & Integrationen sind
+ * gelegentliche Anpassungen; Online & Nachschlagen und Gedächtnis &
+ * Privatsphäre sind seltener; Modell & Leistung ist reine Technik, „einmal
+ * einstellen und vergessen" — ganz hinten. Reine Umsortierung: kein Reiter
+ * wurde umbenannt oder zusammengelegt (das 6-Cluster-Konzept bleibt eine
+ * separate, noch nicht beauftragte Geschmacksentscheidung).
+ *
+ * Frühere Reihenfolge (bis 07.08, Online-Grad als Ordnungsprinzip in der
+ * Mitte): darstellung → sprache-stimme → online-nachschlagen → modell-
+ * leistung → persoenlichkeit → gedaechtnis-privatsphaere → zuhause-
+ * integrationen. Test `settingsnav.test.tsx` pinnt jetzt die neue Ordnung.
  */
 export const SETTINGS_CATEGORY_IDS: readonly SettingsCategoryId[] = [
   'darstellung',
   'sprache-stimme',
-  'online-nachschlagen',
-  'modell-leistung',
   'persoenlichkeit',
-  'gedaechtnis-privatsphaere',
   'zuhause-integrationen',
+  'online-nachschlagen',
+  'gedaechtnis-privatsphaere',
+  'modell-leistung',
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  DIE ZWISCHENSEITE IST WEG (Andi, 21.08., wörtlich: „Dort ist immer noch die
+//  Zwischenseite. Das alles wirkt noch nicht stimmig.")
+//
+//  Seit 19.08. hob ein Tipp auf „Darstellung" die Galerie SOFORT — betrat aber
+//  gleichzeitig die Kategorie. Die lag damit unsichtbar unter dem Vollbild-
+//  Overlay, und „Fertig" legte sie frei: eine Seite, die genau zwei Dinge trug,
+//  die es beide schon im Overlay gab (welches Design läuft; ein Knopf, der die
+//  Galerie wieder aufmacht). Genau das ist die Zwischenseite.
+//
+//  Statt sie zu möblieren, ist sie AUFGELÖST. „Darstellung" ist keine Kategorie
+//  mehr, sondern ein AUSLÖSER: die Karte hebt das Overlay, die Schale bleibt auf
+//  der Übersicht stehen — „Fertig"/Escape landet also dort, wo man hergekommen
+//  ist. Ein Weg hinein, ein Weg hinaus, kein Zwischenstopp.
+//
+//  Was dabei verloren ginge, wenn man nicht hinsieht: die Aktiv-Zeile des alten
+//  Panels („was läuft gerade?"). Sie geht nicht verloren — die Galerie trägt
+//  dieselbe Auskunft seit 19.08. GRÖSSER in ihrem Kopf (`themegallery__active`),
+//  einen Klick entfernt statt zwei. Die Sektion `ThemeSection` hatte danach
+//  keinen Aufrufer mehr und ist mit dieser Scheibe gelöscht.
+//
+//  Die Karte bleibt bewusst an ihrem Platz in {@link SETTINGS_CATEGORY_IDS}:
+//  Andis Nutzungs-Rhythmus vom 07.08. (Darstellung vorn) gilt unverändert, und
+//  für den Nutzer ist es dieselbe Karte an derselben Stelle — nur ohne den
+//  Zwischenhalt dahinter.
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Reihenfolge + DEUTSCHE Labels der Reiter. Die Labels waren bis 25.07 eine
+ * Übersichts-Karten, die KEIN Panel öffnen, sondern sofort eine eigene Fläche —
+ * heute genau eine: „Darstellung" hebt die {@link ThemeGallery}.
+ *
+ * Eine Liste (statt eines `id === 'darstellung'`-Vergleichs an drei Stellen),
+ * damit ein zweiter solcher Fall nicht wieder als verstreute Sonderregel landet.
+ */
+export const SETTINGS_OVERLAY_CATEGORY_IDS: readonly SettingsCategoryId[] = ['darstellung'];
+
+/** Öffnet diese Karte eine Fläche statt einer Kategorie? (s. Block darüber) */
+export const isOverlayCategory = (id: SettingsCategoryId): boolean =>
+  SETTINGS_OVERLAY_CATEGORY_IDS.includes(id);
+
+/**
+ * Die Kategorien, die wirklich ein Panel haben — {@link SETTINGS_CATEGORY_IDS}
+ * ohne die Auslöser-Karten. Der Anfangswert von `activeCategory` kommt hierher:
+ * ein Zustand, für den es kein Panel gibt, wäre eine leere Kategorie mit nichts
+ * als dem Zurück-Knopf darin.
+ */
+export const SETTINGS_PANEL_CATEGORY_IDS: readonly SettingsCategoryId[] =
+  SETTINGS_CATEGORY_IDS.filter((id) => !isOverlayCategory(id));
+
+/**
+ * Reihenfolge + DEUTSCHE Labels der Kategorien. Die Labels waren bis 25.07 eine
  * hartkodierte Modul-Konstante und standen darum IMMER deutsch da, egal welche
  * UI-Sprache aktiv war; jetzt sind sie eine Referenz auf den `de`-Katalog
  * (byte-gleich zum bisherigen Stand, von Bestandstests referenziert) — gerendert
- * wird `useUiStrings().settings.categories`, s. {@link SettingsCategoryNav}.
+ * wird `useUiStrings().settings.categories`, s. {@link SettingsCategoryOverview}
+ * (Karten) und {@link SettingsCategoryPanel} (Überschrift).
  */
 export const SETTINGS_CATEGORIES: { id: SettingsCategoryId; label: string }[] =
   SETTINGS_CATEGORY_IDS.map((id) => ({ id, label: de.settings.categories[id] }));
 
-export const settingsTabId = (id: SettingsCategoryId): string => `settings-tab-${id}`;
+/**
+ * DOM id of the heading INSIDE a category panel. Since the chip tablist is gone
+ * (Andi, 15.08 at the iPad: inside a category only the „‹ Einstellungen" way
+ * back should remain), the heading is what NAMES the panel for assistive
+ * technology — see {@link SettingsCategoryPanel}. There is no `settings-tab-*`
+ * id any more: a dangling `aria-labelledby` would be worse than none.
+ */
+export const settingsCategoryHeadingId = (id: SettingsCategoryId): string =>
+  `settings-heading-${id}`;
 export const settingsPanelId = (id: SettingsCategoryId): string => `settings-panel-${id}`;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -166,84 +241,132 @@ export const settingsAnchorId = (id: SettingsAnchorId): string => `settings-anch
 /** Wie lange der Anker nach dem Sprung ruhig einmalig pulst (ms). */
 export const ANCHOR_HIGHLIGHT_MS = 1600;
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  WHERE THE CHIP TABLIST WENT (Andi, 15.08, live at the iPad)
+//
+//  The overview landed and he liked it („sehen super aus") — with one change:
+//  once you are INSIDE a category, the chip band listing all seven categories
+//  should be gone entirely, not just visually. The way up is the „‹ Einstellungen"
+//  button and nothing else. Two levels, one exit each; a second, parallel way to
+//  switch categories only re-created the wall of options the overview removed.
+//
+//  Consequences carried through here, so nothing dead is left behind:
+//   • `SettingsCategoryNav`, `settingsTabId` and the roving-tabindex keyboard
+//     handling are DELETED (they had no remaining caller).
+//   • The panels are no longer `role="tabpanel"` — without a tablist that role is
+//     a lie, and `aria-labelledby` pointed at an id that no longer exists. They
+//     are `role="region"` now, named by a heading of their own (see
+//     {@link SettingsCategoryPanel}). That heading also gives the eye what the
+//     chip band used to: „where am I".
+//   • Deep links (`SETTINGS_ANCHOR_CATEGORY`) still skip the overview and land in
+//     the category — and find the same single way back out.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Category overview — the drawer's ENTRY LEVEL (design DESIGN-widgets-settings-
+//  2026-08-15.md §3.1). Instead of dropping the user straight into one of seven
+//  chip tabs, the drawer opens on seven equally sized cards: glyph + name + ONE
+//  half-sentence. Tapping a card enters that category — and down there the only
+//  navigation left is the "‹ Settings" way back out (Andi, 15.08 at the iPad:
+//  the chip band is gone entirely, see the block above `SettingsCategoryPanel`).
+//
+//  Two things are deliberately NOT touched here:
+//   1. The ORDER stays `SETTINGS_CATEGORY_IDS` — Andi's own usage rhythm from
+//      07.08. The overview renders it, it does not re-sort it.
+//   2. Deep links (`SETTINGS_ANCHOR_CATEGORY`) keep skipping this level and land
+//      directly in the category — a contextual gear must never cost an extra tap.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** DOM id of an overview card — stable handle for tests and future deep links. */
+export const settingsCategoryCardId = (id: SettingsCategoryId): string =>
+  `settings-card-${id}`;
+
 /**
- * **SettingsCategoryNav** — die Reiter-Leiste (WAI-ARIA-Tabs-Muster: `role="tablist"`
- * + `role="tab"` je Knopf, `aria-selected`/`aria-controls` auf den zugehörigen
- * `tabpanel`). Roving Tabindex: nur der aktive Reiter ist per Tab erreichbar,
- * ←/→ (bzw. ↑/↓) wandern durchs Set und nehmen den Fokus mit — Klick wählt direkt.
+ * One glyph per category, in this file (not in the catalog): a glyph is not
+ * translatable text. Three of them are existing house idioms — mic for voice,
+ * cloud for online egress, lock for privacy; the other four came with this
+ * slice ({@link ../components/icons}).
  */
-export function SettingsCategoryNav({
-  active,
+const SETTINGS_CATEGORY_GLYPH: Record<SettingsCategoryId, () => ReactNode> = {
+  darstellung: () => <PaletteGlyph />,
+  'sprache-stimme': () => <MicGlyph />,
+  persoenlichkeit: () => <PersonGlyph />,
+  'zuhause-integrationen': () => <HomeGlyph />,
+  'online-nachschlagen': () => <CloudGlyph />,
+  'gedaechtnis-privatsphaere': () => <LockGlyph />,
+  'modell-leistung': () => <ChipGlyph />,
+};
+
+/**
+ * **SettingsCategoryOverview** — the seven cards. Equal size comes from the CSS
+ * alone (`repeat(auto-fill, minmax(150px,1fr))` + `grid-auto-rows: 1fr`, see
+ * `.settings__catgrid` in themes.css): in the 340px drawer that is two columns
+ * and four rows, the eighth cell stays empty — no filler entry.
+ *
+ * Carries `categoryNavAria` — the label the chip tablist used to wear. The band
+ * is gone, the SENTENCE is not: this grid is now the one place that says "these
+ * are the settings categories" out loud, so the catalogue entry keeps its user
+ * instead of becoming dead text in five languages.
+ */
+export function SettingsCategoryOverview({
   onSelect,
 }: {
-  active: SettingsCategoryId;
   onSelect: (id: SettingsCategoryId) => void;
 }) {
   const t = useUiStrings().settings;
-  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    const idx = SETTINGS_CATEGORIES.findIndex((c) => c.id === active);
-    let nextIdx: number | null = null;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextIdx = (idx + 1) % SETTINGS_CATEGORIES.length;
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')
-      nextIdx = (idx - 1 + SETTINGS_CATEGORIES.length) % SETTINGS_CATEGORIES.length;
-    if (nextIdx === null) return;
-    e.preventDefault();
-    const next = SETTINGS_CATEGORIES[nextIdx];
-    onSelect(next.id);
-    // Fokus wandert mit (roving tabindex) — der Knopf existiert schon im DOM,
-    // nur seine Attribute ändern sich beim nächsten Render.
-    document.getElementById(settingsTabId(next.id))?.focus();
-  };
-
   return (
-    <div
-      className="settings__catnav"
-      role="tablist"
-      aria-label={t.categoryNavAria}
-      onKeyDown={onKeyDown}
-    >
-      {SETTINGS_CATEGORIES.map((c) => {
-        const isActive = c.id === active;
-        return (
-          <button
-            key={c.id}
-            type="button"
-            role="tab"
-            id={settingsTabId(c.id)}
-            aria-selected={isActive}
-            aria-controls={settingsPanelId(c.id)}
-            tabIndex={isActive ? 0 : -1}
-            className={`settings__cattab ${isActive ? 'is-active' : ''}`}
-            onClick={() => onSelect(c.id)}
-          >
-            {t.categories[c.id]}
-          </button>
-        );
-      })}
+    <div className="settings__catgrid" role="group" aria-label={t.categoryNavAria}>
+      {SETTINGS_CATEGORY_IDS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          id={settingsCategoryCardId(id)}
+          className="settings__catcard"
+          onClick={() => onSelect(id)}
+        >
+          <span className="settings__catcardglyph" aria-hidden="true">
+            {SETTINGS_CATEGORY_GLYPH[id]()}
+          </span>
+          <span className="settings__catcardname">{t.categories[id]}</span>
+          <span className="settings__catcardblurb">{t.categoryBlurbs[id]}</span>
+        </button>
+      ))}
     </div>
   );
 }
 
-/** Ein Kategorie-Panel: bleibt immer gemountet, `hidden` blendet es nur aus. */
+/**
+ * Ein Kategorie-Panel: bleibt immer gemountet, `hidden` blendet es nur aus.
+ *
+ * `active` is nullable since the overview level exists: while the seven cards
+ * are on screen, NO category is the visible one — `null` hides them all without
+ * unmounting a single hook or aborting a single fetch.
+ */
 function SettingsCategoryPanel({
   id,
   active,
   children,
 }: {
   id: SettingsCategoryId;
-  active: SettingsCategoryId;
+  active: SettingsCategoryId | null;
   children: ReactNode;
 }) {
+  const t = useUiStrings().settings;
   return (
-    <div
+    <section
       id={settingsPanelId(id)}
-      role="tabpanel"
-      aria-labelledby={settingsTabId(id)}
+      role="region"
+      aria-labelledby={settingsCategoryHeadingId(id)}
       hidden={active !== id}
       className="settings__category"
     >
+      {/* Names the region for assistive technology AND answers „where am I" for
+          the eye — the job the chip band used to do (15.08). */}
+      <h3 className="settings__cattitle" id={settingsCategoryHeadingId(id)}>
+        {t.categories[id]}
+      </h3>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -309,11 +432,19 @@ interface Props {
 }
 
 /**
- * Einstellungs-Drawer (rechts): sieben Kategorien über eine Reiter-Leiste
- * ({@link SettingsCategoryNav}) statt einer einzigen langen Scroll-Wand (Andi
- * 15.07: „hier müssen wir zu weit scrollen, daher organisiere das bitte
- * übersichtlich neu"; Neuordnung 26.07: „gruppiere sinnig, ordne alles
+ * Einstellungs-Drawer (rechts): sieben Kategorien statt einer einzigen langen
+ * Scroll-Wand (Andi 15.07: „hier müssen wir zu weit scrollen, daher organisiere
+ * das bitte übersichtlich neu"; Neuordnung 26.07: „gruppiere sinnig, ordne alles
  * aufgeräumt"). IA-Referenz: vault/tracks/DESIGN-settings-ia-2026-06-30.md.
+ *
+ * Seit 15.08 (§3.1 der Widgets-/Settings-Spec) hat die Schale ZWEI Ebenen: der
+ * Drawer öffnet auf einer Übersicht aus sieben gleich großen Karten
+ * ({@link SettingsCategoryOverview}); ein Tipp führt IN die Kategorie, aus der
+ * genau ein Weg zurückführt — „‹ Einstellungen". Die frühere Chip-Reiterleiste
+ * gibt es dort nicht mehr (Andi live am iPad, 15.08 — s. den Grabstein-Block
+ * oben). Deep-Links ({@link SETTINGS_ANCHOR_CATEGORY}) überspringen die
+ * Übersicht und landen direkt in der Kategorie — ein kontextuelles Zahnrad darf
+ * nie einen Extra-Tipp kosten, und findet dort denselben einen Ausgang.
  *
  * Bleibt gemountet und blendet über `is-open` ein/aus (sanfter Ein-/Austritt,
  * reduced-motion wird durch die globale Regel in index.css respektiert). Esc und
@@ -342,7 +473,17 @@ export function SettingsPanel({
   const t = useUiStrings();
   const closeRef = useRef<HTMLButtonElement>(null);
   const asideRef = useRef<HTMLElement>(null);
-  const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>('darstellung');
+  const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>(
+    SETTINGS_PANEL_CATEGORY_IDS[0],
+  );
+  // Which of the two shell levels is on screen (design 2026-08-15 §3.1). Starts
+  // on the overview: opening the drawer shows the seven categories, not the
+  // innards of whichever one was last open. A deep link overrides it below.
+  const [view, setView] = useState<'overview' | 'category'>('overview');
+  // Die Design-Galerie (Andi-Auftrag 19.08.). Der State wohnt HIER und nicht
+  // mehr in {@link ThemeSection}, weil das Overlay eine Ebene höher gerendert
+  // werden muss — siehe die Naht unten am `<aside>`-Ende.
+  const [galleryOpen, setGalleryOpen] = useState(false);
   // Skills: Server-State (KEIN localStorage — Satellit/Browser/ct-106 teilen die Wahrheit).
   const { skills, loading: skillsLoading, error: skillsError, busyId, toggle } = useSkills();
   // Deep-Link-Puls: welcher Anker (falls einer) gerade den einmaligen
@@ -367,8 +508,25 @@ export function SettingsPanel({
   // und ihn einmalig pulsen lassen. Ohne `category` (der normale Top-Nav-
   // Zahnrad-Aufruf) bleibt die zuletzt gewählte Kategorie unangetastet stehen.
   useEffect(() => {
-    if (!open || !category) return;
-    setActiveCategory(category);
+    if (!open) return;
+    if (!category) {
+      // Plain top-nav entry (the gear without a target): the overview is the
+      // entry level. `activeCategory` keeps its last value untouched — it only
+      // becomes visible again once a card is tapped.
+      setView('overview');
+      return;
+    }
+    // Ein Deep-Link auf eine Auslöser-Karte meint dasselbe wie ein Klick darauf:
+    // NUR die Fläche, und die Schale bleibt auf der Übersicht — eine zweite Tür
+    // zum selben Raum darf sich nicht anders verhalten als die erste.
+    if (isOverlayCategory(category)) {
+      setView('overview');
+      setGalleryOpen(true);
+    } else {
+      // Deep link: land IN the category, skipping the overview entirely.
+      setView('category');
+      setActiveCategory(category);
+    }
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
     if (anchor) {
       setHighlighted(anchor);
@@ -398,6 +556,16 @@ export function SettingsPanel({
     };
   }, [open, category, anchor]);
 
+  // Der Drawer nimmt die Galerie mit, wenn er geht: sonst stünde sie beim
+  // nächsten Öffnen wieder offen da, obwohl niemand sie gerufen hat.
+  useEffect(() => {
+    if (!open) setGalleryOpen(false);
+  }, [open]);
+
+  // Which category the user actually SEES. On the overview level that is none —
+  // every panel stays mounted, all of them are `hidden`.
+  const visibleCategory: SettingsCategoryId | null = view === 'category' ? activeCategory : null;
+
   return (
     <div
       className={`settings-overlay ${open ? 'is-open' : ''}`}
@@ -425,16 +593,55 @@ export function SettingsPanel({
           </button>
         </header>
 
-        <SettingsCategoryNav active={activeCategory} onSelect={setActiveCategory} />
+        {/* ── Shell level: overview OR one category ─────────────────────────
+            The category PANELS themselves stay mounted either way (only
+            `hidden` switches, see SettingsCategoryPanel) — hooks and fetches
+            keep running regardless of which level is on screen. Only the two
+            navigation elements swap: the seven cards, or — inside a category —
+            the ONE way back (15.08: no chip band down here). */}
+        {view === 'overview' ? (
+          <SettingsCategoryOverview
+            onSelect={(id) => {
+              // DESIGN IST EINE TAT, KEIN ORT (Andi, 19.08., wörtlich: „Ich
+              // möchte, dass direkt ein Overlay über die komplette Seite geht,
+              // wo die Designs präsentiert werden"; zu Ende geführt 21.08.,
+              // s. den Block über SETTINGS_OVERLAY_CATEGORY_IDS). Die Karte
+              // hebt die Galerie — und die Schale bleibt, wo sie ist. Wer
+              // „Fertig" drückt, steht wieder in der Übersicht.
+              if (isOverlayCategory(id)) {
+                setGalleryOpen(true);
+                return;
+              }
+              setActiveCategory(id);
+              setView('category');
+              // A fresh category starts at its top — the drawer is ONE scroll
+              // container, so entering would otherwise inherit the scroll
+              // position of the overview.
+              if (asideRef.current) asideRef.current.scrollTop = 0;
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            className="settings__back"
+            onClick={() => setView('overview')}
+            aria-label={t.settings.overviewBackAria}
+          >
+            <span className="settings__backchevron" aria-hidden="true">
+              ‹
+            </span>
+            {t.settings.overviewBack}
+          </button>
+        )}
 
-        {/* ═══ Darstellung ═══════════════════════════════════════════════ */}
-        <SettingsCategoryPanel id="darstellung" active={activeCategory}>
-          {/* ── Farbthema: drei Gruppen statt einer 8er-Liste ───────────── */}
-          <ThemeSection theme={theme} onTheme={onTheme} />
-        </SettingsCategoryPanel>
+        {/* ═══ Darstellung: KEIN Panel mehr ══════════════════════════════
+            Die Karte hebt direkt die Galerie (s. `isOverlayCategory` und den
+            Block über SETTINGS_OVERLAY_CATEGORY_IDS). Hier stand bis 21.08.
+            ein Panel mit `ThemeSection` darin — die Zwischenseite, die Andi
+            gesehen hat. ═══════════════════════════════════════════════════ */}
 
         {/* ═══ Sprache & Stimme ══════════════════════════════════════════ */}
-        <SettingsCategoryPanel id="sprache-stimme" active={activeCategory}>
+        <SettingsCategoryPanel id="sprache-stimme" active={visibleCategory}>
           {/* ── Sprache (Chat + STT) ────────────────────────────────────── */}
           <section className="settings__group">
             <label className="settings__label" htmlFor="settings-language">
@@ -478,18 +685,18 @@ export function SettingsPanel({
             Modell (steuert WOMIT sie nachschaut, wenn sie es tut). Vorher gab
             es für die Stufen KEIN UI-Element — nur GET/PUT
             /api/v1/settings/extended-think im Backend. */}
-        <SettingsCategoryPanel id="online-nachschlagen" active={activeCategory}>
+        <SettingsCategoryPanel id="online-nachschlagen" active={visibleCategory}>
           <OnlineNachschlagenGroup />
         </SettingsCategoryPanel>
 
         {/* ═══ Modell & Leistung (Andi-Auftrag: Brain-Modell live umschaltbar,
             seit 26.07 + automatische Modellwahl „12B für Chat, e4b für Voice") ═══ */}
-        <SettingsCategoryPanel id="modell-leistung" active={activeCategory}>
+        <SettingsCategoryPanel id="modell-leistung" active={visibleCategory}>
           <ModelPerformanceGroup />
         </SettingsCategoryPanel>
 
         {/* ═══ Persönlichkeit ════════════════════════════════════════════ */}
-        <SettingsCategoryPanel id="persoenlichkeit" active={activeCategory}>
+        <SettingsCategoryPanel id="persoenlichkeit" active={visibleCategory}>
           <section className="settings__group">
             <label className="settings__label" htmlFor="settings-persona">
               {t.settings.personaLabel}
@@ -517,7 +724,7 @@ export function SettingsPanel({
         </SettingsCategoryPanel>
 
         {/* ═══ Gedächtnis & Privatsphäre ═════════════════════════════════ */}
-        <SettingsCategoryPanel id="gedaechtnis-privatsphaere" active={activeCategory}>
+        <SettingsCategoryPanel id="gedaechtnis-privatsphaere" active={visibleCategory}>
           {/* ── Erkannte Sprecher (S2a): Anlernen + Verwalten (getrennt von HOSHIS Stimme) ──
               Anker-Ziel des Zahnrads am „Wer sprach"-Chip im Chat (SpeakerChip). */}
           <SettingsAnchor id="sprecher" active={highlighted === 'sprecher'}>
@@ -533,12 +740,17 @@ export function SettingsPanel({
             ist aufgelöst, ihre zwei verbleibenden Sektionen [Skills-Toggles,
             Wecker-Eskalation] sind Fähigkeiten IM Zuhause und ziehen darum
             hierher, neben Wetter-Ort/HA/Nachtmodus) ═══════════════════════ */}
-        <SettingsCategoryPanel id="zuhause-integrationen" active={activeCategory}>
+        <SettingsCategoryPanel id="zuhause-integrationen" active={visibleCategory}>
           {/* ── Wetter-Ort: der Standort für Wetter-Fragen, serverseitig ─────
               Anker-Ziel des Zahnrads an der Wetter-Kachel im Idle-Gesicht. */}
           <SettingsAnchor id="wetter-standort" active={highlighted === 'wetter-standort'}>
             <WeatherLocationSection />
           </SettingsAnchor>
+
+          {/* ── Zuhause-Widgets (Andi-Auftrag 2026-08-11, erweitert W2 18.08.):
+              acht Schalter, Krone (Uhr/Wecker) + Bühne; Sauger/Klima bleiben
+              QUELLEN-gated. ── */}
+          <HomeTilesSection onClose={onClose} />
 
           {/* ── Skills (S2.3): Zwei-Stufen-Toggle, serverseitig ─────────── */}
           <SkillsSection
@@ -562,131 +774,68 @@ export function SettingsPanel({
           <NightModeSection />
         </SettingsCategoryPanel>
       </aside>
+
+      {/* ═══ Die Design-Galerie — BEWUSST hier, als Geschwister des Drawers ═══
+          Sie stand bis 19.08. in {@link ThemeSection}, also IM `<aside>`. Das
+          war der ganze Fehler hinter Andis Satz „passiert alles auf einem
+          kleinen Fenster rechts": `.settings` trägt einen `transform`
+          (Slide-in) — und ein Element mit `transform` wird zum ENTHALTENDEN
+          BLOCK jedes `position: fixed`-Nachfahren. Das Overlay maß darum nicht
+          den Viewport, sondern den 380-px-Drawer (gemessen: Backdrop 379×1024
+          statt 1366×1024). Kein CSS an der Galerie hätte das je heilen können.
+
+          Hier draußen, im transform-freien `.settings-overlay`, deckt dasselbe
+          `position: fixed; inset: 0` wieder die KOMPLETTE Seite.
+
+          Der Klick-Stopp: `.settings-overlay` schließt beim Klick den ganzen
+          Drawer. Ohne diesen Riegel würde ein Klick auf den Galerie-Backdrop
+          (der die Galerie schließen soll) gleich beide zuschlagen. Der Wirt ist
+          `display: contents` — er erzeugt keine Box, fängt aber den Klick.
+
+          Z-ORDNUNG: die Galerie liegt jetzt IM Stapelkontext des Drawers (50) —
+          über dem Drawer, aber unter dem FiredToast (70). Der Wecker gewinnt
+          weiterhin; der Vertrag aus §3.2 gilt unverändert. */}
+      <div className="settings__galleryhost" onClick={(e) => e.stopPropagation()}>
+        {/* Bleibt beim Wählen OFFEN: so kann man vergleichen, und der
+            Galerie-Kopf zeigt die neue Wahl sofort als „Aktuell". */}
+        <ThemeGallery
+          open={galleryOpen}
+          onClose={() => setGalleryOpen(false)}
+          theme={theme}
+          onTheme={onTheme}
+        />
+      </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Farbthema — drei Gruppen statt einer Liste (Andi 25.07: „Überlege dir ein
-//  Konzept, wie man die Auswahl der Themen übersichtlicher machen kann. Das sind
-//  jetzt schon einige.")
+// ─────────────────────────────────────────────────────────────────────────────
+//  GRABSTEIN: `ThemeSection` (25.07 – 21.08.2026)
 //
-//  Nicht die Menge war das Problem, sondern die Ungleichartigkeit: sechs
-//  Farbwelten, eine Automatik (Sora) und Nagareboshi, das seit 0.8.2 BEIDES ist.
-//  Die Gruppen ({@link THEME_GROUPS}) machen die Unterschiede sichtbar:
-//    „Folgt dem Tag" (die Regel) · „Tageszeiten" (der Bogen) · „Eigene Stimmung".
+//  Sie war die Farbthema-Sektion im Drawer: erst die 8er-Liste, dann drei
+//  Gruppen, dann `<details>`-Falten, ab 15.08. nur noch Aktiv-Zeile + EIN Knopf
+//  („Alle Designs ansehen"), nachdem die AUSWAHL in die 960-px-{@link
+//  ThemeGallery} gezogen war.
 //
-//  Zwei Kleinigkeiten mit großer Wirkung:
-//   • ECHTE Farbvorschau: die Kachel setzt `data-theme` SELBST, die drei Flächen
-//     lesen `--bg-surface`/`--accent`/`--text-1` — die Werte kommen also aus den
-//     echten Theme-Tokens (styles/themes.css), nicht aus einer zweiten,
-//     driftenden Farbliste im Picker. Sora zeigt das GERADE aufgelöste Theme.
-//   • Beiwort: „Nagareboshi · Sternschnuppe" — schön bleibt schön, aber niemand
-//     muss raten (Katalog: `settings.themeGlosses`, alle fünf Sprachen).
+//  Mit dem Auflösen der Zwischenseite (21.08., s. der Block über
+//  SETTINGS_OVERLAY_CATEGORY_IDS) verlor sie ihren letzten Aufrufer. Beide
+//  Dinge, die sie noch trug, stehen im Overlay selbst und BESSER:
+//   • die Aktiv-Zeile → `themegallery__active` im Galerie-Kopf, groß, mit der
+//     echten Szene statt einer 40-px-Swatch,
+//   • der Wieder-Einstiegs-Knopf → überflüssig, wenn man nie irgendwo landet,
+//     von wo aus man zurück in die Galerie müsste.
 //
-//  A11y: EINE Radiogroup über alle acht Karten (es ist EINE exklusive Wahl); die
-//  Gruppen sind Überschriften darin, jede Karte trägt „Gruppe: Name" als
-//  aria-label. Tastatur unverändert — native Buttons, Tab/Enter/Space.
+//  Was BLEIBT, ist die Re-Export-Naht darunter: `themeGroupHeadingId` wird von
+//  Tests und Deep-Link-Ankern über diesen Pfad importiert.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** DOM-Id der Gruppen-Überschrift (stabil, damit Tests/Anker sie greifen können). */
-export const themeGroupHeadingId = (id: ThemeGroupId): string => `settings-themegroup-${id}`;
-
-export function ThemeSection({
-  theme,
-  onTheme,
-}: {
-  theme: Theme;
-  onTheme: (theme: Theme) => void;
-}) {
-  const t = useUiStrings().settings;
-  // Was Sora GERADE zeigen würde — bewusst unabhängig davon, ob Sora gewählt
-  // ist: die Zeile „folgt dem Tag · jetzt Kasumi" erklärt die Regel, BEVOR man
-  // sie wählt. `useResolvedTheme` hält dabei genau einen Timer auf die nächste
-  // Fenstergrenze (kein Polling) — s. useSettings.
-  const soraNow: Theme = useResolvedTheme('sora');
-  const pinned = (SORA_ROTATION as readonly Theme[]).includes(theme);
-
-  return (
-    <section className="settings__group">
-      <h3 className="settings__label">{t.themeLabel}</h3>
-      <div className="settings__themegroups" role="radiogroup" aria-label={t.themeGroupAria}>
-        {THEME_GROUPS.map((group) => {
-          const g = t.themeGroups[group.id];
-          return (
-            <div key={group.id} className={`settings__themegroup settings__themegroup--${group.id}`}>
-              <h4 className="settings__themegrouptitle" id={themeGroupHeadingId(group.id)}>
-                {g.title}
-              </h4>
-              <p className="settings__hint settings__themegroupnote">{g.note}</p>
-
-              {group.themes.map((id) => {
-                const entry = t.themes[id];
-                const isActive = theme === id;
-                // Sora ist keine Farbe: seine Vorschau UND seine Zeile zeigen,
-                // was die Regel gerade ergibt.
-                const previewTheme = id === 'sora' ? soraNow : id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={isActive}
-                    aria-label={t.themeOptionAria(g.title, entry.label)}
-                    className={`settings__theme ${isActive ? 'is-active' : ''}`}
-                    onClick={() => onTheme(id)}
-                    title={entry.hint}
-                  >
-                    {/* Echte Farbvorschau: das Element trägt `data-theme` selbst,
-                        die Flächen lesen die Token dieses Themas (themes.css). */}
-                    <span className="settings__swatch" data-theme={previewTheme} aria-hidden="true">
-                      <span className="settings__swatchbg" />
-                      <span className="settings__swatchaccent" />
-                      <span className="settings__swatchtext" />
-                    </span>
-                    <span className="settings__themename">
-                      {entry.label}
-                      <span className="settings__themegloss">
-                        {t.themeGlossSuffix(t.themeGlosses[id])}
-                      </span>
-                    </span>
-                    <span className="settings__themehint">
-                      {id === 'sora' ? t.themeSoraNow(t.themes[soraNow].label) : entry.hint}
-                    </span>
-                  </button>
-                );
-              })}
-
-              {/* Der Tagesbogen als reine VORSCHAU (nicht klickbar): man sieht auf
-                  einen Blick, was Sora tut — und nebenbei, dass die Sternschnuppe
-                  in der tiefsten Nacht kommt. */}
-              {group.id === 'automatik' && (
-                <p className="settings__themearc" aria-label={t.themeArcAria}>
-                  {SORA_ROTATION.map((id: SoraTheme, i) => (
-                    <span
-                      key={id}
-                      className={`settings__themearcstep ${id === soraNow ? 'is-now' : ''}`}
-                    >
-                      {i > 0 ? t.themeArcSeparator : ''}
-                      {t.themes[id].label}
-                    </span>
-                  ))}
-                </p>
-              )}
-
-              {/* Leise: wer eine Tageszeit fest wählt, pausiert die Automatik. */}
-              {group.id === 'tageszeiten' && pinned && (
-                <p className="settings__hint settings__themepinned">
-                  {t.themePinnedNote(t.themes[theme].label)}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
+/**
+ * DOM-Id der Gruppen-Überschrift — die Gruppen wohnen seit §3.4 in
+ * {@link ThemeGallery}; hier steht nur noch die Re-Export-Naht, damit Tests und
+ * Deep-Link-Anker ihren bisherigen Import behalten.
+ */
+export { themeGroupHeadingId } from './ThemeGallery';
 
 /**
  * Die leise ehrliche Zeile, wenn die Hörprobe scheitert (503/Netz/Audio-Decode)
@@ -905,6 +1054,176 @@ export function WeatherLocationSectionView({
           {note}
         </p>
       )}
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Zuhause-Widgets — acht Schalter des Zuhause-Reiters, zwei Ränge (Andi-
+//  Auftrag 2026-08-11: „Zuhause-Kacheln, die man sich verdient"; erweitert
+//  W2 18.08. auf alle acht Widgets, s. DESIGN-widget-raster-2026-08-18.md
+//  §4.3). Sauger/Klima rendern weiter NUR, wenn ihre Datenquelle real ist;
+//  die übrigen sechs sind quellenlos immer da.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * EIN Schalter-Zeile — Muster wiederholt sich achtmal in {@link HomeTilesSection},
+ * hier einmal faktorisiert statt kopiert.
+ */
+function HomeWidgetToggle({ id, label, enabled, setEnabled }: {
+  id: HomeWidgetId;
+  label: string;
+  enabled: Record<HomeWidgetId, boolean>;
+  setEnabled: (id: HomeWidgetId, on: boolean) => void;
+}) {
+  const on = enabled[id];
+  return (
+    <div className="settings__skill">
+      <div className="settings__skillmeta">
+        <span className="settings__skillname">{label}</span>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+        className={`settings__toggle ${on ? 'is-on' : ''}`}
+        onClick={() => setEnabled(id, !on)}
+      >
+        <span className="settings__toggleknob" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * **HomeTilesSection** — „Zuhause-Widgets" (W2, `vault/tracks/
+ * DESIGN-widget-raster-2026-08-18.md` §4.3). Acht Schalter in zwei Rängen:
+ *  - **Krone** (Uhr, Wecker): der feste Kopf des Zuhause-Bildschirms, immer
+ *    da, kein Quellen-Gate.
+ *  - **Bühne** (Wetter, Läuft, Einkauf, Sauger, Klima, Lagebild): die frei
+ *    anordenbaren Kacheln. Sauger/Klima bleiben QUELLEN-gated — sie pollt die
+ *    Registry selbst (Muster {@link WeatherLocationSection}/{@link
+ *    SpeakerSection}: jede Sektion holt sich ihre Daten unabhängig):
+ *     - Sauger-Schalter nur, wenn {@link findVacuum} eine `vacuum`-Entity findet.
+ *     - Klima-Schalter nur, wenn {@link climateRoomRows} mindestens einen Raum
+ *       MIT climate-Entity liefert (Andis Bedingung: „die Kachel ist erst
+ *       sinnvoll, wenn Räume zugewiesen sind"). Ist die Registry noch nicht
+ *       geladen/aus/nicht erreichbar, gilt das wie „keine Quelle".
+ *    Die übrigen vier Bühnen-Schalter (Wetter/Läuft/Einkauf/Lagebild) haben
+ *    KEIN Quellen-Gate — genau wie das Lagebild-Fenster schon vorher: ihre
+ *    Quelle ist kein entdeckbares HA-Gerät, und ein Schalter, der genau dann
+ *    verschwindet, wenn man ihn sucht, beantwortet „wo schalte ich das ab?"
+ *    gerade nicht.
+ *
+ * Persistenz: {@link useHomeTiles}s generisches `enabled`/`setEnabled`-Paar
+ * (localStorage, Muster {@link useEscalationSeconds}) — Sauger/Klima Default
+ * AUS (Andi schaltet bewusst an), alle anderen sechs Default AN (sie waren
+ * vorher immer da, ein neuer Schalter darf nichts wegnehmen).
+ *
+ * **„Layout zurücksetzen" ist seit W3 da, „Widgets anordnen" noch nicht** —
+ * das Verschieben kommt mit W4 (Edit-Modus), und ein Knopf ohne Wirkung ist
+ * verboten. Der Reset fasst ausschließlich `hoshi.homeTiles.layout` an: die
+ * Schalter darüber sind eine ANDERE Entscheidung (§4.3), und ein Reset, der
+ * beide zurückdreht, nähme Andi seine Sauger-Entscheidung weg. Scharf erst
+ * beim zweiten Klick — dasselbe Idiom wie die Privatsphäre-Löschknöpfe, kein
+ * `window.confirm`.
+ */
+export function HomeTilesSection({ onClose }: { onClose?: () => void } = {}) {
+  const t = useUiStrings().settings;
+  const registry = useHomeRegistry();
+  const { enabled, setEnabled } = useHomeTiles();
+  const { reset: resetLayout } = useHomeLayout();
+  const [layoutResetArmed, setLayoutResetArmed] = useState(false);
+  const [layoutResetDone, setLayoutResetDone] = useState(false);
+
+  const snapshot = registry !== null && registry.kind === 'live' ? registry.data : null;
+  const hasVacuum = snapshot !== null && findVacuum(snapshot) !== null;
+  const hasClimateRooms = snapshot !== null && climateRoomRows(snapshot).length > 0;
+
+  return (
+    <section className="settings__group">
+      <h3 className="settings__label">{t.homeTilesTitle}</h3>
+      <p className="settings__hint">{t.homeTilesHint}</p>
+
+      {/* Krone — fester Kopf, nicht verschiebbar, kein Quellen-Gate. */}
+      <div className="settings__widgetgroup">
+        <h4 className="settings__widgetkicker">{t.homeTilesCrownGroupLabel}</h4>
+        <div className="settings__skills">
+          <HomeWidgetToggle id="uhr" label={t.homeTilesUhrLabel} enabled={enabled} setEnabled={setEnabled} />
+          <HomeWidgetToggle id="wecker" label={t.homeTilesWeckerLabel} enabled={enabled} setEnabled={setEnabled} />
+        </div>
+      </div>
+
+      {/* Bühne — die frei anordenbaren Kacheln. */}
+      <div className="settings__widgetgroup">
+        <h4 className="settings__widgetkicker">{t.homeTilesStageGroupLabel}</h4>
+        <div className="settings__skills">
+          <HomeWidgetToggle id="wetter" label={t.homeTilesWetterLabel} enabled={enabled} setEnabled={setEnabled} />
+          <HomeWidgetToggle id="laeuft" label={t.homeTilesLaeuftLabel} enabled={enabled} setEnabled={setEnabled} />
+          <HomeWidgetToggle id="einkauf" label={t.homeTilesEinkaufLabel} enabled={enabled} setEnabled={setEnabled} />
+          {hasVacuum && (
+            <HomeWidgetToggle id="vacuum" label={t.homeTilesVacuumLabel} enabled={enabled} setEnabled={setEnabled} />
+          )}
+          {hasClimateRooms && (
+            <HomeWidgetToggle
+              id="climate"
+              label={t.homeTilesClimateLabel}
+              enabled={enabled}
+              setEnabled={setEnabled}
+            />
+          )}
+          <HomeWidgetToggle id="news" label={t.homeTilesCurrentAffairsLabel} enabled={enabled} setEnabled={setEnabled} />
+        </div>
+      </div>
+
+      {/* Anordnung — ehrlich benannt: gespeichert wird eine REIHENFOLGE für
+          den Packer, keine freie Zellplatzierung (Produktzusage aus dem
+          Bus-Entscheid 20260818 §2). */}
+      <div className="settings__layoutreset">
+        <p className="settings__hint">{t.homeTilesLayoutHint}</p>
+        {/* W4: der EINZIGE Weg in den Edit-Modus, der keinen Zeiger braucht —
+            der andere ist ein langer Druck auf eine Kachel. Er schließt den
+            Drawer (sonst läge er über der Bühne, die man gerade ordnen will)
+            und schaltet, wenn nötig, auf die Übersicht (App.tsx). */}
+        <button
+          type="button"
+          className="settings__arrangebtn"
+          onClick={() => {
+            requestHomeEdit();
+            onClose?.();
+          }}
+        >
+          {t.homeTilesLayoutArrange}
+        </button>
+        <button
+          type="button"
+          className={`settings__deletebtn ${layoutResetArmed ? 'is-armed' : ''}`}
+          onClick={() => {
+            if (!layoutResetArmed) {
+              setLayoutResetArmed(true);
+              setLayoutResetDone(false);
+              return;
+            }
+            resetLayout();
+            setLayoutResetArmed(false);
+            setLayoutResetDone(true);
+          }}
+        >
+          {layoutResetArmed ? t.homeTilesLayoutResetArmed : t.homeTilesLayoutReset}
+        </button>
+        {layoutResetDone && (
+          <p className="settings__hint" role="status">
+            {t.homeTilesLayoutResetDone}
+          </p>
+        )}
+      </div>
+
+      {hasVacuum && <p className="settings__hint">{t.homeTilesVacuumHint}</p>}
+      {hasClimateRooms && <p className="settings__hint">{t.homeTilesClimateHint}</p>}
+      <p className="settings__hint">{t.homeTilesCurrentAffairsHint}</p>
+      {/* Aktive Quellen — unter dem Lagebild-Anzeige-Schalter, s. NewsSourcesSection-KDoc. */}
+      <NewsSourcesSection />
     </section>
   );
 }

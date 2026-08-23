@@ -3,6 +3,7 @@ package de.hoshi.web
 import com.fasterxml.jackson.annotation.JsonInclude
 import de.hoshi.core.port.RingingItem
 import de.hoshi.core.port.RingingItemPort
+import de.hoshi.core.port.ScheduledItem
 import de.hoshi.core.port.ScheduledItemPort
 import de.hoshi.core.port.ScheduledKind
 import org.slf4j.LoggerFactory
@@ -63,7 +64,7 @@ class ScheduledItemFireService(
      * Service selbst kennt WEDER [de.hoshi.core.port.DeviceDownlinkPort] NOCH irgendeine
      * Retry-Logik — reine Entkopplung (Muster [AudioWebSocketHandler.onDeviceConnected]).
      */
-    private val onFired: (id: String, label: String?, originSatelliteId: String?) -> Unit = { _, _, _ -> },
+    private val onFired: (ScheduledItem) -> Unit = {},
 ) : AutoCloseable {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -130,7 +131,7 @@ class ScheduledItemFireService(
             )
             // PREP-wecker-am-satelliten (Scheibe 2): GENAU EINMAL je Feuerung, direkt hier —
             // der No-op-Default hält diesen Aufruf ohne Wiring folgenlos (byte-neutral).
-            onFired(item.id, item.label, item.originSatelliteId)
+            onFired(item)
             if (missed) {
                 log.warn(
                     "[timer-fire] {} '{}' (id={}) war {} ms ueber-faellig (> {} ms, Downtime) - als VERPASST gefeuert (missed=true).",

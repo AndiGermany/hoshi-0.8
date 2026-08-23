@@ -3,6 +3,7 @@ import { OpsStatusPillLive } from './OpsStatusPill';
 import { CrewOverlayLive } from './CrewOverlay';
 import { GearGlyph } from './icons';
 import { useUiStrings } from '../i18n';
+import { isNagoriUnlocked, unlockNagori } from '../hooks/useSettings';
 
 export type Tab = 'overview' | 'rooms' | 'activity' | 'chat';
 
@@ -29,6 +30,17 @@ interface Props {
 /** 7× auf das 星 (leise Marke links vor dem Wortmark) in diesem Fenster öffnet die Crew. */
 const TAP_WINDOW_MS = 3000;
 const TAP_GOAL = 7;
+
+/**
+ * 3× SCHNELL auf die Versions-Zeile („0.8.4 · Suisei") entdeckt Nagori (名残),
+ * das versteckte Thema der kommenden 0.9 — die Versions-Zeile ist genau die
+ * Stelle, an der die Zukunft durchscheint. Eigene Zähler neben dem 星-Tap
+ * (getrennte Geste, getrenntes Fenster); der Konami-Code bleibt unangetastet
+ * bei der Crew. Das Fenster ist mit 1,2 s bewusst etwas großzügiger als ein
+ * Doppelklick-Intervall: „schnell" soll man treffen können, ohne zu hetzen.
+ */
+const VERSION_TAP_WINDOW_MS = 1200;
+const VERSION_TAP_GOAL = 3;
 
 /** Konami-Code (↑↑↓↓←→←→ b a) — die alternative, klassische Geste. */
 const KONAMI: readonly string[] = [
@@ -81,6 +93,9 @@ export function TopNav({ tab, onTab, onOpenSettings }: Props) {
   const firstTapRef = useRef(0);
   // Fortschritt im Konami-Code.
   const konamiRef = useRef(0);
+  // Tap-Zähler auf der Versions-Zeile (Nagori-Fund) — eigenes Fenster.
+  const verTapsRef = useRef(0);
+  const verFirstTapRef = useRef(0);
 
   const openCrew = useCallback(() => setCrewOpen(true), []);
 
@@ -98,6 +113,25 @@ export function TopNav({ tab, onTab, onOpenSettings }: Props) {
       openCrew();
     }
   }, [openCrew]);
+
+  // Versions-Tap: 3× in 1,2 s → Nagori ist gefunden (Flag + das Thema wird
+  // SOFORT aktiv, s. unlockNagori). Fensterlogik exakt wie beim 星-Tap: ein
+  // Klick außerhalb des Fensters zählt als neuer erster Tap. Ist Nagori schon
+  // gefunden, passiert bewusst nichts mehr — der Moment gehört dem ersten Mal,
+  // und das Thema steht ab dann ohnehin im Picker (kein Zurückschließen).
+  const onVersionTap = useCallback(() => {
+    if (isNagoriUnlocked()) return;
+    const now = Date.now();
+    if (now - verFirstTapRef.current > VERSION_TAP_WINDOW_MS) {
+      verFirstTapRef.current = now;
+      verTapsRef.current = 0;
+    }
+    verTapsRef.current += 1;
+    if (verTapsRef.current >= VERSION_TAP_GOAL) {
+      verTapsRef.current = 0;
+      unlockNagori();
+    }
+  }, []);
 
   // Konami-Code global lauschen (case-tolerant für b/a). Tippt man daneben,
   // springt der Fortschritt nicht auf 0, sondern erkennt einen Neustart der
@@ -142,8 +176,14 @@ export function TopNav({ tab, onTab, onOpenSettings }: Props) {
           </span>
           {/* Version kommt per vite `define` aus gradle.properties (der EINZIGEN
               Versions-Quelle) — s. resolveHoshiVersion() oben. „Suisei" bleibt
-              reiner Text, der Codename der 0.8.x-Linie, keine zweite Wahrheit. */}
-          <span className="nav__ver">{resolveHoshiVersion()} · Suisei</span>
+              reiner Text, der Codename der 0.8.x-Linie, keine zweite Wahrheit.
+              Die Zeile ist zugleich das zweite Easter-Egg: 3× schnell tippen
+              entdeckt Nagori (名残), den Codenamen der 0.9, als Farbthema. Sie
+              sieht weiterhin aus wie Text (Stile: themes.css, `button.nav__ver`)
+              — ihr Klartext ist ihr a11y-Name, darum kein zusätzliches Label. */}
+          <button type="button" className="nav__ver" onClick={onVersionTap}>
+            {resolveHoshiVersion()} · Nagori
+          </button>
         </div>
 
         <nav className="nav__tabs" aria-label={topNav.mainNav}>

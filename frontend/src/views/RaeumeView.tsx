@@ -17,6 +17,8 @@ import { RoomDeviceRow } from '../components/RoomDeviceRow';
 import { RoomsToolbar } from '../components/RoomsToolbar';
 import { InboxCard } from '../components/RoomsInbox';
 import { matchesDomainFilter, matchesRoomSearch, type DomainFilter } from '../components/roomsFilter';
+import { isRoomRelevant } from '../components/roomsRelevance';
+import { sortRoomsByUsage, splitSilentRooms } from '../components/roomsSort';
 import { useUiStrings } from '../i18n';
 
 /**
@@ -28,6 +30,7 @@ import { useUiStrings } from '../i18n';
  */
 export type { AreaOption, RaeumeEdit } from '../components/roomsEdit';
 import type { RaeumeEdit } from '../components/roomsEdit';
+import { startVisiblePolling } from '../hooks/visiblePolling';
 
 /**
  * Räume — Andis „vom Chat zum Zuhause", die räumliche Achse.
@@ -58,6 +61,19 @@ import type { RaeumeEdit } from '../components/roomsEdit';
  *    IMMER eine „Braucht dich"-Inbox ZUERST (Reihenfolge nach Wiederkehr,
  *    Konzept §2) — genau die Entities OHNE HA-Area sichtbar statt versteckt
  *    (die „tado-Lücke").
+ *
+ * **Raum-Übersicht (Andi-Auftrag 2026-08-11, „so ist es nur eine lange
+ * Liste"):** die Raum-Karten stehen jetzt in einem responsiven Grid statt
+ * volle Breite untereinander (CSS, `.rooms` in `index.css`) und sind nach
+ * Nutzung absteigend, dann Geräteanzahl + Name sortiert ({@link sortRoomsByUsage}
+ * in `components/roomsSort.ts` — Konzept-Pfad 1(a): die Nutzungs-Naht liefert
+ * `recentCommands` als echte 14-Tage-Zählung, s. dortiges KDoc). Räume ohne Geräte-Aktivität
+ * (0/1 Gerät) falten sich in ein zugeklapptes „Stille Räume"-Fach ans Ende
+ * ({@link splitSilentRooms}), NUR solange kein Filter aktiv ist — eine
+ * Etagen-Gruppierung ist BEWUSST NICHT gebaut (der aktuelle HA-Registry-
+ * Payload/das Jinja-Template in `HaHomeRegistryAdapter` liefert keine
+ * Floor-Daten; das war im Geräte-Zuordnungs-Konzept ausdrücklich als
+ * „später — Hypothese" zurückgestellt, s. Rückgabe der bauenden Scheibe).
  *
  * Rein prop-getrieben (kein Netz) → via renderToStaticMarkup ohne DOM/Fetch
  * testbar (Suche/Filter/Einklapp-Zustand sind lokaler UI-State, der
@@ -124,12 +140,15 @@ function HoshiSketch() {
 const ROOM_COLLAPSE_AT = 8;
 
 /**
- * Eine Raum-Karte: Name, Geräte-Anzahl-Pille (die des AKTUELL SICHTBAREN,
- * also gefilterten Bestands — ohne aktiven Filter ist das identisch zur
- * vollen Liste), Geräte-Liste (oder ehrlich „noch keine Geräte"). Ab
- * {@link ROOM_COLLAPSE_AT} sichtbaren Zeilen bleibt der Rest eingeklappt,
- * bis Andi „die übrigen n zeigen" antippt (Muster `ScheduledPanel`-Toggle:
- * `aria-expanded` + Chevron-Glyph in eigenem `aria-hidden`-Span).
+ * Eine Raum-Karte — kompakt fürs Grid (Konzept §2 „GRID STATT LISTE"): Titel
+ * + „x von y"-Pille + eingeklappte Geräte-Liste (oder ehrlich „noch keine
+ * Geräte"). Die Pille zeigt die AKTUELL SICHTBARE (gefilterte) Anzahl „von"
+ * der vollen Raum-Anzahl (`area.entities.length`) — ohne aktiven Filter sind
+ * beide Zahlen gleich, dann bleibt die knappere `deviceCount`-Form stehen
+ * statt eines redundanten „12 von 12". Ab {@link ROOM_COLLAPSE_AT} sichtbaren
+ * Zeilen bleibt der Rest eingeklappt, bis Andi „die übrigen n zeigen"
+ * antippt (Muster `ScheduledPanel`-Toggle: `aria-expanded` + Chevron-Glyph
+ * in eigenem `aria-hidden`-Span).
  */
 function RoomCard({ area, visibleEntities }: { area: HomeRegistryArea; visibleEntities: HomeRegistryEntity[] }) {
   const { rooms } = useUiStrings();
@@ -137,11 +156,16 @@ function RoomCard({ area, visibleEntities }: { area: HomeRegistryArea; visibleEn
   const showAll = expanded || visibleEntities.length <= ROOM_COLLAPSE_AT;
   const shown = showAll ? visibleEntities : visibleEntities.slice(0, ROOM_COLLAPSE_AT);
   const hiddenCount = visibleEntities.length - shown.length;
+  const totalCount = area.entities.length;
+  const countLabel =
+    visibleEntities.length === totalCount
+      ? rooms.deviceCount(totalCount)
+      : rooms.deviceCountOfTotal(visibleEntities.length, totalCount);
   return (
     <article className="tile room tile--live" data-status="live">
       <div className="tile__head">
         <span className="tile__name">{area.label}</span>
-        <span className="tile__pill">{rooms.deviceCount(visibleEntities.length)}</span>
+        <span className="tile__pill">{countLabel}</span>
       </div>
       {visibleEntities.length === 0 ? (
         <p className="room__empty">{rooms.roomEmpty}</p>
@@ -224,6 +248,16 @@ function UnreachableCard() {
  * Kopfzeilen-Wahrheit (Zuordnungs-Zahl + Raum-Zahl) ist IMMER der volle
  * Snapshot, nie vom aktiven Filter verändert — sonst würde Suchen/Filtern die
  * ehrliche Zahl selbst verfälschen.
+ *
+ * **Sortierung + „Stille Räume"-Fach (Andi-Auftrag 2026-08-11, Konzept §1+§4):**
+ * die sichtbaren Raum-Karten sind nach Nutzung absteigend, dann Geräteanzahl +
+ * Name sortiert ({@link sortRoomsByUsage} — Konzept-Pfad 1(a), s. KDoc dort).
+ * NUR wenn KEIN Filter aktiv ist, wandern Räume ohne Geräte-Aktivität
+ * (0/1 Gerät, {@link splitSilentRooms}) in ein zugeklapptes „Stille Räume"-
+ * Fach ans Ende — während einer aktiven Suche/eines Domain-Filters bleibt
+ * JEDER Treffer direkt im Raster sichtbar (kein Verstecken eines echten
+ * Suchtreffers hinter einem zugeklappten `<details>`, dieselbe Ehrlichkeits-
+ * Regel wie die „tado-Lücke" oben).
  */
 function LiveRoomsSection({ snapshot, edit }: { snapshot: HomeRegistrySnapshot; edit?: RaeumeEdit }) {
   const { rooms } = useUiStrings();
@@ -246,6 +280,15 @@ function LiveRoomsSection({ snapshot, edit }: { snapshot: HomeRegistrySnapshot; 
   const totalVisible = visibleAreas.reduce((acc, r) => acc + r.visible.length, 0) + visibleUnassigned.length;
   const nothingMatches = filterActive && totalVisible === 0;
 
+  const shownAreas = sortRoomsByUsage(
+    visibleAreas.filter(({ visible }) => visible.length > 0 || !filterActive),
+  );
+  // Das Falten „stiller" Räume ist NUR eine Sicht auf den unveränderten
+  // Standard-Rundgang (kein Filter) — s. KDoc oben.
+  const { active: activeRooms, silent: silentRooms } = filterActive
+    ? { active: shownAreas, silent: [] as typeof shownAreas }
+    : splitSilentRooms(shownAreas);
+
   return (
     <>
       <RoomsToolbar
@@ -257,22 +300,33 @@ function LiveRoomsSection({ snapshot, edit }: { snapshot: HomeRegistrySnapshot; 
         filter={filter}
         onFilter={setFilter}
       />
+      {!filterActive && <p className="rooms__hint">{rooms.sortHint}</p>}
       {nothingMatches ? (
         <p className="rooms__nomatch">{rooms.noMatches(query)}</p>
       ) : (
-        <div className="tiles rooms">
-          <InboxCard
-            realCount={snapshot.unassigned.length}
-            visible={visibleUnassigned}
-            query={query}
-            edit={edit}
-          />
-          {visibleAreas
-            .filter(({ visible }) => visible.length > 0 || !filterActive)
-            .map(({ area, visible }) => (
+        <>
+          <div className="tiles rooms">
+            <InboxCard
+              realActionableCount={snapshot.unassigned.filter(isRoomRelevant).length}
+              visible={visibleUnassigned}
+              query={query}
+              edit={edit}
+            />
+            {activeRooms.map(({ area, visible }) => (
               <RoomCard area={area} visibleEntities={visible} key={area.areaId} />
             ))}
-        </div>
+          </div>
+          {silentRooms.length > 0 && (
+            <details className="rooms__silentgroup">
+              <summary className="rooms__silentsummary">{rooms.silentRooms(silentRooms.length)}</summary>
+              <div className="tiles rooms">
+                {silentRooms.map(({ area, visible }) => (
+                  <RoomCard area={area} visibleEntities={visible} key={area.areaId} />
+                ))}
+              </div>
+            </details>
+          )}
+        </>
       )}
     </>
   );
@@ -370,11 +424,13 @@ export function RaeumeViewLive({
     void loadStatus(controller.signal).then((on) => {
       if (aliveRef.current) setEditEnabled(on);
     });
-    const id = window.setInterval(() => void reload(), intervalMs);
+    // Gate statt Frequenz: sichtbar taktet es unveraendert, dunkles
+    // Display pausiert, Sichtbarwerden holt sofort frisch nach.
+    const stopPolling = startVisiblePolling(() => void reload(), intervalMs);
     return () => {
       aliveRef.current = false;
       controller.abort();
-      window.clearInterval(id);
+      stopPolling();
     };
   }, [reload, loadStatus, intervalMs]);
 

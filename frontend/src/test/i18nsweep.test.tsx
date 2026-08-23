@@ -4,7 +4,14 @@ import { clockParts, dueClock } from '../hooks/useScheduledItems';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { setActiveUiLanguage } from '../i18n';
+import { CATALOGS, setActiveUiLanguage, SUPPORTED_UI_LANGUAGES } from '../i18n';
+import { parseThemeManifest, primeThemeManifest } from '../styles/themeCatalog';
+import { readFileSync } from 'node:fs';
+
+// Der Theme-Picker rendert seit dem .old-Umzug (2026-08-08) aus
+// `public/themes/manifest.json`; `renderToStaticMarkup` führt keine Effekte aus,
+// also wird die echte ausgelieferte Datei hier direkt eingesetzt.
+primeThemeManifest(parseThemeManifest(JSON.parse(readFileSync('public/themes/manifest.json', 'utf8'))));
 import { SendButton } from '../components/SendButton';
 import { VoiceOrb } from '../components/VoiceOrb';
 import { TurnChips, TurnStagesRow, type TurnAnatomyState } from '../components/TurnAnatomy';
@@ -19,14 +26,16 @@ import {
   EscalationSection,
   LookupModelSectionView,
   PrivacySectionView,
-  SettingsCategoryNav,
+  SETTINGS_CATEGORY_IDS,
+  SettingsCategoryOverview,
   SettingsPanel,
   SkillsSection,
   StimmeSectionView,
-  ThemeSection,
   TtsEngineSectionView,
   WeatherLocationSectionView,
 } from '../components/SettingsPanel';
+import { ThemeGallery } from '../components/ThemeGallery';
+import { CurrentAffairsWindow } from '../components/CurrentAffairsTile';
 import { ScheduledPanel } from '../components/ScheduledPanel';
 import { OpsStatusPill } from '../components/OpsStatusPill';
 import { SpeakerChip } from '../components/SpeakerChip';
@@ -36,6 +45,7 @@ import { streamVoice } from '../api/voice';
 import type { VoiceChatSession } from '../hooks/useVoiceChatSession';
 import type { FiredItem } from '../hooks/useFiredItems';
 import type { ScheduledItem } from '../hooks/useScheduledItems';
+import type { CurrentAffairsState } from '../hooks/useCurrentAffairs';
 import type { OpsStatus } from '../hooks/useOpsStatus';
 import type { PrivacySummary } from '../api/privacy';
 import type { Skill } from '../api/types';
@@ -721,11 +731,15 @@ describe('EN-Sweep — SettingsPanel: Dialograhmen + der lang-Bug im vollen Pane
       // Farbthema / Sprache / Persönlichkeit (THEMES/LANGUAGES/PERSONAS):
       'Colour theme',
       'Morning blue on ink',
-      // Die drei Gruppen des Pickers (Scheibe 25.07) inkl. Beiwort + Sora-Zeile:
+      // Die Gruppen des Pickers inkl. Beiwort + Sora-Zeile. Seit 21.08. ordnet
+      // die TAGESLAGE (vorher: eine Gruppe „Scenes" über allen dreizehn); die
+      // Gruppe „Classics" ist der Ruhestand und steht darum GAR NICHT mehr da —
+      // sie erscheint einzig, wenn ein zurückgezogenes Thema gerade aktiv ist.
       '>Follows the day<',
-      '>Times of day<',
-      '>Your own mood<',
-      'aria-label="Times of day: Nagareboshi"',
+      '>Morning<',
+      '>Day<',
+      '>Evening &amp; night<',
+      'aria-label="Evening &amp; night: Nagareboshi"',
       ' · shooting star',
       'follows the day · now ',
       'Automatic (German / English)',
@@ -759,9 +773,10 @@ describe('EN-Sweep — SettingsPanel: Dialograhmen + der lang-Bug im vollen Pane
       'Farbthema',
       'Morgenblau auf Tinte',
       '>Folgt dem Tag<',
-      '>Tageszeiten<',
-      '>Eigene Stimmung<',
-      'aria-label="Tageszeiten: Nagareboshi"',
+      '>Morgen<',
+      '>Tag<',
+      '>Abend &amp; Nacht<',
+      'aria-label="Abend &amp; Nacht: Nagareboshi"',
       ' · Sternschnuppe',
       'folgt dem Tag · jetzt ',
       'Automatisch (Deutsch / Englisch)',
@@ -774,26 +789,41 @@ describe('EN-Sweep — SettingsPanel: Dialograhmen + der lang-Bug im vollen Pane
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  6b) ThemeSection — der gruppierte Farbthema-Picker (Scheibe 25.07). Eigener
-//      Sweep, weil hier die MEISTEN neuen Texte liegen: drei Gruppen-
-//      Überschriften + Einordnungs-Zeilen, die Beiworte der japanischen Namen,
-//      die Sora-Zeile und der Pin-Hinweis.
+//  6b) ThemeGallery — die Design-Fläche. Eigener Sweep, weil hier die MEISTEN
+//      Texte liegen: Gruppen-Überschriften + Einordnungs-Zeilen, die Beiworte
+//      der japanischen Namen, die Sora-Zeile und der Pin-Hinweis.
+//
+//      HIESS BIS 21.08. „ThemeSection". Die Panel-Sektion war der zweite Teil
+//      der Design-Fläche und trug die Aktiv-Zeile; mit dem Auflösen der
+//      Zwischenseite (Andi: „Dort ist immer noch die Zwischenseite") hat sie
+//      ihren Aufrufer verloren und ist gelöscht. Alle geprüften Stellen wohnen
+//      jetzt in der Galerie — inhaltlich prüft dieser Sweep dieselben Texte.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('EN-Sweep — ThemeSection (Farbthema in drei Gruppen)', () => {
-  // 'aoi' ist eine Tageszeit ⇒ der Pin-Hinweis rendert mit.
-  const picker = <ThemeSection theme="aoi" onTheme={() => {}} />;
+describe('EN-Sweep — ThemeGallery (die Design-Fläche)', () => {
+  // 'aoi' ist eine Tageszeit ⇒ der Pin-Hinweis rendert mit (er steht seit der
+  // Tageslage-Sortierung unter der Automatik-Gruppe, nicht mehr bei „Klassiker").
+  const picker = <ThemeGallery open onClose={() => {}} theme="aoi" onTheme={() => {}} />;
 
   it('englisch: Gruppen, Beiworte, Sora-Zeile und Pin-Hinweis sind Englisch', () => {
     const html = renderIn('en', picker);
-    expectNoGerman(html, 'ThemeSection', PANEL_LONGTAIL_GERMAN);
-    expectAll(html, 'ThemeSection', [
+    expectNoGerman(html, 'ThemeGallery', PANEL_LONGTAIL_GERMAN);
+    expectAll(html, 'ThemeGallery', [
       'aria-label="Colour theme"',
+      '>Designs<',
+      '>Done<',
+      '>Now<',
+      // Die Tageslage-Gruppen (21.08.) — „Classics" ist der Ruhestand und steht
+      // hier nicht, weil kein zurückgezogenes Thema aktiv ist.
       '>Follows the day<',
-      '>Times of day<',
-      '>Your own mood<',
+      '>Morning<',
+      '>Day<',
+      '>Evening &amp; night<',
+      // „Your own mood" steht hier NICHT: die Gruppe trägt heute nur Nagori und
+      // ist ohne den Fund unsichtbar. Ihre Übersetzung prüft nagori.test.tsx an
+      // der Stelle, an der sie wirklich auftaucht.
       'aria-label="Follows the day: Sora"',
-      'aria-label="Your own mood: Natsu no Hi"',
+      'aria-label="Day: Natsu no Hi"',
       'follows the day · now ',
       ' · daybreak',
       ' · summer day',
@@ -802,13 +832,17 @@ describe('EN-Sweep — ThemeSection (Farbthema in drei Gruppen)', () => {
   });
 
   it('deutsch (Gegenprobe): dieselben Stellen stehen wörtlich deutsch da', () => {
-    expectAll(renderIn('de', picker), 'ThemeSection', [
+    expectAll(renderIn('de', picker), 'ThemeGallery', [
       'aria-label="Farbthema"',
+      '>Designs<',
+      '>Fertig<',
+      '>Aktuell<',
       '>Folgt dem Tag<',
-      '>Tageszeiten<',
-      '>Eigene Stimmung<',
+      '>Morgen<',
+      '>Tag<',
+      '>Abend &amp; Nacht<',
       'aria-label="Folgt dem Tag: Sora"',
-      'aria-label="Eigene Stimmung: Natsu no Hi"',
+      'aria-label="Tag: Natsu no Hi"',
       'folgt dem Tag · jetzt ',
       ' · Morgengrauen',
       ' · Sommertag',
@@ -863,16 +897,37 @@ const PANEL_LONGTAIL_GERMAN = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  7) SettingsCategoryNav — die sieben Reiter waren eine deutsche Modul-Konstante
+//  7) SettingsCategoryOverview — die sieben Kategorie-Namen waren eine deutsche
+//     Modul-Konstante.
+//
+//     Bis 15.08 trug die Chip-Reiterleiste (`SettingsCategoryNav`) diese Namen;
+//     sie ist gestrichen (Andi live am iPad: in einer Unterkategorie führt nur
+//     noch „‹ Einstellungen" zurück). Dieselben sieben Namen — plus je ein
+//     Halbsatz, der mit der Übersicht dazukam — stehen jetzt auf den Karten der
+//     Einstiegs-Ebene. Der Sweep folgt ihnen dorthin: es geht um die TEXTE, nicht
+//     um das Bauteil, das sie zeigt.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('EN-Sweep — SettingsCategoryNav (Reiter-Leiste)', () => {
-  const nav = <SettingsCategoryNav active="online-nachschlagen" onSelect={() => {}} />;
+describe('EN-Sweep — SettingsCategoryOverview (Kategorie-Karten)', () => {
+  const overview = <SettingsCategoryOverview onSelect={() => {}} />;
+  /**
+   * Die Halbsätze kommen aus dem Katalog und werden als Text gerendert — React
+   * escaped dabei `&`, `<`, `>`, `"` und `'`. Verglichen wird gegen das MARKUP,
+   * also muss der Erwartungswert denselben Weg gehen (sonst scheitert schon ein
+   * „Hoshi's basic tone" an seinem Apostroph).
+   */
+  const asMarkup = (s: string): string =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;');
 
-  it('englisch: aria-label und alle sieben Reiter-Labels sind Englisch', () => {
-    const html = renderIn('en', nav);
-    expectNoGerman(html, 'SettingsCategoryNav', PANEL_LONGTAIL_GERMAN);
-    expectAll(html, 'SettingsCategoryNav', [
+  it('englisch: aria-label, alle sieben Namen und alle sieben Halbsätze sind Englisch', () => {
+    const html = renderIn('en', overview);
+    expectNoGerman(html, 'SettingsCategoryOverview', PANEL_LONGTAIL_GERMAN);
+    expectAll(html, 'SettingsCategoryOverview', [
       'aria-label="Settings categories"',
       '>Appearance<',
       '>Language &amp; voice<',
@@ -882,10 +937,18 @@ describe('EN-Sweep — SettingsCategoryNav (Reiter-Leiste)', () => {
       '>Memory &amp; privacy<',
       '>Home &amp; integrations<',
     ]);
+    // Die Halbsätze sind mit der Übersicht neu dazugekommen — auch sie dürfen
+    // nicht deutsch durchschlagen.
+    expectAll(
+      html,
+      'SettingsCategoryOverview/blurbs',
+      SETTINGS_CATEGORY_IDS.map((id) => asMarkup(CATALOGS.en.settings.categoryBlurbs[id])),
+    );
   });
 
-  it('deutsch (Gegenprobe): dieselben sieben Reiter stehen weiterhin wörtlich deutsch da', () => {
-    expectAll(renderIn('de', nav), 'SettingsCategoryNav', [
+  it('deutsch (Gegenprobe): dieselben sieben Namen stehen weiterhin wörtlich deutsch da', () => {
+    const html = renderIn('de', overview);
+    expectAll(html, 'SettingsCategoryOverview', [
       'aria-label="Einstellungs-Kategorien"',
       '>Darstellung<',
       '>Sprache &amp; Stimme<',
@@ -895,6 +958,11 @@ describe('EN-Sweep — SettingsCategoryNav (Reiter-Leiste)', () => {
       '>Gedächtnis &amp; Privatsphäre<',
       '>Zuhause &amp; Integrationen<',
     ]);
+    expectAll(
+      html,
+      'SettingsCategoryOverview/blurbs',
+      SETTINGS_CATEGORY_IDS.map((id) => asMarkup(CATALOGS.de.settings.categoryBlurbs[id])),
+    );
   });
 });
 
@@ -1220,6 +1288,23 @@ describe('EN-Sweep — OpsStatusPill (Kopfzeile)', () => {
       'Alles lokal — deine Stimme verlässt das Gerät nicht. Online-Recherche nur nach deiner Freigabe.',
     ]);
   });
+
+  // S4 „HA wird sichtbar": die HA-Zeile folgt dem SIDECAR-Idiom — Sidecar-Namen
+  // sind Vertrags-/Produktnamen (`brain`, `whisper-stt`, `home-assistant`) und
+  // stehen in JEDER Sprache wörtlich da; lokalisiert wird nur der Text drumherum.
+  // Der Test friert genau das ein, damit niemand später „Heimassistent" erfindet.
+  it('Home-Assistant-Zeile: der Name steht in allen Sprachen wörtlich (Produktname, kein UI-Text)', () => {
+    const haDown = (
+      <OpsStatusPill
+        status={ops({ sidecars: [{ name: 'home-assistant', status: 'DOWN', detail: 'keine Antwort' }] })}
+        defaultExpanded
+      />
+    );
+    for (const lang of SUPPORTED_UI_LANGUAGES) {
+      setActiveUiLanguage(lang);
+      expectAll(renderToStaticMarkup(haDown), `OpsStatusPill (HA-Zeile, ${lang})`, ['home-assistant']);
+    }
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1337,6 +1422,76 @@ describe('EN-Sweep — API-Fehlertexte (werden als Chat-Blase gerendert)', () =>
     await expect(streamChat('hi', { onEvent: () => {} })).rejects.toThrow(
       'Backend antwortete HTTP 503',
     );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  15) Lagebild-Fenster (Auftrag F5; nutzersichtbar heißt es „Nachrichten"/
+//      „News" — der Code-Name `currentAffairs`/„Lagebild" bleibt intern) —
+//      Kachel-Titel, Stand-Zeile, Alter-Hinweis,
+//      „mehr"/„weniger" und die Quellen-Aktion. Die Meldungen selbst (Quelle,
+//      Titel, Teaser) sind FEED-DATEN und bleiben unübersetzt — die Fixtures
+//      sind darum bewusst ASCII/englisch, damit der Umlaut-Riegel UNSERE Texte
+//      misst und nicht die Testdaten.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('EN-Sweep — Lagebild-Fenster (CurrentAffairsWindow)', () => {
+  const newsItems = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      id: `n-${i + 1}`,
+      source: 'TAGESSCHAU',
+      title: `Headline number ${i + 1}`,
+      feedSnippet: `Teaser text ${i + 1}.`,
+      attribution: null,
+      canonicalUrl: `https://example.test/a-${i + 1}`,
+      publishedAtMs: Date.parse('2026-08-15T08:30:00Z'),
+      fetchedAtMs: Date.parse('2026-08-15T08:45:00Z'),
+    }));
+  const newsState = (count: number): CurrentAffairsState => ({
+    kind: 'live',
+    data: {
+      items: newsItems(count),
+      observedAtMs: Date.parse('2026-08-15T11:59:00Z'),
+      lastSuccessfulRefreshAtMs: Date.parse('2026-08-15T08:45:00Z'),
+      freshness: 'STALE',
+    },
+  });
+  const state = newsState(5);
+  const nowMs = Date.parse('2026-08-15T12:00:00Z');
+  // W1 (DESIGN-widget-raster-2026-08-18 §3.4/§8.3): the old expand/collapse
+  // toggle is gone — `size` decides the content now. M reproduces the former
+  // collapsed view, L the former "mehr" expansion (no toggle button either
+  // way any more, so there is no "mehr"/"weniger" text left to sweep).
+  const window = (size: 'S' | 'M' | 'L' | 'XL') => (
+    <CurrentAffairsWindow state={state} nowMs={nowMs} size={size} />
+  );
+  /** Mehr Meldungen als der L-Deckel ⇒ die Rest-Zeile rendert mit. */
+  const overflowing = <CurrentAffairsWindow state={newsState(9)} nowMs={nowMs} size="L" />;
+
+  it('englisch: Kachel-Titel und Stand-Zeile sind Englisch (M — die Default-Groesse)', () => {
+    const html = renderIn('en', window('M'));
+    expectNoGerman(html, 'Lagebild (Fenster)', ['Nachrichten', 'Stand ', 'aktualisiert']);
+    expectAll(html, 'Lagebild (Fenster)', ['News', 'As of ', 'updated ']);
+  });
+
+  it('englisch: L (Teaser + Quellen-Aktion) ist ebenfalls Englisch', () => {
+    const html = renderIn('en', window('L'));
+    expectNoGerman(html, 'Lagebild (L)', ['Quelle öffnen']);
+    expectAll(html, 'Lagebild (L)', ['Open article', 'open the article in a new tab']);
+  });
+
+  it('englisch: die Rest-Zeile des Deckels („+3 more, not shown here") ist Englisch', () => {
+    const html = renderIn('en', overflowing);
+    expectNoGerman(html, 'Lagebild (Rest-Zeile)', ['weitere', 'hier nicht gezeigt']);
+    expectAll(html, 'Lagebild (Rest-Zeile)', ['+3 more, not shown here']);
+  });
+
+  it('deutsch (Gegenprobe): „Nachrichten"/„Stand"/„Quelle öffnen" stehen wörtlich da', () => {
+    expectAll(renderIn('de', overflowing), 'Lagebild (Rest-Zeile, de)', [
+      '+3 weitere, hier nicht gezeigt',
+    ]);
+    expectAll(renderIn('de', window('M')), 'Lagebild (Fenster, de)', ['Nachrichten', 'Stand ']);
+    expectAll(renderIn('de', window('L')), 'Lagebild (L, de)', ['Quelle öffnen']);
   });
 });
 

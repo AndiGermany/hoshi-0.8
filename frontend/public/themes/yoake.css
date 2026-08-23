@@ -1,0 +1,432 @@
+/* ════════════════ YOAKE (夜明け) — der Übergang selbst ════════════════
+   Hoshi 0.8 · eigenständige Themen-Datei (dynamisch nachladbar, kein Import nötig)
+   Summary (EN): dark indigo theme; the picture is a town of tiled rooftops seen
+   from a roof, against a glowing horizon — the sun is still below it, its light
+   fans across the whole stage, and one window after another comes on. Palette
+   is the old Yoake (indigo → coral) grown up, not replaced.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DAS BILD
+   ────────────────────────────────────────────────────────────────────────────
+   Man steht auf einem Dach. Unter einem die Ziegel und der First, vor einem die
+   Dächer der anderen — drei Reihen tief, bis sie am Horizont zu einer Zeile
+   werden. Dazwischen Oberleitungen, ein Wassertank, sechs Antennen, fünf Vögel
+   auf dem Draht. Dahinter eine Bergkette, deren Grat schon Licht hat und deren
+   Fuß im Dunst der Glut verschwindet. Und darüber der Himmel in der einen
+   Viertelstunde, in der die Nacht aufhört und der Tag noch nicht angefangen
+   hat: Indigo oben, dann Violett, dann Rosa, und am Horizont Orange. Die Sonne
+   selbst steht noch UNTER der Dachlinie — man sieht nur, was sie anrichtet:
+   zwölf Bahnen Licht, die von ihr aus über die ganze Bühne fächern.
+   Und in einem Fenster nach dem anderen geht Licht an. Jemand anderes ist auch
+   wach.
+
+   DIE RADIKALE ENTSCHEIDUNG: das Thema hat kein Motiv, es hat eine UHR.
+   Alle anderen Szenen-Themen zeigen einen Zustand (Nebel liegt, Ast hängt,
+   Welle steht). Yoake zeigt eine VERÄNDERUNG — und darum ist die Bewegung hier
+   nicht Dekoration am Rand, sondern das Thema selbst.
+
+   IN v2 IST DIESE UHR EIN UHRWERK: acht Familien mit teilerfremden Perioden
+   statt einer einzigen Wanderung. Der Verlauf „wandert" nicht mehr, indem eine
+   Ebene verschoben wird — sechs breite Glutbänder liegen versetzt über dem
+   Horizont und verglimmen gegeneinander (53–79 s), wodurch sich der Schwerpunkt
+   des Leuchtens tatsächlich über den Himmel schiebt, seitlich UND in der Höhe.
+   Dazu die Lichtbahnen (37–47 s), die Wolken (83–97 s), die verlöschenden
+   Sterne (64–81 s) und die Fenster (23–41 s). Ihr gemeinsames Vielfaches liegt
+   weit jenseits jeder denkbaren Sitzung: dieselbe Konstellation kommt nicht
+   zweimal vor.
+
+   Der Preis ist weiterhin Langsamkeit, und er ist Absicht: gemessen bewegen
+   sich zwischen zwei Frames im Abstand von drei Sekunden 3–10 % der Bildpunkte,
+   über zehn Sekunden 22,5 %. Das ist unter der Schwelle, ab der man Bewegung
+   SIEHT, und über der, ab der man sie BEMERKT: wer zwei Minuten wegschaut und
+   zurückkommt, findet einen anderen Himmel und zwei neue erleuchtete Fenster
+   vor, ohne je etwas laufen gesehen zu haben. Ein Dämmerungsverlauf, den man
+   wandern sieht, ist ein Bildschirmschoner; einer, den man nur nachträglich
+   bemerkt, ist ein Morgen.
+
+   ABGRENZUNG (drei Themen liegen dicht beieinander, das ist kein Zufall — es
+   sind drei verschiedene Momente desselben Morgens):
+     • asa (朝)      DANACH, und DRINNEN: Morgenlicht durchs Fenster, Dampf
+                     über der Tasse. Der Tag hat begonnen, man sitzt schon.
+     • asagiri (朝霧) DER NEBEL, hell und milchig, nach Sonnenaufgang. Das Wetter
+                     ist das Thema, die Landschaft steht still.
+     • yoake (夜明け) DAVOR, und DRAUSSEN: es ist noch dunkel. Nichts steht still,
+                     weil genau das Stillstehen aufgehört hat. Dark theme, weil
+                     der Moment dunkel IST — er wird nur gerade weniger dunkel.
+   Und gegen nagareboshi (流れ星, ebenfalls Dach-Silhouette bei Nacht): dort ist
+   der STERNENHIMMEL das Bild — hunderte Sterne, ein Milchstraßenband, ein
+   seltener Meteor — und die Nacht ist tief. Hier ist sie am ENDE. Es sind noch
+   sieben Sterne, sie stehen alle im linken oberen Viertel (wo die Nacht am
+   längsten hält), sie verlöschen, und sie sind bewusst NICHT das Hellste im
+   Bild: das ist die Sonne. Zwei Bilder desselben Himmels, zwölf Stunden
+   auseinander.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DIE SEELE BLEIBT (was aus old/yoake.css übernommen wurde)
+   ────────────────────────────────────────────────────────────────────────────
+   Das alte Yoake war schon der richtige Gedanke — „kein Dark Theme mit anderer
+   Akzentfarbe, sondern ein eingefrorener Übergang": oben kühle Nacht, unten
+   warmes Morgenlicht, Korall-Akzent für Stimme und Aktionen, Lavendel für die
+   leisen Texte. Genau das bleibt, Farbe für Farbe:
+     Indigo-Nacht #100d1d → oklch(0.155 0.042 292) (dieselbe Nacht, mit Blut)
+     Koralle      #ff947d → oklch(0.775 0.135 38)  (byte-nah, nur ins OKLCH gehoben)
+     Elfenbein    #fbf3ec → oklch(0.955 0.014 62)
+     Lavendel     #8d7a95 → die text-3/4-Stufen, aufgehellt (s. u.)
+   In v2 sind die leisen Stufen ein zweites Mal gestiegen — nicht aus Geschmack,
+   sondern weil sie den dünneren Schleier bezahlen (Begründung beim Token).
+   Weggeworfen wurde nichts. Zwei Werte mussten wandern, weil das alte Set die
+   Messlatte der Szenen-Themen nicht hielt: --text-4 #8d7a95 stand auf --bg-subtle
+   #302440 bei 3,72:1 (auf --bg-surface waren es die im alten Kopf notierten
+   4,6:1 — nur eben nicht auf der hellsten Fläche). Es ist jetzt heller, und
+   --bg-subtle eine Spur tiefer; beide Enden zusammen tragen die 4,5.
+
+   ────────────────────────────────────────────────────────────────────────────
+   KONTRASTE (WCAG 2.1, gemessen — nicht geschätzt)
+   ────────────────────────────────────────────────────────────────────────────
+   Gemessen mit tools/theme-contrast/measure-yoake.py: headless Chrome rendert
+   jedes Token als Swatch, das Skript liest die von Chrome aufgelöste sRGB
+   zurück und rechnet daraus. Angegeben ist jeweils das SCHLECHTESTE der fünf
+   realen Flächen (--bg-base / --bg-surface / --bg-elevated / --bg-subtle /
+   --bg-user), nicht der schmeichelhafteste Wert.
+   Die schlechteste Fläche ist durchweg --bg-subtle; sie ist die hellste.
+     text-1 13,66:1 · text-2 11,01:1 · text-3 8,57:1 · text-4 6,72:1
+     accent 7,31:1 · success 8,87:1 · warn 9,64:1 · error 5,89:1
+   Die drei leisen Stufen sind in v2 gestiegen (v1: 9,64 / 6,33 / 4,97) — die
+   Werte oben sind headless in Chrome gegengelesen, nicht gerechnet: die Datei
+   wird geladen, jedes Token als Fläche gerendert, der Bildpunkt zurückgelesen.
+   Sie stimmen bis auf die zweite Stelle mit der Rechnung im Generator überein,
+   was beide Seiten bestätigt und keine von beiden ersetzt.
+   Zusätzlich geprüft:
+     • Farbe auf ihrer EIGENEN *-soft-Fläche (so bauen die Pills/Badges in
+       index.css): über --bg-surface accent 5,83 · success 7,49 · warn 7,98 ·
+       error 5,40; über --bg-base accent 6,59 · success 8,47 · warn 9,04 ·
+       error 6,04 — alle ≥ 4,5.
+     • --accent-ink auf --accent (Text im gefüllten CTA): 8,80:1.
+     • --bg-hairline (WCAG 1.4.11): sie ist die EINZIGE Kontur echter
+       Bedienelemente — .inbox__select, .rooms__search, .rooms__chip,
+       .feed__chip, .feed__refresh, .feed__loadmore, .sched__delall,
+       .compose__bar, .msg__sources__summary — also ein echter Control-Rand und
+       darum bewusst kräftiger gezeichnet: gegen --bg-base 3,91 · --bg-surface
+       3,61 · --bg-elevated 3,36 · --bg-subtle 3,11 · --bg-user 3,26. Anders als
+       hanashigure (das --bg-subtle bei 2,95 ausnehmen musste) trägt sie hier auf
+       ALLEN fünf Flächen — es gibt keine Ausnahme zu erinnern.
+       --bg-hairline-dashed liegt bewusst darüber (4,87 / 4,49 / 4,19 / 3,88 /
+       4,07): eine gestrichelte Linie hat weniger Farbe auf dem Schirm und
+       braucht mehr Kontrast, um gleich stark zu lesen.
+   ACHTUNG für alle, die hier weiterrechnen: die Hex-Werte in den Kommentaren
+   unten sind die von CHROME aufgelösten, nicht von Hand gerechnete. Die alten
+   Kommentare waren eigene Mathematik und lagen daneben (--bg-base stand als
+   #17102b da und ist #0d081c) — genau deshalb war die obige Tabelle vor dem
+   19.08. um bis zu 1,6 Punkte zu optimistisch. Nie die eigene Rechnung gegen
+   die eigene Rechnung prüfen; der Renderer ist die Instanz.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DER SCHLEIER — die Zahl, an der das ganze Bild hängt
+   ────────────────────────────────────────────────────────────────────────────
+   Hoshis Antworten haben keine eigene Blase (.msg--assistant ist `background:
+   none`), Uhr und Gruß stehen ebenfalls direkt auf dem Grund. Bei einem DUNKLEN
+   Thema mit heller Schrift ist die Gefahr nicht das Dunkel, sondern das LICHT —
+   und dieses Thema IST Licht: ein glühender Horizont ist das Motiv. Darum liegt
+   über der 920-px-Spalte ein subtraktiver Schleier im Grundton, der nach AUSSEN
+   ausfranst, nie nach innen.
+
+   ZWEITE FASSUNG, ZWEI ZAHLEN GEÄNDERT — und beide sind der Grund, warum es
+   diese Fassung überhaupt gibt:
+
+   1. DIE MASKE IST WEG. v1 hat die Zeichnung über der Spalte auf 9 % maskiert.
+      Neun Prozent sind kein „dezent", das ist ein Gespenst: die ganze Mitte des
+      Bildes war schlicht nicht vorhanden, und genau das hat Andi gesehen. Jetzt
+      läuft die Zeichnung ungebremst durch und der Schleier deckt sie ab — das
+      ist derselbe Vertrag, aber richtig herum. Was auch immer die Zeichnung an
+      Helligkeit erzeugt: der Schleier malt ZULETZT und zieht es zum Grundton
+      zurück. Neue Wolken, ein helleres Fenster, eine zusätzliche Lichtbahn —
+      der Vertrag hält, weil er die letzte Ebene ist.
+
+   2. DIE RAMPE HAT FÜNF STOPPS statt zweier. Mit einem einzigen linearen
+      Übergang hat die Deckkraft an beiden Enden einen Knick, und das Auge liest
+      Knicke in Helligkeitsverläufen als LINIE — bei breiten Fenstern stünde
+      eine senkrechte Naht genau auf der Spaltengrenze. Die Kurve fällt zuerst
+      schnell und läuft dann lange flach aus (0,60 · 0,36 · 0,17 · 0,06), damit
+      schon 120 px neben der Spalte das Bild zu zwei Dritteln dasteht.
+
+   MESSWERTE: s. RESULT.md im Wurzelverzeichnis dieses Zweigs; das Werkzeug ist
+   `node tools/theme-contrast/measure.mjs tools/theme-contrast/yoake.scenarios.mjs`
+   (Szenarien × 3 Breiten, schlechtester Bildpunkt der 920-px-Spalte, exit 0 =
+   alle ≥ 4,5:1). Im SEITENRAUM läuft das Bild ungebremst — dort steht per
+   Definition kein Glyph: .app ist 920 px breit und zentriert. Wer .app
+   verbreitert, muss diese Zahlen ZUERST neu messen.
+
+   ────────────────────────────────────────────────────────────────────────────
+   ZWEI EBENEN — UND ALLE UHREN STEHEN IM BILD
+   ────────────────────────────────────────────────────────────────────────────
+   v1 hatte vier CSS-Ebenen und fünf CSS-Uhren, die zusammen einen Dämmerstreifen
+   ergaben. Diese Fassung hat zwei Ebenen, weil das ganze Bild in EINER Datei
+   steht — `yoake-szene.svg`, gebaut von `tools/theme-contrast/yoake-szene.gen.mjs`:
+
+     body           --theme-atmosphere: der stehende Nachthimmel. Nur noch
+                    Rückfallebene — die Zeichnung deckt per `cover` alles.
+     body::before   z-index -2 · DIE ZEICHNUNG. Statisch als Ebene; was sich
+                    bewegt, bewegt sich IM Bild.
+     body::after    z-index -1 · DER SCHLEIER. Vorderste Deko-Ebene, damit der
+                    Kontrast-Vertrag zuletzt malt.
+
+   Die Uhren stehen alle im SVG (Glut 53–79 s · Lichtbahnen 37–47 s · Wolken
+   83–97 s · Sterne 64–81 s · Fenster 23–41 s), und dort gilt die Regel, die
+   den Beweis überhaupt erst führbar macht: JEDE Keyframe beginnt bei opacity:1
+   und geht nur nach unten. Der gemalte Zustand ist damit der HELLSTE, also ist
+   der eingefrorene Zustand zugleich der Kontrast-Worst-Case — messbar, ohne
+   eine Uhr anhalten zu können, die in einem `background-image` läuft.
+
+   Animiert werden ausschließlich `transform` und `opacity` (Projekt-Konvention,
+   s. index.css „Motion-Token").
+
+   ────────────────────────────────────────────────────────────────────────────
+   ZWEI SELEKTOREN je Token-Block (Projekt-Konvention, s. themes.css): `:root[…]`
+   für das Dokument, `[…]` ohne :root, damit die Vorschau-Kachel im Theme-Picker
+   (.settings__swatch setzt data-theme selbst) die ECHTEN Farben zeigt.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='yoake'],
+[data-theme='yoake'] {
+  /* ── Der stehende Nachthimmel — die RÜCKFALLEBENE ─────────────────────────
+     Seit v2 malt die Zeichnung ihren Himmel selbst und deckt per `cover` das
+     ganze Fenster. Dieser Verlauf ist damit nicht mehr das Bild, sondern das,
+     was übrig bleibt, wenn das SVG nicht lädt: dieselbe Dreiteilung in Decke,
+     Naht und erstem Hauch, nur ohne Stadt. Er steht bewusst noch hier, weil ein
+     Thema, das ohne seine eine Bilddatei zu einem schwarzen Rechteck zerfällt,
+     kein Thema ist.
+     1. DIE DECKE — oben bleibt die Nacht zu. Sie dunkelt ab, kann den Kontrast
+        also nur verbessern.
+     2. DIE NAHT — das kalte Violett auf halber Höhe, in dem sich Nacht und Tag
+        berühren. Der eigentliche „Übergang" als Farbe, nicht als Bewegung.
+     3. DER ERSTE HAUCH — ganz unten rechts, tief und breit: der Horizont, den
+        die Zeichnung dann ausführt.
+     Alles Alpha auf --bg-base; der hellste entstehende Punkt ist mitgemessen. */
+  --theme-atmosphere:
+    linear-gradient(
+      180deg,
+      oklch(0.105 0.05 288 / 0.9),
+      oklch(0.125 0.045 290 / 0.34) 34%,
+      transparent 58%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 40%,
+      oklch(0.34 0.075 322 / 0.24) 68%,
+      oklch(0.3 0.06 330 / 0.1) 80%,
+      transparent 92%
+    ),
+    radial-gradient(ellipse 120% 30% at 72% 88%, oklch(0.56 0.11 42 / 0.1), transparent 70%),
+    var(--bg-base);
+
+  /* ── Flächen: die Indigo-Nacht aus old/yoake, mit Chroma statt Grau ────────
+     Das alte Set war violett-grau (#100d1d → C≈0.03). Die Treppe hier hält
+     denselben Farbton (H≈292), bekommt aber echtes Blut — auf einem Himmel, der
+     unten warm wird, muss die Nacht kalt SEIN und nicht nur dunkel.
+     --bg-subtle ist die hellste Fläche und damit der harte Prüfstein für die
+     leiseste Schriftstufe; sie steht darum eine Spur tiefer als im alten Set.
+     Die Hex-Kommentare sind KEINE Handrechnung, sondern das, was Chrome aus dem
+     OKLCH wirklich macht (probe-Modus liest den gerenderten Pixel zurück). Die
+     vorherigen Werte hier waren eigene Mathematik und lagen daneben — --bg-base
+     stand als #17102b im Kommentar und ist in Wahrheit #0d081c. */
+  --bg-base: oklch(0.155 0.042 292); /* #0d081c — die Nacht */
+  --bg-surface: oklch(0.202 0.04 291); /* #171327 — Karten stehen darin */
+  --bg-elevated: oklch(0.232 0.042 290); /* #1d1a30 */
+  --bg-subtle: oklch(0.262 0.044 292); /* #252038 — Hover/Füllung, hellste Fläche */
+  /* Die beiden Haarlinien sind hier bewusst KRÄFTIGER gezeichnet als die Fläche
+     verlangen würde (Haus-Praxis, s. momiji/hanashigure): sie sind die einzige
+     Kontur echter Bedienelemente — .inbox__select, .rooms__search, .rooms__chip,
+     .feed__chip, .feed__refresh, .feed__loadmore, .sched__delall, .compose__bar,
+     .msg__sources__summary — und fallen damit unter WCAG 1.4.11 (≥ 3:1). Sie
+     tragen NIE Text: an den vier Stellen, an denen index.css --bg-hairline als
+     `background` setzt (.kv, .room__devices, .feed, .idle__alarmtrack), ist sie
+     1-px-Gitterfuge bzw. 2-px-Fortschrittsrille, und die Zeilen darüber malen
+     ihren eigenen Grund. Anheben kann also keinen Text gefährden. */
+  --bg-hairline: oklch(0.545 0.05 293); /* #6d6591 — trennt, aber als echte Kontur */
+  --bg-hairline-dashed: oklch(0.6 0.05 296); /* #7c74a3 — für „ehrlich leer" */
+
+  /* ── Schrift: Elfenbein oben, Lavendel unten ───────────────────────────────
+     Die Treppe wandert nicht nur in der Helligkeit, sondern auch im Ton: die
+     laute Stufe ist warm (das Elfenbein #fbf3ec des alten Sets — sie gehört zum
+     kommenden Tag), die leisen Stufen kippen ins Lavendel und gehören noch zur
+     Nacht. Genau das war die Idee des alten Themas, nur mit einem messbaren
+     Ende.
+
+     DIE LEISE HÄLFTE IST IN v2 GESTIEGEN (--text-2 0.845→0.885, --text-3
+     0.725→0.81, --text-4 0.66→0.74), und das ist ein KAUF, kein Geschmack:
+     bezahlt wird damit der Schleier. Er stand in v1 so dicht, dass vom Bild
+     nichts übrig blieb; jeder Zehntelschritt, den er dünner wird, muss die
+     Textleiter vorher gutgemacht haben. Die bindende Stufe ist --text-4 — sie
+     allein entscheidet über den schlechtesten Bildpunkt der Spalte, weil
+     --text-1 mit 17:1 über --bg-base so viel Luft hat, dass es nie knapp wird.
+     Dieselbe Zahl (L 0.74) trägt auch nagareboshi v2, aus demselben Grund.
+
+     Der Preis ist ehrlich zu benennen: die Leiter ist jetzt gleichmäßig (vier
+     Stufen à 0,07 statt 0,11/0,12/0,065) und in der leisen Hälfte lauter. Yoake
+     flüstert eine Spur weniger als vorher. Dafür ist der Sonnenaufgang zu sehen,
+     und das war die Bestellung. */
+  --text-1: oklch(0.955 0.014 62); /* #f7eee7 — 13,66:1 (schlechteste Fläche) */
+  --text-2: oklch(0.885 0.02 330); /* #e1d5df — 11,01:1 */
+  --text-3: oklch(0.81 0.026 328); /* #cbbbca —  8,57:1 */
+  --text-4: oklch(0.74 0.03 326); /* #b5a5b5 —  6,72:1 */
+
+  /* ── Akzent: die Koralle des alten Yoake, unverrückt ───────────────────────
+     #ff947d war die eine Entscheidung, die das alte Thema getragen hat: der
+     erste warme Ton am Himmel, geliehen für Stimme, CTA und Auswahl. Sie bleibt
+     — nur ins OKLCH gehoben, damit sie mit dem Rest rechnen kann. --accent-ink
+     ist die dunkle Beere aus dem alten Set (#25101a), leicht ins Indigo gedreht,
+     damit der gefüllte Button zum Himmel und nicht zum Herbst gehört. */
+  --accent: oklch(0.775 0.135 38); /* #ff9575 */
+  --accent-soft: oklch(0.775 0.135 38 / 0.2);
+  --accent-faint: oklch(0.775 0.135 38 / 0.1);
+  --accent-glow: oklch(0.775 0.135 38 / 0.42);
+  --accent-ink: oklch(0.185 0.045 20); /* #23090a */
+
+  /* ── Status: warm genug für die Szene, kalt genug zum Unterscheiden ────────
+     Der Akzent sitzt auf H38. --error muss davon weg, sonst wird jede Warnung
+     zum Sonnenaufgang: es steht auf H18 (kühleres Rosa-Rot, 20° Abstand) und
+     ist zugleich das chromatischste Token. --warn geht auf H78 (das Gold der
+     ersten Fenster), --success auf H162 (das Grün, das in dieser Stunde noch
+     keins ist). Alle vier sind aus dem alten Set übernommen. */
+  --success: oklch(0.8 0.13 162); /* #64d8a4 */
+  --success-soft: oklch(0.8 0.13 162 / 0.16);
+  --warn: oklch(0.845 0.125 78); /* #f9c267 */
+  --warn-soft: oklch(0.845 0.125 78 / 0.16);
+  --error: oklch(0.72 0.155 18); /* #f6787f */
+  --error-soft: oklch(0.72 0.155 18 / 0.16);
+
+  /* Du-Blase: eine Stufe über der Fläche, kühl — sie gehört noch der Nacht.
+     Kein Akzent-Fill (Projekt-Konvention seit Yoru). */
+  --bg-user: oklch(0.245 0.05 296); /* #231b35 */
+
+  color-scheme: dark;
+}
+
+/* Der Grund selbst. themes.css setzt das für jedes `[data-theme]` bereits so —
+   hier noch einmal explizit, damit diese Datei auch ALLEIN geladen vollständig
+   ist (gleiche Deklaration, kein Konflikt). */
+:root[data-theme='yoake'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── DIE ZEICHNUNG ────────────────────────────────────────────────────────────
+   Alles Bildhafte steckt in `yoake-szene.svg` — Himmel, Glut, Sterne, Wolken,
+   Berge, ferne Stadt, drei Dachreihen, Vordergrund, Lichtbahnen und sämtliche
+   Uhren. Hier steht nur noch, WO es hängt.
+
+   Maß-Vertrag: `cover` + `center bottom`. Die viewBox ist 1600×1000 (1,6:1),
+   flacher als die meisten Fenster — `cover` schneidet also OBEN ab, und oben ist
+   Himmel. Die Horizontlinie bei 70 % Höhe, die Dachreihen bei 79 % und 89 % und
+   der nahe First bei 94 % stehen deshalb in JEDEM Fensterformat an derselben
+   Stelle des Fensters. Die Zeichnung ist deckend: sie ist der Grund, nicht eine
+   Auflage darauf.
+
+   KEINE MASKE. Das ist die eine Zeile, an der v1 gescheitert ist — dort lief
+   die Zeichnung über der Spalte auf 9 % und war damit weg. Sie läuft jetzt voll
+   durch; die Lesbarkeit trägt der Schleier eine Ebene weiter vorn.
+
+   Keine CSS-Animation auf dieser Ebene, und das ist eine Entscheidung: eine
+   Stadt wandert nicht. Was wandert, ist das Licht — und das wandert im Bild. */
+:root[data-theme='yoake'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: url('yoake-szene.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+}
+
+/* ── DER SCHLEIER: der Kontrast-Vertrag als Fläche ────────────────────────────
+   Vorderste Deko-Schicht (z-index -1), also über der Zeichnung. Das ist der
+   ganze Trick: was auch immer darunter an Helligkeit entsteht — hier wird es in
+   der Lesespalte zum Grundton zurückgezogen.
+
+   SUBTRAKTIV, nicht additiv. Auf hellem Grund deckt man mit Weiß ab und der
+   Kontrast zu dunkler Schrift kann nur besser werden; auf dunklem Grund mit
+   heller Schrift gilt das Gegenteil, und ein weißer Schleier wäre hier genau
+   der Fehler. Also deckt dieser mit einem Ton eine Spur UNTER --bg-base ab: die
+   Nacht, die über der Spalte noch liegt, während sie am Horizont schon geht.
+
+   Er bedeckt die volle 920-px-Spalte und franst nach AUSSEN aus. Unter ~1040 px
+   Fensterbreite fällt die calc-Kette auf 0 zusammen, der Schleier deckt alles,
+   und die Zeichnung wird zum Gespenst statt zu verschwinden — bei einem Bild
+   mit glühendem Horizont ist genau das die sichere Richtung. */
+:root[data-theme='yoake'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  --veil: max(0px, 50% - 460px);
+  background-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--veil) - 330px),
+    oklch(0.13 0.04 292 / 0.06) calc(var(--veil) - 260px),
+    oklch(0.13 0.04 292 / 0.17) calc(var(--veil) - 190px),
+    oklch(0.13 0.04 292 / 0.36) calc(var(--veil) - 120px),
+    oklch(0.13 0.04 292 / 0.6) calc(var(--veil) - 55px),
+    oklch(0.13 0.04 292 / 0.7) var(--veil),
+    oklch(0.13 0.04 292 / 0.7) calc(100% - var(--veil)),
+    oklch(0.13 0.04 292 / 0.6) calc(100% - var(--veil) + 55px),
+    oklch(0.13 0.04 292 / 0.36) calc(100% - var(--veil) + 120px),
+    oklch(0.13 0.04 292 / 0.17) calc(100% - var(--veil) + 190px),
+    oklch(0.13 0.04 292 / 0.06) calc(100% - var(--veil) + 260px),
+    transparent calc(100% - var(--veil) + 330px),
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* ── prefers-reduced-motion ───────────────────────────────────────────────────
+   Hier steht mit Absicht KEINE Regel mehr. In v1 mussten fünf CSS-Uhren
+   angehalten und auf einen eigens gemessenen Standbild-Zustand gesetzt werden;
+   jetzt läuft keine einzige Uhr in dieser Datei. Die Uhren stehen im SVG, und
+   die Zeichnung trägt ihre eigene Medienabfrage
+   (`@media(prefers-reduced-motion:reduce){*{animation:none!important}}`) in
+   ihrem eigenen <style>-Block.
+
+   Und weil dort jede Keyframe von opacity:1 nur nach unten läuft, ist der
+   angehaltene Zustand der HELLSTE und VOLLSTÄNDIGE: das Bild hört auf zu gehen,
+   nicht auf zu sein. Es fehlt kein Motiv, es steht nur still — und es ist
+   zugleich der gemessene Worst Case, weshalb es dafür keine zweite Messreihe
+   braucht. */
+
+/* Die Kopfzeile ist die Insel im Nachthimmel: ein Verlauf von der etwas
+   helleren Oberkante zur tieferen Unterkante, plus eine Korall-Lichtlippe
+   statt eines Schattens (Muster wie Momiji/Nagori, die ihre Nav ebenfalls nur
+   tönen). Das Milchglas selbst (backdrop-filter) steht in index.css. */
+:root[data-theme='yoake'] .nav {
+  background: linear-gradient(180deg, oklch(0.222 0.044 292 / 0.9), oklch(0.178 0.04 294 / 0.86));
+  box-shadow: 0 1px 0 oklch(0.775 0.135 38 / 0.16);
+}
+
+/* Der Sprachstern ist der erste Lichtpunkt über der Stadt: Koralle im Kern, ein
+   Rest Lavendel an der Nachtseite. Das ist unverändert die Geste des alten
+   Yoake — nur die Farben rechnen jetzt mit. Form und Bewegung bleiben die des
+   Basis-Orbs; das Thema ist Farbe. */
+:root[data-theme='yoake'] .vc-orb__core {
+  background: linear-gradient(145deg, oklch(0.9 0.07 52), var(--accent) 58%, oklch(0.63 0.11 300));
+}
+
+/* Der Bloom kippt von Koralle (innen) in das Indigo der Nacht (außen) — Licht,
+   das sich in kalter Morgenluft verliert. */
+:root[data-theme='yoake'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 56% 60%,
+    var(--accent-glow) 0%,
+    oklch(0.63 0.11 300 / 0.16) 38%,
+    transparent 72%
+  );
+}
+
+/* Die Pegel-Ringe bleiben kühl: die Stimme soll im dunklen Bild ein Lichtpunkt
+   sein, kein Alarm. Keine neue Mechanik — nur Farbe auf dem bestehenden Ring. */
+:root[data-theme='yoake'] .vc-orb__ring {
+  border-color: oklch(0.6 0.05 300 / 0.5);
+  box-shadow: 0 0 0 5px oklch(0.66 0.055 300 / 0.12);
+}

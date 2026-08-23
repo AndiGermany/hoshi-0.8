@@ -1,0 +1,946 @@
+/* ════════════════ AMAYADORI (雨宿り) — untergestellt im Wolkenbruch ════════════════
+   Hoshi 0.8 · eigenständige Themen-Datei (dynamisch nachladbar, kein Import nötig)
+   ────────────────────────────────────────────────────────────────────────────────────
+   DAS BILD: eine Seitengasse, Nacht, es schüttet. Kein Nieseln — ein Wolkenbruch,
+   der die Stadt hinter Wasser stellt. Der Asphalt hat den Himmel geschluckt und
+   gibt ihn als lange, zerlaufene Streifen zurück; in den Pfützen steht das Licht
+   auf dem Kopf. Links brennt eine Papierlaterne über einem geschlossenen Laden,
+   daneben glüht ein Automat; rechts hinten die zweite Lichtquelle, dazwischen die
+   Silhouetten der Stadt mit ein paar warmen Fenstern und die Leitungen, die
+   durchhängen. Und man selbst steht TROCKEN: unter einem Vordach, das man nicht
+   sieht, weil man darunter steht — man sieht nur, dass hier kein Wasser ankommt.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   DIE RADIKALE ENTSCHEIDUNG: DIE LESESPALTE IST DER TROCKENE FLECK
+   ────────────────────────────────────────────────────────────────────────────────
+   Andere Themen legen einen Schleier unter den Text, damit die Schrift lesbar
+   bleibt, und erklären ihn hinterher zur Stimmung. Hier ist es umgekehrt: der
+   trockene Fleck ist die ERZÄHLUNG, und die Lesbarkeit fällt für ihn ab.
+   Ein einziger Regler (`--amayadori-dry`) beschreibt ihn, und DREI Schichten
+   gehorchen exakt derselben Kante:
+     1. der Regen HÖRT DORT AUF (Maske auf 0 — das ist die Traufe),
+     2. genau davor läuft das Dachwasser als dichtes Rinnsal ab (die Traufkante
+        ist die nasseste Stelle des ganzen Bildes, physikalisch wie im Bild),
+     3. und unter derselben Kante liegt der Schleier, der die Zeichnung dämpft.
+   Weil alle drei dieselbe Zahl benutzen, liest sich der Rand nicht als drei
+   Effekte, sondern als EIN Gegenstand: ein Dachrand über dem eigenen Kopf.
+
+   Der trockene Fleck ist `min(920px, 100vw)` breit — also auf JEDEM Fenster
+   exakt die App-Spalte (`.app`, max-width 920px, zentriert, ohne seitliche
+   Polsterung; index.css:103). Und weil es NUR diese eine Zahl gibt, kann die
+   Traufkante gar nicht in die Spalte rutschen: der Vertrag hängt nicht an einer
+   Breakpoint-Verabredung zwischen zwei Werten, sondern an der Geometrie. Eine
+   zweite Zahl könnte auseinanderlaufen — und tat es (siehe unten).
+
+   WAS DAS KOSTET — und warum es nicht anders geht. Der sichtbare Regen lebt
+   außerhalb dieser Kante, also im Seitenraum: (Fenster − 920 px) / 2 je Seite.
+   Das sind 500 px bei 1920, 52 px bei 1024 — und 0 px, sobald das Fenster
+   schmaler als 920 px ist. Dann füllt die Spalte das Fenster, und es gibt
+   PHYSISCH keinen Streifen mehr, in dem Regen fallen könnte, ohne über einem
+   Buchstaben zu stehen. Also fällt er dort nicht: je schmaler das Fenster, desto
+   tiefer steht man unter dem Vordach — bis man vom Wetter nur noch weiß, dass
+   man ihm entkommen ist. (Der Ausweg wäre, der Spalte unter 1096 px eine
+   Traufen-Polsterung zu geben; das ist eine Layout-Entscheidung und steht als
+   Rate-Stelle in RESULT.md, nicht still in dieser Datei.)
+
+   DAS WAR DER GEERBTE BUG, und er ist hier benannt statt weggeputzt: die
+   Vorgänger-Fassung ließ die Traufkante mit `100vw - 176px` nach innen wandern,
+   damit unter 1096 px immer 88 px Regen sichtbar bleiben — mitten in die Spalte
+   hinein. Über dem geschützten Grund stand dann nicht nur der Regen (Silber bei
+   0,055 / 0,035 Alpha; DAS war bedacht und gemessen), sondern auch das
+   ABLAUFBAND der Traufkante: 34 px breit, rgb(214 226 233 / 0,11), das hellste
+   nasse Element des ganzen Bildes, bei z-index −1 also ÜBER dem Schleier (−2).
+   Ein Band aus dem hellsten Wasser quer über der Lesespalte ist die exakte
+   Umkehrung dessen, was dieses Theme erzählt. Lieber kein sichtbarer Regen als
+   nasser Text.
+
+   Der geerbte Kopf nannte das „nachgemessen und unkritisch — der Regen kann den
+   Vertrag nicht reißen". Er riss ihn. Derselbe Messcode auf beiden Fassungen,
+   --text-4 im schlimmsten Frame:
+       1024×768   VORHER 3,57 ✗   NACHHER 4,72 ✓
+       1000×800   VORHER 3,52 ✗   NACHHER 4,72 ✓
+        880×1180  VORHER 4,47 ✗   NACHHER 5,31 ✓
+   Drei von sechs Fenstern unter AA, darunter 1024×768 — die Landschaftslage des
+   iPads, auf dem dieser Schirm 24/7 läuft. Nicht die Regen-Alpha war der Fehler
+   (die war wirklich bedacht), sondern das vergessene Ablaufband daneben.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   WARUM DAS NICHT HANASHIGURE IST (花時雨 liegt im selben Wasser)
+   ────────────────────────────────────────────────────────────────────────────────
+   Hanashigure ist TAG und HELL, man steht SELBST im Regen und schaut auf den
+   Tempel; sein Regen hört nirgends auf, er wird über der Spalte nur leiser
+   (Maske 35 %), „es gibt hier kein Dach". Amayadori ist NACHT und DUNKEL, und es
+   gibt sehr wohl ein Dach:
+     • Der Regen hört an der Spaltenkante SICHTBAR auf (Maske 0). Das ist der
+       Unterschied zwischen „im Regen stehen" und „untergestellt sein".
+     • Er dunkelt nicht, er HELLT AUF — Silber auf Schwarz. Bei Nacht sieht man
+       Regen nur, wo Licht ihn trifft.
+     • Er neigt nach 93°, Hanashigure nach 97°: die Striche stehen spiegelbildlich
+       schräg, der Schauer kommt von der anderen Seite.
+     • Das Warme ist hier DRINNEN und nah (Kaki-Persimone als Herdfeuer), bei
+       Hanashigure draußen und weit weg.
+   Und es ist auch nicht Yoru: Yoru ist die ruhige Nacht. Hier ist Wetter.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   DIE PALETTE IST ANDIS ALT-PALETTE (die Seele), mit genau EINER Abweichung
+   ────────────────────────────────────────────────────────────────────────────────
+   Alle Flächen, Signale und der Kaki-Akzent stehen byte-gleich wie in
+   `old/amayadori.css`. Angehoben wurde einzig `--text-4` (#90836c → #9a8c74,
+   +7 % linear, dieselbe warme Familie): der Spec-Wert ist auf zwei der fünf
+   realen Untergründe KEIN AA (--bg-subtle 4,02:1, --bg-user 4,47:1) und wird im
+   Produkt als echte Schriftfarbe benutzt (73 Fundstellen in `src/`). Der Wert
+   steht als Rate-Stelle in RESULT.md — er soll nicht still „repariert" wirken.
+
+   KONTRASTE (WCAG 2.1, sRGB, selbst nachgerechnet mit
+   `tools/theme-contrast/wcag_amayadori.py` — kein Wert ist erinnert):
+                    base  surface elevated subtle   user   WORST
+       --text-1    16,02   14,95   13,89   12,43   13,82   12,43
+       --text-2    11,47   10,71    9,95    8,90    9,89    8,90
+       --text-3     6,49    6,06    5,63    5,04    5,60    5,04
+       --text-4     5,85    5,46    5,07    4,54    5,05    4,54
+       --accent     8,76    8,17    7,60    6,80    7,55    6,80
+       --success    9,15    8,54    7,93    7,10    7,89    7,10
+       --warn      11,24   10,49    9,75    8,72    9,69    8,72
+       --error      6,27    5,85    5,43    4,86    5,40    4,86
+   Matrix-Minimum 4,54:1 — AA auf jeder Stufe, auf jedem Grund.
+   Zusätzlich:
+     • CHIP (Farbe auf ihrer EIGENEN *-soft-Füllung): über --bg-base 5,13–8,22 ·
+       über --bg-surface 4,66–7,43 — alle ≥ 4,5.
+     • --accent-ink auf --accent (gefüllter CTA): 8,76:1.
+   Bewusst NICHT AA und hier benannt statt versteckt:
+     • Farbe auf ihrer *-soft-Füllung über --bg-subtle (3,85–6,00): --bg-subtle ist
+       eine Hover-/Füllfläche und trägt keine getönten Chips.
+     • --text-4 AUF einer getönten Status-Füllung: .hero__time (index.css:717)
+       steht in .hero--up auf --success-soft (:721) → 4,04 und in .hero--down auf
+       --error-soft (:733) → 4,35. Das sind die beiden BELEGTEN Renderpfade, und
+       beide sind hier nicht AA. (wcag_amayadori.py misst zusätzlich --accent-soft
+       3,73 und --warn-soft 3,87 als Vorrat — auf diesen beiden steht heute
+       nirgends --text-4.) Er ist es im Produkt nirgends: das Basis-Set (Yoru, index.css)
+       liegt an derselben Stelle bei 2,25–2,46 — Amayadori ist dort fast doppelt so
+       gut wie der Ist-Zustand. AA würde eine deutliche Verzerrung von Andis Palette
+       kosten; die Entscheidung gehört ihm, nicht mir (RESULT.md, Rate-Stelle 2).
+     • --bg-hairline 1,19–1,53:1 (WCAG 1.4.11 verlangt 3:1 für Nicht-Text). Kommt
+       unverändert aus der Spec: diese Haarlinie TRENNT, sie zeichnet nicht, und sie
+       ist in keinem Steuerelement die einzige Auskunft. Bestätigungspflichtig.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   SZENEN-EBENE (body::after) — amayadori-szene.svg
+   ────────────────────────────────────────────────────────────────────────────────
+   Flache Vektor-Szene, viewBox 1600×1000, ~30 KB, keine Animation im SVG. Sie ist
+   halbdurchlässig gebaut: jede Ebene hängt an einer Gruppen-Opazität, damit die
+   ATMOSPHÄRE (der body-Hintergrund unten) DURCH die Zeichnung sichtbar bleibt.
+   Verläufe können Dunst, Vektoren können Kanten — beides zusammen ergibt Tiefe,
+   die keine der beiden Techniken allein hat.
+   Größen-Vertrag: `cover` + `center bottom`. Die viewBox ist 1,6:1, flacher als
+   die üblichen Fenster: `cover` schneidet oben Himmel weg, die Straße bleibt
+   stehen. Die beiden Lichtquellen liegen bei viewBox-x ≈ 250–420 (Laterne +
+   Automat links) und ≈ 1270–1500 (Automat rechts); die Mitte ist Asphalt,
+   Pfützen und Stadt — genau das, worauf die Textspalte stehen soll.
+
+   GEMESSEN, nicht erinnert (headless Chrome, echte Pixel, schlimmster Frame —
+   `python3 tools/theme-contrast/measure_amayadori.py --sweep`, zweimal gelaufen,
+   byte-gleiche Zahlen). Gesucht wird der HELLSTE Pixel im 920-px-Band der
+   Lesespalte und dagegen `--text-4` gerechnet, die leiseste Schriftstufe:
+
+       Fenster      hellster i.d. Spalte  --text-4  --text-1   Seitenraum
+       1920×1080    #1d1914                   5,31     14,54   #fed5aa (2,40)
+       1440×900     #242423                   4,72     12,92   #747c7e (1,29)
+       1280×800     #242423                   4,72     12,92   #6f7679 (1,40)
+       1024×768     #242423                   4,72     12,92   #2d2821 (4,44)
+       1000×800     #242423                   4,72     12,92   #494c4e (2,63)
+        880×1180    #1d1914                   5,31     14,54   — kein Seitenraum
+   Schlechtester Fall über alle Fenster: --text-4 4,72:1 — AA auf jedem Fenster.
+
+   DREI DINGE, DIE DIESE TABELLE BEWEIST:
+     • Der Seitenraum wird bis #fed5aa hell — das ist die Laterne, ungeschleiert.
+       Die Zeichnung ist also wirklich da; sie steht nur, wo nie ein Buchstabe
+       steht. „Dunkel" ist hier ein Ort, keine Eigenschaft.
+     • 880×1180 ist SCHMALER als die Spalte, dort deckt der trockene Fleck das
+       ganze Fenster — und misst mit 5,31 BESSER als jedes breite Fenster. Genau
+       das ist die Umkehrung des geerbten Bugs: das schmale Fenster war der
+       gefährliche Fall, jetzt ist es der sicherste.
+     • Der hellste Pixel in der Spalte ist kein Wasser mehr, sondern eine Kante
+       der Zeichnung (≈ #d8eaf2, durch die 10 % Restdurchlass des Schleiers).
+       Regen und Ablaufband kommen dort rechnerisch nicht mehr vor.
+
+   SCHLEIER-KURVE (1440×900, --amayadori-veil gedreht, --text-4):
+       0,60 → 1,80 · 0,70 → 2,51 · 0,78 → 3,27 · 0,84 → 3,97 ✗
+       0,90 → 4,72 ✓(gewählt) · 0,92 → 4,96 · 0,94 → 5,22 · 0,95 → 5,33
+   AA reißt zwischen 0,84 und 0,90. Der gewählte Wert ist damit der ERSTE, der
+   hält — 0,22 Stufen Luft, nicht mehr. Das ist knapper als bei den
+   Geschwister-Themen und steht als Rate-Stelle 3 in RESULT.md: wer diese Palette
+   oder die Szene anfasst, muss hier neu messen, nicht schätzen.
+
+   ────────────────────────────────────────────────────────────────────────────────
+   ZWEI SELEKTOREN je Token-Block (Projekt-Konvention, s. themes.css):
+   `:root[data-theme='amayadori']` (0,2,0) gewinnt am <html> gegen die Basis-Token
+   unabhängig von der Ladereihenfolge; der nackte `[data-theme='amayadori']`
+   (0,1,0) trägt die Token auch an ein verschachteltes Element, das `data-theme`
+   selbst setzt — genau das macht die echte Farbvorschau im Theme-Picker
+   (.settings__swatch).
+   ════════════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='amayadori'],
+[data-theme='amayadori'] {
+  /* ── Die Szene als Flächen-Stapel (erste Schicht = oberste) ─────────────────
+     1. WOLKENDECKE: der Himmel hängt herunter und drückt. Kaltes Regenblau,
+        oben am stärksten, bei 58 % im Nichts. Das ist die einzige Schicht, die
+        über der ganzen Breite liegt — Wetter kennt keinen Seitenrand.
+     2./3. REGENBLAU IN DEN SEITENRÄNDERN: die Signatur aus der Alt-Datei, nur
+        kräftiger. Die Temperaturspaltung TRÄGT die Stimmung — das warme Innen
+        liest sich erst als Schutz, WEIL außen die kalte Farbe steht.
+     4. HERDFEUER: die Kaki-Wärme unten links, dort wo im Bild die Laterne und
+        der Automat stehen. Sehr flach und sehr leise: sie erklärt das Licht der
+        Zeichnung, sie ersetzt es nicht.
+     5. NASSE STRASSE: der Asphalt gibt ganz unten Himmelslicht zurück — die
+        einzige Schicht, die aufhellt statt zu tönen.
+     Kein Kommentar INNERHALB des Werts: eine Custom Property wird als Token-Strom
+     gespeichert und diese Datei wird dynamisch nachgeladen; der Wert bleibt darum
+     ein einziger, glatter Ausdruck. */
+  --theme-atmosphere:
+    linear-gradient(
+      180deg,
+      rgb(110 130 150 / 0.16),
+      rgb(110 130 150 / 0.05) 34%,
+      transparent 58%
+    ),
+    radial-gradient(ellipse 30% 60% at 0% 46%, rgb(110 130 150 / 0.13), transparent 62%),
+    radial-gradient(ellipse 28% 56% at 100% 64%, rgb(110 130 150 / 0.11), transparent 62%),
+    radial-gradient(ellipse 34% 30% at 22% 84%, rgb(238 155 110 / 0.1), transparent 66%),
+    linear-gradient(0deg, rgb(199 210 218 / 0.07), transparent 22%), var(--bg-base);
+
+  /* ── Flächen: nasses Zedernholz unterm Vordach ──────────────────────────────
+     Dunkel-Kanon (die gehobene Fläche ist HELLER als der Grund), aber warm statt
+     neutral: alles liegt auf einem Braunstich, der bei Kerzenlicht entsteht und
+     nicht bei Tageslicht. --bg-subtle ist die Hover-/Füllfläche und bleibt der
+     harte Kontrast-Prüfstein (dort steht --text-4 mit 4,54:1 am knappsten). */
+  --bg-base: #100e0c;
+  --bg-surface: #1a1613;
+  --bg-elevated: #221d18;
+  --bg-subtle: #2c2620;
+  --bg-hairline: #3a322a;
+  --bg-hairline-dashed: #4a4038;
+
+  /* ── Schrift: Elfenbein, das im Lampenlicht liegt ───────────────────────────
+     Kein Weiß — die hellste Stufe hat einen warmen Kern (#f2e9dc), sonst läge
+     sie kälter als das Licht, das sie beleuchtet. Nach hinten wird die Treppe
+     leiser UND wärmer. */
+  --text-1: #f2e9dc;
+  --text-2: #d3c6b4;
+  --text-3: #a2947f;
+  --text-4: #9a8c74; /* Andis #90836c +7 %: die leiseste Stufe hält jetzt überall AA */
+
+  /* ── Akzent: Kaki-Persimone — das Herdfeuer, das man für einen dagelassen hat.
+     Trägt Stimme, CTA, Auswahl, Fokus — sonst nichts. --accent-ink ist der
+     Grund selbst, der im gefüllten Knopf darauf sitzt (8,76:1). */
+  --accent: #ee9b6e;
+  --accent-soft: rgb(238 155 110 / 0.2);
+  --accent-faint: rgb(238 155 110 / 0.1);
+  --accent-glow: rgb(238 155 110 / 0.4);
+  --accent-ink: #100e0c;
+
+  /* ── Status: gedämpft, aber eindeutig ───────────────────────────────────────
+     --error steht mit H≈8 pinkseitig neben dem orangeseitigen Kaki-Akzent
+     (H≈28): ein Rot-Signal neben einem Rot-Akzent braucht einen eigenen Hue,
+     sonst liest man Wärme als Warnung. */
+  --success: #8fbf87;
+  --success-soft: rgb(143 191 135 / 0.16);
+  --warn: #e8c07a;
+  --warn-soft: rgb(232 192 122 / 0.16);
+  --error: #e0736a;
+  --error-soft: rgb(224 115 106 / 0.16);
+
+  /* Du-Blase: eine Spur wärmer und höher als der Grund — die eigene Nachricht
+     liegt im Licht, nicht im Regen. Kein Akzent-Fill (Projekt-Konvention seit
+     Yoru). --text-1 darauf 13,82:1 · --text-4 darauf 5,05:1. */
+  --bg-user: #241d18;
+
+  color-scheme: dark;
+}
+
+/* ── DIE REGLER DES BILDES ──────────────────────────────────────────────────────
+   Bewusst NUR auf `:root[data-theme='amayadori']`, nicht auf dem nackten
+   Selektor: die Vorschau-Kachel im Theme-Picker setzt `data-theme` auf ein <div>
+   und soll die Token erben, aber nicht anfangen, ein Vordach zu simulieren.
+
+   Und bewusst auf `:root`, NICHT auf `body` — die Lehre des Aoi-Pods vom 19.08.:
+   Custom Properties erben nach UNTEN. Der Regenabfluss unten hängt an
+   `:root::after`, einem Pseudoelement von <html>; eine Deklaration auf <body>
+   erreicht ihn nie, und `var()`-Ersatzwerte rechnen dann still weiter. Das sieht
+   richtig aus und ist untunbar — genau der Fehler, den Aoi teuer gefunden hat.
+
+   --amayadori-dry     Die TRAUFKANTE, und zugleich die VERTRAGSKANTE — es gibt
+                       hier bewusst nur diese eine Zahl. Sie ist immer exakt die
+                       App-Spalte: 920 px, und wenn das Fenster schmaler ist, das
+                       Fenster. `.app` hat keine seitliche Polsterung
+                       (index.css:103), Text steht also bis an diese Kante; sie
+                       darf deshalb nie schmaler werden als die Spalte. Regen,
+                       Ablaufband und Schleier lesen alle DIESEN Ausdruck — eine
+                       zweite Zahl könnte auseinanderlaufen, diese hier nicht.
+   --amayadori-feather Wie weich die Kante ausläuft (nach AUSSEN, nie nach
+                       innen — nach innen gefedert wäre die Spaltenkante
+                       ungeschützt).
+   --amayadori-veil    Deckkraft des Schleiers unter dem trockenen Fleck. Der
+                       gemessene Wert; die Kurve dazu steht in RESULT.md.
+
+   ZUR ZWEITEN FASSUNG: 0,9 → 0,86 und 72 px → 96 px Feder. Beides ist NICHT
+   dafür da, die Spalte heller zu machen — das tut es kaum, weil die Obergrenze
+   in der Spalte ohnehin --text-4 setzt und nicht der Schleier. Es ist dafür da,
+   dass die Szene DARUNTER überhaupt noch Stufen hat: bei 0,9 blieben von einem
+   Bildbereich zwischen 20 und 200 noch 18 Grauwerte übrig, bei 0,86 sind es 25,
+   und der Farbabstand warm↔kalt überlebt statt zu vergrauen. Die breitere Feder
+   nimmt der Kante das Rahmenhafte: der Randstreifen ist bei 1366 px 223 px
+   breit, 96 px davon sind jetzt Übergang statt Sprung. */
+:root[data-theme='amayadori'] {
+  --amayadori-dry: min(920px, 100vw);
+  /* 330 px, nicht 120. Die Piloten-Lehre (REZEPT F) hat es an nagareboshi
+     ausgezaehlt: eine Feder unter ~300 px mit gleichmaessigem Verlauf ist am
+     Rand der Lesespalte als NAHT sichtbar — das Auge liest dann ein Rechteck
+     auf einem Bild, kein Wetter. Gemessen an der eigenen Frame-Serie: mit
+     120 px linear stand hier ein Helligkeitssprung, mit 330 px in der
+     schnell-dann-flachen Kurve (0,60/0,36/0,17/0,06 der Deckkraft bei
+     18/39/65/91 % der Federbreite) laeuft der Schleier aus, statt zu enden.
+     Die Feder liegt AUSSERHALB der Spalte — innen bleibt volle Deckung, der
+     Kontrast-Vertrag ist von dieser Zahl darum unberuehrt. */
+  --amayadori-feather: 330px;
+  --amayadori-veil: 0.86;
+}
+
+/* Der Grund gehört dem body. themes.css hat dieselbe Regel generisch für
+   `:root[data-theme]`; sie steht hier noch einmal, damit die Datei auch ALLEIN
+   geladen vollständig ist — gleiche Spezifität, gleicher Wert, kein Konflikt. */
+:root[data-theme='amayadori'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── DER WOLKENBRUCH (body::before, z-index -1) ────────────────────────────────
+   Zwei übereinanderliegende Regenwände aus haarfeinen, geneigten Strichen: eine
+   dichte vorn (11 px Abstand) und eine lockere dahinter (22 px), beide auf
+   derselben Achse (93°, also ~3° aus der Senkrechten). Gleiche Achse, zwei
+   Dichten — nur so entsteht Tiefe statt Moiré.
+
+   SIE HELLEN AUF. Bei Nacht ist Regen nicht dunkel, sondern genau dort sichtbar,
+   wo Licht ihn trifft; kaltes Regensilber (#c7d2da) auf warmem Schwarz. Die
+   Alphas (0,055 / 0,035) sind kräftiger als in der Alt-Datei (0,035, eine Wand):
+   das hier ist ein Wolkenbruch, kein Nieseln. Bezahlbar ist das nur, weil der
+   Regen die Lesespalte gar nicht erst betritt.
+
+   DER FEHLER DER ERSTEN FASSUNG, UND SEINE BEHEBUNG. Bei einem Gradienten auf
+   93° zeigt die Musterachse in Bildschirmkoordinaten auf (sin 93°, −cos 93°) =
+   (0,99863 | 0,05234). Eine reine Y-Verschiebung um d verschiebt die Phase also
+   nur um d · 0,05234 zur Seite. Die alte Fassung fuhr 420,35 px in 19 s und
+   nannte das Ergebnis „ein stehendes Gitter, das driftet" — was stimmte, und
+   genau das Problem war: eine SENKRECHTE Linie, die man SENKRECHT verschiebt,
+   bewegt sich für das Auge nicht. Sie ist ja auf sich selbst abgebildet.
+   Sichtbar blieben 1,2 px/s seitliche Wanderung. Das ist kein fallender Regen,
+   das ist ein Vorhang aus Tapete.
+
+   Es bewegt sich erst, wenn die Striche STRICHE sind, also unterbrochen. Die
+   Maske hat darum eine zweite Ebene: waagerechte Bänder (16 px Strich, weich
+   auslaufend bis 34 px, dann 26 px Lücke), die mit der Traufmaske GESCHNITTEN
+   werden. Aus endlosen Linien werden Tropfenspuren, und die Y-Fahrt bewegt
+   jetzt genau das, was man sieht. Aus 1,2 px/s werden 140 px/s.
+
+   Die Fahrt ist trotzdem gerechnet, nicht gegriffen — sie muss BEIDE Muster
+   gleichzeitig schließen: 1261,05 px sind exakt 21 Strich-Perioden (60,05 px)
+   UND 66,0 px seitliche Phase, also 6 Perioden der dichten (11 px), 3 der
+   lockeren (22 px) und 2 der nahen Wand (33 px). Alle vier Zahlen gehen auf;
+   die Schleife hat keinen Sprung. Die dritte, gröbste Wand (2 px breit, 33 px
+   Abstand) ist neu: sie ist der Regen, der direkt vor einem fällt.
+
+   ZWEITE UHR, weil es zwei Bewegungen sind: `amayadori-squall` (43 s, alternate)
+   lässt die Deckkraft zwischen 0,78 und 1 schwingen — Böen. Sie hört nie auf
+   (Minimum 0,78), sonst wäre der Wolkenbruch ein Schauer. 19 s und 43 s sind
+   teilerfremd (beide prim), die gemeinsame Wiederkehr liegt bei 13,6 min; mit den
+   Uhren des Abflusses (11 s / 31 s) und der Tropfen (47/61/79 s) wiederholt sich
+   das Gesamtbild frühestens nach Jahren.
+
+   NUR transform/opacity werden animiert (Projekt-Konvention, index.css
+   „Motion-Token") — kein Layout, kein Repaint der Gradienten.
+
+   STAPELUNG: `position:fixed; z-index:-1` hält die Ebene HINTER jedem normalen
+   (nicht positionierten) Inhalt, aber ÜBER dem body-Hintergrund
+   (--theme-atmosphere ist eine reguläre `background`-Eigenschaft und liegt als
+   Backdrop der Stacking-Context-Wurzel immer zuunterst). Karten sind deckend —
+   der Regen zieht also HINTER der Lesespalte durch, selbst wenn die Maske ihn
+   dort nicht ohnehin abschneiden würde.
+
+   `inset: -440px 0 0` gibt oben Anlauf: die Ebene ist eine ganze Wanderung höher
+   als der Viewport, damit die 420-px-Fahrt nie eine regenfreie Kante am oberen
+   Bildrand freilegt (die Alt-Datei tat mit `inset:0` + 150 px genau das).
+
+   DIE MASKE IST DIE TRAUFE. `black` bis 30 px vor die Kante des trockenen
+   Flecks, dann in `--amayadori-feather` auf `transparent` — und innerhalb bleibt
+   sie transparent. Der Regen hört SICHTBAR auf. Das ist kein Kontrast-Trick,
+   sondern das Motiv; was der Schleier für die Zahlen tut, steht weiter unten. */
+:root[data-theme='amayadori'] body::before {
+  content: '';
+  position: fixed;
+  inset: -440px 0 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      93deg,
+      rgb(214 226 234 / 0.2) 0px,
+      rgb(214 226 234 / 0.2) 2px,
+      transparent 2px,
+      transparent 33px
+    ),
+    repeating-linear-gradient(
+      93deg,
+      rgb(199 210 218 / 0.15) 0px,
+      rgb(199 210 218 / 0.15) 1px,
+      transparent 1px,
+      transparent 11px
+    ),
+    repeating-linear-gradient(
+      93deg,
+      rgb(176 190 202 / 0.095) 0px,
+      rgb(176 190 202 / 0.095) 1px,
+      transparent 1px,
+      transparent 22px
+    );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(50% - var(--amayadori-dry) / 2 - var(--amayadori-feather)),
+    transparent calc(50% - var(--amayadori-dry) / 2),
+    transparent calc(50% + var(--amayadori-dry) / 2),
+    #000 calc(50% + var(--amayadori-dry) / 2 + var(--amayadori-feather)),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(50% - var(--amayadori-dry) / 2 - var(--amayadori-feather)),
+    transparent calc(50% - var(--amayadori-dry) / 2),
+    transparent calc(50% + var(--amayadori-dry) / 2),
+    #000 calc(50% + var(--amayadori-dry) / 2 + var(--amayadori-feather)),
+    #000 100%
+  );
+  animation:
+    amayadori-fall 9s linear infinite,
+    amayadori-squall 43s var(--ease-standard, ease-in-out) infinite alternate;
+}
+
+/* DIE STRICHE. Zweite Maskenebene, mit der Traufmaske GESCHNITTEN statt zu ihr
+   addiert — sonst wäre die Vereinigung beider Masken das Gegenteil dessen, was
+   sie soll, und der Regen liefe über die Lesespalte. Genau deshalb steht das
+   hier als Aufsatz und nicht in der Grundregel: wo `mask-composite` fehlt,
+   bleibt die Traufmaske von oben stehen und der Regen ist durchgezogen statt
+   gestrichelt. Weniger schön, nie falsch.
+
+   `-webkit-mask-composite: source-in` ist dieselbe Rechnung in der alten
+   Schreibweise; beide stehen da, weil Chrome je nach Alter die eine oder die
+   andere Eigenschaft liest. */
+@supports (mask-composite: intersect) {
+  :root[data-theme='amayadori'] body::before {
+    -webkit-mask-image:
+      repeating-linear-gradient(
+        to bottom,
+        #000 0px,
+        #000 16px,
+        transparent 34px,
+        transparent 60.05px
+      ),
+      linear-gradient(
+        to right,
+        #000 0%,
+        #000 calc(50% - var(--amayadori-dry) / 2 - var(--amayadori-feather)),
+        transparent calc(50% - var(--amayadori-dry) / 2),
+        transparent calc(50% + var(--amayadori-dry) / 2),
+        #000 calc(50% + var(--amayadori-dry) / 2 + var(--amayadori-feather)),
+        #000 100%
+      );
+    mask-image:
+      repeating-linear-gradient(
+        to bottom,
+        #000 0px,
+        #000 16px,
+        transparent 34px,
+        transparent 60.05px
+      ),
+      linear-gradient(
+        to right,
+        #000 0%,
+        #000 calc(50% - var(--amayadori-dry) / 2 - var(--amayadori-feather)),
+        transparent calc(50% - var(--amayadori-dry) / 2),
+        transparent calc(50% + var(--amayadori-dry) / 2),
+        #000 calc(50% + var(--amayadori-dry) / 2 + var(--amayadori-feather)),
+        #000 100%
+      );
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+  }
+}
+
+@keyframes amayadori-fall {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 1261.05px, 0);
+  }
+}
+
+/* `to` = die volle Deckung; der Ruhezustand (`from`) ist die Bö-Pause. */
+@keyframes amayadori-squall {
+  from {
+    opacity: 0.78;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── DER ABFLUSS AN DER TRAUFKANTE (:root::after, z-index -1) ──────────────────
+   Die nasseste Stelle eines Unterstands ist nicht der Regen davor, sondern die
+   Kante, an der das gesammelte Dachwasser abläuft. Genau dort — in zwei schmalen
+   Bändern, die außen an der Kante des trockenen Flecks kleben — liegt eine
+   dritte, sehr dichte Wand (7 px Abstand, doppelte Deckkraft) mit eigener,
+   schnellerer Uhr. Das ist der Grund, warum die Kante als GEGENSTAND liest und
+   nicht als Maskenrand: Wasser wird dort mehr, nicht einfach nur weniger.
+
+   Eigene Fall-Zahl, dieselbe Rechnung: 7 px Periode ⇒ eine Periode entspricht
+   133,75 px Y-Weg; 401,25 px sind genau drei davon. In 11 s ergibt das 36,5 px/s
+   — dreimal so schnell wie der Vorhang dahinter, so wie ablaufendes Dachwasser
+   eben schneller ist als Regen in der Luft.
+
+   Sie wohnt auf `:root::after`, weil body seine beiden Pseudoelemente schon
+   vergeben hat (Regen, Szene). Der `:root`-gebundene Selektor hält sie außerdem
+   aus der Vorschau-Kachel des Theme-Pickers heraus.
+
+   MASKE: zwei Bänder von 34 px Breite, die AUSSEN an der Kante enden (bei
+   exakt derselben `--amayadori-dry`-Rechnung wie Regen und Schleier). Innerhalb
+   des trockenen Flecks: nichts. */
+:root[data-theme='amayadori']::after {
+  content: '';
+  position: fixed;
+  inset: -440px 0 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    93deg,
+    rgb(214 226 233 / 0.22) 0px,
+    rgb(214 226 233 / 0.22) 1px,
+    transparent 1px,
+    transparent 7px
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    transparent calc(50% - var(--amayadori-dry) / 2 - 52px),
+    #000 calc(50% - var(--amayadori-dry) / 2 - 5px),
+    transparent calc(50% - var(--amayadori-dry) / 2),
+    transparent calc(50% + var(--amayadori-dry) / 2),
+    #000 calc(50% + var(--amayadori-dry) / 2 + 5px),
+    transparent calc(50% + var(--amayadori-dry) / 2 + 52px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    transparent calc(50% - var(--amayadori-dry) / 2 - 52px),
+    #000 calc(50% - var(--amayadori-dry) / 2 - 5px),
+    transparent calc(50% - var(--amayadori-dry) / 2),
+    transparent calc(50% + var(--amayadori-dry) / 2),
+    #000 calc(50% + var(--amayadori-dry) / 2 + 5px),
+    transparent calc(50% + var(--amayadori-dry) / 2 + 52px),
+    transparent 100%
+  );
+  animation:
+    amayadori-runoff 6s linear infinite,
+    amayadori-gush 31s var(--ease-standard, ease-in-out) infinite alternate;
+}
+
+/* Dieselbe Schnitt-Technik wie beim Vorhang, eigene Zahlen: 1203,75 px sind 30
+   Strich-Perioden (40,125 px) UND 63,0 px seitliche Phase, also 9 volle
+   Perioden der 7-px-Wand. In 6 s ergibt das 200 px/s — ablaufendes Dachwasser
+   ist das Schnellste im Bild, und das soll man sehen. */
+@supports (mask-composite: intersect) {
+  :root[data-theme='amayadori']::after {
+    -webkit-mask-image:
+      repeating-linear-gradient(
+        to bottom,
+        #000 0px,
+        #000 13px,
+        transparent 25px,
+        transparent 40.125px
+      ),
+      linear-gradient(
+        to right,
+        transparent 0%,
+        transparent calc(50% - var(--amayadori-dry) / 2 - 52px),
+        #000 calc(50% - var(--amayadori-dry) / 2 - 5px),
+        transparent calc(50% - var(--amayadori-dry) / 2),
+        transparent calc(50% + var(--amayadori-dry) / 2),
+        #000 calc(50% + var(--amayadori-dry) / 2 + 5px),
+        transparent calc(50% + var(--amayadori-dry) / 2 + 52px),
+        transparent 100%
+      );
+    mask-image:
+      repeating-linear-gradient(
+        to bottom,
+        #000 0px,
+        #000 13px,
+        transparent 25px,
+        transparent 40.125px
+      ),
+      linear-gradient(
+        to right,
+        transparent 0%,
+        transparent calc(50% - var(--amayadori-dry) / 2 - 52px),
+        #000 calc(50% - var(--amayadori-dry) / 2 - 5px),
+        transparent calc(50% - var(--amayadori-dry) / 2),
+        transparent calc(50% + var(--amayadori-dry) / 2),
+        #000 calc(50% + var(--amayadori-dry) / 2 + 5px),
+        transparent calc(50% + var(--amayadori-dry) / 2 + 52px),
+        transparent 100%
+      );
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+  }
+}
+
+@keyframes amayadori-runoff {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 1203.75px, 0);
+  }
+}
+
+@keyframes amayadori-gush {
+  from {
+    opacity: 0.72;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Eigenes reduced-motion-Gate: die globale Regel in index.css (animation-duration
+   0.01ms, iteration-count 1) würde beide Wände im `from`-Frame einfrieren, also
+   bei 0,78 bzw. 0,72 Deckkraft — einem halben Wolkenbruch. Hier explizit
+   abgeschaltet und auf volle Deckung gesetzt: es regnet weiter, es bewegt sich
+   nur nichts mehr. Der Regen BLEIBT sichtbar (er ist Fläche, keine Information).
+   Diese Datei muss auch allein geladen korrekt sein. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='amayadori'] body::before,
+  :root[data-theme='amayadori']::after {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ── DIE SZENE + DER TROCKENE FLECK (body::after, z-index -2) ──────────────────
+   Schichtreihenfolge von hinten nach vorn: body-Hintergrund (--theme-atmosphere)
+   → body::after (Zeichnung + Schleier, z-index -2) → body::before und
+   :root::after (Regen und Abfluss, z-index -1) → Inhalt. Der Regen fällt also VOR
+   der Stadt, was der ganze Punkt ist; alle drei Pseudoelemente bleiben hinter
+   jedem In-Flow-Element.
+
+   DER SCHLEIER IST DER TROCKENE FLECK und zugleich der Kontrast-Vertrag. Er ist
+   NICHT irgendein Dunkel, sondern `--bg-base` selbst: die Fläche, auf der die App
+   ohnehin steht, hier über die Zeichnung gelegt. Deshalb wirkt der geschützte
+   Bereich nicht wie eine Milchscheibe über einem Bild, sondern wie ein Stück
+   Boden, das trocken geblieben ist.
+
+   Er benutzt `--amayadori-dry`, denselben Ausdruck wie Regen und Ablaufband —
+   dieselbe Kante auf jeder Fensterbreite, nicht erst ab einem Breakpoint.
+   Gefedert wird `--amayadori-feather` nach AUSSEN; nach innen gefedert wäre
+   genau die Spaltenkante ungeschützt. */
+:root[data-theme='amayadori'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(50% - var(--amayadori-dry) / 2 - var(--amayadori-feather)),
+      rgb(16 14 12 / calc(var(--amayadori-veil) * 0.06))
+        calc(50% - var(--amayadori-dry) / 2 - var(--amayadori-feather) * 0.91),
+      rgb(16 14 12 / calc(var(--amayadori-veil) * 0.17))
+        calc(50% - var(--amayadori-dry) / 2 - var(--amayadori-feather) * 0.65),
+      rgb(16 14 12 / calc(var(--amayadori-veil) * 0.36))
+        calc(50% - var(--amayadori-dry) / 2 - var(--amayadori-feather) * 0.39),
+      rgb(16 14 12 / calc(var(--amayadori-veil) * 0.6))
+        calc(50% - var(--amayadori-dry) / 2 - var(--amayadori-feather) * 0.18),
+      rgb(16 14 12 / var(--amayadori-veil)) calc(50% - var(--amayadori-dry) / 2),
+      rgb(16 14 12 / var(--amayadori-veil)) calc(50% + var(--amayadori-dry) / 2),
+      rgb(16 14 12 / calc(var(--amayadori-veil) * 0.6))
+        calc(50% + var(--amayadori-dry) / 2 + var(--amayadori-feather) * 0.18),
+      rgb(16 14 12 / calc(var(--amayadori-veil) * 0.36))
+        calc(50% + var(--amayadori-dry) / 2 + var(--amayadori-feather) * 0.39),
+      rgb(16 14 12 / calc(var(--amayadori-veil) * 0.17))
+        calc(50% + var(--amayadori-dry) / 2 + var(--amayadori-feather) * 0.65),
+      rgb(16 14 12 / calc(var(--amayadori-veil) * 0.06))
+        calc(50% + var(--amayadori-dry) / 2 + var(--amayadori-feather) * 0.91),
+      transparent calc(50% + var(--amayadori-dry) / 2 + var(--amayadori-feather)),
+      transparent 100%
+    ),
+    url('amayadori-szene.svg');
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center bottom;
+  background-size: auto, cover;
+}
+
+/* Die Kopfzeile ist die Unterseite des Vordachs: dunkel, warm, mit einer dünnen
+   Lichtlippe statt eines Schattens — das Licht von drinnen fängt sich an der
+   Kante. box-shadow statt border: kein Reflow, und der bestehende Insel-Schatten
+   bleibt erhalten (Muster wie Natsu no Hi / Nagori / Hanashigure, die ihre Nav
+   ebenfalls nur tönen). */
+:root[data-theme='amayadori'] .nav {
+  background: rgb(26 22 19 / 0.86);
+  box-shadow:
+    0 1px 0 rgb(238 155 110 / 0.16),
+    0 10px 30px -20px rgb(0 0 0 / 0.8);
+  -webkit-backdrop-filter: blur(14px) saturate(1.04);
+  backdrop-filter: blur(14px) saturate(1.04);
+}
+
+/* Der Sprachstern bleibt warmes Licht im Kern — die Glut, die man für einen
+   dagelassen hat. (Unverändert aus der Alt-Datei: das ist die Seele.) */
+:root[data-theme='amayadori'] .vc-orb__core {
+  background: radial-gradient(circle at 42% 38%, #fff3e6, var(--accent) 62%, #b9713f 100%);
+}
+
+/* Der Bloom kippt von warm (innen) zu einem sehr leisen Regenblau-Silber
+   (außen) — Licht, das sich in nasser Luft bricht. */
+:root[data-theme='amayadori'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    rgb(199 210 218 / 0.16) 46%,
+    transparent 74%
+  );
+}
+
+/* Der PFÜTZEN-ORB: dieselben Pegel-Ringe wie überall, nur kühles Regenblau-
+   Silber statt Akzent — sie lesen sich als Ringe, die der Regen auf einer Pfütze
+   schlägt. Der zusätzliche weiche Außen-Schein macht sie konzentrisch statt
+   scharf. KEINE neue Mechanik — nur Farbe/Form auf dem bestehenden Ring. */
+:root[data-theme='amayadori'] .vc-orb__ring {
+  border-color: rgb(199 210 218 / 0.55);
+  box-shadow: 0 0 0 5px rgb(199 210 218 / 0.1);
+}
+
+/* Die Lichtlippe: eine 2px warme Kante an der Oberkante der Lesespalte — hier
+   hat jemand das Licht gelassen. box-shadow statt border/Pseudo-Element: kein
+   Reflow, und die Kante bleibt beim Scrollen im Thread an Ort und Stelle (sie
+   gehört der Box, nicht ihrem — scrollenden — Inhalt). */
+:root[data-theme='amayadori'] .chat__log {
+  box-shadow: 0 -2px 0 0 var(--accent-glow);
+}
+
+/* ── DIE TROPFEN VON DER TRAUFKANTE ───────────────────────────────────────────
+   Bis hierher fällt Wasser nur als Fläche. Ein Vordach hat aber genau ein
+   Geräusch, das man erinnert: den einzelnen Tropfen, der sich an der Kante löst.
+   Drei davon lösen sich hier, einer nach dem anderen.
+
+   WARUM NICHT IM SVG: amayadori-szene.svg wird über `background-image` geladen;
+   eine CSS-Regel aus dieser Datei kommt in jenes Dokument nicht hinein, und das
+   Bild selbst zu animieren hieße, ein bildschirmfüllendes Bitmap jeden Frame neu
+   zu rastern — dieser Schirm läuft 24/7 auf einem iPad. Jeder Tropfen ist darum
+   eine eigene ~14 px kleine `fixed`-Box mit einer Inline-Silhouette, bewegt nur
+   über transform und opacity: drei Compositor-Ebenen in Briefmarkengröße.
+   Dasselbe Idiom, das Hanashigure für seine Blütenblätter benutzt.
+
+   WO SIE FALLEN — der Lesbarkeits-Vertrag: sie hängen an der TRAUFKANTE, also
+   5–19 px AUSSERHALB des trockenen Flecks (`50% ∓ dry/2 ∓ 19px`, Boxbreite 14 px
+   inkl. der ±3 px Seitwärtsdrift). Die Textspalte endet definitionsgemäß an
+   `dry/2` — kein Tropfen kreuzt je einen Buchstaben, keiner braucht Schleier,
+   keiner trägt Kontrast-Risiko.
+
+   DER RHYTHMUS — „ab und zu ein Tropfen", kein Vorhang: die drei Perioden
+   (47 / 61 / 79 s) sind paarweise prim, jeder Tropfen ist nur 3–4 % seiner
+   eigenen Periode in der Luft, und die negativen Verzögerungen streuen die
+   Starts. Das ergibt im Mittel alle ~20 s einen Tropfen und ein Muster, das sich
+   innerhalb eines Arbeitstages nicht wiederholt.
+
+   DER FALL — beschleunigt, nicht linear: anders als ein Blütenblatt hat ein
+   Tropfen Gewicht. Die Y-Marken (6 / 20 / 44 / 76 / 116 vh) liegen bei gleichen
+   Zeitschritten immer weiter auseinander; dazu streckt `scaleY` ihn von 1 auf
+   1,45, während `scaleX` auf 0,82 schrumpft — genau das tut ein fallender
+   Tropfen. Er verlischt kurz über dem Boden: was unten ankommt, ist die Pfütze,
+   und die ist schon gezeichnet. */
+:root[data-theme='amayadori']::before,
+:root[data-theme='amayadori'] #root::before,
+:root[data-theme='amayadori'] #root::after {
+  content: '';
+  position: fixed;
+  top: -22px;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+/* 1 — links, im Laternenlicht: der Tropfen ist warm, weil das Licht warm ist. */
+:root[data-theme='amayadori']::before {
+  left: calc(50% - var(--amayadori-dry) / 2 - 19px);
+  width: 9px;
+  height: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 62'%3E%3Cpath fill='%23e8b98d' d='M20 0 C20 16 38 30 38 43 A18 18 0 0 1 2 43 C2 30 20 16 20 0 Z'/%3E%3C/svg%3E");
+  animation-name: amayadori-drip-a;
+  animation-duration: 47s;
+  animation-delay: -9s;
+}
+
+/* 2 — rechts, im kalten Licht des Automaten: Regensilber. */
+:root[data-theme='amayadori'] #root::before {
+  left: calc(50% + var(--amayadori-dry) / 2 + 10px);
+  width: 8px;
+  height: 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 62'%3E%3Cpath fill='%23c7d2da' d='M20 0 C20 16 38 30 38 43 A18 18 0 0 1 2 43 C2 30 20 16 20 0 Z'/%3E%3C/svg%3E");
+  animation-name: amayadori-drip-b;
+  animation-duration: 61s;
+  animation-delay: -38s;
+}
+
+/* 3 — der seltene: längste Periode, blassester Tropfen, am weitesten außen. */
+:root[data-theme='amayadori'] #root::after {
+  left: calc(50% - var(--amayadori-dry) / 2 - 33px);
+  width: 7px;
+  height: 11px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 62'%3E%3Cpath fill='%23a9b6c0' d='M20 0 C20 16 38 30 38 43 A18 18 0 0 1 2 43 C2 30 20 16 20 0 Z'/%3E%3C/svg%3E");
+  animation-name: amayadori-drip-c;
+  animation-duration: 79s;
+  animation-delay: -55s;
+}
+
+/* Nach dem letzten Fall-Keyframe steht dieselbe Transformation bei Deckkraft 0:
+   die Box parkt unter dem Bildrand und wartet dort. Das Schweigen kostet nichts,
+   und nichts springt sichtbar zurück. */
+@keyframes amayadori-drip-a {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1, 1);
+    opacity: 0;
+  }
+  0.4% {
+    opacity: 0.78;
+  }
+  0.9% {
+    transform: translate3d(1px, 6vh, 0) scale(0.98, 1.06);
+  }
+  1.7% {
+    transform: translate3d(2px, 20vh, 0) scale(0.94, 1.16);
+  }
+  2.5% {
+    transform: translate3d(2px, 44vh, 0) scale(0.9, 1.28);
+  }
+  3.2% {
+    transform: translate3d(3px, 76vh, 0) scale(0.86, 1.38);
+    opacity: 0.78;
+  }
+  3.9%,
+  100% {
+    transform: translate3d(3px, 116vh, 0) scale(0.82, 1.45);
+    opacity: 0;
+  }
+}
+
+@keyframes amayadori-drip-b {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1, 1);
+    opacity: 0;
+  }
+  0.3% {
+    opacity: 0.66;
+  }
+  0.8% {
+    transform: translate3d(-1px, 6vh, 0) scale(0.98, 1.05);
+  }
+  1.5% {
+    transform: translate3d(-2px, 20vh, 0) scale(0.94, 1.15);
+  }
+  2.2% {
+    transform: translate3d(-2px, 44vh, 0) scale(0.9, 1.27);
+  }
+  2.8% {
+    transform: translate3d(-3px, 76vh, 0) scale(0.86, 1.36);
+    opacity: 0.66;
+  }
+  3.4%,
+  100% {
+    transform: translate3d(-3px, 116vh, 0) scale(0.82, 1.44);
+    opacity: 0;
+  }
+}
+
+@keyframes amayadori-drip-c {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1, 1);
+    opacity: 0;
+  }
+  0.3% {
+    opacity: 0.52;
+  }
+  0.7% {
+    transform: translate3d(1px, 6vh, 0) scale(0.98, 1.05);
+  }
+  1.3% {
+    transform: translate3d(1px, 20vh, 0) scale(0.94, 1.14);
+  }
+  1.9% {
+    transform: translate3d(2px, 44vh, 0) scale(0.9, 1.26);
+  }
+  2.4% {
+    transform: translate3d(2px, 76vh, 0) scale(0.86, 1.35);
+    opacity: 0.52;
+  }
+  2.9%,
+  100% {
+    transform: translate3d(2px, 116vh, 0) scale(0.82, 1.42);
+    opacity: 0;
+  }
+}
+
+/* Die Tropfen können seit der Ein-Zahl-Kante nicht mehr über der Schrift hängen
+   (sie sitzen definitionsgemäß außerhalb von --amayadori-dry). Sie brauchen aber
+   Traufe, auf der sie hängen können: die äußerste Bahn steht bis 36 px außerhalb
+   der Kante, und der Seitenraum ist nur (Fenster − 920 px) / 2 breit — 88 px bei
+   1096, 40 px bei 1000, gar nichts ab 920 px abwärts. Statt drei Grenzen für drei
+   Tropfen eine gemeinsame, die allen dreien satt Platz lässt: unter 1096 px
+   tropft es weiter, man sieht es nur nicht. Dieselbe Logik und derselbe Grund wie
+   bei Momijis fallendem Blatt und Hanashigures Blüten. */
+@media (max-width: 1096px) {
+  :root[data-theme='amayadori']::before,
+  :root[data-theme='amayadori'] #root::before,
+  :root[data-theme='amayadori'] #root::after {
+    display: none;
+  }
+}
+
+/* Reduced motion: die Tropfen halten an, sie verschwinden nicht. Jeder parkt auf
+   seiner eigenen Höhe, voll gezeichnet — aus dem Fallen wird ein Bild. Eigenes
+   Gate, weil die globale Regel in index.css sie bei 0 % einfrieren würde, also
+   unsichtbar über dem oberen Bildrand. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='amayadori']::before,
+  :root[data-theme='amayadori'] #root::before,
+  :root[data-theme='amayadori'] #root::after {
+    animation: none;
+  }
+  :root[data-theme='amayadori']::before {
+    opacity: 0.78;
+    transform: translate3d(2px, 31vh, 0) scale(0.92, 1.2);
+  }
+  :root[data-theme='amayadori'] #root::before {
+    opacity: 0.66;
+    transform: translate3d(-2px, 58vh, 0) scale(0.88, 1.32);
+  }
+  :root[data-theme='amayadori'] #root::after {
+    opacity: 0.52;
+    transform: translate3d(1px, 12vh, 0) scale(0.96, 1.1);
+  }
+}

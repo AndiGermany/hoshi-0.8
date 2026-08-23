@@ -23,8 +23,10 @@
   </sub>
 </p>
 
-**Status:** 0.8.3 "Suisei" (彗星, the comet) — under active development, heading toward 1.0.
-The honest state of every release, known edges included, lives in [`CHANGELOG.md`](CHANGELOG.md).
+**Status:** 0.9.x — under active development, heading toward 1.0. The exact version this tree
+carries is the `version=` line in [`gradle.properties`](gradle.properties) (and the banner of
+`bin/hoshi help`); the honest state of every release, known edges included, lives in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -44,18 +46,29 @@ exception, never a dependency.
   charge, from the settings or by voice.
 - **Two brains, chosen automatically.** Typing gets the thorough model (Gemma-4-12B — runs via
   a bundled MLX architecture patch), speaking gets the fast one; the swap hides inside your own
-  speaking time. Optional, off by default.
-- **Reflexes without thinking pauses.** Timers, alarms, lights and color temperatures route
-  through deterministic, brain-free fast paths — no LLM between "Licht an" and the light.
-- **A hallway display.** The home screen is built for an iPad on the wall: big clock, live
-  weather with a rain answer ("6.1 mm today" / "dry"), real countdowns, the shopping list —
-  and empty cards disappear instead of claiming "nothing planned".
-- **Speaks five languages — and since 0.8.3 *understands* commands in five, too.** Roughly 770
+  speaking time. Optional, off by default. A persona-KV freeze now keeps the warm cache across
+  repeated prompt prefixes — a measured ×27 faster warm time-to-first-token, with a coherence
+  A/B tool standing by to keep checking that answer quality doesn't drift.
+- **Reflexes without thinking pauses.** Timers, alarms, lights, color temperatures, and now the
+  vacuum (start / return-to-base, with real state — "ready in the dock" instead of a ghostly
+  "last seen…") all route through deterministic, brain-free fast paths — no LLM between
+  "Licht an" and the light.
+- **A hallway display you can actually rearrange.** Big clock (the moon phase joins it at night,
+  computed locally), live weather with a rain answer ("6.1 mm today" / "dry"), a multi-source
+  news teaser (public broadcasters, attributed, no brain calls behind it), real countdowns, the
+  shopping list — and empty cards disappear instead of claiming "nothing planned". Tiles live on
+  a free grid: drag one anywhere, resize it with +/− controls, and switch any widget on or off
+  from Settings — the layout survives being turned off and on again.
+- **Speaks five languages — and *understands* commands in German and English** (several fast
+  paths already trigger in all five; the smart-home classifier does not yet). Roughly 770
   backend sentences, streamed phrase pools so replies don't repeat, honest provenance in every
   language. Time and date formats follow along.
-- **Nine color worlds,** from Aoi (青) to Amayadori (雨宿り, sheltering from the rain — the rain
-  ends visibly at the edge of the reading column). Driven by shared design tokens;
-  `prefers-reduced-motion` respected.
+- **Sixteen living scene themes,** in three time-of-day groups — morning, day, evening & night —
+  from Asagiri (朝霧) through Aoi (青) to Nagareboshi (流れ星); an automatic theme (Sora) picks one
+  for you by the clock, and a hidden mood theme (Nagori, three taps on the version line) rewards
+  the curious. A one-click, full-screen gallery replaces the old cramped drawer, grouped by time
+  of day and ordered by brightness. Driven by shared design tokens; `prefers-reduced-motion`
+  respected.
 - **A diary of measurements, never of content.** Timestamps, categories, latencies — no
   conversation content, ever. The activity tab shows p50/p95 per pipeline stage.
 
@@ -63,8 +76,12 @@ exception, never a dependency.
 
 1. **Honesty is architecture, not tone.** Unknowns produce a deterministic "I don't know"
    instead of hallucination; the UI shows "—" rather than invented numbers; a cached answer
-   says it is one; an online answer carries its source. The house rule `green ≠ alive`
-   (a green test is not yet a living feature) governs every acceptance.
+   says it is one; an online answer carries its source. An execution-claim gate (the "Kagami"
+   mirror) refuses to let a reply claim a switch that never happened; its first live replay ran
+   green (13 corpus cases, 14 turns, zero false completion claims, zero proof gaps), and the
+   satellite proved the same thing on real hardware — "kitchen switches kitchen", light on and
+   back off, logged with `toolCallRan=true`. The house rule `green ≠ alive` (a green test is not
+   yet a living feature) governs every acceptance.
 2. **Trust lives in code, not in prompts.** A capability kernel with default-deny for every
    writing action; biometric voice profiles never leave the device; unknown voices are never
    auto-enrolled; the private knowledge library is `egress: never` by design.
@@ -90,7 +107,11 @@ exception, never a dependency.
 - The 12B brain **requires the bundled mlx-lm patch** — no released mlx-lm knows its
   architecture yet.
 - Hoshi is hardened on **exactly one machine**; expect edges when adapting it. Making it
-  genuinely installable for others is the current focus (0.8.4).
+  genuinely installable for others is the current focus.
+- A few pieces are deliberately parked for a later release: the official weather-warning feed
+  (NINA) and news personalization, the calendar widget (waiting on a Home Assistant calendar
+  integration), and the satellite side of multi-turn follow-up questions (the server half
+  landed; the flag stays off until the firmware half exists).
 
 ## Architecture & quickstart
 

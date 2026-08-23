@@ -11,22 +11,15 @@ import java.time.LocalTime
 enum class NightModeMode { SCHEDULE, ALWAYS }
 
 /**
- * **NightModeConfig** — die Nachtmodus-Einstellung EINES Geräts (Andi-Entscheidung
- * 2026-07-12, `vault/tracks/prep/PREP-nachtmodus.md`: „pro verbundenem Gerät
- * einstellbar", KEIN Global-V1). Bewusst reine Daten (Spring-/Jackson-databind-frei,
- * uhrfrei) — der Store (`:web-inbound` `JsonFileNightModeStore`) hält eine Map
- * `satelliteId → NightModeConfig`.
+ * Framework- and clock-free night-mode settings for one device.
+ * ADR-005-nachtmodus-pro-geraet: v1 stores one config per `satelliteId`, never
+ * one global household value.
  *
- * @property enabled der MASTER-Toggle (Andi 12.07: „ein Toggle zum Aktivieren des
- *   Features"). `false` ⇒ `active` ist IMMER `false`, unabhängig von [mode]/[from]/[to].
- * @property mode SCHEDULE (Zeitfenster) oder ALWAYS (immer gedämpft, solange enabled).
- * @property from Fenster-Start als `HH:mm` (24h, zwei-stellig — der `<input type="time">`-
- *   Contract). Nur bei [mode] `SCHEDULE` wirksam.
- * @property to Fenster-Ende als `HH:mm`, s. [from]. Rollover über Mitternacht ist
- *   ausdrücklich erlaubt (`from > to`, z.B. `22:00`–`07:00`) — s. [NightModeCompute.active].
- * @property dim Dimm-Stärke `0.0..1.0` (Slider, KEINE festen Stufen — Andi 12.07).
- *   Nur bedeutsam, wenn der berechnete `active`-Zustand `true` ist (bei `false` ist
- *   das Gerät im Normalbetrieb und ignoriert `dim`).
+ * @property enabled ADR-005: master toggle; false always computes inactive.
+ * @property mode scheduled window or always dimmed while enabled.
+ * @property from inclusive `HH:mm` window start, used only by [NightModeMode.SCHEDULE].
+ * @property to exclusive `HH:mm` end; a window may cross midnight.
+ * @property dim ADR-005: continuous slider value `0.0..1.0`, not fixed levels.
  */
 data class NightModeConfig(
     val enabled: Boolean = false,

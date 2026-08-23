@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>tagesschau.de - Die Nachrichten der ARD</title>
+    <link>https://www.tagesschau.de/</link>
+    <description>Nachrichten</description>
+    <item>
+      <title>Erste Meldung &amp; Einordnung</title>
+      <link>https://www.tagesschau.de/inland/erste-meldung-100.html?utm_source=rss&amp;foo=bar#abschnitt</link>
+      <guid isPermaLink="false">tagesschau-erste-100</guid>
+      <description><![CDATA[<p>Der erste <strong>Anriss</strong> bleibt Text.</p>]]></description>
+      <pubDate>Sat, 15 Aug 2026 07:00:00 +0200</pubDate>
+    </item>
+    <item>
+      <title>Zweite Meldung</title>
+      <link>https://www.tagesschau.de/ausland/zweite-meldung-100.html</link>
+      <guid isPermaLink="false">tagesschau-zweite-100</guid>
+      <description><![CDATA[<p>Zweiter Anriss ohne Volltext.</p>]]></description>
+      <pubDate>Sat, 15 Aug 2026 08:00:00 +0200</pubDate>
+    </item>
+  </channel>
+</rss>

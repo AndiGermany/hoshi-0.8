@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE, TOKEN } from '../api/config';
 import { de } from '../i18n/de';
 import type { ScheduledStrings } from '../i18n/types';
+import { startVisiblePolling } from './visiblePolling';
 
 /**
  * Sichtbarkeits-Naht der Wecker-Lane (Cowork-Befund: laufende Timer/Wecker waren
@@ -15,10 +16,17 @@ import type { ScheduledStrings } from '../i18n/types';
  *  - Der Endpoint ist READ-ONLY (kein drain) — jeder Poll ERSETZT den Stand
  *    (ein stornierter Timer verschwindet), statt zu mergen. Gleicher Stand ⇒
  *    dieselbe Referenz zurück ({@link sameSchedule}) → kein React-Re-render.
- *  - BEWUSST KEIN visibility-Gate (Live-Befund 2026-07-02): Chromes Window-
- *    Occlusion meldet auch den aktiven Tab als `hidden`, sobald das Fenster
- *    verdeckt ist — das Gate blockierte dann JEDEN Tick inkl. Initial-Fetch
- *    und die Zeile erschien nie. Gepollt wird immer (wie useOpsStatus).
+ *  - Visibility-Gate ueber {@link startVisiblePolling}: bei dunklem Display
+ *    pausiert das INTERVALL, der Initial-Fetch feuert weiter immer, und
+ *    Sichtbarwerden holt sofort frisch nach.
+ *    Genau daran ist es 2026-07-02 schon einmal gescheitert — damals sass das
+ *    Gate IM tick (`if (document.hidden) return`) und blockierte auch den
+ *    ersten Fetch; unter Chromes Window-Occlusion meldet der aktive Tab
+ *    `hidden`, sobald das Fenster verdeckt ist, und die Zeile erschien live
+ *    nie. Das Gate sitzt darum jetzt NUR am Intervall, nie am Fetch (der
+ *    Regressionstest in test/polling.test.tsx haelt beide Haelften fest).
+ *    Nicht gegatet ist bewusst useFiredItems: das ist der Weg, auf dem ein
+ *    Wecker klingelt — ein verdecktes Fenster darf keinen Alarm verschlucken.
  *  - Ehrlichkeits-/Lärm-Achse wie useFiredItems: 401/404/5xx/Netzfehler → `[]`
  *    (still — die Zeile verschwindet, kein roter Fehler). Token als
  *    `X-Hoshi-Token` (api/config).
@@ -323,11 +331,13 @@ export function useScheduledItems(intervalMs = 15_000): ScheduledItemsState {
     };
 
     void tick();
-    const id = window.setInterval(() => void tick(), intervalMs);
+    // Gate statt Frequenz: sichtbar taktet es unveraendert, dunkles
+    // Display pausiert, Sichtbarwerden holt sofort frisch nach.
+    const stopPolling = startVisiblePolling(() => void tick(), intervalMs);
     return () => {
       aliveRef.current = false;
       controller.abort();
-      window.clearInterval(id);
+      stopPolling();
     };
   }, [intervalMs]);
 

@@ -1,6 +1,8 @@
 package de.hoshi.web
 
 import de.hoshi.core.port.DeviceDownlinkPort
+import de.hoshi.core.port.ScheduledItem
+import de.hoshi.core.port.ScheduledKind
 import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
@@ -13,9 +15,11 @@ import java.util.concurrent.TimeUnit
  * (`vault/tracks/prep/PREP-wecker-am-satelliten.md`, Scheibe 2 von 2): beim Feuern eines
  * Timers/Weckers/einer Erinnerung MIT bekannter `originSatelliteId` schickt dieser Service
  * ZUSÄTZLICH zum bestehenden FE-Poll-Pfad (`GET /api/v1/scheduled/fired`, **unverändert**)
- * ein `{"type":"timer_ring","id":…,"label"?:…}`-Frame an genau diesen Satelliten — über den
+ * ein `{"type":"timer_ring","id":…,"label"?:…,"scheduledFor":…,"kind":…}`-Frame an
+ * genau diesen Satelliten — über den
  * BESTEHENDEN server-initiierten WS-Downlink-Kanal ([DeviceDownlinkPort], Nachtmodus-Muster
- * `116fa8d`/[NightModeService]. KEIN neuer Kanal, KEIN neuer Wire-Vertrag am ws-Rand.
+ * `116fa8d`/[NightModeService]. KEIN neuer Kanal und KEIN neuer Frame-Typ; das bestehende
+ * `timer_ring`-Schema wird nur additiv erweitert.
  *
  * **Retry bis Ack oder Timeout:** ein einzelner Push kann verloren gehen (UDP-artiges
  * Best-effort-`emitNext`, Netzwerkwackler) — [tick] (Muster [ScheduledItemFireService.pollOnce]/
@@ -49,6 +53,8 @@ class TimerRingDownlinkService(
     private data class RingState(
         val satelliteId: String,
         val label: String?,
+        val scheduledFor: Long,
+        val kind: ScheduledKind,
         val firstPushAtMs: Long,
         val lastPushAtMs: Long,
     )
@@ -93,7 +99,7 @@ class TimerRingDownlinkService(
     /**
      * **Ein Item ist gerade gefeuert** (der [ScheduledItemFireService.onFired]-Hook ruft
      * das GENAU EINMAL je Feuerung). Flag OFF ODER kein bekannter Satelliten-Ursprung
-     * ([originSatelliteId] `null`, z.B. Chat/FE-gestellter Timer) ⇒ No-op — der FE-Pfad
+     * ([ScheduledItem.originSatelliteId] `null`, z.B. Chat/FE-gestellter Timer) ⇒ No-op — der FE-Pfad
      * bleibt der EINZIGE Klingel-Weg, exakt wie heute.
      *
      * Der ERSTE Push passiert SOFORT (nicht erst beim nächsten Tick) — ein Wecker, der
@@ -102,15 +108,23 @@ class TimerRingDownlinkService(
      * Klassen-KDoc „Ehrlich bei nicht verbundenem Satelliten") — KEIN Retry-Zustand wird
      * angelegt.
      */
-    fun onFired(id: String, label: String?, originSatelliteId: String?) {
+    fun onFired(item: ScheduledItem) {
+        val originSatelliteId = item.originSatelliteId
         if (!enabled || originSatelliteId == null) return
         val now = clock.millis()
-        if (pushOnce(id, originSatelliteId, label)) {
-            ringing[id] = RingState(originSatelliteId, label, firstPushAtMs = now, lastPushAtMs = now)
+        if (pushOnce(item.id, originSatelliteId, item.label, item.dueAtEpochMs, item.kind)) {
+            ringing[item.id] = RingState(
+                satelliteId = originSatelliteId,
+                label = item.label,
+                scheduledFor = item.dueAtEpochMs,
+                kind = item.kind,
+                firstPushAtMs = now,
+                lastPushAtMs = now,
+            )
         } else {
             log.info(
                 "[timer-ring] Satellit {} nicht verbunden beim Feuern von {} - nur FE-Pfad (kein Fehler).",
-                originSatelliteId, id,
+                originSatelliteId, item.id,
             )
         }
     }
@@ -144,7 +158,7 @@ class TimerRingDownlinkService(
                 continue
             }
             if (now - state.lastPushAtMs < retryIntervalMs) continue
-            if (pushOnce(id, state.satelliteId, state.label)) {
+            if (pushOnce(id, state.satelliteId, state.label, state.scheduledFor, state.kind)) {
                 ringing[id] = state.copy(lastPushAtMs = now)
             } else {
                 toRemove.add(id)
@@ -160,11 +174,19 @@ class TimerRingDownlinkService(
     /** Wie viele Items aktuell auf eine `timer_ack` warten — Test-/Diagnose-Naht. */
     fun ringingCount(): Int = ringing.size
 
-    private fun pushOnce(id: String, satelliteId: String, label: String?): Boolean =
+    private fun pushOnce(
+        id: String,
+        satelliteId: String,
+        label: String?,
+        scheduledFor: Long,
+        kind: ScheduledKind,
+    ): Boolean =
         downlink.pushToDevice(satelliteId, buildMap {
             put("type", "timer_ring")
             put("id", id)
             if (label != null) put("label", label)
+            put("scheduledFor", scheduledFor)
+            put("kind", kind.name)
         })
 
     /** Fährt den Retry-Ticker herunter (Bean-`destroyMethod`). Idempotent. */

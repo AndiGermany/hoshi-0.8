@@ -37,6 +37,13 @@ import { CloudGlyph, LockGlyph, WarnGlyph } from './icons';
  * Der stille OK-Punkt bleibt unverändert (Hover/Fokus/Tap-Reveal wie gehabt).
  * Rein prop-getrieben (kein Netz) → ohne Fetch unit-testbar (Open-Zustand per
  * `defaultExpanded`); den Hook verdrahtet {@link OpsStatusPillLive}.
+ *
+ * Layout contract (Andi 2026-08-14 "the memory hint slips in the row"): the pill
+ * headline is the ONLY elastic part — it is clipped (`.ops__headline`, ellipsis)
+ * or dropped below the tablet breakpoint, so a long sentence can never resize the
+ * nav row. Therefore the panel ALWAYS carries the headline in full
+ * (`.ops__hint`), and the button's aria-label/title repeat it: whatever the pill
+ * abbreviates stays readable with ONE tap (no hover-only path).
  */
 
 type Tone = 'ok' | 'warn' | 'critical';
@@ -117,6 +124,11 @@ export function OpsStatusPill({
     t.title(status.overall, status.memory.level) +
     (status.memory.detail ? t.titleDetail(status.memory.detail) : '');
 
+  // The pill's own words. Clipped/hidden by CSS at narrow widths — so it is
+  // repeated verbatim in the panel and in the button label (never lost).
+  const hint = tone === 'ok' ? null : headline(status, tone, t);
+  const pillLabel = hint ? `${hint} · ${title}` : title;
+
   return (
     <div
       ref={rootRef}
@@ -149,19 +161,23 @@ export function OpsStatusPill({
           className={`badge ops__pill ops__pill--${tone}`}
           aria-expanded={expanded}
           aria-controls={panelId}
-          aria-label={title}
-          title={title}
+          aria-label={pillLabel}
+          title={pillLabel}
           onClick={() => setOpen((v) => !v)}
         >
           <span className="badge__dot" aria-hidden="true" />
           <span className="ops__icon" aria-hidden="true">
             <WarnGlyph />
           </span>
-          {headline(status, tone, t)}
+          {/* Clipped by CSS (max-width + ellipsis), hidden below the tablet
+              breakpoint — the full sentence lives in .ops__hint below. */}
+          <span className="ops__headline">{hint}</span>
         </button>
       )}
 
       <div className="ops__panel" id={panelId} role="status" aria-live="polite">
+        {/* The pill's headline in full — the pill may only show a fragment. */}
+        {hint && <p className="ops__hint">{hint}</p>}
         {/* Toms Privacy-Banner: NUR wenn das BE ehrlich cloud:true meldet (aktive
             TTS-Engine ist openai — dieselbe Wahrheitsquelle wie die
             Settings-Sektion, b4844d0). */}

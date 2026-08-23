@@ -1,0 +1,342 @@
+{
+  "fenster": "1366x1024",
+  "berichte": [
+    {
+      "engine": "firefox",
+      "fenster": "1366x1024",
+      "saat": "w7",
+      "rueckbau": true,
+      "schritte": [
+        {
+          "titel": "0 · VORHER (keine Blase)",
+          "kacheln": {
+            "uhr": {
+              "x": 243,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            },
+            "wecker": {
+              "x": 243,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "wetter": {
+              "x": 1123,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "laeuft": {
+              "x": 1123,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "news": {
+              "x": 2003,
+              "y": 157,
+              "w": 583,
+              "h": 153
+            },
+            "einkauf": {
+              "x": 2003,
+              "y": 322,
+              "w": 583,
+              "h": 153
+            },
+            "vacuum": {
+              "x": 2003,
+              "y": 488,
+              "w": 880,
+              "h": 319
+            },
+            "climate": {
+              "x": 2883,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            }
+          },
+          "spalten": [
+            285,
+            285,
+            285
+          ],
+          "zeilen": [
+            153,
+            153,
+            153,
+            153
+          ],
+          "seiten": 4,
+          "kasten": {
+            "x": 243,
+            "y": 157,
+            "w": 880,
+            "h": 669
+          },
+          "orb": {
+            "x": 243,
+            "y": 826,
+            "w": 880,
+            "h": 140
+          },
+          "orbhint": {
+            "x": 615,
+            "y": 946,
+            "w": 137,
+            "h": 20
+          },
+          "blase": false,
+          "scrollHeight": 1024,
+          "fenster": {
+            "w": 1366,
+            "h": 1024
+          },
+          "einFenster": true,
+          "ueberstand": [
+            ".themegallery__groups bottom=2232",
+            ".themegallery__group bottom=1601",
+            ".settings__themegrouptitle bottom=1030",
+            ".settings__hint bottom=1054",
+            ".themegallery__grid bottom=1601"
+          ]
+        },
+        {
+          "titel": "1 · Turn starten (Chat-Reiter)",
+          "reiter": "ok"
+        },
+        {
+          "titel": "1b · gesendet, zurück auf Zuhause",
+          "getippt": "ok",
+          "gesendet": "ok",
+          "zurueck": "ok"
+        },
+        {
+          "titel": "2 · WÄHREND (Blase steht)",
+          "blaseGesehen": true,
+          "blaseDurchgehend": true,
+          "blase": true,
+          "schichtPosition": "absolute/none",
+          "blaseBox": {
+            "x": 466,
+            "y": 667,
+            "w": 435,
+            "h": 300
+          },
+          "kacheln": {
+            "uhr": {
+              "x": 243,
+              "y": 157,
+              "w": 583,
+              "h": 335
+            },
+            "wecker": {
+              "x": 1123,
+              "y": 157,
+              "w": 583,
+              "h": 162
+            },
+            "wetter": {
+              "x": 2003,
+              "y": 157,
+              "w": 880,
+              "h": 335
+            },
+            "laeuft": {
+              "x": 2883,
+              "y": 157,
+              "w": 583,
+              "h": 162
+            },
+            "news": {
+              "x": 3763,
+              "y": 157,
+              "w": 583,
+              "h": 162
+            },
+            "einkauf": {
+              "x": 3763,
+              "y": 331,
+              "w": 583,
+              "h": 162
+            },
+            "vacuum": {
+              "x": 4643,
+              "y": 157,
+              "w": 880,
+              "h": 335
+            },
+            "climate": {
+              "x": 5523,
+              "y": 157,
+              "w": 583,
+              "h": 335
+            }
+          },
+          "spalten": [
+            285,
+            285,
+            285
+          ],
+          "zeilen": [
+            162,
+            162
+          ],
+          "seiten": 7,
+          "kasten": {
+            "x": 243,
+            "y": 157,
+            "w": 880,
+            "h": 355
+          },
+          "orb": {
+            "x": 243,
+            "y": 512,
+            "w": 880,
+            "h": 454
+          },
+          "versatzGegenVorher": {
+            "uhr": "dx=0 dy=0 dw=0 dh=16",
+            "wecker": "dx=880 dy=-331 dw=0 dh=9",
+            "wetter": "dx=880 dy=0 dw=0 dh=16",
+            "laeuft": "dx=1760 dy=-331 dw=0 dh=9",
+            "news": "dx=1760 dy=0 dw=0 dh=9",
+            "einkauf": "dx=1760 dy=9 dw=0 dh=9",
+            "vacuum": "dx=2640 dy=-331 dw=0 dh=16",
+            "climate": "dx=2640 dy=0 dw=0 dh=16"
+          },
+          "kastenHoeheVorherNachher": "669 → 355",
+          "orbHoeheVorherNachher": "140 → 454",
+          "orbhintVorherNachher": "20 → 20",
+          "scrollHeight": 1024,
+          "einFenster": true,
+          "ueberstand": [
+            ".voiceorb__row bottom=1059",
+            ".themegallery__groups bottom=2232",
+            ".themegallery__group bottom=1601",
+            ".settings__themegrouptitle bottom=1030",
+            ".settings__hint bottom=1054"
+          ],
+          "unterschriftenImTurn": 1,
+          "lesbarkeit": {
+            "zeilen": [
+              {
+                "klasse": "voiceorb__row--user",
+                "text": "rgb(185, 195, 212)",
+                "grund": "rgb(12,16,23)",
+                "kontrast": 10.72,
+                "schrift": "14.5px"
+              },
+              {
+                "klasse": "voiceorb__row--assistant",
+                "text": "rgb(232, 238, 247)",
+                "grund": "rgb(12,16,23)",
+                "kontrast": 16.34,
+                "schrift": "14.5px"
+              }
+            ],
+            "backdropFilter": null,
+            "deckkraft": "oklab(0.217736 -0.00273154 -0.0252593 / 0.86)"
+          }
+        },
+        {
+          "titel": "3 · NACHHER (Blase abgelaufen)",
+          "blaseWeg": true,
+          "kacheln": {
+            "uhr": {
+              "x": 243,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            },
+            "wecker": {
+              "x": 243,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "wetter": {
+              "x": 1123,
+              "y": 157,
+              "w": 880,
+              "h": 319
+            },
+            "laeuft": {
+              "x": 1123,
+              "y": 488,
+              "w": 583,
+              "h": 153
+            },
+            "news": {
+              "x": 2003,
+              "y": 157,
+              "w": 583,
+              "h": 153
+            },
+            "einkauf": {
+              "x": 2003,
+              "y": 322,
+              "w": 583,
+              "h": 153
+            },
+            "vacuum": {
+              "x": 2003,
+              "y": 488,
+              "w": 880,
+              "h": 319
+            },
+            "climate": {
+              "x": 2883,
+              "y": 157,
+              "w": 583,
+              "h": 319
+            }
+          },
+          "versatzGegenVorher": {},
+          "scrollHeight": 1024,
+          "einFenster": true
+        },
+        {
+          "titel": "4 · URTEIL",
+          "unterschriftenGesamt": 1,
+          "verlauf": [
+            {
+              "ms": 16,
+              "blase": true,
+              "sig": "ANDERS"
+            }
+          ],
+          "vorherGleichWaehrend": false,
+          "vorherGleichNachher": true,
+          "schicht": "absolute/none",
+          "ok": false
+        }
+      ],
+      "ok": false,
+      "unterschriften": 1,
+      "aa": {
+        "zeilen": [
+          {
+            "klasse": "voiceorb__row--user",
+            "text": "rgb(185, 195, 212)",
+            "grund": "rgb(12,16,23)",
+            "kontrast": 10.72,
+            "schrift": "14.5px"
+          },
+          {
+            "klasse": "voiceorb__row--assistant",
+            "text": "rgb(232, 238, 247)",
+            "grund": "rgb(12,16,23)",
+            "kontrast": 16.34,
+            "schrift": "14.5px"
+          }
+        ],
+        "backdropFilter": null,
+        "deckkraft": "oklab(0.217736 -0.00273154 -0.0252593 / 0.86)"
+      }
+    }
+  ]
+}

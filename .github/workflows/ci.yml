@@ -64,3 +64,52 @@ jobs:
       # py_compile importiert nichts — prüft reine Syntax, braucht kein mlx.
       - run: python3 -m py_compile sidecars/*/server.py
       - run: python3 -m json.tool models.json > /dev/null
+
+  python-tests:
+    # CI-POD-Befund (2026-08-20/22): 20 test_*.py-Dateien (8.487 Zeilen) unter
+    # sidecars/*/test_*.py + tools/**/test_*.py liefen NIE über py_compile
+    # hinaus. Details/Inventar/Rate-Stellen: RESULT.md im gleichen Commit.
+    name: Python-Suiten (pytest, ohne Modelle/echte DB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Bewusst schlankes, GB-freies Setup: NUR die echten Pins, die die
+      # eingeschlossenen Tests selbst importieren — fastapi/pydantic/
+      # zstandard/pytest 1:1 aus sidecars/knowledge/requirements-dev.txt
+      # (Quelle der Wahrheit), plus numpy + tqdm einzeln (aus sidecars/stt/
+      # bzw. sidecars/brain requirements.txt herauskopiert, OHNE deren
+      # schwere Nachbarn torch/mlx/mlx-whisper/onnxruntime zu ziehen).
+      - run: |
+          set -e
+          pip install -r sidecars/knowledge/requirements-dev.txt
+          pip install numpy==2.4.6 tqdm==4.68.1
+      # Jedes Verzeichnis einzeln = eigener Python-Prozess: mehrere Sidecars/
+      # Tools haben gleichnamige lokale Module (server.py, collect.py,
+      # schema.py) — ein gemeinsamer pytest-Lauf über mehrere Verzeichnisse
+      # wuerde sys.modules-Kollisionen zwischen ihnen verursachen.
+      #
+      # Bewusst NICHT dabei (Details/Begruendung: RESULT.md):
+      #   sidecars/brain               — braucht mlx.core/mlx_lm + echtes
+      #                                   Gemma-4-Modell (Apple-Silicon-only)
+      #   sidecars/speaker              — test_decode_audio.py braucht das
+      #                                   echte CAM++-ONNX-Modell auf Platte
+      #   sidecars/knowledge/test_fact_gate_battery.py — kein pytest/unittest-
+      #                                   Case, sondern ein Batterie-Skript
+      #                                   gegen die ECHTE ~7-GB articles.db
+      - run: |
+          set -e
+          export HOSHI_WIKI_DB_PATH=/dev/null
+          python3 -m pytest sidecars/knowledge -q --ignore=sidecars/knowledge/test_fact_gate_battery.py
+          for d in sidecars/piper sidecars/stt \
+                   tools/command-replay tools/knowledge-bench \
+                   tools/knowledge-library tools/knowledge-pack \
+                   tools/memory-bench tools/speaker-ab; do
+            echo "::group::pytest $d"
+            python3 -m pytest "$d" -q
+            echo "::endgroup::"
+          done
+          python3 -m pytest tools/test_verified_fetch.py -q

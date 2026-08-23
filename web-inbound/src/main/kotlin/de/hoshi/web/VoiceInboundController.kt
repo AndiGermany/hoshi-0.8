@@ -45,7 +45,7 @@ import reactor.core.scheduler.Schedulers
 @RestController
 class VoiceInboundController(
     private val stt: SttPort,
-    private val orchestrator: TurnOrchestrator,
+    orchestrator: TurnOrchestrator,
     private val ttsStage: TtsStage,
     /**
      * Löst die optionale [LanguagePolicy] (AUTO/DE/EN) auf. Bei AUTO + aktivem Flag
@@ -123,6 +123,7 @@ class VoiceInboundController(
         java.nio.file.Paths.get(System.getProperty("user.home"), ".hoshi", "language.json"),
     ),
 ) {
+    private val inboundTurns = InboundTurnGateway(orchestrator)
 
     /**
      * Store-Fallback (Andi-Auftrag 2026-07-20): ein expliziter `language`-Query-Param
@@ -351,25 +352,25 @@ class VoiceInboundController(
         // Persona: roher Query-Param → Persona.fromCode (unbekannt/leer → STANDARD),
         // dann derselbe flag-gated Resolver wie am Chat-Rand (OFF ⇒ STANDARD ⇒ byte-neutral).
         val effectivePersona = personaResolver.resolve(Persona.fromCode(personaRaw))
-        val request = ChatRequest(
-            text = transcript,
-            language = responseLanguage,
-            speak = speak,
-            persona = effectivePersona,
-            // Per-Turn-Voice-Wunsch: nie roh an die Cloud — der TTS-Adapter whitelistet
-            // (unbekannt ⇒ Boot-Default). null (kein Param) ⇒ heutiges Verhalten.
-            voice = voice,
-            // Sprecher-Kontext (Recognition ON) ⇒ Identity-Isolation; null (OFF) ⇒ heutiger Pfad.
-            speakerContext = speakerContext,
-            // Wecker-Ursprung: die Gerät-Id des Sprech-Clients, damit ein per STIMME
-            // gestellter Wecker sein Ursprungs-Gerät kennt (ohne sie bimmelt er überall).
-            deviceId = deviceId,
-            // Eingangs-Rand (Tagesnote-Naht): dieser Turn kam per Stimme —
-            // dieselbe Kennung wie im Turn-Diary.
-            source = TurnDiaryTap.SOURCE_VOICE,
+        val inbound = inboundTurns.voice(
+            ChatRequest(
+                text = transcript,
+                language = responseLanguage,
+                speak = speak,
+                persona = effectivePersona,
+                // Per-Turn-Voice-Wunsch: nie roh an die Cloud — der TTS-Adapter whitelistet
+                // (unbekannt ⇒ Boot-Default). null (kein Param) ⇒ heutiges Verhalten.
+                voice = voice,
+                // Sprecher-Kontext (Recognition ON) ⇒ Identity-Isolation; null (OFF) ⇒ heutiger Pfad.
+                speakerContext = speakerContext,
+                // Wecker-Ursprung: die Gerät-Id des Sprech-Clients, damit ein per STIMME
+                // gestellter Wecker sein Ursprungs-Gerät kennt (ohne sie bimmelt er überall).
+                deviceId = deviceId,
+            ),
         )
+        val request = inbound.request
         // Brain-Turn durchs globale Admission-Gate (OFF ⇒ Passthrough ⇒ byte-neutral).
-        val turn = admissionGate.gate(request.language) { orchestrator.handle(request) }
+        val turn = admissionGate.gate(request.language) { inbound.run() }
         val streamed = if (speak) ttsStage.transform(turn, responseLanguage, request.voice) else turn
         val out = Flux.concat(
             // Speaker-Event nur bei Recognition ON (sonst leer ⇒ byte-neutral, keine Extra-Emission).

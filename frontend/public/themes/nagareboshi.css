@@ -1,0 +1,552 @@
+/* ═══════════ NAGAREBOSHI (流れ星) — die Sternenstraße über dem Dorf im Tal ═══════════
+
+   ZWEITE FASSUNG. Die erste war ein schwarzes Bild: sie ließ den Himmel mit
+   Ansage leer („KEINE STERNE — eine Auslassung mit Absicht"), malte Land in
+   Tönen dicht über dem Grundton und deckte die Lesespalte zu 94 % ab. Übrig
+   blieben ~95 % Schwarz und ein einziger oranger Fensterpixel. Das Urteil dazu
+   („echt nicht gut — weder kreativ noch gut umgesetzt") ist der Grund für alles,
+   was hier anders ist.
+
+   DER SATZ, DER DIE ZWEITE FASSUNG TRÄGT: auch eine Nacht ist REICH. Nicht
+   heller — reicher. Dieselbe Dunkelheit, aber voller Dinge: ein
+   Milchstraßen-Band quer über die ganze Bühne, ~440 Sterne in vier Helligkeiten,
+   vier Grate in Luftperspektive, ein Dorf aus vierzehn Minka mit warmen Fenstern,
+   eine Laternenkette darüber, ein Torii am Ufer, ein Reisfeld, in dem sich jedes
+   dieser Lichter bricht, und ganz vorn eine große Zeder gegen den Sternenhimmel.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DAS BILD IN ZWEI WORTEN: „die Sternenstraße"
+   ────────────────────────────────────────────────────────────────────────────
+   Ein Thema braucht ein Motiv, das man benennen kann (Ukiyo hat die Welle,
+   Hanashigure die Pagode). Hier ist es das Band der Milchstraße, das von links
+   oben diagonal zum rechten Horizont zieht — mit Dunkelriss, mit
+   Sternverdichtung an seinen Rändern, über die volle Breite. Alles andere ist
+   Beiwerk zu ihm: die Grate sind seine Standlinie, das Dorf sein Maßstab, das
+   Reisfeld sein Echo. Und der fallende Stern, der dem Thema den Namen gibt, ist
+   das, was auf dieser Straße gelegentlich passiert.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DIE SCHICHTEN, von hinten nach vorn
+   ────────────────────────────────────────────────────────────────────────────
+     body (Hintergrund)   --theme-atmosphere — der Himmel als Verlaufsstapel
+     :root::before z -4    DAS FLIMMERN — Luftglühen + Streusterne, atmend (43 s)
+     :root::after  z -3    DIE METEORE — alle ~20 s einer (Uhr 60 s, drei Einsätze)
+     body::before  z -2    DIE SZENE — nagareboshi-szene.svg, das ganze Bild
+     body::after   z -1    DER SCHLEIER über der Lesespalte (der Kontrast-Vertrag)
+     Inhalt                alles Weitere
+   Alle vier Deko-Ebenen sind `position: fixed` mit negativem z-index und liegen
+   damit hinter jedem In-Flow-Kasten; Karten sind deckend und rühren nichts an.
+   Dass die Meteore HINTER der Szene liegen, ist die Pointe: ein fallender Stern
+   verschwindet hinter dem Grat, statt über ihn hinwegzulaufen.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DER HERZSCHLAG — zwei Uhrwerke, absichtlich getrennt
+   ────────────────────────────────────────────────────────────────────────────
+   (a) FEIN, im Bild: die Sterne funkeln VERSETZT. Acht Flimmer-Gruppen mit
+       eigenen Perioden (21–43 s) und eigenen Phasen stehen im SVG selbst, dazu
+       drei Uhren für die Laternen und drei für die Spiegelungen im Wasser. In
+       Frames bei 1 / 4 / 7 / 10 s ist jedes Mal ein anderer Teil des Himmels
+       hell — das ist die Bewegung, die man sieht, ohne hinzusehen.
+       Nachgeprüft, dass das trägt: ein per `background-image` geladenes SVG
+       animiert in Chrome deklarativ mit (Messreihe im RESULT), und der gemalte
+       Grundzustand ist der HELLSTE — fällt die Animation irgendwo aus, steht
+       das Bild vollständig da, nur still.
+   (b) GROB, in CSS: `:root::before` atmet als Ganzes (43 s) und driftet minimal.
+       Diese Ebene ist die Rückversicherung für (a) und zugleich das Luftglühen,
+       das ein reiner Sternhaufen nicht hergibt.
+   Seltenes kommt HINZU, es ersetzt den Herzschlag nicht: der Meteor.
+
+   ────────────────────────────────────────────────────────────────────────────
+   WARUM DIESE FASSUNG HELLERE SCHRIFT HAT — die Rechnung hinter dem Bild
+   ────────────────────────────────────────────────────────────────────────────
+   Der Schleier der ersten Fassung deckte mit 94 % ab. Das ist der eigentliche
+   Grund, warum dort die Bildmitte tot war: was auch immer man malt, in der
+   Lesespalte bleiben 6 % davon übrig. Ein Bild, das „hinter der Lesespalte
+   durchläuft" (Regie v2, Regel 1), braucht dort mehr Durchlass.
+
+   Mehr Durchlass heißt hellere Pixel unter der Schrift, und das ist ein
+   Kontrast-Budget. Also wurde es gekauft statt geliehen: die Textleiter ist
+   angehoben (--text-4 von L 0.60 auf 0.74), und der Schleier steht auf 0.78.
+   Rechnung für den ungünstigsten denkbaren Fall — ein weiß leuchtender Stern
+   direkt unter einer Glyphe:
+       0.22 × #ffffff + 0.78 × --bg-base  ≈  #3c3d44  (Y ≈ 0.047)
+       --text-4 (L 0.74)                  ≈  Y 0.467
+       Kontrast                            ≈  5,3:1   ≥ 4,5
+   Der Boden hält also selbst dann, wenn das hellste Ding des Bildes genau in
+   der Spalte steht. Die gemessenen Zahlen (echtes Render, schlechtestes Pixel)
+   stehen im RESULT.md; sie sind besser als diese Abschätzung.
+
+   ────────────────────────────────────────────────────────────────────────────
+   EIGENSTÄNDIG LADBAR: dieser Block setzt JEDEN Token, den die Themen in
+   src/styles/themes.css setzen, plus die body-Hintergrund-Regel — die Datei
+   funktioniert also auch dann, wenn sie zur Laufzeit nachgeladen wird und nicht
+   neben themes.css im Bundle steht.
+
+   ZWEI SELEKTOREN je Token-Block (`:root[data-theme='nagareboshi']` UND
+   `[data-theme='nagareboshi']`): der zweite trägt die Token auch an ein
+   verschachteltes Element, das `data-theme` selbst setzt — genau das macht die
+   echte Farbvorschau im Theme-Picker (.settings__swatch).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root[data-theme='nagareboshi'],
+[data-theme='nagareboshi'] {
+  /* ── Der Himmel als Flächen-Stapel (erste Schicht = oberste) ───────────────
+     1. RESTLICHT über dem Dorf — der warme Schein, den vierzehn Fenster und
+        eine Laternenkette in die Luft werfen. Er sitzt tief und breit und ist
+        der Grund, warum die Grate überhaupt Silhouette sind.
+     2. INDIGO-TIEFE oben links, 3. PFLAUMEN-HAUCH oben rechts: zwei sehr
+        schwache Farbstiche, damit der Himmel nicht eine Fläche ist.
+     4. DER GRUNDVERLAUF — vom Zenit (dunkel) zum Horizont (heller). Genau
+        andersherum als eine Tapete: eine echte Nacht ist unten hell, weil dort
+        die Luftschicht dick ist.
+
+     JEDE SCHICHT HELLT NUR AUF, KEINE DUNKELT AB — Bedingung, kein Zufall.
+     Der Schleier deckt die Lesespalte mit --bg-base ab; läge irgendwo ein Ton
+     UNTER --bg-base, würde er dort aufhellen und als sichtbares Rechteck im
+     Nachthimmel stehen (genau dieser Fehler ist der ersten Fassung passiert und
+     hat sie einen Fix gekostet). Wer hier ergänzt: nur aufhellen. */
+  --theme-atmosphere:
+    radial-gradient(ellipse 86% 26% at 51% 70%, oklch(0.36 0.06 58 / 0.34), transparent 74%),
+    radial-gradient(ellipse 92% 44% at 20% 6%, oklch(0.4 0.062 288 / 0.15), transparent 74%),
+    radial-gradient(ellipse 72% 32% at 88% 20%, oklch(0.38 0.05 322 / 0.1), transparent 70%),
+    linear-gradient(
+      180deg,
+      oklch(0.118 0.03 274) 0%,
+      oklch(0.132 0.03 272) 34%,
+      oklch(0.178 0.034 268) 56%,
+      oklch(0.215 0.038 264) 68%,
+      oklch(0.16 0.032 264) 84%,
+      var(--bg-base) 100%
+    ),
+    var(--bg-base);
+
+  /* ── Flächen: Indigo-Samt ──────────────────────────────────────────────────
+     Die erste Fassung war fast-neutral mit Pflaumen-Unterton. Diese ist ein
+     dunkles Indigo (H≈268) — die Farbe, die eine klare Nacht wirklich hat, und
+     die Farbe, gegen die Laternen-Gold am wärmsten aussieht. --bg-subtle ist die
+     hellste Fläche und damit der harte Kontrast-Prüfstein; jede Textstufe ist
+     gegen SIE gerechnet, nicht gegen die schmeichelhafteste. */
+  --bg-base: oklch(0.105 0.022 268); /* #02040b — der dunkelste Ton des Themas */
+  --bg-surface: oklch(0.138 0.022 268); /* #050812 */
+  --bg-elevated: oklch(0.168 0.023 269); /* #0b0f19 */
+  --bg-subtle: oklch(0.192 0.023 269); /* #10141f — Hover-/Füllfläche */
+  --bg-hairline: oklch(0.27 0.02 270); /* #232630 */
+  --bg-hairline-dashed: oklch(0.32 0.019 270); /* #2f333d, für „ehrlich leer" */
+
+  /* ── Schrift: Sternweiß, minimal kühl ──────────────────────────────────────
+     Angehoben gegenüber der ersten Fassung (siehe Rechnung im Kopf): die
+     Textleiter kauft dem Bild den Durchlass durch den Schleier. --text-4 steht
+     auf L 0.725 statt 0.60 und hat damit auch auf --bg-subtle noch Luft. */
+  --text-1: oklch(0.945 0.008 250); /* #e9edf2 */
+  --text-2: oklch(0.86 0.01 252); /* #ccd1d7 */
+  --text-3: oklch(0.785 0.012 254); /* #b4b9c1 */
+  --text-4: oklch(0.74 0.014 256); /* #a5abb4 */
+
+  /* ── Akzent: Laternen-Gold, und diesmal LEUCHTET es ────────────────────────
+     Die erste Fassung dimmte das Gold „bewusst matt" — in einem 95 % schwarzen
+     Bild war es damit die einzige Farbe und trotzdem unsichtbar. Hier ist es
+     dieselbe Farbe wie das Licht in den Fenstern der Szene (die SVG mischt sie
+     aus demselben OKLCH-Tripel), und es steht hell genug, um in einer Nacht
+     eine Stimme zu sein. */
+  --accent: oklch(0.82 0.13 72); /* #f8b65d */
+  --accent-soft: oklch(0.82 0.13 72 / 0.16);
+  --accent-faint: oklch(0.82 0.13 72 / 0.08);
+  --accent-glow: oklch(0.82 0.13 72 / 0.26);
+  --accent-ink: oklch(0.14 0.028 66); /* #110701 — Samt im gefüllten Button */
+
+  /* ── Status: leise, aber lesbar ────────────────────────────────────────────
+     Chroma gedämpft — sie informieren, sie alarmieren nicht. Alle vier bleiben
+     auch auf ihrer eigenen *-soft-Fläche über 4,5:1. */
+  --success: oklch(0.77 0.115 152); /* #79c990 */
+  --success-soft: oklch(0.77 0.115 152 / 0.13);
+  --warn: oklch(0.83 0.11 80); /* #edbf71 */
+  --warn-soft: oklch(0.83 0.11 80 / 0.13);
+  --error: oklch(0.72 0.15 25); /* #f47b74 */
+  --error-soft: oklch(0.72 0.15 25 / 0.13);
+
+  /* Du-Blase: sanft gehoben, Samt statt Kante. Kein Akzent-Fill
+     (Projekt-Konvention seit Yoru). */
+  --bg-user: oklch(0.163 0.024 270); /* #0a0d18 */
+
+  color-scheme: dark;
+}
+
+/* Der Charakter des Themas erscheint als Raum um die Inhalte. Karten bleiben auf
+   ihren Flächentoken, darum verändert der Verlauf weder Statusfarben noch
+   Textkontrast. (themes.css hat dieselbe Regel generisch für `:root[data-theme]`;
+   sie steht hier noch einmal, damit die Datei allein geladen vollständig ist —
+   gleiche Spezifität, gleicher Wert, kein Konflikt.) */
+:root[data-theme='nagareboshi'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── DAS FLIMMERN (:root::before) ─────────────────────────────────────────────
+   Luftglühen und eine Handvoll Streusterne, die als GANZES atmen. Zwei Aufgaben:
+
+   (1) Es ist der zweite, gröbere Herzschlag — und die Rückversicherung. Der
+       feine, versetzte Funkelrhythmus steht im SVG; sollte eine Engine
+       deklarative Animation in einem `background-image`-SVG nicht mitlaufen
+       lassen, bewegt sich hier trotzdem etwas.
+   (2) Ein Sternfeld allein sieht aus wie Konfetti. Luftglühen (der schwache,
+       überall vorhandene Eigenschein der Nachtatmosphäre) legt einen Hauch
+       Dichte dazwischen — erst damit wird aus Punkten ein Himmel.
+
+   Die Ebene sitzt bei z -4 GANZ HINTEN, hinter Meteor und Szene: ihre Punkte
+   stehen damit nur dort, wo die Szene Himmel zeigt, und verschwinden hinter Grat
+   und Dorf, statt darüberzuliegen. Sie ist bewusst NICHT auf die Szene
+   ausgerichtet (die skaliert mit `cover`, diese hier mit dem Fenster) — bei
+   Streusternen ist das gleichgültig, bei Motiven wäre es ein Fehler.
+
+   Sie hängt am `:root`, nicht am `[data-theme]`: die 44-px-Vorschaukachel des
+   Theme-Pickers setzt data-theme auf ein <div>, und die soll keine fixe
+   Vollbild-Ebene bekommen. */
+:root[data-theme='nagareboshi']::before {
+  content: '';
+  position: fixed;
+  inset: -3%;
+  z-index: -4;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-image:
+    /* Luftglühen: zwei sehr breite, sehr schwache Höfe. */
+    radial-gradient(ellipse 62% 34% at 30% 22%, oklch(0.42 0.05 276 / 0.17), transparent 70%),
+    radial-gradient(ellipse 54% 30% at 74% 40%, oklch(0.44 0.045 284 / 0.15), transparent 72%),
+    /* Streusterne. Jeder hat einen HALTESTOPP (die Farbe steht bis 55 % und
+       läuft erst dann aus) — ein Verlauf ohne ihn ist auf 2 px praktisch
+       unsichtbar; die erste Fassung hat genau daran ihren Meteor verloren. */
+    radial-gradient(circle 1.7px at 8% 12%, oklch(0.92 0.02 250) 55%, transparent 100%),
+    radial-gradient(circle 1.3px at 15% 31%, oklch(0.84 0.02 252) 55%, transparent 100%),
+    radial-gradient(circle 2px at 23% 8%, oklch(0.95 0.015 246) 55%, transparent 100%),
+    radial-gradient(circle 1.2px at 29% 24%, oklch(0.8 0.025 254) 55%, transparent 100%),
+    radial-gradient(circle 1.6px at 36% 15%, oklch(0.9 0.02 250) 55%, transparent 100%),
+    radial-gradient(circle 1.2px at 41% 33%, oklch(0.82 0.025 254) 55%, transparent 100%),
+    radial-gradient(circle 1.9px at 47% 6%, oklch(0.94 0.015 248) 55%, transparent 100%),
+    radial-gradient(circle 1.3px at 53% 21%, oklch(0.85 0.02 252) 55%, transparent 100%),
+    radial-gradient(circle 1.6px at 59% 36%, oklch(0.89 0.02 250) 55%, transparent 100%),
+    radial-gradient(circle 1.2px at 64% 11%, oklch(0.81 0.025 254) 55%, transparent 100%),
+    radial-gradient(circle 2px at 71% 27%, oklch(0.95 0.015 246) 55%, transparent 100%),
+    radial-gradient(circle 1.3px at 77% 9%, oklch(0.84 0.02 252) 55%, transparent 100%),
+    radial-gradient(circle 1.7px at 83% 34%, oklch(0.91 0.02 250) 55%, transparent 100%),
+    radial-gradient(circle 1.2px at 89% 18%, oklch(0.8 0.025 254) 55%, transparent 100%),
+    radial-gradient(circle 1.8px at 95% 29%, oklch(0.93 0.015 248) 55%, transparent 100%),
+    radial-gradient(circle 1.2px at 4% 38%, oklch(0.82 0.025 254) 55%, transparent 100%),
+    radial-gradient(circle 1.5px at 19% 44%, oklch(0.88 0.02 250) 55%, transparent 100%),
+    radial-gradient(circle 1.2px at 33% 41%, oklch(0.8 0.025 254) 55%, transparent 100%),
+    radial-gradient(circle 1.6px at 50% 46%, oklch(0.89 0.02 250) 55%, transparent 100%),
+    radial-gradient(circle 1.2px at 68% 43%, oklch(0.81 0.025 254) 55%, transparent 100%),
+    radial-gradient(circle 1.5px at 86% 47%, oklch(0.87 0.02 250) 55%, transparent 100%),
+    radial-gradient(circle 1.2px at 12% 20%, oklch(0.8 0.025 254) 55%, transparent 100%),
+    radial-gradient(circle 1.4px at 44% 28%, oklch(0.86 0.02 252) 55%, transparent 100%),
+    radial-gradient(circle 1.4px at 74% 19%, oklch(0.86 0.02 252) 55%, transparent 100%);
+  animation: nagareboshi-flimmern 43s ease-in-out infinite;
+}
+
+/* Atmen und ein Hauch Drift — die Sterndrehung einer ganzen Nacht, so weit
+   heruntergerechnet, dass sie in einer Minute nur zu ahnen ist. `inset: -3%`
+   gibt der Verschiebung Reserve, damit nie eine Kante aufreißt. Nur `opacity`
+   und `transform` (Projekt-Konvention, s. index.css „Motion-Token"). */
+@keyframes nagareboshi-flimmern {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 0.42;
+    transform: translate3d(-0.7%, 0.3%, 0);
+  }
+}
+
+/* ── DIE METEORE (:root::after) ───────────────────────────────────────────────
+   Der Namensgeber. Eine Uhr von 60 s trägt drei Einsätze von je ~1,4 s: es
+   fällt also im Schnitt alle zwanzig Sekunden einer, so wie die Regie es
+   bestellt hat — oft genug, dass man beim Hinsehen belohnt wird, selten genug,
+   dass es ein Ereignis bleibt (die Abgrenzung zu Natsumatsuri, wo das Feuerwerk
+   das Bild IST).
+
+   WIE EIN STRICH ENTSTEHT, ohne dass es drei Elemente braucht: die Ebene ist um
+   24° gedreht, und der Strich (Kopf + Schweif, zwei Verläufe) liegt darin
+   waagerecht auf 50 %/50 % — dem FIXPUNKT der Drehung. Eine Verschiebung
+   entlang der lokalen X-Achse bewegt ihn damit ENTLANG seiner eigenen Längsachse
+   (das macht aus einem Strich eine Sternschnuppe), und seine Bildposition ist
+   schlicht „Fenstermitte + rotate(24°)·(tx, ty)". Die Keyframe-Werte unten sind
+   deshalb ausgerechnet und nicht geraten.
+
+   ZWEI FALLEN, in die diese Datei schon getappt IST — beide am Messbild
+   aufgefallen, nicht am Nachdenken:
+   (1) Lag der Strich irgendwo in der Ebene statt im Drehpunkt, warf ihn die
+       Drehung an einen ganz anderen Ort (gemessen: y ≈ -290 px, weit über dem
+       Fensterrand).
+   (2) Ein Verlauf ohne Haltestopp ist auf wenigen Pixeln fast unsichtbar:
+       gemessen wurde statt eines Meteors ein #2a2626. Kopf und Schweif haben
+       darum je einen zweiten Farbstopp, der die Farbe erst HÄLT.
+
+   Gegenüber der ersten Fassung ist der Strich zweieinhalbmal so lang (400 statt
+   160 px) und heller — er muss jetzt gegen einen Himmel VOLLER Sterne bestehen,
+   nicht mehr gegen Schwarz. */
+:root[data-theme='nagareboshi']::after {
+  content: '';
+  position: fixed;
+  inset: -30%;
+  z-index: -3;
+  pointer-events: none;
+  opacity: 0; /* Grundzustand: kein Meteor. Nur die Animation hebt ihn. */
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-image:
+    /* Kopf: der helle Punkt, der vorausläuft — am vorderen Ende des Schweifs. */
+    radial-gradient(
+      circle 4px at calc(50% + 196px) 50%,
+      oklch(1 0.01 84) 0,
+      oklch(1 0.01 84 / 0.92) 46%,
+      transparent 100%
+    ),
+    /* Hof um den Kopf. Ohne ihn ist der Meteor ein 2-px-Kratzer; mit ihm ist er
+       ein Licht. Er kostet nichts und macht den Unterschied zwischen „da war
+       eine Linie" und „da ist ein Stern gefallen". */
+    radial-gradient(
+      circle 16px at calc(50% + 196px) 50%,
+      oklch(0.95 0.04 80 / 0.34) 0,
+      oklch(0.95 0.04 80 / 0.16) 42%,
+      transparent 100%
+    ),
+    /* Schweif: 400 px lang, gut 2 px dünn, nach hinten ausbleichend. */
+    radial-gradient(
+      ellipse 200px 2.2px at 50% 50%,
+      oklch(0.97 0.025 78 / 0.85) 0,
+      oklch(0.97 0.025 78 / 0.5) 56%,
+      transparent 100%
+    );
+  animation: nagareboshi-meteor 60s linear infinite;
+}
+
+/* Drei Einsätze auf einer Uhr von 60 s: bei 10,4 % / 43,0 % / 76,0 %, jeder
+   ~2,3 % lang (≈1,4 s). Die Abstände sind 19,6 s · 19,8 s · 20,6 s.
+   Dazwischen steht die Deckkraft auf 0, und die Verschiebung wandert unsichtbar
+   an den nächsten Himmelsort — deshalb fällt nicht dreimal derselbe Stern an
+   derselben Stelle.
+
+   Die (tx, ty) sind Fenstermitte-relativ IM GEDREHTEN Rahmen; tx ist die
+   Flugrichtung, ty die Wahl der Himmelshöhe.
+
+   WO SIE FLIEGEN, IST KEINE FREIE WAHL, UND ES IST AUCH KEINE RECHNUNG. Die
+   erste Version dieser Fassung hat beides gelernt: die Bahn wurde algebraisch
+   gesetzt (Fenstermitte + rotate·(tx,ty)) und lag dann prompt hinter einer
+   deckenden Karte — im Frame bei 7 s war schlicht nichts zu sehen. Und als die
+   Bahn korrigiert war, stimmte die ausgerechnete Position immer noch nicht mit
+   der gemalten überein. Also GEMESSEN statt gerechnet: die Meteor-Ebene wird
+   einzeln ein- und ausgeschaltet und die Differenz der beiden Bilder gibt den
+   Ort. Kopf-Positionen bei 1366×1024, so nachgemessen:
+     Einsatz 1  (1122, 165) → (1284, 238)   aus der Spalte in den rechten Rand
+     Einsatz 2  (120, 119)  → (552, 312)    aus dem linken Rand in die Spalte
+     Einsatz 3  (1202, 388) → (1230, 401)   rechts unten, und dort taucht er
+                                            HINTER dem fernen Grat weg (die
+                                            Szene ist z -2, diese Ebene z -3):
+                                            von seiner Deckung bleibt ein
+                                            Viertel — genau das ist die Absicht.
+   Einsatz 1 und 2 laufen bewusst durch den Randraum, wo kein Schleier steht und
+   nie eine Glyphe sitzt; dort darf der Strich scharf sein (gemessen #585960
+   gegen #1a1b28 Himmel). Einsatz 1 ist so getaktet, dass ein Bild bei
+   virtueller Zeit 7 s ihn mitten im Flug erwischt — die Frame-Serie nutzt genau
+   das als Beweis. */
+@keyframes nagareboshi-meteor {
+  0%,
+  10.4% {
+    opacity: 0;
+    transform: rotate(24deg) translate3d(-1.9vw, -36.2vw, 0);
+  }
+  10.8% {
+    opacity: 0.95;
+  }
+  12.3% {
+    opacity: 0.95;
+  }
+  12.7% {
+    opacity: 0;
+    transform: rotate(24deg) translate3d(23.6vw, -36.2vw, 0);
+  }
+  43% {
+    opacity: 0;
+    transform: rotate(24deg) translate3d(-49.3vw, -9.5vw, 0);
+  }
+  43.4% {
+    opacity: 0.8;
+  }
+  44.9% {
+    opacity: 0.8;
+  }
+  45.3% {
+    opacity: 0;
+    transform: rotate(24deg) translate3d(-23.8vw, -9.5vw, 0);
+  }
+  76% {
+    opacity: 0;
+    transform: rotate(24deg) translate3d(14.9vw, -23.7vw, 0);
+  }
+  76.4% {
+    opacity: 0.88;
+  }
+  77.9% {
+    opacity: 0.88;
+  }
+  78.3%,
+  100% {
+    opacity: 0;
+    transform: rotate(24deg) translate3d(40.5vw, -23.7vw, 0);
+  }
+}
+
+/* ── DIE SZENE: das ganze Bild (body::before) ─────────────────────────────────
+   Maß-Vertrag: `cover` + `center bottom`. Die viewBox ist 1600×1000 (1,6:1);
+   `cover` beschneidet bei schmalen Fenstern seitlich, bei breiten oben. Die
+   Sichere Zone der Zeichnung ist darum x 140–1460 und y ≥ 110 — dort steht
+   alles, was das Bild ausmacht; außerhalb liegt nur Fortsetzung (Sterne,
+   Schilf, Wald). Geprüft für 4:3 bis 16:9.
+
+   Der Horizont sitzt bei 49–62 % Höhe, die Uferlinie bei 81 %, das Dorf
+   dazwischen — bei `center bottom` bleiben diese Linien bei jeder Fensterhöhe
+   an derselben Stelle des Fensters.
+
+   Keine CSS-Animation auf dieser Ebene, und das ist eine Entscheidung: eine
+   Landschaft bewegt sich nicht als Ganzes. Was sich bewegt, sind die Sterne, die
+   Laternen und die Spiegelungen — jedes für sich, IM Bild, mit eigener Uhr. */
+:root[data-theme='nagareboshi'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: url('nagareboshi-szene.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+}
+
+/* ── DER SCHLEIER: der Kontrast-Vertrag als Fläche (body::after) ──────────────
+   Er ist die VORDERSTE Deko-Schicht (z-index -1) und liegt damit über Flimmern,
+   Meteor und Szene. Das ist der ganze Trick: was auch immer die Schichten
+   darunter an Helligkeit erzeugen — der Schleier zieht es in der Lesespalte zum
+   Grundton zurück. Neue Sterne, ein hellerer Meteor, ein zusätzlicher Verlauf:
+   der Vertrag hält, weil er zuletzt malt.
+
+   SUBTRAKTIV, nicht additiv. Auf hellem Grund (Asagiri) deckt man mit Weiß ab
+   und der Kontrast zu dunkler Schrift kann nur besser werden; auf dunklem Grund
+   gilt das Gegenteil, und ein weißer Schleier wäre hier genau der Fehler. Also
+   deckt dieser mit dem Grundton selbst.
+
+   0,78 STATT 0,94 — die eine Zahl, an der die zweite Fassung hängt. Bei 0,94
+   blieben von jedem Bildpixel 6 % übrig, und genau deshalb war die Mitte der
+   ersten Fassung tot. Bei 0,78 sind es 22 %: das Band, das Dorf und die
+   Spiegelungen laufen sichtbar hinter der Spalte durch, ohne dass ein einziger
+   Messwert unter 4,5:1 fällt (die Textleiter oben hat den Platz dafür gekauft).
+
+   Er bedeckt die volle 920-px-Spalte und franst nach AUSSEN aus, nie nach innen.
+   Unter ~1040 px Fensterbreite fällt die calc-Kette auf 0 zusammen, der Schleier
+   deckt alles, und die Zeichnung wird zum Gespenst statt zu verschwinden.
+
+   DIE KANTE BRAUCHT MEHR ALS EINE RAMPE. Mit einem einzigen linearen Übergang
+   (so stand es hier: 190 px, zwei Stopps) hat die Deckkraft an beiden Enden
+   einen Knick, und das Auge sieht Knicke in Helligkeitsverläufen als LINIE —
+   bei 1920 px stand eine sichtbare senkrechte Naht im Nachthimmel, genau auf
+   der Spaltengrenze. Die Rampe hat deshalb fünf Stopps über 330 px.
+
+   IHRE FORM IST ABER AUCH NICHT EGAL. Ein erster Versuch fiel gleichmäßig ab
+   (0,72 · 0,58 · 0,30 · 0,09) — die Naht war weg, aber bei 1366 px, wo der
+   Randraum nur 223 px breit ist, lag danach über dem GANZEN Rand noch gut die
+   Hälfte Schleier, und der Meteor, der genau dort scharf sein soll, war ein
+   Schatten seiner selbst. Die Kurve fällt jetzt zuerst schnell und läuft dann
+   lange flach aus (0,60 · 0,36 · 0,17 · 0,06): schon 120 px neben der Spalte
+   steht das Bild zu zwei Dritteln da, und der weiche Rest reicht weit genug,
+   dass kein Knick sichtbar wird. */
+:root[data-theme='nagareboshi'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  --veil: max(0px, 50% - 460px);
+  background-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--veil) - 330px),
+    oklch(0.105 0.022 268 / 0.06) calc(var(--veil) - 260px),
+    oklch(0.105 0.022 268 / 0.17) calc(var(--veil) - 190px),
+    oklch(0.105 0.022 268 / 0.36) calc(var(--veil) - 120px),
+    oklch(0.105 0.022 268 / 0.6) calc(var(--veil) - 55px),
+    oklch(0.105 0.022 268 / 0.78) var(--veil),
+    oklch(0.105 0.022 268 / 0.78) calc(100% - var(--veil)),
+    oklch(0.105 0.022 268 / 0.6) calc(100% - var(--veil) + 55px),
+    oklch(0.105 0.022 268 / 0.36) calc(100% - var(--veil) + 120px),
+    oklch(0.105 0.022 268 / 0.17) calc(100% - var(--veil) + 190px),
+    oklch(0.105 0.022 268 / 0.06) calc(100% - var(--veil) + 260px),
+    transparent calc(100% - var(--veil) + 330px),
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* Eigenes reduced-motion-Gate: die globale Regel in index.css stellt die Ebenen
+   ohnehin still, aber diese Datei muss auch allein geladen korrekt sein.
+
+   Für den Meteor fällt `animation: none` auf den Grundzustand der Regel zurück —
+   und der ist `opacity: 0`. Es bleibt also KEIN Meteor mitten im Himmel stehen
+   (das sähe aus wie ein Kratzer im Bild); es fällt schlicht keiner mehr.
+   Für das Flimmern ist der Grundzustand `opacity: 1` — die Streusterne bleiben
+   also stehen, sie hören nur auf zu atmen. Das Gate LÖSCHT nichts.
+
+   Die Uhren im SVG stellt die Zeichnung selbst still: sie trägt dieselbe
+   Medienabfrage in ihrem eigenen <style>. Auch dort ist der Ruhezustand der
+   HELLSTE — das Bild bleibt vollständig. NACHGEMESSEN, nicht behauptet: mit
+   `--force-prefers-reduced-motion` sind die Bilder bei 1 s und bei 7 s
+   virtueller Zeit BITGLEICH, ohne den Schalter nicht. Das Gate greift also
+   durch die Bildgrenze hindurch.
+
+   Die Szenen-Ebene (`body::before`) steht hier mit, obwohl sie heute keine
+   Animation trägt. Zwei Gründe: sie ist die Ebene, an der ein späterer Griff
+   („lass die Landschaft doch ganz leicht atmen") zuerst ansetzen würde, und der
+   projektweite Riegel in src/test/sceneanimation.test.ts verlangt von einer
+   bewegten Szene genau diesen Namen im Gate. Eine Regel, die nichts abschaltet,
+   kostet nichts und hält das Versprechen auch für den nächsten Griff. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='nagareboshi']::before,
+  :root[data-theme='nagareboshi']::after,
+  :root[data-theme='nagareboshi'] body::before {
+    animation: none;
+  }
+}
+
+/* Die Kopfzeile ist die Nacht selbst, nur dichter: fast deckender Samt mit einer
+   kaum sichtbaren kühlen Kante statt eines Schattens (Muster wie Natsu no Hi /
+   Nagori / Asagiri, die ihre Nav ebenfalls nur tönen). */
+:root[data-theme='nagareboshi'] .nav {
+  background: oklch(0.118 0.022 268 / 0.88);
+  box-shadow: 0 1px 0 oklch(0.27 0.02 270 / 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Der Sprachstern ist der Stern, der bleibt: weißglühender Kern, nach außen ins
+   Laternen-Gold abfallend — dieselbe Farbfolge wie ein heller Stern der Szene.
+   Form und Bewegung bleiben die des Basis-Orbs; das Thema ist Farbe. */
+:root[data-theme='nagareboshi'] .vc-orb__core {
+  background: radial-gradient(circle at 42% 36%, oklch(0.98 0.015 240), oklch(0.9 0.07 66) 50%, var(--accent) 100%);
+}
+
+/* Der Bloom kippt von Gold (innen) ins Indigo des Nachthimmels (außen) —
+   Licht, das sich in klarer, kalter Luft verliert. */
+:root[data-theme='nagareboshi'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    oklch(0.44 0.06 278 / 0.18) 44%,
+    transparent 74%
+  );
+}
+
+/* Die Pegel-Ringe bleiben im Gold, aber leise: die Stimme soll in der stillen
+   Nacht nicht zum Blinklicht werden. Keine neue Mechanik — nur Farbe auf dem
+   bestehenden Ring. */
+:root[data-theme='nagareboshi'] .vc-orb__ring {
+  border-color: oklch(0.82 0.13 72 / 0.36);
+  box-shadow: 0 0 0 5px oklch(0.82 0.13 72 / 0.09);
+}

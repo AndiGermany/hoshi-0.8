@@ -2,7 +2,8 @@
 # diary-gap-rate.sh — S1 des Nachtschicht-Spikes (PREP-nachtschicht-spike.md).
 #
 # READ-ONLY Lücken-Rate-Report aus dem Turn-Diary (#10):
-#   Turns gesamt · deflected-Rate · deflected nach category · groundingUsed-Rate · error-Rate.
+#   Turns gesamt · deflected-Rate · deflected nach category · groundingUsed-Rate · error-Rate
+#   · brainTimeout-Rate (Wedges; sie tragen KEIN error-Feld, s.u.).
 #
 # Quelle 1: GET /api/v1/diary/recent?limit=500 (ct-106, HTTPS :8082, PerimeterWebFilter-Token)
 # Quelle 2 (Fallback): lokale JSONL ~/.hoshi/diary/turn-diary-YYYY-MM-DD.jsonl (heute+gestern)
@@ -73,6 +74,8 @@ jq -r --arg src "$source_label" '
   | ([.[] | select(.deflected == true)]) as $defl
   | ([.[] | select(.groundingUsed == true)] | length) as $ground
   | ([.[] | select(.error != null and .error != "")] | length) as $err
+  | ([.[] | select(.brainTimeout == true)] | length) as $wedge
+  | ([.[] | select(.brainTimeout == null)] | length) as $wedge_blind
   | ([.[].ts] | sort) as $ts
   | "Quelle: \($src)",
     "Zeitraum: \($ts[0]) .. \($ts[-1])",
@@ -80,6 +83,10 @@ jq -r --arg src "$source_label" '
     "deflected: \($defl|length) / \($n) = \(($defl|length)*10000/$n|round/100)%",
     "groundingUsed: \($ground) / \($n) = \($ground*10000/$n|round/100)%",
     "error: \($err) / \($n) = \($err*10000/$n|round/100)%",
+    # Brain-Wedge: ein Chat-Timeout endet in der warmen Never-Silent-Phrase, also
+    # OHNE error-Feld — er zählt in KEINE Rate darüber. Zeilen ohne den Key sind
+    # vor dem 14.08. geschrieben: dort ist der Wedge unmessbar, nicht 0.
+    "brainTimeout: \($wedge) / \($n) = \($wedge*10000/$n|round/100)%\(if $wedge_blind>0 then " (\($wedge_blind) Alt-Zeilen ohne Feld = unmessbar, NICHT 0)" else "" end)",
     "",
     "deflected nach category (Anteil an allen Turns dieser Kategorie):",
     ( group_by(.category)[]

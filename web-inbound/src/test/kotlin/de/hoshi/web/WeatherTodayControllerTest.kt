@@ -286,4 +286,49 @@ class WeatherTodayControllerTest {
             }
         }
     }
+
+    // ── Der Sieben-Tage-Ausblick auf dem DRAHT (FE-Naht 2026-08-21) ────────────
+
+    @Test
+    fun `outlook steht als additives Wire-Feld im JSON - Bestandsschluessel unveraendert daneben`() {
+        // Dieser Test prüft bewusst die SERIALISIERUNG, nicht nur das Objekt: die
+        // FE-Kachel liest JSON-Schlüssel, und ein Feld, das nur im Kotlin-Objekt
+        // existiert, ist für sie nicht da. Die übrigen Tests dieser Datei greifen
+        // `body as TodayForecast` ab und würden einen Serialisierungs-Bruch nie sehen.
+        val sevenDayJson = """
+            {
+              "latitude": 52.52,
+              "longitude": 13.41,
+              "current": { "temperature_2m": 14.2, "weathercode": 61 },
+              "daily": {
+                "time": ["2026-07-05", "2026-07-06", "2026-07-07", "2026-07-08",
+                         "2026-07-09", "2026-07-10", "2026-07-11"],
+                "temperature_2m_max": [19.4, 22.1, 24.0, 21.5, 18.2, 20.0, 23.3],
+                "temperature_2m_min": [11.3, 13.0, 14.2, 12.8, 10.1, 11.7, 12.9],
+                "precipitation_sum": [3.4, 0.0, 0.0, 1.2, 6.7, 0.0, 0.3],
+                "precipitation_probability_max": [80, 10, 0, 40, 90, 5, 20],
+                "weathercode": [61, 2, 0, 3, 63, 1, 2]
+              }
+            }
+        """.trimIndent()
+
+        withOpenMeteo(sevenDayJson) { url, _ ->
+            val body = get(controller(url)).body as WeatherGroundingProvider.TodayForecast
+            val json = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper().writeValueAsString(body)
+
+            // Bestands-Kern unverändert (der Vertrag, den `parseWeatherToday` prüft).
+            for (key in listOf("\"label\"", "\"todayMin\"", "\"todayMax\"", "\"codeText\"", "\"precipMm\"")) {
+                assertTrue(json.contains(key), "Bestandsschlüssel $key bleibt auf dem Draht: $json")
+            }
+            // Und das neue Feld daneben, mit allen sieben Tagen.
+            assertTrue(json.contains("\"outlook\""), "additives Ausblick-Feld auf dem Draht: $json")
+            assertEquals(7, body.outlook.size, "sieben Tage")
+            assertEquals(0, body.outlook.first().offset)
+            assertEquals("2026-07-05", body.outlook.first().dateIso)
+            assertEquals(80, body.outlook.first().precipProbability)
+            for (key in listOf("\"offset\"", "\"dateIso\"", "\"tempMin\"", "\"tempMax\"", "\"precipProbability\"")) {
+                assertTrue(json.contains(key), "Ausblick-Schlüssel $key: $json")
+            }
+        }
+    }
 }

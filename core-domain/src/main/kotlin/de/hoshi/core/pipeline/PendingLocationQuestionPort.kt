@@ -23,19 +23,16 @@ data class PendingLocationQuestion(
  * **PendingLocationQuestionPort** — das winzige Session-Gedächtnis der offenen
  * „Für welchen Ort denn?"-Nachfrage, ZEILE FÜR ZEILE nach dem
  * [PendingLookupPort]-Muster (Interface + [NONE]-Default + In-Memory-Impl,
- * one-shot [consume], TTL [DEFAULT_TTL], Key `chatId ?: speakerId ?: "local"`).
+ * one-shot [consume], TTL [DEFAULT_TTL], kanalgebundener [ConversationKeys]-Key).
  *
  * **Eigener Port statt Generalisierung (begründeter Entscheid):** die beiden
  * Pendings tragen zwar dieselbe Payload-Form (query+language+ts), aber
  * GRUNDVERSCHIEDENE Einlöse-Verträge — das Nachschau-Angebot löst NUR eine
  * deterministische Affirmation ([AffirmationRecognizer]) ein, die Orts-Nachfrage
  * NUR ein konservativer Orts-Erkenner ([LocationAnswerRecognizer]). Getrennte
- * Stores machen eine Ketten-Vermischung STRUKTURELL unmöglich (ein „ja" kann nie
- * eine Orts-Nachfrage einlösen, ein „Duisburg" nie ein Cloud-Angebot — selbst
- * bei einem künftigen Refactor-Fehler am Orchestrator). Die ~20 duplizierten
- * Impl-Zeilen sind billiger als eine generische Abstraktion über zwei
- * Ein-Feld-Payloads (Muster [LastAreaPort]-Familie: lieber zwei ehrliche kleine
- * Ports als ein cleverer großer).
+ * Stores halten ihre Payloads typisiert; der [PendingTurnArbiter] entscheidet
+ * atomar, welche Art pro Key aktiv ist. Damit kann ein „ja" nie gleichzeitig
+ * eine Orts-Nachfrage verbrauchen und „Duisburg" nie ein Cloud-Angebot.
  *
  * Lebenszyklus strikt **one-shot** (wie [PendingLookupPort]): [offer] setzt die
  * Nachfrage am Wetter-Zweig, der NÄCHSTE Turn desselben Schlüssels zieht sie per

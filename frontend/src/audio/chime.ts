@@ -11,8 +11,9 @@
 // {@link playAlarmChime} kapselt den lazy Singleton-AudioContext + die
 // Autoplay-Policy: der Chime feuert NICHT auf einer User-Geste (Timer läuft im
 // Hintergrund ab!), ein frischer/suspendierter Context darf also stumm sein.
-// Dann schedulen wir trotzdem (currentTime steht still) und holen den Klang
-// bei der nächsten Geste per resume() nach — visuell klingelt der Toast SOFORT.
+// Dann schedulen wir NICHTS (sonst staut sich der Klang und detoniert bei der
+// nächsten Geste), sondern entsperren nur — visuell klingelt der Toast SOFORT,
+// akustisch der erste Schleifen-Tick nach der Geste.
 
 /** Ein Sinus-Partialton des Chimes: Frequenz (Hz) + relativer Pegel (0..1). */
 export interface ChimePartial {
@@ -120,9 +121,13 @@ export function resetChimeContext(): void {
 
 /**
  * Bei der nächsten User-Geste (Klick/Taste) den suspendierten Context
- * entsperren — die bereits geschedulten Anschläge klingen dann von vorn
- * (currentTime stand während `suspended` still). Ein Listener reicht,
- * egal wie viele Polls dazwischen feuern.
+ * entsperren — damit der NÄCHSTE Klingel-Tick (die Schleife läuft alle ~4s,
+ * solange etwas unbestätigt ist) hörbar spielt. Ein Listener reicht, egal wie
+ * viele Polls dazwischen feuern.
+ *
+ * Bewusst KEIN Nachholen des versäumten Klangs: entsperrt wird nur der Context,
+ * nichts wird abgespielt. Ist das Klingeln bis zur Geste quittiert/gelöscht/
+ * verpasst, bleibt es still — s. {@link playAlarmChime}.
  */
 function armResumeOnGesture(ctx: ChimeContext): void {
   if (gestureArmed || typeof window === 'undefined') return;
@@ -139,27 +144,39 @@ function armResumeOnGesture(ctx: ChimeContext): void {
 
 /**
  * Spielt den Wecker-Chime über einen lazy, geteilten AudioContext.
- * Autoplay-Policy: der Aufruf kommt vom Polling (KEINE Geste) — ein
- * suspendierter Context wird best-effort resumed und zusätzlich bei der
- * nächsten Geste nachgeholt. Fehler (kein Web-Audio, Context tot) sind
- * bewusst still: der Klang ist Komfort, der Banner trägt die Nachricht.
+ * Autoplay-Policy: der Aufruf kommt vom Polling (KEINE Geste) — läuft der
+ * Context nicht, wird er best-effort entsperrt (resume + Geste-Listener) und
+ * **nichts** geschedult. Fehler (kein Web-Audio, Context tot) sind bewusst
+ * still: der Klang ist Komfort, der Banner trägt die Nachricht.
+ *
+ * **Kein Ton-Stau (Andi-Live-Befund 23.08.2026: „der gelöschte Wecker ging beim
+ * Ausklappen trotzdem"):** früher wurde AUCH in einen gesperrten Context
+ * geschedult. Dort steht `currentTime` still, also legte jeder 4-s-Takt der
+ * Klingel-Schleife weitere Anschläge auf denselben Zeitpunkt — und die erste
+ * User-Geste (das Aufklappen des Displays!) entsperrte den Context und spielte
+ * den ganzen Stapel auf einmal ab. Quittieren, Löschen oder Verpasst-Werden
+ * konnten diesen Klang nicht mehr einfangen: er lag längst im Context. Jetzt
+ * gilt: **was nicht hörbar ist, wird gar nicht erst geplant.** Ein noch
+ * unbestätigter Wecker klingelt trotzdem — die Schleife ruft weiter, der erste
+ * Tick nach der Geste (≤ {@link CHIME_REPEAT_MS}) spielt hörbar.
  *
  * @returns `true`, wenn der Chime JETZT hörbar spielt (Context `running`);
  *   `false`, wenn die Autoplay-Policy ihn (noch) sperrt oder Web-Audio fehlt —
  *   der Aufrufer soll dann EHRLICH visuell eskalieren (Pulsieren, Titel-Blinken)
- *   statt auf einen stummen Klang zu vertrauen. Nachgeholt wird der Klang bei
- *   der nächsten User-Geste (resume; currentTime stand still ⇒ klingt von vorn).
+ *   statt auf einen stummen Klang zu vertrauen.
  */
 export function playAlarmChime(makeContext: () => ChimeContext = () => new AudioContext()): boolean {
   try {
     if (!shared) shared = makeContext();
-    playChime(shared);
-    if (shared.state === 'suspended') {
+    if (shared.state !== 'running') {
+      // Gesperrt/tot: NICHT schedulen (sonst detoniert der Stapel bei der nächsten
+      // Geste), nur entsperren — der nächste Tick der Schleife klingelt dann hörbar.
       void shared.resume().catch(() => {});
       armResumeOnGesture(shared);
-      return false; // gesperrt: JETZT hört das niemand — visuell eskalieren.
+      return false;
     }
-    return shared.state === 'running';
+    playChime(shared);
+    return true;
   } catch {
     shared = null; // nächster Versuch darf frisch anlegen
     return false;

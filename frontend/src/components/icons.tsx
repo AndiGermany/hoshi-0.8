@@ -283,3 +283,83 @@ export function GearGlyph({ className }: GlyphProps) {
     </Svg>
   );
 }
+
+/* ---- Settings category glyphs (design 2026-08-15 §3.1) ---------------------
+   The drawer's entry level is a grid of seven equally sized cards, each with
+   one glyph. Three categories already had an honest glyph in this file and
+   reuse it — mic for "language & voice", cloud for "online & lookup" (the
+   egress idiom of this house), lock for "memory & privacy". The four below
+   fill the gaps in the same muted stroke language; none of them is decorative
+   anywhere else, they exist for the overview cards. */
+
+/** Palette — appearance/colour theme. */
+export function PaletteGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="palette" className={className}>
+      <path d="M12 3a9 9 0 1 0 0 18 2 2 0 0 0 1.6-3.2 2 2 0 0 1 1.6-3.2h2a3.8 3.8 0 0 0 3.8-3.8C21 6.5 17 3 12 3z" />
+      <circle cx="7.8" cy="12.2" r="1.05" fill="currentColor" stroke="none" />
+      <circle cx="9.6" cy="8.2" r="1.05" fill="currentColor" stroke="none" />
+      <circle cx="14.4" cy="7.6" r="1.05" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+/** Person — personality (Hoshi's tone), not a user account. */
+export function PersonGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="person" className={className}>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M4.8 20.5a7.2 7.2 0 0 1 14.4 0" />
+    </Svg>
+  );
+}
+
+/** House — home & integrations (rooms, weather place, alarms, skills). */
+export function HomeGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="home" className={className}>
+      <path d="M3.5 10.8 12 3.8l8.5 7" />
+      <path d="M5.6 12.4v7.8h12.8v-7.8" />
+      <path d="M10 20.2v-4.6h4v4.6" />
+    </Svg>
+  );
+}
+
+/**
+ * Bin — deleting ONE recording in the enrol overlay (design 2026-08-15 §3.3/3).
+ *
+ * WHY AN ICON AND NOT THE WORD: the text button `.settings__deletebtn` is
+ * `flex: none` and ~118 px wide; inside a per-recording row of the 340 px drawer
+ * it could not shrink and pushed every row into a panel-wide horizontal scroll
+ * (§1.4/1). An icon button has a FIXED, small footprint, so the row's flexible
+ * meta column always wins. The word does not disappear — it moves into
+ * `aria-label`/`title`, where a screen reader and a hover still read it.
+ */
+export function BinGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="bin" className={className}>
+      <line x1="4.5" y1="6.5" x2="19.5" y2="6.5" />
+      <path d="M9 6.5V4.6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1.9" />
+      <path d="M6.6 6.5l.8 12.1a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5l.8-12.1" />
+      <line x1="10.4" y1="10" x2="10.7" y2="17" />
+      <line x1="13.6" y1="10" x2="13.3" y2="17" />
+    </Svg>
+  );
+}
+
+/** Chip — model & performance (pure technique, "set once and forget"). */
+export function ChipGlyph({ className }: GlyphProps) {
+  return (
+    <Svg name="chip" className={className}>
+      <rect x="7.4" y="7.4" width="9.2" height="9.2" rx="1.6" />
+      <line x1="10.2" y1="3.4" x2="10.2" y2="7.4" />
+      <line x1="13.8" y1="3.4" x2="13.8" y2="7.4" />
+      <line x1="10.2" y1="16.6" x2="10.2" y2="20.6" />
+      <line x1="13.8" y1="16.6" x2="13.8" y2="20.6" />
+      <line x1="3.4" y1="10.2" x2="7.4" y2="10.2" />
+      <line x1="3.4" y1="13.8" x2="7.4" y2="13.8" />
+      <line x1="16.6" y1="10.2" x2="20.6" y2="10.2" />
+      <line x1="16.6" y1="13.8" x2="20.6" y2="13.8" />
+    </Svg>
+  );
+}

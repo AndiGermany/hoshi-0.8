@@ -134,6 +134,37 @@ class JsonlTurnTraceAdapter(
             "escalated" to trace.escalated,
             "escalationCostCents" to trace.escalationCostCents,
             "cacheHit" to trace.cacheHit,
+            // Räume-Nutzungs-Naht (additiv ANS ZEILENENDE — Muster cacheHit): die
+            // area_id, die der ToolCall dieses Turns bereits kannte (s. TurnTrace.
+            // targetAreaId-KDoc, kartiert in Commit f049965). null = kein Tool-Turn
+            // ODER keine aufgelöste Area — nie eine erfundene Area.
+            "targetAreaId" to trace.targetAreaId,
+            // Execution-claim latch (additive AT LINE END — same rule as targetAreaId):
+            // true = an unbacked switching claim was replaced by the honest ask-back
+            // (see TurnTrace.claimGateFired). Old lines without the key stay valid.
+            "claimGateFired" to trace.claimGateFired,
+            // Brain timeout (additive AT LINE END — same rule as claimGateFired):
+            // true = the brain was asked and timed out, which is WHY brainTtftMs is
+            // null on this line (see TurnTrace.brainTimeout). Old lines without the
+            // key stay valid.
+            "brainTimeout" to trace.brainTimeout,
+            // Room-clarify cycle (additive AT LINE END — same rule as claimGateFired):
+            // asked/resolved/expired/abandoned; null = no clarify involvement.
+            // Old lines without the key stay valid.
+            "pendingClarify" to trace.pendingClarify,
+            // Tool executor ran (additive AT LINE END — same rule as claimGateFired):
+            // true = ToolPort.execute was really invoked in this turn (grant/read/
+            // agentic grant), false = no executor ran (deny, ask, brain-only). The
+            // CALL, not its outcome (see TurnTrace.toolCallRan). Old lines without the
+            // key stay valid.
+            "toolCallRan" to trace.toolCallRan,
+            // Raumname-Naht (additiv AM ECHTEN ZEILENENDE — dieselbe Regel wie
+            // toolCallRan, NICHT neben targetAreaId: die Position der Alt-Keys ist
+            // Vertrag, s. JsonlTurnTraceClaimGateFieldTest): der echte HA-Anzeige-
+            // name zum Slug („kuche" ⇒ „Küche"), damit eine Diary-Zeile für Menschen
+            // lesbar ist. Der SLUG bleibt die Matching-Wahrheit; der Name begleitet
+            // ihn nur. Alt-Zeilen ohne den Key bleiben gültig.
+            "targetAreaName" to trace.targetAreaName,
         ),
     )
 

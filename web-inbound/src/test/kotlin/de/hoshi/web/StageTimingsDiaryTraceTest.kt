@@ -33,6 +33,7 @@ import de.hoshi.core.port.TtsPort
 import de.hoshi.core.port.TurnTrace
 import de.hoshi.core.port.TurnTracePort
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -144,6 +145,7 @@ class StageTimingsDiaryTraceTest {
                         ttsFirstAudioMs = 350,
                         admissionWaitMs = 0,
                         answerEntropy = 1.25,
+                        brainTimeout = true,
                     ),
                 ),
             ),
@@ -163,6 +165,7 @@ class StageTimingsDiaryTraceTest {
         assertEquals(350L, trace.ttsFirstAudioMs)
         assertEquals(0L, trace.admissionWaitMs, "ein GEMESSENES 0 (tryAcquire sofort) ist erlaubt")
         assertEquals(1.25, trace.answerEntropy, "Antwort-Entropie (S1) reist am selben Done ins Diary")
+        assertTrue(trace.brainTimeout, "der Brain-Timeout reist am selben Done ins Diary")
     }
 
     @Test
@@ -190,6 +193,7 @@ class StageTimingsDiaryTraceTest {
         assertNull(trace.ttsFirstAudioMs)
         assertNull(trace.admissionWaitMs)
         assertNull(trace.answerEntropy, "nichts gemessen ⇒ ehrlich null (Server ohne logprobs / Flag OFF)")
+        assertFalse(trace.brainTimeout, "kein Timeout-Feld am Done ⇒ false, nie ein geratenes true")
     }
 
     // ── 2+3) Voice-Rand end-to-end ──────────────────────────────────────────────

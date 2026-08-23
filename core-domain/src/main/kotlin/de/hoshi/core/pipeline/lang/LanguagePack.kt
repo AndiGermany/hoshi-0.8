@@ -69,6 +69,17 @@ data class LanguagePack(
     val honestyBridgeDownRefusals: List<String>,
 
     /**
+     * Ask-back of the execution-claim latch
+     * ([de.hoshi.core.pipeline.ExecutionClaimGate]): a turn ran WITHOUT a tool call
+     * and the answer nevertheless claimed a switching act — this sentence REPLACES
+     * that answer. Contract for every translation: never claim or deny a device
+     * state (nothing is known), name the misunderstanding, invite a retry. Warm and
+     * short — it is spoken, and it lands on someone who just gave a command.
+     * Single string, no pool: a correction should sound the same every time.
+     */
+    val executionClaimAskBack: String,
+
+    /**
      * **OFFLINE-Kennzeichnung** ([de.hoshi.core.pipeline.FactCoverageGate],
      * Andi-Auftrag 2026-07-26: „im Offline-Modus antwortet er selbst, sagt
      * aber dazu, dass es unbelegt ist"). Anders als [honestyBridgeDownRefusals]
@@ -211,6 +222,31 @@ data class LanguagePack(
 
     /** Probe-Selbsttest („Hoshi, Probe."): die Kette Ohren→Draht→Stimme steht. */
     val probeReceipt: String,
+
+    /**
+     * Opening of the spoken news briefing
+     * ([de.hoshi.core.pipeline.CurrentAffairsFastpath]), `{time}`
+     * ([TIME_PLACEHOLDER]) = spoken clock of the LAST SUCCESSFUL refresh
+     * ([de.hoshi.core.port.CurrentAffairsSnapshot.lastSuccessfulRefreshAt]),
+     * never of the read itself. Contract for every translation: it names a
+     * point in time, it never claims "right now"; it ends with a separator +
+     * space so the first headline joins it as one spoken sentence.
+     */
+    val currentAffairsBriefingPrefix: String,
+
+    /**
+     * Same opening for a [de.hoshi.core.port.CurrentAffairsFreshness.STALE]
+     * snapshot. Contract: the age MUST be audible — a stale briefing that
+     * sounds current is a freshness lie. Same trailing separator + space.
+     */
+    val currentAffairsBriefingStalePrefix: String,
+
+    /**
+     * Nothing to report — EMPTY (source had nothing) and UNAVAILABLE (source
+     * unreachable) share one honest sentence. Contract: never the word
+     * "current"/"latest", never an implied all-clear, no engine-speak.
+     */
+    val currentAffairsNone: String,
 
     /** Dokumentarische Notizen der Lookup-/Consent-/Research-Muster (s. KDoc dort). */
     val intentPatterns: IntentPatternNotes,
@@ -396,13 +432,13 @@ data class HaExecutorPack(
     /** Kein HA-Token ⇒ ehrlich kein Temperatur-Wert (Lese-Pfad). */
     val noTokenTemperature: String,
 
-    /** Area OHNE climate-Entity — ehrlich VOR jedem Service-Call. `{room}` = Area-Label. */
+    /** Area OHNE climate-Entity — ehrlich VOR jedem Service-Call. `{room}` = Area-ANZEIGENAME (nie der Slug, s. [roomFallbackName]). */
     val noThermostatInArea: String,
 
-    /** turn_off verifiziert (an=0). `{room}` = Area-Slug. */
+    /** turn_off verifiziert (an=0). `{room}` = Area-ANZEIGENAME (nie der Slug, s. [roomFallbackName]). */
     val lightOffArea: String,
 
-    /** turn_off, aber es brennt noch etwas. `{room}` = Area-Slug. */
+    /** turn_off, aber es brennt noch etwas. `{room}` = Area-ANZEIGENAME (nie der Slug, s. [roomFallbackName]). */
     val lightSomeStillOn: String,
 
     /** Offline-Zusatz MIT Zähler — wird an [lightNothingNewOn]/[lightNoneWentOn] angehängt. */
@@ -411,10 +447,10 @@ data class HaExecutorPack(
     /** Offline-Zusatz OHNE Zähler (vage) — dito angehängt. */
     val offlineHintVague: String,
 
-    /** Die Area hat gar keine Lampen. `{room}` = Area-Slug. */
+    /** Die Area hat gar keine Lampen. `{room}` = Area-ANZEIGENAME (nie der Slug, s. [roomFallbackName]). */
     val noLightsInArea: String,
 
-    /** turn_on verifiziert (echtes Delta oder an≥1). `{room}` = Area-Slug. */
+    /** turn_on verifiziert (echtes Delta oder an≥1). `{room}` = Area-ANZEIGENAME (nie der Slug, s. [roomFallbackName]). */
     val lightOnArea: String,
 
     /** Alle erreichbaren brannten schon — ehrlich „schon an" statt Fake-Erfolg. */
@@ -426,13 +462,13 @@ data class HaExecutorPack(
     /** Angekommen, aber kein Licht ging an (Satzanfang, Offline-Zusatz folgt). */
     val lightNoneWentOn: String,
 
-    /** Soll-Wert bestätigt. `{room}` = Area-Label, `{value}` = Grad. */
+    /** Soll-Wert bestätigt. `{room}` = Area-ANZEIGENAME (nie der Slug, s. [roomFallbackName]), `{value}` = Grad. */
     val climateSetArea: String,
 
     /** Soll-Wert (noch) nicht bestätigt — ehrlich statt Rateglück. */
     val climateNotYet: String,
 
-    /** HTTP-200 ohne lesbaren Zustand, MIT Area. `{room}` = Area-Slug. */
+    /** HTTP-200 ohne lesbaren Zustand, MIT Area. `{room}` = Area-ANZEIGENAME (nie der Slug, s. [roomFallbackName]). */
     val sentToArea: String,
 
     /** HTTP-200 ohne lesbaren Zustand, ohne Area. */
@@ -444,7 +480,7 @@ data class HaExecutorPack(
     /** Read lieferte keinen (numerischen) Wert. */
     val noValue: String,
 
-    /** Ist-Temperatur einer Area. `{room}` = Area-Label, `{value}` = Grad. */
+    /** Ist-Temperatur einer Area. `{room}` = Area-ANZEIGENAME (nie der Slug, s. [roomFallbackName]), `{value}` = Grad. */
     val temperatureInArea: String,
 
     /** Ist-Temperatur als Haus-Durchschnitt. `{value}` = Grad. */
@@ -459,6 +495,74 @@ data class HaExecutorPack(
      * EN spricht Punkt.
      */
     val decimalSeparator: String,
+
+    // ── Frische-Phrasen (F2-Rest, Andi-Auftrag: „'Stand: vor X min' sprechbar",
+    //    5 Sprachen) — s. [freshnessMarker] für die geteilte Stufen-Logik. ─────
+
+    /**
+     * Alters-Stufe **< 2 Minuten** — DE „gerade eben". Bewusst KEIN Platzhalter:
+     * eine so frische Ablesung braucht keine Zahl, nur die warme Feststellung
+     * „das gilt noch".
+     */
+    val freshnessJustNow: String,
+
+    /**
+     * Alters-Stufe **2–59 Minuten**, Platzhalter `{minutes}` ([MINUTES_PLACEHOLDER]).
+     * Startet bei 2 (< 2 Minuten fällt auf [freshnessJustNow]) — im Deutschen
+     * darum IMMER Plural („vor 2 Minuten", nie „vor 1 Minute"), andere Sprachen
+     * entsprechend ihrer eigenen Grammatik.
+     */
+    val freshnessMinutesAgo: String,
+
+    /**
+     * Alters-Stufe **≥ 60 Minuten** — EIN Auffang-Satz für „lang her", KEINE
+     * Stunden-Zählung (Auftrag: „Stufen statt Sekunden-Pedanterie" — eine
+     * Ablesung, die über eine Stunde alt ist, braucht keine Präzision mehr,
+     * nur die ehrliche Warnung „das ist alt").
+     */
+    val freshnessOverAnHourAgo: String,
+
+    /**
+     * **Nicht mehr live, aber ehrlich beziffert:** die Vergangenheitsform von
+     * [temperatureInArea] für einen Last-known-Fallback-Wert (s.
+     * `de.hoshi.adapters.ha.HaToolPort` — eigener In-Prozess-Cache je Area, NICHT
+     * [de.hoshi.adapters.ha.LastKnownStateStore]/`statesFetchedAt`, s. dortige
+     * KDoc). Platzhalter `{room}`/`{value}` wie [temperatureInArea], zusätzlich
+     * `{freshness}` ([FRESHNESS_PLACEHOLDER], gefüllt über [freshnessMarker]).
+     * Honesty-Charter: die Zeitform muss VERGANGENHEIT sein — [temperatureInArea]s
+     * „sind es gerade" wäre hier eine Lüge, der Wert ist nicht mehr aktuell.
+     */
+    val temperatureInAreaStale: String,
+
+    /** Vergangenheitsform von [temperatureHouseAverage], s. [temperatureInAreaStale]. */
+    val temperatureHouseAverageStale: String,
+
+    // ── Additiv AM ZEILENENDE (LL-additive-Regel), Andi 2026-08-22 ────────────
+    /**
+     * **Der ehrliche Ersatz für einen Raumnamen, den wir NICHT kennen** — das
+     * einzige Wort, das je in einen `{room}`-Slot darf, ohne aus Home Assistant
+     * zu stammen.
+     *
+     * **Warum es das gibt (Andi, 2026-08-22):** „Das TTS sagt aber leider Kuche
+     * und nicht Küche." Der Licht-Pfad hat den ASCII-`area_id`-SLUG (`kuche`) in
+     * den Satz gesetzt statt den echten HA-Anzeigenamen (`Küche`). Ein Slug ist
+     * ein Schlüssel, kein Name: HA slugifiziert ü→u, also ist der kapitalisierte
+     * Slug ein VERSTÜMMELTER Nutzername — und Nutzerdaten verstümmeln verletzt
+     * dieselbe eiserne Regel wie Nutzerdaten übersetzen.
+     *
+     * **Die Regel dahinter:** gesprochen wird der Anzeigename aus der
+     * HA-Area-Registry ([de.hoshi.core.port.AreaInfo.label]); ist KEIN
+     * vertrauenswürdiger Name auffindbar, sagt Hoshi lieber vage DIESES Wort als
+     * einen kaputten. Ehrlich-vage schlägt falsch-konkret — genau wie überall
+     * sonst in der Honesty-Charter.
+     *
+     * **Für Übersetzer:** das ist ein NOMEN-Einsatz für den `{room}`-Slot, kein
+     * Satz — es muss in JEDEN raumbezogenen Satz dieses Packs grammatisch passen
+     * (DE: „im {room}" ⇒ Dativ „gewünschten Raum"). Es ist der EINZIGE
+     * `{room}`-Inhalt, der übersetzt wird und werden MUSS: ein echter Raumname
+     * bleibt immer unangetastet.
+     */
+    val roomFallbackName: String,
 )
 
 /**
@@ -501,6 +605,47 @@ fun <T> Language.deOr(de: T, en: T): T = if (this == Language.DE) de else en
 
 /** Der Platzhalter für die Tages-Note 1–5 in [LanguagePack.dailyNoteRecorded]/[LanguagePack.dailyNoteUpdated]. */
 const val SCORE_PLACEHOLDER = "{score}"
+
+/** Platzhalter für die Minutenzahl in [LanguagePack.freshnessMinutesAgo], s. [freshnessMarker]. */
+const val MINUTES_PLACEHOLDER = "{minutes}"
+
+/**
+ * Platzhalter für die eingesetzte Alters-Phrase (Ergebnis von [freshnessMarker])
+ * in [LanguagePack.temperatureInAreaStale]/[LanguagePack.temperatureHouseAverageStale].
+ */
+const val FRESHNESS_PLACEHOLDER = "{freshness}"
+
+/**
+ * **Die EINE Stufen-Logik der Frische-Phrasen** (F2-Rest, „'Stand: vor X min'
+ * sprechbar", 5 Sprachen) — GENAU EIN Ort entscheidet, ab wann eine Ablesung
+ * „gerade eben"/„vor N Minuten"/„vor über einer Stunde" heißt; die fünf
+ * [HaExecutorPack]s liefern nur noch die Worte, nie die Schwellen. Drei Stufen,
+ * bewusst grob (Auftrag „Stufen statt Sekunden-Pedanterie"):
+ *
+ *  - `age < 2 min` → [HaExecutorPack.freshnessJustNow]
+ *  - `2 min ≤ age < 60 min` → [HaExecutorPack.freshnessMinutesAgo] mit
+ *    `{minutes}` = `age` abgerundet auf ganze Minuten (immer ≥ 2, s. dortige KDoc)
+ *  - `age ≥ 60 min` → [HaExecutorPack.freshnessOverAnHourAgo] (EIN Auffang-Satz,
+ *    keine Stunden-Zählung)
+ *
+ * `ageMillis < 0` (Uhr-Drift/Test-Unsauberkeit) wird NIE negativ gesprochen —
+ * fällt ehrlich auf „gerade eben" statt eine unsinnige Minutenzahl zu behaupten.
+ */
+fun HaExecutorPack.freshnessMarker(ageMillis: Long): String {
+    val minutes = ageMillis.coerceAtLeast(0) / 60_000
+    return when {
+        minutes < 2 -> freshnessJustNow
+        minutes < 60 -> freshnessMinutesAgo.replace(MINUTES_PLACEHOLDER, minutes.toString())
+        else -> freshnessOverAnHourAgo
+    }
+}
+
+/**
+ * Placeholder for the spoken clock in [LanguagePack.currentAffairsBriefingPrefix]/
+ * [LanguagePack.currentAffairsBriefingStalePrefix]. Filled by the caller via
+ * `replace` (pattern [SCORE_PLACEHOLDER]) — a time is data, never translated.
+ */
+const val TIME_PLACEHOLDER = "{time}"
 
 /**
  * **Die BOOLEAN-Form derselben EINEN Fallback-Regel** wie [deOr] — für die

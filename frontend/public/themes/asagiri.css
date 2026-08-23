@@ -1,0 +1,372 @@
+/* ════════════════ ASAGIRI (朝霧) — Morgennebel über den Reisfeldern ════════════════
+   Kurz nach Sonnenaufgang. Die Luft steht, das Feld ist noch nicht zu sehen, nur
+   die Nebelbänke, die flach darüber liegen. Die Welt vor dem ersten Kaffee: hell,
+   milchig, kühl — und ganz unten am Horizont ein Hauch Rosé, der einzige warme
+   Ton im ganzen Bild.
+
+   RADIKAL ist hier die HELLIGKEIT: --bg-base steht bei OKLCH L 0.955, das Produkt
+   war bisher überwiegend dunkel. Damit dreht sich die Kontrast-Mechanik um — die
+   Schrift ist DUNKEL (Schiefer-Indigo statt Elfenbein), und jede Signalfarbe muss
+   deutlich UNTER L 0.55 liegen, sonst verschwindet sie im Milchglas. Das
+   Laternen-Gold (L 0.80) aus Yoru/Kasumi/Nagareboshi ist hier physikalisch
+   unbrauchbar; der Akzent ist stattdessen das gedämpfte Rosé des Horizonts.
+
+   EIGENSTÄNDIG LADBAR: dieser Block setzt JEDEN Token, den die Themen in
+   src/styles/themes.css setzen (Amayadori/Nagori als Vollständigkeits-Maßstab),
+   plus die body-Hintergrund-Regel — die Datei funktioniert also auch dann, wenn
+   sie zur Laufzeit nachgeladen wird und nicht neben themes.css im Bundle steht.
+
+   ZWEI SELEKTOREN je Token-Block (`:root[data-theme='asagiri']` UND
+   `[data-theme='asagiri']`), exakt wie die Bundle-Themen: der zweite trägt die
+   Token auch an ein verschachteltes Element, das `data-theme` selbst setzt —
+   genau das macht die echte Farbvorschau im Theme-Picker (.settings__swatch).
+
+   KONTRASTE (WCAG 2.1, sRGB, selbst nachgerechnet; angegeben ist jeweils das
+   SCHLECHTESTE der vier realen Untergründe --bg-surface / --bg-base / --bg-subtle
+   / --bg-user, nicht der schmeichelhafteste):
+     text-1 12,5:1 · text-2 8,2:1 · text-3 6,1:1 · text-4 4,7:1
+     accent 5,1:1 · success 5,1:1 · warn 5,0:1 · error 5,1:1
+   Zusätzlich geprüft, weil helle Themen hier gern kippen:
+     • Farbe auf ihrer EIGENEN *-soft-Fläche (16 % über --bg-surface, so bauen die
+       Pills/Badges in index.css): accent 4,8 · success 4,8 · warn 4,8 · error 4,7
+       — alle ≥ 4,5.
+     • --accent-ink auf --accent (Text im gefüllten CTA): 6,1:1.
+     • text-4 auf der dunkelsten Stelle, die die Atmosphäre erzeugt (die kühle
+       Himmelsbahn oben, ≈ #dde8ef): 4,7:1.
+   Alle Werte liegen im sRGB-Gamut (Chroma je Farbton unter dem Gamut-Rand
+   gewählt; kein Kanal wird beim Rendern geklippt).
+
+   ────────────────────────────────────────────────────────────────────────────
+   SCENE LAYER (body::after, 2026-08-14) — the paddy at first light
+   ────────────────────────────────────────────────────────────────────────────
+   The fog now has something to hide: asagiri-szene.svg (75 KB, flat vector fills,
+   viewBox 1600x1000) sits full-bleed behind the app — a leaning pine on the left,
+   a stand of cedars on the right, two receding tree rows dissolving into stacked
+   fog bands, and the whole thing mirrored in the standing water of the paddy,
+   with reeds cutting the near edge. Aerial perspective carries the depth: five
+   tone steps from #d8e1e7 (farthest ridge) to #4d5f6c (nearest ink), each row
+   one step darker than the one behind it.
+   The drifting banks (body::before and :root::after, two layers with four
+   independent clocks — see „DRIFT v2") read as fog moving THROUGH a landscape
+   instead of over an empty ground — that is why the drawing itself stays still.
+
+   Readability is a MEASURED veil, not geometry: oklch(0.985 0.005 240 / 0.9)
+   covers the full 920 px app column and feathers 110 px outward. The darkest ink
+   of the drawing composites under it to 4.85:1 against --text-4, so no later edit
+   of the SVG can break the text contract. Measured on the real headless-Chrome
+   render (empty page: atmosphere + fog banks + scene + veil), worst pixel inside
+   the column: 4.81:1 for --text-4 and 12.73:1 for --text-1 at 1440, 1280 and
+   1024 px alike. In the side space the drawing runs at full strength (down to
+   1.00:1 against --text-4) — no glyph ever sits there, .app is 920 px and
+   centred. Whoever widens .app must re-measure these numbers first.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root[data-theme='asagiri'],
+[data-theme='asagiri'] {
+  /* ── Die Szene als Flächen-Stapel (erste Schicht = oberste) ────────────────
+     1. MILCH UNTEN — die untere Bildhälfte ist milchiger als die obere, weil
+        Nebel schwer ist und über dem Feld liegt. Sie liegt VOR der Sonne, darum
+        ist die Scheibe verschleiert statt aufgesetzt.
+     2. SONNENSCHEIBE — sehr blass, tief bei 61 % Höhe, ohne harte Kante (weicher
+        Abfall bis 74 %). Sie ist Landschaft, kein Punkt und keine Anzeige: sie
+        stellt nichts dar und behauptet keinen Messwert.
+     3. ROSÉ-HORIZONT — ein schmales warmes Band um die Sonnenhöhe, das nach oben
+        und unten ins Nichts ausläuft.
+     4. KÜHLER HIMMEL — oben bleibt es blaugrau; das ist der Rest der Nacht.
+     Alle Schichten sind Alpha-Aufhellungen bzw. eine sehr leichte Tönung auf
+     --bg-base; die dunkelste entstehende Stelle ist mit text-4 auf 4,7:1
+     nachgerechnet (s. Kopf). */
+  --theme-atmosphere:
+    linear-gradient(
+      180deg,
+      transparent 32%,
+      oklch(0.99 0.004 240 / 0.42) 66%,
+      oklch(1 0.002 240 / 0.72) 100%
+    ),
+    radial-gradient(
+      circle 30vmin at 71% 61%,
+      oklch(0.99 0.03 42 / 0.5),
+      oklch(0.97 0.026 30 / 0.2) 44%,
+      transparent 74%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 44%,
+      oklch(0.93 0.033 18 / 0.28) 58%,
+      oklch(0.95 0.018 20 / 0.11) 67%,
+      transparent 76%
+    ),
+    linear-gradient(180deg, oklch(0.9 0.022 235 / 0.55), transparent 42%), var(--bg-base);
+
+  /* ── Flächen ───────────────────────────────────────────────────────────────
+     Umgekehrte Treppe zum Dunkel-Kanon: die gehobene Fläche ist HELLER, nicht
+     dunkler. --bg-base ist die Nebelluft, --bg-surface das Papier darin,
+     --bg-elevated fast Weiß. --bg-subtle ist die einzige Fläche, die spürbar
+     nach unten geht (Hover/Füllung) — sie bleibt der harte Kontrast-Prüfstein. */
+  --bg-base: oklch(0.955 0.008 235); /* Nebelluft, #ebf1f5 */
+  --bg-surface: oklch(0.985 0.005 240); /* Papier im Nebel, #f7fbfd */
+  --bg-elevated: oklch(0.995 0.003 242); /* #fcfeff */
+  --bg-subtle: oklch(0.925 0.013 232); /* Hover-/Füllfläche, #dee8ed */
+  --bg-hairline: oklch(0.83 0.017 232); /* #bdcad1 — trennt, ohne zu zeichnen */
+  --bg-hairline-dashed: oklch(0.775 0.019 230); /* #aab8c0, für „ehrlich leer" */
+
+  /* ── Schrift: Schiefer-Indigo, kein Schwarz ────────────────────────────────
+     Reines Schwarz wäre in dieser Luft ein Fremdkörper; die Tinte behält einen
+     kühlen Blaustich (H≈240) und wird nach hinten leiser UND blasser. */
+  --text-1: oklch(0.26 0.028 245); /* #182631 */
+  --text-2: oklch(0.375 0.026 243); /* #35434e */
+  --text-3: oklch(0.445 0.024 240); /* #485660 */
+  --text-4: oklch(0.505 0.023 238); /* #596771 — 4,7:1 auch auf --bg-subtle */
+
+  /* ── Akzent: das Rosé vom Horizont, ins Lesbare gedunkelt ──────────────────
+     Der Hauch am Himmel ist L≈0.93 — als Schriftfarbe auf Milchglas wäre er
+     unsichtbar. Der Akzent ist dieselbe Farbe eine Stunde früher: gedämpftes
+     Altrosa (L 0.505 / H 12). Er trägt Stimme, CTA und Auswahl — sonst nichts.
+     --accent-ink ist das Milchweiß, das im gefüllten Button darauf sitzt. */
+  --accent: oklch(0.505 0.135 12); /* #a23d50 */
+  --accent-soft: oklch(0.505 0.135 12 / 0.16);
+  --accent-faint: oklch(0.505 0.135 12 / 0.08);
+  --accent-glow: oklch(0.505 0.135 12 / 0.28);
+  --accent-ink: oklch(0.99 0.004 240); /* #f9fcfe */
+
+  /* ── Status: dunkel und entsättigt ─────────────────────────────────────────
+     Auf hellem Grund braucht Semantik TIEFE statt Leuchtkraft. Alle vier liegen
+     bei L≈0.48–0.51 und bleiben auch auf ihrer eigenen *-soft-Fläche über
+     4,5:1 — sie informieren, sie schreien nicht in eine stille Szene. */
+  --success: oklch(0.475 0.11 152); /* #1d6d3c */
+  --success-soft: oklch(0.475 0.11 152 / 0.16);
+  --warn: oklch(0.495 0.098 72); /* #845713 */
+  --warn-soft: oklch(0.495 0.098 72 / 0.16);
+  --error: oklch(0.505 0.145 25); /* #a83a38 */
+  --error-soft: oklch(0.505 0.145 25 / 0.16);
+
+  /* Du-Blase: eine Spur kühler und tiefer als das Papier — sie liegt im Nebel,
+     nicht darüber. Kein Akzent-Fill (Projekt-Konvention seit Yoru). */
+  --bg-user: oklch(0.935 0.016 250); /* #e2ebf4 */
+
+  color-scheme: light;
+}
+
+/* Der Charakter des Themas erscheint als Raum um die Inhalte. Karten bleiben auf
+   ihren Flächentoken, darum verändert der Verlauf weder Statusfarben noch
+   Textkontrast. (themes.css hat dieselbe Regel generisch für `:root[data-theme]`;
+   sie steht hier noch einmal, damit die Datei allein geladen vollständig ist —
+   gleiche Spezifität, gleicher Wert, kein Konflikt.) */
+:root[data-theme='asagiri'] body {
+  background: var(--theme-atmosphere, var(--bg-base));
+}
+
+/* ── Die NEBELBÄNKE: flache Schwaden, die langsam über das Feld ziehen ────────
+   Echte Bodennebel-Bänke sind keine gleichmäßige Trübung, sondern einzelne,
+   sehr breite und sehr flache Schwaden auf verschiedenen Höhen. Deshalb vier
+   weit auseinanderliegende Ellipsen (Höhe 4–8 %, Breite 30–54 %) statt eines
+   Streifenmusters: nur so wird die seitliche Drift überhaupt sichtbar — bei
+   exakt waagerechten Streifen wäre eine Horizontalbewegung unsichtbar.
+
+   Bau (bewusst dieselbe Naht wie Amayadori/Nagori in themes.css, kein neues
+   Deko-System):
+     • `position:fixed; z-index:-1` hält den Nebel HINTER jedem normalen Inhalt,
+       aber ÜBER dem body-eigenen Hintergrund (--theme-atmosphere ist eine
+       reguläre `background`-Eigenschaft und liegt als Backdrop der Stacking-
+       Context-Wurzel immer zuunterst). Karten sind deckend — der Nebel zieht
+       also HINTER der Lesespalte durch und rührt keinen Textkontrast an.
+     • `inset: -10% -30%` gibt seitlichen Anlauf: die Drift (±2,9 %) schiebt nie
+       eine Kante ins Bild.
+     • mask-image blendet die obere Bildhälfte aus — Nebel liegt unten. Das
+       verstärkt genau das, was die Atmosphäre schon tut: unten milchiger.
+     • Aufgehellt wird mit Weiß auf hellem Grund; die Bänke können den Kontrast
+       konstruktionsbedingt nur VERBESSERN, nie verschlechtern.
+
+   ────────────────────────────────────────────────────────────────────────────
+   DRIFT v2 (2026-08-14, Andi's brief) — zwei Bänke, vier Uhren
+   ────────────────────────────────────────────────────────────────────────────
+   v1 zog alle vier Schwaden mit EINER Animation (140 s, alternate). Damit
+   bewegte sich der ganze Nebel wie eine Tapete: gleiche Richtung, gleiche
+   Geschwindigkeit, sichtbare Wiederkehr alle 4,7 min. Andis Regie: Bänke sollen
+   sich versetzt bewegen, verdichten und lichten, „damit es nie loopt-aussieht".
+
+   Darum liegen dieselben vier Ellipsen jetzt auf ZWEI Ebenen — keine neue
+   Schwade erfunden, nur aufgeteilt:
+     • body::before (hier)  Bank 1 (22 %/57 %) + Bank 3 (44 %/79 %) — die nahen,
+       großen; Drift 165 s nach RECHTS, Dichte 97 s.
+     • :root::after (unten) Bank 2 (69 %/67 %) + Bank 4 (82 %/89 %) — die kleinen
+       rechts; Drift 236 s nach LINKS, Dichte 131 s.
+   Gegenläufige Drift heißt: die Bänke schieben sich sichtbar durcheinander statt
+   parallel zu wandern. 165/97/236/131 s sind paarweise teilerfremd genug, dass
+   die gemeinsame Wiederkehr in Tagen liegt statt in Minuten.
+
+   Animiert werden ausschließlich `transform` und `opacity` (Projekt-Konvention,
+   s. index.css „Motion-Token"); zwei Knoten für die ganze Wetterlage. Die
+   Dichte-Animation ist kontrast-sicher, weil sie nur die AUFHELLUNG zurücknimmt:
+   der Boden ist der Schleier ohne jede Bank, und dessen 4,85:1 (s. Kopf) gilt
+   ohnehin. Weniger Nebel kann den Text also nie unter den gemessenen Wert
+   drücken. */
+:root[data-theme='asagiri'] body::before {
+  content: '';
+  position: fixed;
+  inset: -10% -30%;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 46% 7% at 22% 57%, oklch(1 0 0 / 0.55), transparent 70%),
+    radial-gradient(ellipse 54% 8% at 44% 79%, oklch(1 0 0 / 0.5), transparent 70%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 26%, #000 56%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 26%, #000 56%, #000 100%);
+  animation:
+    asagiri-drift 165s ease-in-out infinite alternate,
+    asagiri-thicken 97s ease-in-out infinite alternate;
+}
+@keyframes asagiri-drift {
+  from {
+    transform: translate3d(-2.5%, 0, 0);
+  }
+  to {
+    transform: translate3d(2.5%, 0, 0);
+  }
+}
+/* `from` = die volle Deckung: ohne Animation steht exakt das gemessene Bild. */
+@keyframes asagiri-thicken {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.72;
+  }
+}
+
+/* Die zweite Nebel-Ebene. Sie wohnt auf `:root::after`, weil body seine beiden
+   Pseudoelemente schon vergeben hat (Bänke, Szene) — die Baumreihenfolge malt
+   sie über beide, `z-index: -1` hält sie trotzdem hinter jedem In-Flow-Kasten.
+   Der `:root`-gebundene Selektor hält sie außerdem aus der Vorschau-Kachel des
+   Theme-Pickers heraus, die data-theme auf ein einfaches <div> setzt.
+   Geometrie und Maske sind zeichengleich mit body::before: dieselben Bänke an
+   derselben Stelle, nur mit eigener Uhr. */
+:root[data-theme='asagiri']::after {
+  content: '';
+  position: fixed;
+  inset: -10% -30%;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 38% 5% at 69% 67%, oklch(1 0 0 / 0.45), transparent 72%),
+    radial-gradient(ellipse 30% 4% at 82% 89%, oklch(1 0 0 / 0.4), transparent 72%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 26%, #000 56%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 26%, #000 56%, #000 100%);
+  animation:
+    asagiri-drift-far 236s ease-in-out infinite alternate,
+    asagiri-thicken-far 131s ease-in-out infinite alternate;
+}
+@keyframes asagiri-drift-far {
+  from {
+    transform: translate3d(2.9%, 0, 0);
+  }
+  to {
+    transform: translate3d(-2.9%, 0, 0);
+  }
+}
+@keyframes asagiri-thicken-far {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.6;
+  }
+}
+
+/* Eigenes reduced-motion-Gate: die globale Regel in index.css stellt die Drift
+   ohnehin still, aber diese Datei muss auch allein geladen korrekt sein. Der
+   Nebel BLEIBT sichtbar (er ist Fläche, keine Information) — er hört nur auf,
+   sich zu bewegen, und zwar bei voller Deckung (`from`-Frame beider Dichte-
+   Animationen), also genau im gemessenen Bild. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='asagiri'] body::before,
+  :root[data-theme='asagiri']::after {
+    animation: none;
+  }
+}
+
+/* ── THE SCENE: paddy, tree rows, reflection (body::after) ────────────────────
+   Layer order, back to front: body background (--theme-atmosphere) → body::after
+   (this drawing + its veil, z-index -2) → body::before and :root::after (the two
+   drifting fog layers, z-index -1) → content. The banks therefore pass IN FRONT
+   of the trees, which is what makes the fog read as fog; all three pseudo
+   elements stay behind every in-flow element, and the banks only ever lighten.
+
+   Sizing contract: `cover` + `center bottom`. The viewBox is 1600x1000 (1.6:1),
+   flatter than any usual window, so cover crops from the TOP — the water line at
+   80 % height never moves, only sky is lost. The two motifs live in the outer
+   ~20 % (pine x<330, cedars x>1340 in viewBox units); the middle is water and
+   fog, which is exactly what the text column should stand on.
+
+   The veil is the contrast contract (numbers in the file header): it covers the
+   full app column (920 px → `50% - 460px` per side) and feathers 110 px OUTWARD,
+   never inward — feathering inward would leave the column edge unprotected. Below
+   ~1040 px the calc collapses to 0, the veil covers everything, and the drawing
+   becomes a ghost rather than disappearing; the text contract holds unchanged.
+
+   No animation here on purpose: a landscape does not drift, the weather does.
+   Nothing to gate for prefers-reduced-motion — the moving parts are the two fog
+   layers, which share a gate above. */
+:root[data-theme='asagiri'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  --veil: max(0px, 50% - 460px);
+  background-image:
+    linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(var(--veil) - 110px),
+      oklch(0.985 0.005 240 / 0.9) var(--veil),
+      oklch(0.985 0.005 240 / 0.9) calc(100% - var(--veil)),
+      transparent calc(100% - var(--veil) + 110px),
+      transparent 100%
+    ),
+    url('asagiri-szene.svg');
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center bottom;
+  background-size: auto, cover;
+}
+
+/* Die Kopfzeile ist milchiges Glas: fast weiß, leicht durchscheinend, mit einer
+   kühlen Nebelkante statt eines Schattens (Muster wie Natsu no Hi/Nagori, die
+   ihre Nav ebenfalls nur tönen). */
+:root[data-theme='asagiri'] .nav {
+  background: oklch(0.99 0.004 240 / 0.82);
+  box-shadow: 0 1px 0 oklch(0.83 0.017 232 / 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Der Sprachstern ist die blasse Sonne, die durch den Nebel kommt: milchig hell
+   im Kern, zum Rand hin ins Rosé abkühlend. Form und Bewegung bleiben die des
+   Basis-Orbs — das Thema ist Farbe. */
+:root[data-theme='asagiri'] .vc-orb__core {
+  background: radial-gradient(
+    circle at 42% 36%,
+    oklch(0.995 0.008 60),
+    oklch(0.9 0.06 22) 52%,
+    var(--accent) 100%
+  );
+}
+
+/* Der Bloom kippt von Rosé (innen) in ein sehr leises Nebelblau (außen) —
+   Licht, das sich in feuchter Morgenluft verteilt. */
+:root[data-theme='asagiri'] .vc-orb__bloom {
+  background: radial-gradient(
+    circle at 50% 55%,
+    var(--accent-glow) 0%,
+    oklch(0.72 0.04 235 / 0.16) 44%,
+    transparent 74%
+  );
+}
+
+/* Die Pegel-Ringe als Nebelringe: kühles Silbergrau statt Akzent, damit die
+   Stimme im hellen Bild nicht zum roten Ausrufezeichen wird. Keine neue
+   Mechanik — nur Farbe auf dem bestehenden Ring. */
+:root[data-theme='asagiri'] .vc-orb__ring {
+  border-color: oklch(0.68 0.028 232 / 0.5);
+  box-shadow: 0 0 0 5px oklch(0.72 0.026 232 / 0.12);
+}
