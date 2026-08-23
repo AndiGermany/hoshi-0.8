@@ -233,8 +233,24 @@ def verify_contract(repo_root: Path = REPO_ROOT) -> dict:
             capture_output=True,
             text=True,
         ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise ValueError(f"Gepinnter Reducer-Commit nicht verifizierbar: {exc}") from exc
+    except (OSError, subprocess.CalledProcessError):
+        # Exportierter Baum (öffentliches Repo, CI): der gepinnte Commit lebt
+        # nur in der privaten History. Der Vertrag bleibt trotzdem voll
+        # prüfbar — `git hash-object` errechnet die Blob-ID aus dem INHALT,
+        # und die SHA-256-/Blob-Vergleiche unten beißen unverändert. Was hier
+        # entfällt, ist allein der Beweis, dass der Commit existierte; was
+        # bleibt, ist der Beweis, dass der Inhalt byte-identisch ist.
+        source_path = repo_root / contract["productionSource"]
+        try:
+            pinned_source = source_path.read_bytes()
+            pinned_blob = subprocess.run(
+                ["git", "-C", str(repo_root), "hash-object", "--", str(source_path)],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise ValueError(f"Gepinnter Reducer-Commit nicht verifizierbar: {exc}") from exc
     pinned_sha = hashlib.sha256(pinned_source).hexdigest()
     if pinned_sha != contract["productionSourceSha256"]:
         raise ValueError(

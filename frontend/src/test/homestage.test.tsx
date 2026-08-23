@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -100,6 +100,12 @@ describe('HomeStage — measured stage, pages and dots', () => {
   const activeIndex = () => pages().findIndex((p) => p.getAttribute('data-active') === 'true');
   const track = () => container.querySelector('.idle__pages')!;
 
+  // Hermetisch gegen ANDERE Testdateien (localStorage überlebt Worker-weit;
+  // CI-Rot 23.08.) — aber nur EINMAL pro Datei: die Tests dieses Blocks
+  // bauen bewusst aufeinander auf (gespeichertes Layout wandert mit).
+  beforeAll(() => {
+    globalThis.localStorage?.clear?.();
+  });
   beforeEach(() => {
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -315,6 +321,10 @@ describe('HomeStage — explicit placement pins the model onto the DOM (no CSS a
   const pageOf = (id: string) => pages().findIndex((p) => p.querySelector(`[data-tile="${id}"]`) !== null);
 
   beforeEach(() => {
+    // Hermetisch: ein von ANDEREN Testdateien hinterlassenes Layout
+    // (localStorage überlebt Worker-weit) verschiebt sonst die Seitenzahl —
+    // CI-Rot 23.08. bei 2-Kern-Worker-Verteilung, lokal zufällig grün.
+    globalThis.localStorage?.clear?.();
     container = document.createElement('div');
     document.body.appendChild(container);
   });
