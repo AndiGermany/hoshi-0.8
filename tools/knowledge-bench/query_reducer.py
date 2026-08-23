@@ -235,22 +235,25 @@ def verify_contract(repo_root: Path = REPO_ROOT) -> dict:
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         # Exportierter Baum (öffentliches Repo, CI): der gepinnte Commit lebt
-        # nur in der privaten History. Der Vertrag bleibt trotzdem voll
-        # prüfbar — `git hash-object` errechnet die Blob-ID aus dem INHALT,
-        # und die SHA-256-/Blob-Vergleiche unten beißen unverändert. Was hier
-        # entfällt, ist allein der Beweis, dass der Commit existierte; was
-        # bleibt, ist der Beweis, dass der Inhalt byte-identisch ist.
-        source_path = repo_root / contract["productionSource"]
-        try:
-            pinned_source = source_path.read_bytes()
-            pinned_blob = subprocess.run(
-                ["git", "-C", str(repo_root), "hash-object", "--", str(source_path)],
-                check=True,
-                capture_output=True,
-                text=True,
-            ).stdout.strip()
-        except (OSError, subprocess.CalledProcessError) as exc:
-            raise ValueError(f"Gepinnter Reducer-Commit nicht verifizierbar: {exc}") from exc
+        # nur in der privaten Entwicklungs-History — und die Quelle darf sich
+        # seither weiterentwickelt haben, der Pin zeigt bewusst in die
+        # Vergangenheit. Hier ist der Pin darum EHRLICH unprüfbar: wir
+        # markieren das sichtbar im Ergebnis, statt so zu tun, als hätten wir
+        # ihn geprüft. Alles Prüfbare (aktuelle Quelle, Region-Hash,
+        # Vertrags-Datei) ist oben bereits gebissen.
+        return {
+            "version": contract["contractVersion"],
+            "source": contract["productionSource"],
+            "sourceSha256": actual_sha,
+            "sourceGitBlob": blob,
+            "pinnedSourceSha256": None,
+            "pinnedSourceGitBlob": None,
+            "pinnedUnverifiable": "exported-tree",
+            "regionSha256": region_sha,
+            "sourceCommit": contract["productionCommit"],
+            "contractFile": CONTRACT_PATH.name,
+            "contractSha256": _sha256(CONTRACT_PATH),
+        }
     pinned_sha = hashlib.sha256(pinned_source).hexdigest()
     if pinned_sha != contract["productionSourceSha256"]:
         raise ValueError(
